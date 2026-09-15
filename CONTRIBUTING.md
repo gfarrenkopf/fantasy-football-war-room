@@ -17,6 +17,7 @@ npm install
 npm run dev        # http://localhost:3000
 npm run typecheck
 npm run lint
+npm test
 npm run build
 ```
 
@@ -25,6 +26,13 @@ npm run build
 - The app uses **Tailwind CSS v4**. Design tokens (colors, radius, font) are defined in the `@theme` block of `src/app/globals.css` and were ported from the prototype's `:root` variables.
 - Use the token utilities (`bg-panel`, `text-muted`, `border-qb`, `text-value`, ...). Don't hard-code hex values in components. If you need a new color, add a token first.
 - The app is dark-only.
+
+## Draft engine
+
+- Game logic lives in `src/lib/draft/`. It is pure TypeScript: no React, DOM, storage, or env access.
+- League size, draft slot, scoring, and roster always come from `LeagueSettings`. Don't hardcode 12 teams or 16 rounds.
+- Anything random takes an injected `rng` so tests can be seeded.
+- Unit tests sit next to the code as `*.test.ts` and run with Vitest (`npm test`).
 
 ## Configuration & feature flags
 
