@@ -87,7 +87,7 @@ The app ships with `src/lib/data/sample-2026.json`, a **stale sample** built fro
    ```sh
    npm run check-data
    ```
-   This validates every field and checks bye weeks, position ranks, and that there are enough players for at least a 10-team league. A failure names the problem, e.g. `Invalid dataset: players[12].adp (Travis Kelce) must be a number`. (Use `check-data`, not `npm test`: the full test suite also checks facts about the bundled sample data and will fail on yours.)
+   This validates every field and checks bye weeks, position ranks, and that there are enough players for at least a 10-team league. A failure names the problem, e.g. `Invalid dataset: players[12].adp (Travis Kelce) must be a number`. `npm run build` runs the same check first and stops if it fails. (Use `check-data`, not `npm test`: the full test suite also checks facts about the bundled sample data and will fail on yours.)
 5. Rebuild and restart: `npm run build && npm start`.
 6. In the browser, open **League** and adjust the settings if your data supports different scoring. Saved drafts are keyed by player `id`, so keep ids stable between updates.
 
@@ -164,7 +164,7 @@ Set variables are read when the server **starts**, not at build time, so you can
 
 **Port 3000 is already in use.** Run `PORT=3001 npm start` (or `npm run dev -- -p 3001`).
 
-**The page shows an error mentioning `Invalid dataset: …`.** Your player file doesn't match the format. Run `npm run check-data` for the details; the message names the first bad field, for example `players[12].adp (Travis Kelce) must be a number`. Fix the file, then `npm run build` and restart.
+**`npm run build` stops with `Invalid dataset: …`.** Your player file doesn't match the format. The message names the first bad field, for example `players[12].adp (Travis Kelce) must be a number`. Fix the file and build again; `npm run check-data` runs just this check.
 
 **League setup says the player data only supports N picks.** Your data has too few players for that league. Reduce teams or bench slots, or add players (see [How much data you need](#how-much-data-you-need)).
 

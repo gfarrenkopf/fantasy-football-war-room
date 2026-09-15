@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "check-data": "vitest run src/lib/data/loaded-dataset.test.ts"
+    "check-data": "vitest run src/lib/data/loaded-dataset.test.ts",
+    "prebuild": "npm run check-data"
   },
   "dependencies": {
     "next": "16.3.5",
