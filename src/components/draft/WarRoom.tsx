@@ -2,11 +2,12 @@
 
 import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { PublicFlags } from "@/lib/config";
-import { DEFAULT_LEAGUE } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
 import { BestAvailableStrip } from "./BestAvailableStrip";
 import { Board, matchesQuery, useBoardColumns } from "./Board";
-import { s } from "./cx";
+import { cx, s } from "./cx";
+import { LeagueProvider, useLeague } from "./LeagueProvider";
+import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
@@ -19,19 +20,29 @@ export const useFlags = () => useContext(FlagsContext);
 
 /** The war room app: providers plus the active view. */
 export function WarRoom({ flags }: { flags: PublicFlags }) {
-  const league = DEFAULT_LEAGUE;
   return (
     <FlagsContext.Provider value={flags}>
       <ToastProvider>
         <ConfirmProvider>
-          <DraftProvider totalPicks={totalPicks(league)}>
-            <DraftModelProvider league={league}>
-              <WarRoomView />
-            </DraftModelProvider>
-          </DraftProvider>
+          <LeagueProvider>
+            <LeagueGate />
+          </LeagueProvider>
         </ConfirmProvider>
       </ToastProvider>
     </FlagsContext.Provider>
+  );
+}
+
+/** Waits for the saved league, then mounts the draft for it. */
+function LeagueGate() {
+  const { league, hydrated } = useLeague();
+  if (!hydrated) return <div className={cx("root", "loading")}>Loading your league…</div>;
+  return (
+    <DraftProvider totalPicks={totalPicks(league)}>
+      <DraftModelProvider league={league}>
+        <WarRoomView />
+      </DraftModelProvider>
+    </DraftProvider>
   );
 }
 
@@ -48,6 +59,10 @@ function WarRoomView() {
   const columns = useBoardColumns();
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  const { configured } = useLeague();
+  const [setupOpen, setSetupOpen] = useState(false);
+  // First run: show setup until the user saves a league.
+  const showSetup = setupOpen || !configured;
   const q = query.trim().toLowerCase();
 
   // First available player matching the search, in board order.
@@ -67,7 +82,7 @@ function WarRoomView() {
   };
 
   const onGlobalKey = useEffectEvent((e: KeyboardEvent) => {
-    if (e.defaultPrevented) return;
+    if (e.defaultPrevented || showSetup) return;
     if (e.key === "/" && !isTyping()) {
       e.preventDefault();
       searchRef.current?.focus();
@@ -85,7 +100,14 @@ function WarRoomView() {
 
   return (
     <div className={s.root}>
-      <Header ref={searchRef} query={query} onQueryChange={setQuery} onQueryKeyDown={onQueryKeyDown} hint={hint} />
+      <Header
+        ref={searchRef}
+        query={query}
+        onQueryChange={setQuery}
+        onQueryKeyDown={onQueryKeyDown}
+        hint={hint}
+        onOpenLeague={() => setSetupOpen(true)}
+      />
       {hydrated ? (
         <div className={s.boardView}>
           <BestAvailableStrip />
@@ -94,6 +116,7 @@ function WarRoomView() {
       ) : (
         <div className={s.loading}>Loading your draft…</div>
       )}
+      {showSetup && <LeagueSetupDialog dataset={model.dataset} firstRun={!configured} onClose={() => setSetupOpen(false)} />}
     </div>
   );
 }
