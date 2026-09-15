@@ -44,3 +44,5 @@ export default function Home() {
     </>
   );
 }
+
+export const deliberateTypeError: number = "oops";
