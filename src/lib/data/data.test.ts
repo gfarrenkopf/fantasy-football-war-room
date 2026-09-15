@@ -28,7 +28,8 @@ describe("sample dataset", () => {
 
   it("has enough players to fill every preset's draft", () => {
     for (const { league } of LEAGUE_PRESETS) {
-      expect(dataset.players.length).toBeGreaterThanOrEqual(totalPicks(league));
+      // Leave spare skill players so the last picks aren't forced onto extra kickers and D/STs.
+      expect(dataset.players.length).toBeGreaterThanOrEqual(totalPicks(league) + 10);
       expect(dataset.players.filter((p) => p.pos === "K").length).toBeGreaterThanOrEqual(league.teams);
       expect(dataset.players.filter((p) => p.pos === "DST").length).toBeGreaterThanOrEqual(league.teams);
     }
@@ -60,10 +61,10 @@ describe("validateDataset", () => {
 });
 
 describe("league presets", () => {
-  it("offer 10, 12 and 14 team PPR leagues on the 16-round standard roster", () => {
+  it("offer 10, 12 and 14 team PPR leagues on the standard roster (14 teams with a 6-man bench)", () => {
     expect(LEAGUE_PRESETS.map((p) => p.league.teams)).toEqual([10, 12, 14]);
+    expect(LEAGUE_PRESETS.map((p) => p.league.roster.length)).toEqual([16, 16, 15]);
     for (const { league } of LEAGUE_PRESETS) {
-      expect(league.roster).toHaveLength(16);
       expect(league.scoring).toBe("ppr");
       expect(league.mySlot).toBe(1);
     }

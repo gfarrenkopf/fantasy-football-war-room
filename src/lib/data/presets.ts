@@ -26,13 +26,15 @@ export interface LeaguePreset {
   league: LeagueSettings;
 }
 
-const preset = (teams: number): LeaguePreset => ({
+const preset = (teams: number, bench = 7): LeaguePreset => ({
   id: `${teams}-team-ppr`,
   label: `${teams} teams, full PPR`,
-  league: { teams, mySlot: 1, scoring: "ppr", roster: standardRoster(), valueThreshold: DEFAULT_VALUE_THRESHOLD },
+  league: { teams, mySlot: 1, scoring: "ppr", roster: standardRoster(bench), valueThreshold: DEFAULT_VALUE_THRESHOLD },
 });
 
-export const LEAGUE_PRESETS: readonly LeaguePreset[] = [preset(10), preset(12), preset(14)];
+// The 14-team preset uses a 6-man bench (15 rounds, 210 picks): 16 rounds would need 224 of the
+// sample dataset's 225 players, leaving only spare kickers and D/STs for the last picks.
+export const LEAGUE_PRESETS: readonly LeaguePreset[] = [preset(10), preset(12), preset(14, 6)];
 
 /** Used until the user sets up a league: the prototype's 12-team full-PPR league, slot 1. */
 export const DEFAULT_LEAGUE: LeagueSettings = LEAGUE_PRESETS[1].league;
