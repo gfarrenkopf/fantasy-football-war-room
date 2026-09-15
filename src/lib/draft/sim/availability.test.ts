@@ -94,9 +94,17 @@ describe("computeTurnPlan", () => {
     expect(now.letGo).toEqual([]);
   });
 
-  it("builds a plan for each remaining turn", () => {
+  it("builds a full plan for each remaining turn, projecting the user's roster", () => {
     const plans = computeAllTurnPlans(start, odds, ctx);
     expect(plans.map((p) => p.picks)).toEqual(odds.turns);
+    for (const plan of plans) expect(plan.targets.length, `picks ${plan.picks}`).toBeGreaterThanOrEqual(2);
+    // Mid-draft turns aren't hijacked by kickers and D/STs just because the current roster has none.
+    for (const plan of plans.slice(0, 6)) {
+      expect(plan.targets.every((e) => e.player.pos !== "K" && e.player.pos !== "DST"), `picks ${plan.picks}`).toBe(true);
+    }
+    // By the last turn a K or D/ST is the right call if the projected roster still lacks one.
+    const last = plans.at(-1)!;
+    expect(last.targets.length).toBeGreaterThan(0);
   });
 
   it("returns null for a turn that doesn't exist", () => {

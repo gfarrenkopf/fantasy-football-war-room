@@ -1,8 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { PublicFlags } from "@/lib/config";
+import { defaultRoom } from "@/lib/draft/sim";
 import { totalPicks } from "@/lib/draft/snake";
+import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
+import { useAvailability } from "./useAvailability";
+
+/** Mocks per availability report, as in the prototype. */
+const REPORT_MOCKS = 300;
 import { BestAvailableStrip } from "./BestAvailableStrip";
 import { Board, matchesQuery, useBoardColumns } from "./Board";
 import { cx, s } from "./cx";
@@ -60,7 +66,19 @@ function WarRoomView() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const { configured } = useLeague();
+  const { state } = useDraft();
+  const runAvailability = useAvailability();
+  const [report, setReport] = useState<{ open: boolean; running: boolean; data: ReportData | null }>({ open: false, running: false, data: null });
   const [setupOpen, setSetupOpen] = useState(false);
+  const closeReport = useCallback(() => setReport({ open: false, running: false, data: null }), []);
+
+  const openReport = async () => {
+    const picks = state.picks;
+    const room = defaultRoom(model.league.teams);
+    setReport({ open: true, running: true, data: null });
+    const result = await runAvailability(picks, room, REPORT_MOCKS);
+    if (result) setReport((r) => (r.open ? { open: true, running: false, data: { result, picks, room } } : r));
+  };
   // First run: show setup until the user saves a league.
   const showSetup = setupOpen || !configured;
   const q = query.trim().toLowerCase();
@@ -107,6 +125,11 @@ function WarRoomView() {
         onQueryKeyDown={onQueryKeyDown}
         hint={hint}
         onOpenLeague={() => setSetupOpen(true)}
+        actions={
+          <button className={cx("btn", "primary")} onClick={() => void openReport()} title={`${REPORT_MOCKS} mocks from the current pick`}>
+            Availability report
+          </button>
+        }
       />
       {hydrated ? (
         <div className={s.boardView}>
@@ -116,7 +139,8 @@ function WarRoomView() {
       ) : (
         <div className={s.loading}>Loading your draft…</div>
       )}
-      {showSetup && <LeagueSetupDialog dataset={model.dataset} firstRun={!configured} onClose={() => setSetupOpen(false)} />}
+      {report.open && <AvailabilityReport data={report.data} running={report.running} onClose={closeReport} />}
+      {showSetup &&<LeagueSetupDialog dataset={model.dataset} firstRun={!configured} onClose={() => setSetupOpen(false)} />}
     </div>
   );
 }
