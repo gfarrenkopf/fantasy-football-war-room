@@ -7,6 +7,7 @@ import { isMyPick } from "@/lib/draft/snake";
 import { useDraft } from "./DraftProvider";
 import { useModel } from "./DraftModel";
 import { useConfirm, useToast } from "./Feedback";
+import { useSim } from "./Simulator";
 
 /** Briefly highlights every rendered card and roster row for a player (the prototype's flashCards). */
 function flash(playerId: string) {
@@ -27,6 +28,7 @@ export function useDraftActions() {
   const model = useModel();
   const toast = useToast();
   const confirm = useConfirm();
+  const sim = useSim();
 
   /** Logs a pick for an available player, or moves a taken player between rosters. */
   const draft = useCallback(
@@ -89,6 +91,7 @@ export function useDraftActions() {
   );
 
   const undo = useCallback(() => {
+    sim.stop();
     const last = draftCtx.state.picks.at(-1);
     if (!last) {
       toast("Nothing to undo");
@@ -96,9 +99,10 @@ export function useDraftActions() {
     }
     draftCtx.undo();
     toast(`Undid pick ${draftCtx.state.picks.length}: ${model.player(last.playerId)?.name ?? ""}`);
-  }, [draftCtx, model, toast]);
+  }, [draftCtx, model, toast, sim]);
 
   const reset = useCallback(async () => {
+    sim.stop();
     const ok = await confirm({
       message: "Reset the entire draft? This clears every pick and your roster.",
       confirmLabel: "Reset draft",
@@ -107,7 +111,7 @@ export function useDraftActions() {
     if (!ok) return;
     draftCtx.reset();
     toast("Draft reset");
-  }, [draftCtx, confirm, toast]);
+  }, [draftCtx, confirm, toast, sim]);
 
   return { draft, untake, draftWithIntent, intentFrom, undo, reset };
 }
