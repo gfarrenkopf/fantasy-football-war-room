@@ -1,9 +1,9 @@
 import { myPlayers, positionCounts } from "../roster";
 import { roundOf } from "../snake";
-import type { DraftPick, Player } from "../types";
+import type { DraftPick, Player, Position } from "../types";
 import { survival, type AvailabilityResult } from "./availability";
 import type { SimContext } from "./context";
-import { bestOnBoard } from "./cpu";
+import { bestOnBoard, type Counts } from "./cpu";
 
 export interface PlanEntry {
   player: Player;
@@ -24,8 +24,6 @@ export interface TurnPlan {
 
 export const TARGET_ODDS = 0.6;
 export const FALLBACK_ODDS = 0.3;
-/** How far down the needs-adjusted board to look. */
-const SCAN = 60;
 const MAX = { targets: 4, fallbacks: 4, letGo: 3 };
 
 /**
@@ -36,22 +34,30 @@ const MAX = { targets: 4, fallbacks: 4, letGo: 3 };
  * - fallbacks: the next players with ≥ 30% odds;
  * - let go: players ranked within half a round before the pick who will likely be gone, i.e. the
  *   tempting names that shouldn't be counted on (obviously-gone stars aren't listed).
- * Players the user's own simulated earlier picks usually take are skipped.
+ * For future turns the user's roster is projected from the mocks: each position gets the expected
+ * number of players the user's simulated picks take before that turn. Players those picks usually
+ * take (≥ 50%) are skipped.
  */
 export function computeTurnPlan(picks: DraftPick[], odds: AvailabilityResult, ctx: SimContext, turn = 0): TurnPlan | null {
   const turnPicks = odds.turns[turn];
   if (!turnPicks) return null;
 
-  const counts = positionCounts(myPlayers(picks, (id) => ctx.byId.get(id)));
-  const taken = new Set(picks.map((p) => p.playerId));
-  // Players the user's own earlier auto-picks usually take aren't really available to plan around.
-  const skip = new Set([...odds.players].filter(([, o]) => o.mine[turn] >= 0.5).map(([id]) => id));
-  const round = roundOf(turnPicks[0], ctx.league.teams);
+  const counts: Counts = positionCounts(myPlayers(picks, (id) => ctx.byId.get(id)));
+  const expected = new Map<Position, number>();
+  const skip = new Set<string>();
+  for (const [id, o] of odds.players) {
+    const pos = ctx.byId.get(id)?.pos;
+    if (pos) expected.set(pos, (expected.get(pos) ?? 0) + o.mine[turn]);
+    if (o.mine[turn] >= 0.5) skip.add(id);
+  }
+  for (const [pos, n] of expected) counts[pos] = (counts[pos] ?? 0) + Math.round(n);
 
+  const taken = new Set(picks.map((p) => p.playerId));
+  const round = roundOf(turnPicks[0], ctx.league.teams);
   const letGoFromRank = turnPicks[0] - ctx.league.teams / 2;
 
   const plan: TurnPlan = { picks: turnPicks, targets: [], fallbacks: [], letGo: [] };
-  for (const player of bestOnBoard(taken, counts, round, ctx, SCAN, skip)) {
+  for (const player of bestOnBoard(taken, counts, round, ctx, ctx.players.length, skip)) {
     const o = odds.players.get(player.id);
     const entry = { player, survival: o ? survival(o, turn) : 0 };
     if (entry.survival >= TARGET_ODDS && plan.targets.length < MAX.targets) plan.targets.push(entry);
