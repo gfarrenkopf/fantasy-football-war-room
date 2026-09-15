@@ -33,6 +33,33 @@
   --color-mine: #3ddc91;
   --color-focus: #7cb7ff;
 
+  /* secondary surfaces and ink from the prototype's one-off colors */
+  --color-row-line: #2a3039;
+  --color-hover: #2a303a;
+  --color-chip: #2f3743;
+  --color-tier: #1f242c;
+  --color-strip: #1e232b;
+  --color-btn-hover: #333c48;
+  --color-seg-on: #3a4453;
+  --color-done: #4a5566;
+  --color-scroll: #3a4351;
+  --color-bye-ink: #aab4c2;
+  --color-value-ink: #5ee39a;
+  --color-reach-ink: #ff8a8a;
+  --color-soft-red: #ff9a9a;
+  --color-pale-red: #ffb4b4;
+  --color-warn-ink: #f5d27a;
+  --color-warn-dark: #3b2f00;
+  --color-mine-ink: #0d1a14;
+  --color-flex: #d6c26b;
+  --color-heading: #bcd3ff;
+  --color-plan-line: #4a5a72;
+  --color-sky: #9be1ff;
+  --color-sky-line: #2c7a9a;
+  --color-sim-bg: #1c2530;
+  --color-sim-line: #2c4a5c;
+  --color-room-bg: #1a222b;
+
   --radius-card: 6px;
 
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;

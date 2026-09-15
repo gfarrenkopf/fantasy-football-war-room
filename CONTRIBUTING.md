@@ -25,6 +25,7 @@ npm run build
 
 - The app uses **Tailwind CSS v4**. Design tokens (colors, radius, font) are defined in the `@theme` block of `src/app/globals.css` and were ported from the prototype's `:root` variables.
 - Use the token utilities (`bg-panel`, `text-muted`, `border-qb`, `text-value`, ...). Don't hard-code hex values in components. If you need a new color, add a token first.
+- The war room UI (`src/components/draft/`) is styled with one CSS module, `warRoom.module.css`, ported from the prototype with its class structure intact. Its state-driven selectors (taken/mine cards, sticky tier headers, bye-warning chips) are clearer as CSS than as utility strings. It uses the same tokens via `var(--color-*)`, with `color-mix()` for translucent variants. Join its classes with `cx()`.
 - The app is dark-only.
 
 ## Draft engine
