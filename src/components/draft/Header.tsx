@@ -21,10 +21,12 @@ interface HeaderProps {
   children?: React.ReactNode;
   /** Buttons rendered at the start of the action group. */
   actions?: React.ReactNode;
+  /** Roster needs strip, rendered after search. */
+  needs?: React.ReactNode;
 }
 
 /** Pick box, turn state, click-mode hint, search and draft actions. Ported from renderHeader(). */
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, children, actions }, searchRef) {
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, children, actions, needs }, searchRef) {
   const model = useModel();
   const { undo, reset } = useDraftActions();
   const { current: cur, total, done, onClock, league } = model;
@@ -124,6 +126,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         />
         <span className={s.hint}>{hint}</span>
       </div>
+      {needs}
       <div className={s.actions}>
         {actions}
         <button className={s.btn} onClick={onOpenLeague} title="League size, draft slot, scoring and roster">
