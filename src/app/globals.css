@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens ported from prototype/war_room.html (:root block).
+ * Each --color-* token generates Tailwind utilities (bg-panel, text-qb, border-line, ...).
+ * The app is dark-only, like the prototype.
+ */
+@theme {
+  /* surfaces */
+  --color-bg: #1a1e25;
+  --color-panel: #22272f;
+  --color-panel2: #282e37;
+  --color-line: #323a45;
+  --color-line2: #3d4654;
+
+  /* text */
+  --color-text: #e7ebf0;
+  --color-muted: #8f9aa8;
+  --color-dim: #5f6a78;
+
+  /* positions */
+  --color-qb: #e5484d;
+  --color-rb: #3ddc91;
+  --color-wr: #4f9cf9;
+  --color-te: #f59e42;
+  --color-k: #b39ddb;
+  --color-dst: #9aa7b8;
+
+  /* signals */
+  --color-value: #22c55e;
+  --color-reach: #ef4444;
+  --color-warn: #fbbf24;
+  --color-mine: #3ddc91;
+  --color-focus: #7cb7ff;
+
+  --radius-card: 6px;
+
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    font-size: 13px;
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+}
