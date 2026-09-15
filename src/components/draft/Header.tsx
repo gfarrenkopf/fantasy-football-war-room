@@ -16,12 +16,13 @@ interface HeaderProps {
   onQueryChange(q: string): void;
   onQueryKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void;
   hint: string;
+  onOpenLeague(): void;
   /** Extra controls rendered before the action buttons (view switch, mock toggle, ...). */
   children?: React.ReactNode;
 }
 
 /** Pick box, turn state, click-mode hint, search and draft actions. Ported from renderHeader(). */
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, children }, searchRef) {
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, children }, searchRef) {
   const model = useModel();
   const { undo, reset } = useDraftActions();
   const { current: cur, total, done, onClock, league } = model;
@@ -122,6 +123,9 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         <span className={s.hint}>{hint}</span>
       </div>
       <div className={s.actions}>
+        <button className={s.btn} onClick={onOpenLeague} title="League size, draft slot, scoring and roster">
+          League
+        </button>
         <button className={s.btn} onClick={undo}>
           Undo last pick
         </button>
