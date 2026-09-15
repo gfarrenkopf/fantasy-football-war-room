@@ -56,7 +56,8 @@ export interface LeagueSettings {
   valueThreshold: number;
 }
 
-export interface Pick {
+/** One logged pick. Named DraftPick so it doesn't shadow TypeScript's Pick<> utility. */
+export interface DraftPick {
   playerId: string;
   /** True if the user drafted this player. */
   mine: boolean;
@@ -65,7 +66,7 @@ export interface Pick {
 /** Synced state of one draft. The pick number of picks[i] is i + 1. */
 export interface DraftState {
   version: number;
-  picks: Pick[];
+  picks: DraftPick[];
 }
 
 export type CpuStyle =
