@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { PublicFlags } from "@/lib/config";
-import { roomFor } from "@/lib/draft/sim";
 import { totalPicks } from "@/lib/draft/snake";
+import { MockBar, SimProvider, useSim } from "./Simulator";
 import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
 import { BestAvailableStrip } from "./BestAvailableStrip";
 import { Board, matchesQuery, useBoardColumns } from "./Board";
@@ -50,7 +50,9 @@ function LeagueGate() {
   return (
     <DraftProvider totalPicks={totalPicks(league)}>
       <DraftModelProvider league={league}>
-        <WarRoomView />
+        <SimProvider>
+          <WarRoomView />
+        </SimProvider>
       </DraftModelProvider>
     </DraftProvider>
   );
@@ -72,7 +74,8 @@ function WarRoomView() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  const room = useMemo(() => roomFor(prefs.room, model.league.teams), [prefs.room, model.league.teams]);
+  const sim = useSim();
+  const { room } = sim;
 
   const [setupOpen, setSetupOpen] = useState(false);
   const showSetup = setupOpen || !configured; // first run: setup until a league is saved
@@ -164,8 +167,16 @@ function WarRoomView() {
         needs={<NeedsStrip />}
         actions={
           <>
-            <button className={cx("btn", "primary")} onClick={() => void openReport()} title={`${REPORT_MOCKS} mocks from the current pick`}>
-              Availability report
+            <button
+              className={cx("btn", prefs.mockOn && "on")}
+              title="Mock draft mode: CPU teams make the other picks"
+              aria-pressed={prefs.mockOn}
+              onClick={() => {
+                if (prefs.mockOn) sim.stop();
+                setPrefs({ mockOn: !prefs.mockOn });
+              }}
+            >
+              Mock draft
             </button>
             <button className={cx("btn", "plan")} onClick={() => setDrawerOpen(true)}>
               Turn plan
@@ -181,6 +192,7 @@ function WarRoomView() {
           ))}
         </div>
       </Header>
+      {prefs.mockOn && <MockBar onReport={() => void openReport()} reportMocks={REPORT_MOCKS} />}
       {!hydrated ? (
         <div className={s.loading}>Loading your draft…</div>
       ) : prefs.view === "focus" ? (
