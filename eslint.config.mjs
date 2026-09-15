@@ -19,6 +19,24 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // All persistence goes through the stores in src/lib/storage (see getStores()).
+  {
+    ignores: ["src/lib/storage/**"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        { name: "localStorage", message: "Use getStores() from \"@/lib/storage\" instead." },
+        { name: "sessionStorage", message: "Use getStores() from \"@/lib/storage\" instead." },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "MemberExpression[property.name=/^(localStorage|sessionStorage)$/]",
+          message: "Use getStores() from \"@/lib/storage\" instead.",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
