@@ -9,6 +9,10 @@ An open-source fantasy football draft room. Keep a tiered board open during your
 - **Free forever, self-hostable:** the tiered board, mock-draft simulator, availability report, and bye-conflict detection.
 - **Hosted (paid once per league, per season):** an account with league sync across devices, plus an AI-written draft plan tailored to your pick slot.
 
+## Self-hosting
+
+No configuration needed: `npm install && npm run build && npm start`. Hosted features switch on only when their env vars are set (see `.env.example`).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
