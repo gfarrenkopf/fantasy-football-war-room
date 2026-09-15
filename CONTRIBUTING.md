@@ -26,6 +26,13 @@ npm run build
 - Use the token utilities (`bg-panel`, `text-muted`, `border-qb`, `text-value`, ...). Don't hard-code hex values in components. If you need a new color, add a token first.
 - The app is dark-only.
 
+## Configuration & feature flags
+
+- **Never read `process.env` directly.** Import `config` from `@/lib/config`. ESLint enforces this.
+- The app must run with **zero** env vars set. Hosted features turn on when their credentials are present. Check `config.cloudEnabled`, `config.aiEnabled`, `config.paymentsEnabled`, or `config.dataPipelineEnabled` before rendering or calling anything hosted.
+- `config` is server-only. To use flags in a client component, pass `publicFlags` down as props.
+- New env vars go in both `src/lib/config.ts` and `.env.example`.
+
 ## More to come
 
 Local setup, code style, and project conventions will be documented here as the app takes shape.
