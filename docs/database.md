@@ -8,6 +8,7 @@ The hosted features (accounts and syncing leagues across devices) store data in 
 2. [Schema and migrations](#2-schema-and-migrations)
 3. [Tests](#3-tests)
 4. [League API](#4-league-api)
+5. [Backups and restore](#5-backups-and-restore)
 
 ---
 
@@ -66,3 +67,50 @@ The browser syncs through these routes. `src/lib/storage/server.ts` is their onl
 | `PUT /api/leagues/:id/draft` | `{ state, baseRevision }`. Saves only if `baseRevision` is the stored revision and returns `{ revision }`. Otherwise it returns 409 with what's stored. |
 
 Data access lives in `src/lib/server/leagues.ts`, and its tests (including the cross-user cases) run on PGlite.
+
+## 5. Backups and restore
+
+A self-hosted database with no backups is the most likely way to lose users' leagues. Back up before every deploy that runs migrations, and on a schedule.
+
+### Taking a backup
+
+```sh
+DATABASE_URL=postgres://... npm run db:backup                 # writes backups/warroom-<UTC timestamp>.dump
+DATABASE_URL=postgres://... npm run db:backup -- /var/backups/warroom
+```
+
+`scripts/db-backup.sh` runs `pg_dump` in custom format (compressed, restorable table by table) and writes to a `.partial` file first. It checks the dump with `pg_restore --list` before renaming it, so a file with a final name is always readable. `backups/` is git-ignored.
+
+The scripts need the Postgres client tools (`pg_dump`, `pg_restore`) at the server's major version, 17. If those aren't installed but Postgres runs in Docker, set `PG_DOCKER_CONTAINER=<container name>` to run the tools inside that container. `DATABASE_URL` is then resolved from inside the container, e.g. `postgres://warroom:warroom@localhost:5432/warroom`.
+
+### Restoring
+
+```sh
+DATABASE_URL=postgres://... npm run db:restore -- backups/warroom-20260916T124920Z.dump --yes
+```
+
+This replaces every table with the dump's contents in a single transaction. If anything fails, the database is left as it was. Without `--yes` the script only explains what it would do.
+
+Runbook:
+
+1. **Stop the app** so nothing writes during the restore. Browsers keep unsynced picks locally and push them once the app is back.
+2. **Take a backup of the current state first**, even if it's broken. That keeps the restore reversible.
+3. Run `npm run db:restore -- <dump> --yes`.
+4. Run `npm run db:migrate`. It's a no-op if the dump came from the current schema, and it upgrades an older dump.
+5. Start the app, sign in, and check that leagues load.
+
+### Restore drill
+
+Do this before relying on backups, and again after changing Postgres versions. It was last run on 2026-09-16 against the dev container: counts and a checksum of every draft matched before the wipe and after the restore.
+
+```sh
+export DATABASE_URL=postgres://warroom:warroom@localhost:5432/warroom PG_DOCKER_CONTAINER=<dev db container>
+npm run db:backup
+docker exec "$PG_DOCKER_CONTAINER" psql -U warroom -d warroom -c "drop schema public cascade; create schema public;"
+npm run db:restore -- backups/<the dump> --yes
+docker exec "$PG_DOCKER_CONTAINER" psql -U warroom -d warroom -c "select count(*) from leagues"
+```
+
+### Not covered here
+
+Scheduling (cron or a systemd timer), copying dumps off the server, and retention depend on the deployment. They're tracked with the deploy pipeline in Epic 6 (APE-108). A backup that only lives on the database's own disk doesn't survive losing that disk.

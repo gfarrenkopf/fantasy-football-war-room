@@ -15,7 +15,9 @@
     "capture-fixtures": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/capture-fixtures.mts",
     "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --env-file-if-exists=.env.local scripts/db/migrate.mts"
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db/migrate.mts",
+    "db:backup": "scripts/db-backup.sh",
+    "db:restore": "scripts/db-restore.sh"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
