@@ -4,7 +4,7 @@
 #   sudo systemctl enable --now warroom
 #
 # deploy/deploy.sh points /srv/warroom/current at a built release and restarts this unit.
-# Secrets come from /etc/warroom/env: KEY=value lines, no `export`; double-quote values with spaces.
+# Secrets come from /etc/warroom/.env: KEY=value lines, no `export`; double-quote values with spaces.
 # Next listens on localhost only; Caddy (deploy/Caddyfile) serves the public HTTPS site.
 
 [Unit]
@@ -17,7 +17,7 @@ Type=simple
 User=warroom
 Group=warroom
 WorkingDirectory=/srv/warroom/current
-EnvironmentFile=/etc/warroom/env
+EnvironmentFile=/etc/warroom/.env
 Environment=NODE_ENV=production
 # The home directory is read-only to the service, so there is nowhere to store telemetry state.
 Environment=NEXT_TELEMETRY_DISABLED=1

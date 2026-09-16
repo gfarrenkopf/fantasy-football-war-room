@@ -6,7 +6,7 @@
 #   Environment=WARROOM_DOMAIN=warroom.example.com
 #
 # Caddy forwards Host and X-Forwarded-Host, which the API's same-origin check and Auth.js rely on.
-# NEXTAUTH_URL in /etc/warroom/env must be https://<the same domain>.
+# NEXTAUTH_URL in /etc/warroom/.env must be https://<the same domain>.
 
 {$WARROOM_DOMAIN:localhost} {
 	encode zstd gzip
