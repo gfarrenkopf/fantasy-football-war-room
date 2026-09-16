@@ -26,12 +26,14 @@ interface HeaderProps {
   children?: React.ReactNode;
   /** Buttons rendered at the start of the action group. */
   actions?: React.ReactNode;
+  /** Sign-in state, rendered after the draft actions. */
+  account?: React.ReactNode;
   /** Roster needs strip, rendered after search. */
   needs?: React.ReactNode;
 }
 
 /** Pick box, turn state, click-mode hint, search and draft actions. Ported from renderHeader(). */
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, onNewLeague, children, actions, needs }, searchRef) {
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, onNewLeague, children, actions, account, needs }, searchRef) {
   const model = useModel();
   const { undo, reset } = useDraftActions();
   const { leagues, active, switchLeague } = useLeague();
@@ -160,6 +162,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         <button className={cx("btn", "danger")} onClick={() => void reset()}>
           Reset draft
         </button>
+        {account}
       </div>
     </header>
   );

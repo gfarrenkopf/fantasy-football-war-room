@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import type { SessionUser } from "@/lib/auth/types";
 import type { PublicFlags } from "@/lib/config";
 import { DATASET_ID } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
+import { AccountMenu, AccountProvider } from "./Account";
 import { MockBar, SimProvider, useSim } from "./Simulator";
 import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
 import { BestAvailableStrip } from "./BestAvailableStrip";
@@ -28,18 +30,20 @@ const REPORT_MOCKS = 300;
 const PLAN_MOCKS = 100;
 
 /** The war room app: providers plus the active view. */
-export function WarRoom({ flags }: { flags: PublicFlags }) {
+export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser | null }) {
   return (
     <FlagsProvider flags={flags}>
-      <ToastProvider>
-        <ConfirmProvider>
-          <PrefsProvider>
-            <LeagueProvider>
-              <LeagueGate />
-            </LeagueProvider>
-          </PrefsProvider>
-        </ConfirmProvider>
-      </ToastProvider>
+      <AccountProvider user={user}>
+        <ToastProvider>
+          <ConfirmProvider>
+            <PrefsProvider>
+              <LeagueProvider>
+                <LeagueGate />
+              </LeagueProvider>
+            </PrefsProvider>
+          </ConfirmProvider>
+        </ToastProvider>
+      </AccountProvider>
     </FlagsProvider>
   );
 }
@@ -198,6 +202,7 @@ function WarRoomView() {
             </button>
           </>
         }
+        account={<AccountMenu />}
       >
         <div className={s.seg} role="tablist" aria-label="View">
           {(["focus", "board"] as const).map((v) => (

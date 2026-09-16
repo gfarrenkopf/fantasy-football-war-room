@@ -1648,3 +1648,23 @@
 .setupFoot .btn {
   white-space: nowrap;
 }
+
+/* ---------- account ---------- */
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.accountEmail {
+  color: var(--color-muted);
+  font-size: 11.5px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
