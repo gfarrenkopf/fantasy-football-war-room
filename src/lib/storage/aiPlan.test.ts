@@ -37,6 +37,19 @@ describe("AI plan store", () => {
     expect(calls).toEqual([{ url: "/api/leagues/league%201/plan", method: "POST" }]);
   });
 
+  it("sends regenerate requests as a JSON body, and plain requests without one", async () => {
+    const bodies: (string | undefined)[] = [];
+    const { fetch } = fakeFetch((_url, init) => {
+      bodies.push(init.body as string | undefined);
+      return Response.json({ ...generating, regenerationsLeft: 2, limitReached: true });
+    });
+    const store = createAiPlanStore({ fetch, flush: async () => true });
+    const regenerated = await store.request("l1", { regenerate: true });
+    await store.request("l1");
+    expect(bodies).toEqual(['{"regenerate":true}', undefined]);
+    expect(regenerated).toMatchObject({ ok: true, view: { regenerationsLeft: 2, limitReached: true } });
+  });
+
   it("doesn't ask when league edits can't sync", async () => {
     const { fetch, calls } = fakeFetch(() => Response.json(generating));
     const store = createAiPlanStore({ fetch, flush: async () => false });

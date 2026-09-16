@@ -33,9 +33,23 @@ export async function generateAiPlan(
 ): Promise<GeneratedPlan> {
   const start = performance.now();
   const { system, user } = buildPlanPrompt(input);
-  const { json, usage } = await model.generate({ system, user, schema: PLAN_OUTPUT_SCHEMA, maxTokens: MAX_OUTPUT_TOKENS, effort, signal });
+  const call = model.generate({ system, user, schema: PLAN_OUTPUT_SCHEMA, maxTokens: MAX_OUTPUT_TOKENS, effort, signal });
+  const { json, usage } = await (signal ? withDeadline(call, signal) : call);
 
   const result = validateAiPlan(json, input);
   if (!result.ok) throw new PlanModelError("invalid_output", `Unusable plan: ${result.issues.join("; ")}`, usage);
   return { plan: result.plan, issues: result.issues, provider: model.provider, model: model.model, usage, durationMs: performance.now() - start };
+}
+
+/**
+ * Settles with `call`, or rejects with a "timeout" PlanModelError once `signal` aborts, even if the
+ * adapter ignores the signal. A job must never hang past its deadline and hold its lease.
+ */
+function withDeadline<T>(call: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new PlanModelError("timeout", "Plan request aborted before it started"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new PlanModelError("timeout", "Plan request ran past its deadline"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    call.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
 }

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { AiPlanTurn } from "@/lib/ai/planSchema";
-import { isWorking, nextPollDelay, type PlanView } from "@/lib/ai/planView";
+import { isWorking, nextPollDelay, planFallback, type FallbackReason, type PlanView } from "@/lib/ai/planView";
 import { roundOf } from "@/lib/draft/snake";
 import { getStores, type AiPlanResult } from "@/lib/storage";
 import { useAccount } from "./Account";
@@ -10,7 +10,9 @@ import { POS_COLOR } from "./Board";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { useToast } from "./Feedback";
+import type { PlanOdds } from "./FocusView";
 import { useFlags } from "./Flags";
+import { LiveTurnPlans } from "./LiveTurnPlans";
 
 /* ================= state ================= */
 
@@ -23,7 +25,8 @@ interface AiPlanValue {
   problem: string | null;
   /** Seconds the current job has been waiting or running. */
   waitingSeconds: number;
-  request(): void;
+  /** Asks for a plan for the current settings, or with `regenerate`, a new version of an up-to-date one. */
+  request(regenerate?: boolean): void;
 }
 
 const AiPlanContext = createContext<AiPlanValue | null>(null);
@@ -75,6 +78,7 @@ function AiPlanTracker({ leagueId, children }: { leagueId: string; children: Rea
     }
     setProblem(null);
     const next = result.view;
+    if (next.limitReached) toast("You've used this league's free rewrites, so your saved plan was kept");
     if (isWorking(next)) watched.current = true;
     else if (watched.current) {
       watched.current = false;
@@ -112,11 +116,11 @@ function AiPlanTracker({ leagueId, children }: { leagueId: string; children: Rea
     };
   }, [delay, view]);
 
-  function request() {
+  function request(regenerate = false) {
     setSending(true);
     setProblem(null);
     void store
-      .request(leagueId)
+      .request(leagueId, { regenerate })
       .then(handle)
       .finally(() => {
         setNow(Date.now());
@@ -181,22 +185,55 @@ function Progress({ plan }: { plan: AiPlanValue }) {
   );
 }
 
+/** Why a job failed, for the user. */
+function failureText(kind: string): string {
+  switch (kind) {
+    case "invalid_league":
+      return "These league settings don't fit the player data.";
+    case "timeout":
+      return "The AI took too long this time.";
+    case "unavailable":
+      return "The AI service is down or didn't respond.";
+    default:
+      return "The AI didn't produce a usable plan this time.";
+  }
+}
+
+const FALLBACK_TEXT: Record<FallbackReason, string> = {
+  failed: "Until then, here's the live turn plan",
+  unreachable: "While the AI plan is out of reach, here's the live turn plan",
+  slow: "This is taking longer than usual. Meanwhile, here's the live turn plan",
+  writing: "While yours is written, here's the live turn plan",
+};
+
 /* ================= drawer tab ================= */
 
-/** The "AI game plan" tab of the plan drawer. */
-export function AiPlanTab() {
+/**
+ * The "AI game plan" tab of the plan drawer. Whenever there's no AI plan to show (it's being written,
+ * it failed, or the server can't be reached) the live turn plan fills in, so the tab is never a dead end.
+ */
+export function AiPlanTab({ planOdds, onShowLive }: { planOdds: PlanOdds | null; onShowLive(): void }) {
   const plan = useAiPlan();
   const model = useModel();
   if (!plan) return null;
-  const { view, sending, problem, request } = plan;
+  const { view, sending, problem, request, waitingSeconds } = plan;
   const working = !!view && isWorking(view);
   const stored = view?.plan ?? null;
+  const fallback = planFallback(view, problem !== null, waitingSeconds * 1000);
+  const mocks = planOdds ? ` from ${planOdds.result.n} mocks of your room` : "";
 
-  const button = (label: string) => (
-    <button className={cx("btn", "primary")} onClick={request} disabled={sending || working}>
-      {sending ? "Starting…" : label}
-    </button>
-  );
+  const left = view?.regenerationsLeft ?? null;
+  /** A new plan for a league that already has one uses up a rewrite; none are left. */
+  const outOfRewrites = !!stored && left === 0;
+  const rewrites = left === null ? "" : ` (${left} left)`;
+  const button = (label: string, { regenerate = false, counted = !!stored } = {}) =>
+    counted && outOfRewrites ? (
+      <div className={s.lbl}>You&apos;ve used this league&apos;s free rewrites. The live turn plan keeps updating after every pick.</div>
+    ) : (
+      <button className={cx("btn", "primary")} onClick={() => request(regenerate)} disabled={sending || working}>
+        {sending ? "Starting…" : `${label}${counted ? rewrites : ""}`}
+      </button>
+    );
 
   return (
     <div className={s.aiPlan}>
@@ -208,7 +245,7 @@ export function AiPlanTab() {
             An AI analyst writes a game plan for your draft slot: who to target at each of your turns, who to fall back on, and who not to count on, from 300
             mock drafts of your room.
           </p>
-          {button("Write my game plan")}
+          {button("Write my game plan", { counted: false })}
           <div className={s.lbl}>Takes about a minute. You can keep drafting while it&apos;s written.</div>
         </div>
       )}
@@ -219,7 +256,7 @@ export function AiPlanTab() {
         <div className={cx("aiCallout", "aiFailed")}>
           <p>
             <b>Couldn&apos;t write your game plan.</b>{" "}
-            {view.error.kind === "invalid_league" ? "These league settings don't fit the player data." : "The AI service didn't come through this time."}
+            {failureText(view.error.kind)}
             {stored && " Your previous plan is below."}
           </p>
           {view.error.retryable && button("Try again")}
@@ -228,12 +265,30 @@ export function AiPlanTab() {
 
       {stored && view?.stale && !working && (
         <div className={cx("aiCallout", "aiStale")}>
-          <p>Your league settings changed since this plan was written, so its picks may not line up.</p>
+          <p>Your league settings changed since this plan was written, so its picks may not line up.{outOfRewrites && " Switch to Live odds for a plan that fits them."}</p>
           {button("Rewrite for my current settings")}
         </div>
       )}
 
       {problem && <p className={s.aiProblem}>{problem}</p>}
+
+      {fallback && stored && (
+        <p className={s.lbl}>
+          The live turn plan{mocks} is always up to date.{" "}
+          <button className={s.linkBtn} onClick={onShowLive}>
+            Show live odds
+          </button>
+        </p>
+      )}
+      {fallback && !stored && (
+        <>
+          <p className={s.aiFallback}>
+            {FALLBACK_TEXT[fallback]}
+            {mocks}. % is the chance a player survives to that turn.
+          </p>
+          <LiveTurnPlans planOdds={planOdds} />
+        </>
+      )}
 
       {stored && (
         <>
@@ -266,6 +321,12 @@ export function AiPlanTab() {
             );
           })}
           {view?.generatedAt && <p className={s.lbl}>Written {new Date(view.generatedAt).toLocaleString()}.</p>}
+          {view?.status === "ready" && !view.stale && (
+            <div className={s.aiCallout}>
+              <div className={s.lbl}>Want a different take? A new version replaces this one.</div>
+              {button("Write a new version", { regenerate: true })}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -292,7 +353,17 @@ export function AiTurnNote({ onOpen }: { onOpen(): void }) {
     );
   }
   const turn = view.plan && !view.stale ? currentTurn(view.plan.turns, model.next) : null;
-  if (!turn) return null;
+  if (!turn) {
+    if (view.status !== "failed") return null;
+    return (
+      <div className={cx("aiTurn", "lbl")}>
+        AI game plan unavailable; the live plan below still works.{" "}
+        <button className={s.linkBtn} onClick={onOpen}>
+          Details
+        </button>
+      </div>
+    );
+  }
   return (
     <div className={s.aiTurn}>
       <div>

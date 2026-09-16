@@ -1702,6 +1702,10 @@ a.btn {
 .aiProblem {
   color: var(--color-warn-ink);
 }
+.aiFallback {
+  margin: 4px 0 8px;
+  color: var(--color-muted);
+}
 .aiIntro {
   font-size: 13px;
   color: var(--color-text);

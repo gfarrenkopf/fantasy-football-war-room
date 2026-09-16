@@ -15,6 +15,13 @@
       "when": 1789590438262,
       "tag": "0001_ai_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789593725086,
+      "tag": "0002_ai_generations",
+      "breakpoints": true
     }
   ]
 }

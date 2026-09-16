@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { myPlayers, positionCounts } from "@/lib/draft/roster";
-import { bestOnBoard, computeTurnPlan, type AvailabilityResult, type PlanEntry, type TurnPlan } from "@/lib/draft/sim";
+import { bestOnBoard, computeTurnPlan, type AvailabilityResult, type PlanEntry } from "@/lib/draft/sim";
 import { formatRoundPick, isMyPick, nextMyPick, roundOf } from "@/lib/draft/snake";
 import { LATE_POSITIONS, type DraftPick, type Position } from "@/lib/draft/types";
 import { POS_COLOR } from "./Board";
@@ -14,6 +14,7 @@ import { usePrefs } from "./PrefsProvider";
 import { ByePanel, RosterPanel } from "./RosterPanels";
 import { useFlags } from "./Flags";
 import { AiPlanTab, AiTurnNote, useAiPlan } from "./AiPlan";
+import { LiveTurnPlans, pct } from "./LiveTurnPlans";
 
 export interface PlanOdds {
   /** Picks the odds were computed from. */
@@ -145,8 +146,6 @@ function PickLog() {
 }
 
 /* ================= plan panel ================= */
-
-const pct = (e: PlanEntry) => `${Math.round(e.survival * 100)}%`;
 
 function Accordion({ id, head, hint, children }: { id: "plan" | "ba"; head: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode }) {
   const { prefs, setPrefs } = usePrefs();
@@ -304,21 +303,6 @@ export function PlanDrawer({ planOdds, tab, onTab, onClose }: { planOdds: PlanOd
   const model = useModel();
   const aiPlan = useAiPlan();
   const showing = aiPlan ? tab : "live";
-  const plans: TurnPlan[] = useMemo(
-    () => (planOdds ? planOdds.result.turns.map((_, i) => computeTurnPlan(planOdds.picks, planOdds.result, model.ctx, i)).filter((p): p is TurnPlan => !!p) : []),
-    [planOdds, model.ctx],
-  );
-
-  const name = (e: PlanEntry) => {
-    const tk = model.taken.get(e.player.id);
-    return (
-      <span key={e.player.id} style={{ color: POS_COLOR[e.player.pos] }}>
-        {tk ? <span className={s.struck}>{e.player.name}</span> : e.player.name}
-        {tk?.mine ? " ✓" : ""} <span className={s.lbl}>({pct(e)})</span>
-      </span>
-    );
-  };
-  const list = (entries: PlanEntry[]) => entries.map((e, i) => [i > 0 && ", ", name(e)]);
 
   return (
     <>
@@ -342,7 +326,7 @@ export function PlanDrawer({ planOdds, tab, onTab, onClose }: { planOdds: PlanOd
         </div>
         {showing === "ai" ? (
           <div className={s.drawerBody}>
-            <AiPlanTab />
+            <AiPlanTab planOdds={planOdds} onShowLive={() => onTab("live")} />
           </div>
         ) : (
           <div className={s.drawerBody}>
@@ -350,29 +334,7 @@ export function PlanDrawer({ planOdds, tab, onTab, onClose }: { planOdds: PlanOd
               You pick at <b>{planOdds?.result.turns.map((t) => t.join("/")).join(", ") || "—"}</b>. Plans are rebuilt after every pick from{" "}
               {planOdds?.result.n ?? "—"} mocks of your room. % is the chance a player survives to that turn.
             </p>
-            {!planOdds && <p>Estimating…</p>}
-            {plans.map((pl, i) => (
-              <section key={pl.picks[0]} className={cx("planSection", i === 0 && "now")}>
-                <h4>
-                  Pick{pl.picks.length > 1 ? "s" : ""} {pl.picks.join(" & ")}
-                </h4>
-                <ul>
-                  <li>
-                    <b>Targets:</b> {pl.targets.length ? list(pl.targets) : "—"}
-                  </li>
-                  {pl.fallbacks.length > 0 && (
-                    <li>
-                      <b>Fallbacks:</b> {list(pl.fallbacks)}
-                    </li>
-                  )}
-                  {pl.letGo.length > 0 && (
-                    <li>
-                      <b>Let go:</b> {list(pl.letGo)}
-                    </li>
-                  )}
-                </ul>
-              </section>
-            ))}
+            <LiveTurnPlans planOdds={planOdds} />
             <h4>Controls</h4>
             <ul>
               <li>Click a player: logs the pick for whoever is on the clock (you on your picks, another team otherwise).</li>

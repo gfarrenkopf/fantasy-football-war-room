@@ -1,6 +1,7 @@
-import { index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import type { AiPlan } from "@/lib/ai/planSchema";
 import type { PlanJobStatus } from "@/lib/ai/planView";
+import type { PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
 
 /**
@@ -162,4 +163,37 @@ export const aiPlans = pgTable(
     }),
   },
   (t) => [index("ai_plans_status_idx").on(t.status)],
+);
+
+/** How a model call for a plan ended: saved, outrun by a newer job, or a failure kind. */
+export type GenerationOutcome = "ready" | "superseded" | PlanModelErrorKind | "internal";
+
+/**
+ * Every model call made for an AI plan, with its token usage and cost, for checking unit economics
+ * (see src/lib/server/aiCosts.ts). Append-only. League and user ids aren't foreign keys, so the
+ * history outlives deleted leagues and accounts.
+ */
+export const aiGenerations = pgTable(
+  "ai_generations",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    leagueId: text("league_id").notNull(),
+    userId: text("user_id").notNull(),
+    jobId: text("job_id").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    promptVersion: integer("prompt_version").notNull(),
+    outcome: text("outcome").$type<GenerationOutcome>().notNull(),
+    /** Null when the provider reported no usage, e.g. a call cut off at its deadline. */
+    inputTokens: integer("input_tokens"),
+    cachedInputTokens: integer("cached_input_tokens"),
+    outputTokens: integer("output_tokens"),
+    /** Priced when logged (src/lib/ai/pricing.ts). Null for a model without a known price or without usage. */
+    costUsd: numeric("cost_usd", { precision: 12, scale: 6, mode: "number" }),
+    durationMs: integer("duration_ms").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_generations_created_at_idx").on(t.createdAt), index("ai_generations_league_outcome_idx").on(t.leagueId, t.outcome)],
 );

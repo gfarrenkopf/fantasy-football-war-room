@@ -27,6 +27,10 @@ export interface PlanView {
   /** 1-based place in line while queued. */
   queuePosition: number | null;
   error: PlanError | null;
+  /** New versions the league may still have written, or null before its first plan. */
+  regenerationsLeft: number | null;
+  /** This request asked for a new plan past the league's allowance, so the stored one was kept. */
+  limitReached: boolean;
 }
 
 export const NO_PLAN: PlanView = {
@@ -38,6 +42,8 @@ export const NO_PLAN: PlanView = {
   startedAt: null,
   queuePosition: null,
   error: null,
+  regenerationsLeft: null,
+  limitReached: false,
 };
 
 /** A job is waiting or running: keep polling. */
@@ -52,6 +58,27 @@ const FAST_FOR_MS = 60_000;
 export function nextPollDelay(view: PlanView, waitingMs: number): number | null {
   if (!isWorking(view)) return null;
   return waitingMs < FAST_FOR_MS ? FAST_POLL_MS : SLOW_POLL_MS;
+}
+
+/** Past the job's lease plus a margin: by now a healthy job has finished or been reclaimed. */
+export const PLAN_OVERDUE_MS = 5 * 60_000;
+
+/**
+ * Why the AI tab should also show the live, algorithmic turn plan, or null when it needn't:
+ * - failed: the last job failed (provider down, timed out, unusable output);
+ * - unreachable: the last status read or request didn't get an answer from the server;
+ * - slow: a job has been waiting or running for longer than a healthy one takes;
+ * - writing: a job is waiting or running.
+ * The AI plan never blocks the user: whenever it isn't there, the live plan is.
+ */
+export type FallbackReason = "failed" | "unreachable" | "slow" | "writing";
+
+export function planFallback(view: PlanView | null, unreachable: boolean, waitingMs: number): FallbackReason | null {
+  if (unreachable) return "unreachable";
+  if (!view) return null;
+  if (view.status === "failed") return "failed";
+  if (isWorking(view)) return waitingMs > PLAN_OVERDUE_MS ? "slow" : "writing";
+  return null;
 }
 
 const STATUSES = new Set(["none", "queued", "generating", "ready", "failed"]);
@@ -77,5 +104,7 @@ export function parsePlanView(raw: unknown): PlanView | null {
     startedAt: str(v.startedAt),
     queuePosition: typeof v.queuePosition === "number" ? v.queuePosition : null,
     error: error && typeof error.kind === "string" ? { kind: error.kind, retryable: error.retryable === true } : null,
+    regenerationsLeft: typeof v.regenerationsLeft === "number" ? v.regenerationsLeft : null,
+    limitReached: v.limitReached === true,
   };
 }

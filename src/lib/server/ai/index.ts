@@ -2,6 +2,7 @@ import "server-only";
 import type { PlanModel } from "@/lib/ai/provider";
 import { createPlanModel, isPlanProvider } from "@/lib/ai/providers";
 import { config } from "@/lib/config";
+import { DEFAULT_PLAN_ALLOWANCE } from "@/lib/server/aiPlans";
 
 /** The configured plan model, or null when AI plans are off. */
 export function getPlanModel(): PlanModel | null {
@@ -19,4 +20,12 @@ export function getPlanModel(): PlanModel | null {
 export function canUseAiPlan(email: string | null): boolean {
   if (!config.aiAllowlist.length) return true;
   return email !== null && config.aiAllowlist.includes(email.toLowerCase());
+}
+
+/**
+ * How many plans a league may have written: its first plus the free regenerations. The seam for
+ * entitlements (Epic 4.4), which will take the league and look up what it has paid for here.
+ */
+export async function planAllowance(): Promise<number> {
+  return DEFAULT_PLAN_ALLOWANCE;
 }
