@@ -108,7 +108,7 @@ export const drafts = pgTable("drafts", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
-/** What a league has paid for. Epic 4 defines the kinds and when rows are written. */
+/** What a league has paid for. Written by the Stripe webhook; see src/lib/server/entitlements.ts. */
 export const entitlements = pgTable(
   "entitlements",
   {
@@ -119,6 +119,10 @@ export const entitlements = pgTable(
     grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     /** Where the grant came from, e.g. a Stripe checkout session id. */
     source: text("source").notNull(),
+    /** What was paid, in the currency's smallest unit (cents). Null for grants that weren't bought. */
+    amountTotal: integer("amount_total"),
+    /** ISO currency code, lowercase as Stripe sends it (e.g. "usd"). */
+    currency: text("currency"),
   },
   (t) => [primaryKey({ columns: [t.leagueId, t.kind] })],
 );

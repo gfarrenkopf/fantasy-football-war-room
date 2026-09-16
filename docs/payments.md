@@ -9,7 +9,8 @@ The hosted app sells a one-time **season pass** per league through Stripe. It un
 1. [How it's switched on](#1-how-its-switched-on)
 2. [Stripe product setup](#2-stripe-product-setup)
 3. [Checkout](#3-checkout)
-4. [Local testing](#4-local-testing)
+4. [Webhook](#4-webhook)
+5. [Local testing](#5-local-testing)
 
 ---
 
@@ -45,7 +46,25 @@ The price lives only in Stripe. To change it, create a new price and update `STR
 - Responses: **404** when payments are off or the league isn't the user's, **409** when the league already has a pass, and **503** when Stripe can't be reached (logged as `[server-error]`, so alerts fire).
 - Success and cancel links use `NEXTAUTH_URL`, because behind the proxy the request URL is the internal address.
 
-## 4. Local testing
+## 4. Webhook
+
+`POST /api/stripe/webhook` is where Stripe reports payments. It's the **only** thing that grants a season pass. Returning to the success page doesn't.
+
+- **Authentication is the signature.** The route isn't behind a session. It checks the raw body against the `Stripe-Signature` header using `STRIPE_WEBHOOK_SECRET`. A missing, forged or tampered signature gets **400**, and nothing is read from or written to the database.
+- **What grants a pass:** `checkout.session.completed` with `payment_status: "paid"` (cards), or `checkout.session.async_payment_succeeded` (payment methods that settle later). The session's metadata must name a league owned by the user who paid. The row goes into `entitlements` with the session id as `source`, plus `amount_total` and `currency`.
+- **Retries are safe.** There's one row per league and kind, so a repeated event answers `exists` and changes nothing.
+- **Responses:** **200** for every event that's been dealt with, including ignored event types, unpaid sessions, and sessions without our metadata or with an unknown league (those last two also log a `[payments]` warning). **500** only when handling fails (e.g. the database is down). It's logged as `[server-error]`, and Stripe retries with backoff for up to three days.
+- **404** when payments are off.
+
+In the dashboard's webhook endpoint, subscribe to `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Other events are harmless but unused.
+
+**Refunds are manual.** Refund in the Stripe dashboard, then remove the pass if it shouldn't stay unlocked:
+
+```sql
+DELETE FROM entitlements WHERE league_id = '<league id>' AND kind = 'season_pass';
+```
+
+## 5. Local testing
 
 1. Run cloud features locally (see [database.md](database.md)) and set `STRIPE_SECRET_KEY` to a test key and `STRIPE_PRICE_ID` to the test price.
 2. Install the [Stripe CLI](https://docs.stripe.com/stripe-cli), then run `stripe login`.
@@ -57,4 +76,10 @@ The price lives only in Stripe. To change it, create a new price and update `STR
 
 4. Restart `npm run dev` so the new variables are read.
 
-Pay with test card `4242 4242 4242 4242`, any future expiry date and any CVC.
+Pay with test card `4242 4242 4242 4242`, any future expiry date and any CVC. The `stripe listen` window shows the event, and the webhook's response should be `200` with `"outcome":"granted"`.
+
+To check that forged events are rejected, post an unsigned one. It should get `400`:
+
+```sh
+curl -i -X POST localhost:3000/api/stripe/webhook -H 'stripe-signature: t=1,v1=forged' -d '{}'
+```

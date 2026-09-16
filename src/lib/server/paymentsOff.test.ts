@@ -32,4 +32,13 @@ describe("payment routes with payments off", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Not found" });
   });
+
+  it("webhook: POST /api/stripe/webhook → 404, signed or not", async () => {
+    const { POST } = await import("@/app/api/stripe/webhook/route");
+    for (const headers of [{}, { "stripe-signature": "t=1,v1=abc" }] as Record<string, string>[]) {
+      const response = await POST(new Request("http://localhost/api/stripe/webhook", { method: "POST", headers, body: "{}" }));
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "Not found" });
+    }
+  });
 });

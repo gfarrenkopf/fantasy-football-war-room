@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { entitlements } from "@/lib/db/schema";
+import { entitlements, leagues } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
 
 /**
@@ -16,4 +16,32 @@ export async function hasEntitlement(db: Db, leagueId: string, kind: string): Pr
     .from(entitlements)
     .where(and(eq(entitlements.leagueId, leagueId), eq(entitlements.kind, kind)));
   return !!row;
+}
+
+export type GrantResult =
+  | "granted"
+  /** Already recorded, e.g. Stripe retried the event. Nothing changed. */
+  | "exists"
+  /** No such league, or it isn't owned by that user. */
+  | "no-league";
+
+/**
+ * Records a purchase. Idempotent: one row per league and kind, so a retried event is harmless.
+ * A soft-deleted league still gets the grant (it was paid for, and restoring the league keeps it).
+ */
+export async function grantEntitlement(
+  db: Db,
+  grant: { leagueId: string; userId: string; kind: string; source: string; amountTotal: number | null; currency: string | null },
+): Promise<GrantResult> {
+  const [league] = await db
+    .select({ id: leagues.id })
+    .from(leagues)
+    .where(and(eq(leagues.id, grant.leagueId), eq(leagues.userId, grant.userId)));
+  if (!league) return "no-league";
+  const inserted = await db
+    .insert(entitlements)
+    .values({ leagueId: grant.leagueId, kind: grant.kind, source: grant.source, amountTotal: grant.amountTotal, currency: grant.currency })
+    .onConflictDoNothing()
+    .returning({ kind: entitlements.kind });
+  return inserted.length ? "granted" : "exists";
 }

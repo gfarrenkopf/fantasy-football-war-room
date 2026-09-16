@@ -1,12 +1,12 @@
 import type Stripe from "stripe";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { standardRoster } from "@/lib/data";
 import { entitlements } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { startCheckout, type CreateCheckoutSession } from "./checkout";
 import { SEASON_PASS } from "./entitlements";
-import { deleteLeague, upsertLeague } from "./leagues";
+import { deleteLeague } from "./leagues";
+import { createTestLeague } from "./testLeagues";
 
 let db: Db;
 let close: () => Promise<void>;
@@ -22,21 +22,7 @@ beforeEach(async () => {
   bob = await createTestUser(db);
 });
 
-let seq = 0;
-async function league(userId: string) {
-  const id = `checkout-league-${++seq}`;
-  const now = "2026-09-01T00:00:00.000Z";
-  await upsertLeague(db, userId, {
-    id,
-    name: "Home league",
-    season: 2026,
-    datasetId: "2026-abc",
-    settings: { teams: 12, mySlot: 3, scoring: "ppr", valueThreshold: 10, roster: standardRoster() },
-    createdAt: now,
-    updatedAt: now,
-  });
-  return id;
-}
+const league = (userId: string) => createTestLeague(db, userId);
 
 function fakeStripe(url: string | null = "https://checkout.stripe.com/c/pay/cs_test_1") {
   const calls: Stripe.Checkout.SessionCreateParams[] = [];
