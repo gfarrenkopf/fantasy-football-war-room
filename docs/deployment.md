@@ -46,12 +46,13 @@ Every command below runs over SSH. Replace `warroom.example.com` with your domai
 
 ## 3. Secure the server
 
-As `root`, create an admin user that can use sudo and copy your SSH key to it:
+As `root`, create your own admin user with the same SSH key. Login is key-only, so it gets passwordless sudo, the same access root had:
 
 ```sh
-adduser --gecos "" admin          # pick any name; set a password for sudo
+adduser --disabled-password --gecos "" admin     # pick any name
 usermod -aG sudo admin
 rsync --archive --chown=admin:admin ~/.ssh /home/admin
+echo 'admin ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/admin && chmod 440 /etc/sudoers.d/admin
 ```
 
 Check that `ssh admin@<ip>` works from another terminal **before** continuing. Then, as `admin`:
@@ -132,6 +133,8 @@ In the editor, add at least one sign-in method. The variables are described in [
 
 - **Google:** `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`. In Google Cloud, set the OAuth redirect URI to `https://warroom.example.com/api/auth/callback/google`.
 - **Email link:** `AUTH_RESEND_KEY` and `EMAIL_FROM`. The sender's domain must be verified in Resend.
+
+`NEXTAUTH_URL` must include the scheme (`https://warroom.example.com`, not `warroom.example.com`). Leave unused keys empty or delete them; an empty key counts as unset.
 
 The file is `KEY=value` lines with no `export`. **Double-quote values that contain spaces**, e.g. `EMAIL_FROM="War Room <draft@example.com>"`. Both systemd and `deploy.sh` read it.
 
