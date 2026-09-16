@@ -27,18 +27,14 @@ export const FALLBACK_ODDS = 0.3;
 const MAX = { targets: 4, fallbacks: 4, letGo: 3 };
 
 /**
- * The free-tier turn plan, replacing the prototype's hand-written PLAN. For one of the user's
- * upcoming turns, walk down the board in needs-adjusted order (as a sharp drafter would score
- * players for the user's roster in that round):
- * - targets: the first players with ≥ 60% odds of surviving to the turn;
- * - fallbacks: the next players with ≥ 30% odds;
- * - let go: players ranked within half a round before the pick who will likely be gone, i.e. the
- *   tempting names that shouldn't be counted on (obviously-gone stars aren't listed).
+ * Every player still worth considering for one of the user's upcoming turns, in needs-adjusted
+ * order (as a sharp drafter would score players for the user's roster in that round), with each
+ * one's odds of surviving to the turn.
  * For future turns the user's roster is projected from the mocks: each position gets the expected
  * number of players the user's simulated picks take before that turn. Players those picks usually
  * take (≥ 50%) are skipped.
  */
-export function computeTurnPlan(picks: DraftPick[], odds: AvailabilityResult, ctx: SimContext, turn = 0): TurnPlan | null {
+export function turnBoard(picks: DraftPick[], odds: AvailabilityResult, ctx: SimContext, turn = 0): { picks: number[]; entries: PlanEntry[] } | null {
   const turnPicks = odds.turns[turn];
   if (!turnPicks) return null;
 
@@ -54,15 +50,30 @@ export function computeTurnPlan(picks: DraftPick[], odds: AvailabilityResult, ct
 
   const taken = new Set(picks.map((p) => p.playerId));
   const round = roundOf(turnPicks[0], ctx.league.teams);
-  const letGoFromRank = turnPicks[0] - ctx.league.teams / 2;
-
-  const plan: TurnPlan = { picks: turnPicks, targets: [], fallbacks: [], letGo: [] };
-  for (const player of bestOnBoard(taken, counts, round, ctx, ctx.players.length, skip)) {
+  const entries = bestOnBoard(taken, counts, round, ctx, ctx.players.length, skip).map((player) => {
     const o = odds.players.get(player.id);
-    const entry = { player, survival: o ? survival(o, turn) : 0 };
+    return { player, survival: o ? survival(o, turn) : 0 };
+  });
+  return { picks: turnPicks, entries };
+}
+
+/**
+ * The free-tier turn plan, replacing the prototype's hand-written PLAN. Walks down turnBoard():
+ * - targets: the first players with ≥ 60% odds of surviving to the turn;
+ * - fallbacks: the next players with ≥ 30% odds;
+ * - let go: players ranked within half a round before the pick who will likely be gone, i.e. the
+ *   tempting names that shouldn't be counted on (obviously-gone stars aren't listed).
+ */
+export function computeTurnPlan(picks: DraftPick[], odds: AvailabilityResult, ctx: SimContext, turn = 0): TurnPlan | null {
+  const board = turnBoard(picks, odds, ctx, turn);
+  if (!board) return null;
+
+  const letGoFromRank = board.picks[0] - ctx.league.teams / 2;
+  const plan: TurnPlan = { picks: board.picks, targets: [], fallbacks: [], letGo: [] };
+  for (const entry of board.entries) {
     if (entry.survival >= TARGET_ODDS && plan.targets.length < MAX.targets) plan.targets.push(entry);
     else if (entry.survival >= FALLBACK_ODDS && plan.fallbacks.length < MAX.fallbacks) plan.fallbacks.push(entry);
-    else if (entry.survival < FALLBACK_ODDS && player.consensusRank >= letGoFromRank && plan.letGo.length < MAX.letGo) plan.letGo.push(entry);
+    else if (entry.survival < FALLBACK_ODDS && entry.player.consensusRank >= letGoFromRank && plan.letGo.length < MAX.letGo) plan.letGo.push(entry);
     if (plan.targets.length === MAX.targets && plan.fallbacks.length === MAX.fallbacks) break;
   }
   return plan;

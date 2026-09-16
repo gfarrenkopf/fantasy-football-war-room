@@ -22,6 +22,9 @@ const resendApiKey = readEnv("AUTH_RESEND_KEY");
 const emailFrom = readEnv("EMAIL_FROM");
 const isProduction = process.env.NODE_ENV === "production";
 const anthropicApiKey = readEnv("ANTHROPIC_API_KEY");
+/** Which model provider writes the AI plan (see src/lib/ai/providers), and optionally which of its models. */
+const aiProvider = readEnv("AI_PROVIDER") ?? "anthropic";
+const aiModel = readEnv("AI_MODEL");
 const stripeSecretKey = readEnv("STRIPE_SECRET_KEY");
 const sportsDataApiKey = readEnv("SPORTSDATA_API_KEY");
 
@@ -30,6 +33,12 @@ const cloudEnabled = Boolean(databaseUrl && nextAuthSecret);
 /** Sign-in methods. Each needs cloud features plus its own credentials. */
 const googleAuthEnabled = cloudEnabled && Boolean(googleClientId && googleClientSecret);
 const emailAuthEnabled = cloudEnabled && Boolean(resendApiKey && emailFrom);
+/** API key per AI provider. Add a provider here when it gets an adapter in src/lib/ai/providers. */
+const aiApiKeys: Record<string, { env: string; key: string | undefined }> = {
+  anthropic: { env: "ANTHROPIC_API_KEY", key: anthropicApiKey },
+};
+const aiProviderKnown = Object.hasOwn(aiApiKeys, aiProvider);
+const aiApiKey = aiProviderKnown ? aiApiKeys[aiProvider].key : undefined;
 
 export const config = Object.freeze({
   databaseUrl,
@@ -41,6 +50,10 @@ export const config = Object.freeze({
   emailFrom,
   isProduction,
   anthropicApiKey,
+  aiProvider,
+  aiModel,
+  /** The configured AI provider's API key. */
+  aiApiKey,
   stripeSecretKey,
   sportsDataApiKey,
 
@@ -48,7 +61,7 @@ export const config = Object.freeze({
   googleAuthEnabled,
   emailAuthEnabled,
   /** AI-generated draft plan. A paid, hosted feature, so it needs accounts. */
-  aiEnabled: cloudEnabled && Boolean(anthropicApiKey),
+  aiEnabled: cloudEnabled && Boolean(aiApiKey),
   /** Stripe checkout + entitlements. Needs accounts to attach purchases to. */
   paymentsEnabled: cloudEnabled && Boolean(stripeSecretKey),
   /** Live ADP/projections ingestion. Without it the app uses the bundled sample data. */
@@ -87,8 +100,13 @@ if (Boolean(resendApiKey) !== Boolean(emailFrom)) {
 if (cloudEnabled && isProduction && !nextAuthUrl) {
   warnings.push("NEXTAUTH_URL is not set, so sign-in will reject requests in production. Set it to the site's public URL.");
 }
-if (anthropicApiKey && !cloudEnabled) {
-  warnings.push("ANTHROPIC_API_KEY is set but cloud features are disabled, so the AI plan is off.");
+if (!aiProviderKnown) {
+  warnings.push(`AI_PROVIDER "${aiProvider}" isn't supported (known: ${Object.keys(aiApiKeys).join(", ")}), so the AI plan is off.`);
+} else if (cloudEnabled && !aiApiKey && readEnv("AI_PROVIDER")) {
+  warnings.push(`AI_PROVIDER is "${aiProvider}" but ${aiApiKeys[aiProvider].env} is not set, so the AI plan is off.`);
+}
+if (aiApiKey && !cloudEnabled) {
+  warnings.push(`${aiApiKeys[aiProvider].env} is set but cloud features are disabled, so the AI plan is off.`);
 }
 if (stripeSecretKey && !cloudEnabled) {
   warnings.push("STRIPE_SECRET_KEY is set but cloud features are disabled, so payments are off.");
