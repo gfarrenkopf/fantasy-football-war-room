@@ -46,7 +46,7 @@ export function configureStores({ cloudEnabled, userId }: { cloudEnabled: boolea
 
   if (cloudEnabled && userId) {
     writeJson(storage, LAST_USER_KEY, userId);
-    stores = createServerStores({ userId, storage, onSyncIssue: (issue) => issueListeners.forEach((l) => l(issue)) });
+    stores = createServerStores({ userId, storage, legacy, onSyncIssue: (issue) => issueListeners.forEach((l) => l(issue)) });
   } else {
     stores = createLocalStores(storage, { legacy });
   }

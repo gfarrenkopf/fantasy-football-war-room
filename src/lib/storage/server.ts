@@ -1,6 +1,6 @@
 import { emptyDraftState } from "@/lib/draft/state";
 import type { DraftState } from "@/lib/draft/types";
-import { browserStorage, createLocalStores, readJson, storageKeys, writeJson } from "./localStorage";
+import { browserStorage, createLocalStores, readJson, storageKeys, writeJson, type LegacyContext } from "./localStorage";
 import { migrateDraftState, parseLeagueRecord } from "./records";
 import type { LeagueRecord, Stores } from "./types";
 
@@ -37,6 +37,8 @@ export interface ServerStoreOptions {
   retryDelays?: number[];
   /** Per-request timeout in ms. */
   timeoutMs?: number;
+  /** Passed to the signed-out stores that imports read from, so a not-yet-migrated legacy league is offered too. */
+  legacy?: LegacyContext;
 }
 
 interface SyncMeta {
@@ -79,6 +81,7 @@ export function createServerStores(options: ServerStoreOptions): Stores {
 
   const cache = createLocalStores(storage, { namespace: userId });
   const metaKey = syncMetaKey(userId);
+  const dismissedKey = `${storageKeys(userId).prefix}:import-dismissed`;
 
   /* ---------- sync metadata ---------- */
 
@@ -285,7 +288,7 @@ export function createServerStores(options: ServerStoreOptions): Stores {
     void syncDraft(id);
   }
 
-  return {
+  const stores: Stores = {
     prefs: cache.prefs,
 
     league: {
@@ -384,6 +387,35 @@ export function createServerStores(options: ServerStoreOptions): Stores {
       },
     },
 
+    imports: {
+      async pending() {
+        const signedOut = createLocalStores(storage, { legacy: options.legacy });
+        const local = await signedOut.league.listLeagues();
+        if (!local.length) return [];
+        const accountIds = new Set((await cache.league.listLeagues()).map((l) => l.id));
+        const dismissed = readJson(storage, dismissedKey);
+        const skip = new Set(Array.isArray(dismissed) ? dismissed : []);
+        return local.filter((l) => !accountIds.has(l.id) && !skip.has(l.id));
+      },
+      async importLeagues(ids) {
+        // Moves, not copies: once in the account cache (and queued to sync), the signed-out copy is removed
+        // so the two can't drift apart. Unsynced account changes are never cleared, so nothing is lost offline.
+        const signedOut = createLocalStores(storage);
+        for (const id of ids) {
+          const league = await signedOut.league.getLeague(id);
+          if (!league) continue;
+          const state = await signedOut.draft.getDraftState(id);
+          await stores.league.saveLeague(league);
+          if (state) await saveDraft(id, state);
+          await signedOut.league.deleteLeague(id);
+        }
+      },
+      async dismiss(ids) {
+        const dismissed = readJson(storage, dismissedKey);
+        writeJson(storage, dismissedKey, [...new Set([...(Array.isArray(dismissed) ? dismissed : []), ...ids])]);
+      },
+    },
+
     sync: {
       async flush() {
         clearTimeout(retryTimer);
@@ -395,4 +427,5 @@ export function createServerStores(options: ServerStoreOptions): Stores {
       },
     },
   };
+  return stores;
 }

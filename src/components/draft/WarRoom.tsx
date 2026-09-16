@@ -19,6 +19,7 @@ import { SyncNotices } from "./SyncNotices";
 import { FlagsProvider } from "./Flags";
 import { FocusView, PlanDrawer, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
+import { ImportPrompt } from "./ImportPrompt";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { NeedsStrip } from "./NeedsStrip";
@@ -44,6 +45,7 @@ export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser
           <ConfirmProvider>
             <PrefsProvider>
               <LeagueProvider>
+                <ImportPrompt />
                 <LeagueGate />
               </LeagueProvider>
             </PrefsProvider>

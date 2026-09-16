@@ -4,6 +4,7 @@ import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import type { DraftState } from "@/lib/draft/types";
 import * as api from "@/lib/server/leagues";
+import { createLocalStores } from "./localStorage";
 import { migrateDraftState, parseLeagueRecord } from "./records";
 import { createServerStores, hasUnsyncedChanges, type SyncIssue } from "./server";
 import { memoryStorage } from "./testing";
@@ -271,5 +272,64 @@ describe("server-backed stores: no-op saves", () => {
     expect(await laptop.stores.sync!.flush()).toBe(true);
     expect(server.requests.filter((r) => r.startsWith("PUT"))).toEqual([]);
     expect((await api.getDraft(db, userId, l.id))?.revision).toBe(1);
+  });
+});
+
+describe("first sign-in import", () => {
+  const signedOutWith = async (storage: Storage, ...leagues: LeagueRecord[]) => {
+    const local = createLocalStores(storage);
+    for (const l of leagues) {
+      await local.league.saveLeague(l);
+      await local.draft.saveDraftState(l.id, draft(`${l.id}-pick`));
+    }
+  };
+
+  it("offers leagues saved while signed out, and imports them into the account", async () => {
+    const storage = memoryStorage();
+    const a = league({ name: "Signed-out A" });
+    const b = league({ name: "Signed-out B" });
+    await signedOutWith(storage, a, b);
+
+    const phone = device(storage);
+    await phone.stores.league.listLeagues();
+    expect((await phone.stores.imports!.pending()).map((l) => l.name)).toEqual(["Signed-out A", "Signed-out B"]);
+
+    await phone.stores.imports!.importLeagues([a.id, b.id]);
+    expect(await phone.stores.sync!.flush()).toBe(true);
+    expect(await phone.stores.imports!.pending()).toEqual([]);
+    // Moved, not copied.
+    expect(await createLocalStores(storage).league.listLeagues()).toEqual([]);
+
+    // On a second device, the imported leagues and picks are there.
+    const laptop = device();
+    expect((await laptop.stores.league.listLeagues()).map((l) => l.name)).toEqual(["Signed-out A", "Signed-out B"]);
+    expect(await laptop.stores.draft.getDraftState(a.id)).toEqual(draft(`${a.id}-pick`));
+  });
+
+  it("importing twice never duplicates a league", async () => {
+    const storage = memoryStorage();
+    const a = league();
+    await signedOutWith(storage, a);
+    const phone = device(storage);
+    await phone.stores.imports!.importLeagues([a.id]);
+    await phone.stores.imports!.importLeagues([a.id]);
+    await phone.stores.sync!.flush();
+    expect(await device().stores.league.listLeagues()).toHaveLength(1);
+  });
+
+  it("doesn't offer declined leagues again, and leaves them local", async () => {
+    const storage = memoryStorage();
+    const a = league();
+    await signedOutWith(storage, a);
+    const phone = device(storage);
+    await phone.stores.imports!.dismiss([a.id]);
+    expect(await device(storage).stores.imports!.pending()).toEqual([]);
+    expect(await createLocalStores(storage).league.listLeagues()).toHaveLength(1);
+    await phone.stores.sync!.flush();
+    expect(await api.listLeagues(db, userId)).toEqual([]);
+  });
+
+  it("offers nothing when there are no signed-out leagues", async () => {
+    expect(await device().stores.imports!.pending()).toEqual([]);
   });
 });
