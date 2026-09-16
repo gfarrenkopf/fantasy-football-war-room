@@ -158,7 +158,7 @@ The variables exist for the paid hosted version. Accounts and cross-device sync 
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Sign in with Google. Set the OAuth redirect URI to `<NEXTAUTH_URL>/api/auth/callback/google`. | cloud features | Available |
 | `AUTH_RESEND_KEY`, `EMAIL_FROM` | Sign in with an emailed magic link, sent through [Resend](https://resend.com). `EMAIL_FROM` must be on a domain verified in Resend. | cloud features | Available |
 | `ANTHROPIC_API_KEY` | AI-written draft plan | cloud features (database + auth secret) | Planned |
-| `STRIPE_SECRET_KEY` | Payments | cloud features | Planned |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID` | Payments: a one-time season pass per league that unlocks AI plans. See [payments.md](payments.md). **Leave unset when self-hosting.** Without them nothing is paywalled. | cloud features, and all three set | In progress |
 | `SPORTSDATA_API_KEY` | The [data pipeline](data-pipeline.md), for refreshing player data from SportsDataIO | nothing | Available |
 
 If a key is set without what it depends on (say, a Stripe key without a database), the feature stays off and the server logs a `[config]` warning explaining why.
