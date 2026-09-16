@@ -29,3 +29,8 @@ next-env.d.ts
 # misc
 .DS_Store
 .vercel
+
+# ingestion pipeline: raw API snapshots are large and re-fetchable; live.json is
+# environment-specific. Committed fixtures live in src/lib/data/__fixtures__/.
+data/snapshots/
+data/live.json

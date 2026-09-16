@@ -74,6 +74,8 @@ If a setting can't work, the dialog says why and disables Save, e.g. when the dr
 
 The app ships with `src/lib/data/sample-2026.json`, a **stale sample** built from late-August 2026 rankings. Replace it with your own file to use current rankings or another platform's ADP.
 
+If you have a SportsDataIO key, the [data pipeline](data-pipeline.md) can generate this file for you instead of writing it by hand.
+
 ### Step by step
 
 1. Create a JSON file in the format below, e.g. `my-rankings.json`.
@@ -129,8 +131,8 @@ The app ships with `src/lib/data/sample-2026.json`, a **stale sample** built fro
 | `players[].pos` | yes | One of `QB`, `RB`, `WR`, `TE`, `K`, `DST`. |
 | `players[].team` | yes | NFL team abbreviation, matching a key in `byeWeeks`. |
 | `players[].bye` | yes | Bye week (number). |
-| `players[].consensusRank` | yes | Overall expert rank, 1 = best. Drives tiers, sorting and the "sharp" CPU drafters. |
-| `players[].adp` | yes | Overall average draft position on your platform. Drives the "casual" CPU drafters and Value/Reach tags. |
+| `players[].consensusRank` | yes | Overall rank by merit, 1 = best — expert consensus rank (ECR) is the usual source. Drives tiers, sorting and the "sharp" CPU drafters. It must come from something **other than** your ADP: the two are compared to produce Value/Reach tags, so if both columns hold the same ranking, every player is tagged "even". Projected points are a fine alternative source; see [the data pipeline](data-pipeline.md#6-how-consensusrank-is-derived) for the pitfalls. |
+| `players[].adp` | yes | Overall average draft position on your platform. Drives the "casual" CPU drafters and Value/Reach tags. Keep it on the same scale as `consensusRank` — both should be positions within *this* file's player list. Pasting in raw ADP measured across a much larger player pool makes almost everyone look like a Value. |
 | `players[].posRank` | yes | Rank within the position by `consensusRank`, 1 = best. |
 | `players[].note` | no | Short note; cards show a yellow dot with the note on hover. |
 | `players[].projPoints` | no | Season projected points. If every tiered player has it, tiers are built from points instead of ranks. |
@@ -152,7 +154,7 @@ The variables exist for the paid hosted version, and those features aren't built
 | `NEXTAUTH_URL` | Public URL used in auth callbacks | cloud features | Planned |
 | `ANTHROPIC_API_KEY` | AI-written draft plan | cloud features (database + auth secret) | Planned |
 | `STRIPE_SECRET_KEY` | Payments | cloud features | Planned |
-| `SPORTSDATA_API_KEY` | Live ADP, projections and injuries | nothing | Planned |
+| `SPORTSDATA_API_KEY` | The [data pipeline](data-pipeline.md), for refreshing player data from SportsDataIO | nothing | Available |
 
 If a key is set without what it depends on (say, a Stripe key without a database), the feature stays off and the server logs a `[config]` warning explaining why.
 

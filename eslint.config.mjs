@@ -5,9 +5,10 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // All env access goes through src/lib/config.ts.
+  // All env access goes through src/lib/config.ts, or scripts/ingest/env.mts for the
+  // ingestion CLI — config.ts imports "server-only" and can't be loaded by a node script.
   {
-    ignores: ["src/lib/config.ts"],
+    ignores: ["src/lib/config.ts", "scripts/ingest/env.mts"],
     rules: {
       "no-restricted-properties": [
         "error",
