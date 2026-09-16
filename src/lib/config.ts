@@ -25,7 +25,10 @@ const anthropicApiKey = readEnv("ANTHROPIC_API_KEY");
 /** Which model provider writes the AI plan (see src/lib/ai/providers), and optionally which of its models. */
 const aiProvider = readEnv("AI_PROVIDER") ?? "anthropic";
 const aiModel = readEnv("AI_MODEL");
-/** Comma-separated emails allowed to generate AI plans until payments gate them. Empty = every signed-in user. */
+/**
+ * Comma-separated emails. Payments off: only these may generate AI plans (empty = every signed-in user).
+ * Payments on: these skip the season pass paywall (empty = nobody does).
+ */
 const aiAllowlist = (readEnv("AI_ALLOWLIST") ?? "")
   .split(",")
   .map((email) => email.trim().toLowerCase())

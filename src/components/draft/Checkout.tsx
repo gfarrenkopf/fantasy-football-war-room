@@ -45,6 +45,17 @@ export function BuySeasonPass({ leagueId, label = "Buy season pass" }: { leagueI
   );
 }
 
+/** The league the user just paid for, until its season pass shows up (the webhook can lag the redirect). */
+let awaitingPass: string | null = null;
+
+/** Whether the user just came back from paying for this league, so its paywall is probably about to lift. */
+export const isAwaitingPass = (leagueId: string) => awaitingPass === leagueId;
+
+/** The pass arrived (or waiting gave up). */
+export function passArrived(leagueId: string) {
+  if (awaitingPass === leagueId) awaitingPass = null;
+}
+
 /**
  * Toasts the outcome when Stripe sends the user back (`?checkout=success|cancel`), then removes the
  * query so a reload doesn't repeat it. The purchase itself is recorded by the webhook, not this redirect.
@@ -55,6 +66,7 @@ export function CheckoutReturn() {
     const url = new URL(window.location.href);
     const outcome = url.searchParams.get("checkout");
     if (outcome !== "success" && outcome !== "cancel") return;
+    if (outcome === "success") awaitingPass = url.searchParams.get("league");
     toast(outcome === "success" ? "Payment received. Your season pass will be active in a moment." : "Checkout canceled. You weren't charged.");
     url.searchParams.delete("checkout");
     url.searchParams.delete("league");

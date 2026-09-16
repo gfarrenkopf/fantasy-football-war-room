@@ -10,7 +10,8 @@ The hosted app sells a one-time **season pass** per league through Stripe. It un
 2. [Stripe product setup](#2-stripe-product-setup)
 3. [Checkout](#3-checkout)
 4. [Webhook](#4-webhook)
-5. [Local testing](#5-local-testing)
+5. [What the season pass unlocks](#5-what-the-season-pass-unlocks)
+6. [Local testing](#6-local-testing)
 
 ---
 
@@ -64,7 +65,21 @@ In the dashboard's webhook endpoint, subscribe to `checkout.session.completed` a
 DELETE FROM entitlements WHERE league_id = '<league id>' AND kind = 'season_pass';
 ```
 
-## 5. Local testing
+## 5. What the season pass unlocks
+
+Only the AI game plan: the first plan plus the free rewrites (`FREE_REGENERATIONS`). It's enforced on the server in `planAccess()` (`src/lib/server/ai`):
+
+| | Payments off (self-hosted) | Payments on (hosted) |
+|---|---|---|
+| League with a season pass | n/a | AI plans |
+| League without one | AI plans, unless `AI_ALLOWLIST` is set and the account isn't on it | Paywall: `GET /plan` returns `needsPurchase: true` and `POST /plan` gets `402` |
+| Account on `AI_ALLOWLIST` | AI plans | AI plans, no pass needed (for the operator's own testing) |
+
+The board, mock drafts, live odds, availability report and cross-device sync are never gated.
+
+The paywall shows in the AI game plan tab with the live turn plan underneath. After checkout the tab checks every 2 seconds, for up to 30 seconds, until the webhook has recorded the pass, then unlocks. If the webhook is slower than that, reloading picks it up.
+
+## 6. Local testing
 
 1. Run cloud features locally (see [database.md](database.md)) and set `STRIPE_SECRET_KEY` to a test key and `STRIPE_PRICE_ID` to the test price.
 2. Install the [Stripe CLI](https://docs.stripe.com/stripe-cli), then run `stripe login`.

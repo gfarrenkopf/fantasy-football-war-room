@@ -32,7 +32,8 @@ export function createAiPlanStore({
     }
     const body: unknown = await response.json().catch(() => null);
     const message = (body as { error?: unknown } | null)?.error;
-    if (response.ok) {
+    // 402: the league needs a season pass. The body is a PlanView saying so, which the UI shows as the paywall.
+    if (response.ok || response.status === 402) {
       const view = parsePlanView(body);
       return view ? { ok: true, view } : { ok: false, reason: "offline" };
     }
