@@ -89,10 +89,26 @@ export type CheckoutResult =
       reason: "offline" | "signed-out" | "not-found" | "already-paid" | "unavailable";
     };
 
+/** A season pass (or other entitlement) the user bought, for the purchase history. */
+export interface Purchase {
+  leagueId: string;
+  leagueName: string;
+  season: number;
+  /** Deleted since buying. */
+  leagueDeleted: boolean;
+  kind: string;
+  purchasedAt: string;
+  /** In the currency's smallest unit (cents), or null when not recorded. */
+  amountTotal: number | null;
+  currency: string | null;
+}
+
 /** Buying a league's season pass. Whether payments are enabled is a separate flag (PublicFlags.paymentsEnabled). */
 export interface CheckoutStore {
   /** Syncs league edits, then returns the Stripe Checkout URL to send the user to. */
   start(leagueId: string): Promise<CheckoutResult>;
+  /** The user's purchases, newest first, or null when they can't be loaded. */
+  purchases(): Promise<Purchase[] | null>;
 }
 
 export interface Stores {

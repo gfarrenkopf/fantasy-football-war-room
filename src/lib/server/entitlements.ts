@@ -1,6 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { entitlements, leagues } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
+import type { Purchase } from "@/lib/storage/types";
 
 /**
  * What leagues have paid for (Epic 4). Rows are written only by the Stripe webhook; nothing here
@@ -44,4 +45,24 @@ export async function grantEntitlement(
     .onConflictDoNothing()
     .returning({ kind: entitlements.kind });
   return inserted.length ? "granted" : "exists";
+}
+
+/** The user's purchases, newest first. Includes leagues deleted since, so the history stays complete. */
+export async function listPurchases(db: Db, userId: string): Promise<Purchase[]> {
+  const rows = await db
+    .select({
+      leagueId: entitlements.leagueId,
+      kind: entitlements.kind,
+      purchasedAt: entitlements.grantedAt,
+      amountTotal: entitlements.amountTotal,
+      currency: entitlements.currency,
+      leagueName: leagues.name,
+      season: leagues.season,
+      deletedAt: leagues.deletedAt,
+    })
+    .from(entitlements)
+    .innerJoin(leagues, eq(leagues.id, entitlements.leagueId))
+    .where(eq(leagues.userId, userId))
+    .orderBy(desc(entitlements.grantedAt));
+  return rows.map(({ purchasedAt, deletedAt, ...row }) => ({ ...row, purchasedAt: purchasedAt.toISOString(), leagueDeleted: deletedAt !== null }));
 }

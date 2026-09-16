@@ -41,4 +41,14 @@ describe("payment routes with payments off", () => {
       expect(await response.json()).toEqual({ error: "Not found" });
     }
   });
+
+  it("purchases: GET /api/purchases → 404", async () => {
+    vi.stubEnv("DATABASE_URL", "postgres://localhost/unused");
+    vi.stubEnv("NEXTAUTH_SECRET", "secret");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { GET } = await import("@/app/api/purchases/route");
+    const response = await GET(new Request("http://localhost/api/purchases"), {});
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found" });
+  });
 });

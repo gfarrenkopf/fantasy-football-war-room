@@ -11,7 +11,8 @@ The hosted app sells a one-time **season pass** per league through Stripe. It un
 3. [Checkout](#3-checkout)
 4. [Webhook](#4-webhook)
 5. [What the season pass unlocks](#5-what-the-season-pass-unlocks)
-6. [Local testing](#6-local-testing)
+6. [Purchase history and refunds](#6-purchase-history-and-refunds)
+7. [Local testing](#7-local-testing)
 
 ---
 
@@ -79,7 +80,13 @@ The board, mock drafts, live odds, availability report and cross-device sync are
 
 The paywall shows in the AI game plan tab with the live turn plan underneath. After checkout the tab checks every 2 seconds, for up to 30 seconds, until the webhook has recorded the pass, then unlocks. If the webhook is slower than that, reloading picks it up.
 
-## 6. Local testing
+## 6. Purchase history and refunds
+
+Signed-in users see **Purchases** next to Sign out when payments are on. It lists each season pass with its league, date and amount, and still shows leagues deleted since. It's served by `GET /api/purchases` (404 when payments are off).
+
+Refunds follow [refund-policy.md](refund-policy.md). They're done by hand in the Stripe dashboard, plus removing the entitlement if the pass shouldn't stay unlocked (§4).
+
+## 7. Local testing
 
 1. Run cloud features locally (see [database.md](database.md)) and set `STRIPE_SECRET_KEY` to a test key and `STRIPE_PRICE_ID` to the test price.
 2. Install the [Stripe CLI](https://docs.stripe.com/stripe-cli), then run `stripe login`.

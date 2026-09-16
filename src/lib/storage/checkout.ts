@@ -1,6 +1,21 @@
-import type { CheckoutStore } from "./types";
+import type { CheckoutStore, Purchase } from "./types";
 
-/** Starts a season pass purchase for a signed-in user. The page then navigates to Stripe. */
+const isPurchase = (x: unknown): x is Purchase => {
+  const p = x as Record<string, unknown> | null;
+  return (
+    typeof p === "object" &&
+    p !== null &&
+    typeof p.leagueId === "string" &&
+    typeof p.leagueName === "string" &&
+    typeof p.season === "number" &&
+    typeof p.kind === "string" &&
+    typeof p.purchasedAt === "string" &&
+    (p.amountTotal === null || typeof p.amountTotal === "number") &&
+    (p.currency === null || typeof p.currency === "string")
+  );
+};
+
+/** Season pass purchases for a signed-in user: starting one (the page then navigates to Stripe), and the history. */
 export function createCheckoutStore({
   fetch: doFetch,
   flush,
@@ -32,6 +47,17 @@ export function createCheckoutStore({
       if (response.status === 404) return { ok: false, reason: "not-found" };
       if (response.status === 409) return { ok: false, reason: "already-paid" };
       return { ok: false, reason: "unavailable" };
+    },
+
+    async purchases() {
+      try {
+        const response = await doFetch("/api/purchases", { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+        if (!response.ok) return null;
+        const list = ((await response.json()) as { purchases?: unknown } | null)?.purchases;
+        return Array.isArray(list) ? list.filter(isPurchase).map((p) => ({ ...p, leagueDeleted: p.leagueDeleted === true })) : null;
+      } catch {
+        return null;
+      }
     },
   };
 }

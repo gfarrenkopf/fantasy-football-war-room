@@ -818,6 +818,26 @@
   justify-content: flex-end;
   gap: 8px;
 }
+.dialog h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.purchases {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.purchases li {
+  padding: 8px 0;
+  border-top: 1px solid var(--color-line);
+}
+.purchases li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
 /* ---------- needs strip ---------- */
 .needs {
   display: flex;

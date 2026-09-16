@@ -50,4 +50,14 @@ describe("checkout store", () => {
     const { fetch } = fakeFetch(() => Response.json({}));
     expect(await createCheckoutStore({ fetch, flush: async () => true }).start("l1")).toEqual({ ok: false, reason: "unavailable" });
   });
+
+  it("loads purchases, dropping malformed entries, and returns null when they can't load", async () => {
+    const purchase = { leagueId: "l1", leagueName: "Home", season: 2026, leagueDeleted: false, kind: "season_pass", purchasedAt: "2026-09-10T00:00:00.000Z", amountTotal: 999, currency: "usd" };
+    const { fetch, calls } = fakeFetch(() => Response.json({ purchases: [purchase, { leagueId: 1 }] }));
+    expect(await createCheckoutStore({ fetch, flush: async () => true }).purchases()).toEqual([purchase]);
+    expect(calls).toEqual([{ url: "/api/purchases", method: "GET" }]);
+
+    const failing = fakeFetch(() => Response.json({ error: "Not found" }, { status: 404 }));
+    expect(await createCheckoutStore({ fetch: failing.fetch, flush: async () => true }).purchases()).toBeNull();
+  });
 });
