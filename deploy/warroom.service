@@ -1,0 +1,34 @@
+# The hosted app, run by systemd on the droplet. Install:
+#
+#   sudo cp deploy/warroom.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now warroom
+#
+# deploy/deploy.sh points /srv/warroom/current at a built release and restarts this unit.
+# Secrets come from /etc/warroom/env (KEY=value lines, no quotes or `export`); see .env.example.
+# Next listens on localhost only; Caddy (deploy/Caddyfile) serves the public HTTPS site.
+
+[Unit]
+Description=Fantasy War Room
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=warroom
+Group=warroom
+WorkingDirectory=/srv/warroom/current
+EnvironmentFile=/etc/warroom/env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+# Next writes its runtime cache under .next/cache inside the release.
+ReadWritePaths=/srv/warroom/releases
+
+[Install]
+WantedBy=multi-user.target

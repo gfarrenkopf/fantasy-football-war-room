@@ -1,0 +1,23 @@
+# Public HTTPS in front of the app. Caddy gets and renews the TLS certificate itself once the
+# domain's DNS points at the droplet and ports 80/443 are open. Install as /etc/caddy/Caddyfile
+# and set WARROOM_DOMAIN in Caddy's environment (`sudo systemctl edit caddy`):
+#
+#   [Service]
+#   Environment=WARROOM_DOMAIN=warroom.example.com
+#
+# Caddy forwards Host and X-Forwarded-Host, which the API's same-origin check and Auth.js rely on.
+# NEXTAUTH_URL in /etc/warroom/env must be https://<the same domain>.
+
+{$WARROOM_DOMAIN:localhost} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	reverse_proxy 127.0.0.1:3000
+}
