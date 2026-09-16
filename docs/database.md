@@ -113,4 +113,4 @@ docker exec "$PG_DOCKER_CONTAINER" psql -U warroom -d warroom -c "select count(*
 
 ### Not covered here
 
-Scheduling (cron or a systemd timer), copying dumps off the server, and retention depend on the deployment. They're tracked with the deploy pipeline in Epic 6 (APE-108). A backup that only lives on the database's own disk doesn't survive losing that disk.
+The hosted droplet backs up nightly with a systemd timer and before every deploy, and keeps 14 days of dumps. See [deployment.md §8](deployment.md#8-backups). Copying dumps off the server is still tracked in Epic 6 (APE-108). A backup that only lives on the database's own disk doesn't survive losing that disk.

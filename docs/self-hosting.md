@@ -50,6 +50,7 @@ npm start
 - Use another port with `PORT=8080 npm start`. Set `PORT` in the shell or service definition; it can't go in a `.env` file.
 - Put a reverse proxy (Caddy, nginx) in front of it if you want HTTPS or a domain name.
 - To keep it running after you log out, use a process manager such as `pm2` or a systemd service that runs `npm start` in the project folder.
+- The hosted version's production setup (systemd, Caddy, Postgres and a deploy script) is documented in [deployment.md](deployment.md). It's more than the free app needs, but it's a working example.
 
 **After changing code or player data, run `npm run build` again** and restart `npm start`. The production server only serves what was built.
 
