@@ -59,6 +59,8 @@ Each browser keeps its own draft. If you open the app on a second device, it sta
 
 On first run the **Set up your league** dialog opens. You can reopen it any time with the **League** button in the header.
 
+You can keep several leagues, each with its own draft. Switch between them, or add one with **+ New league…**, from the league menu under the app name. **League** → **Delete league** removes the open league and its picks.
+
 | Setting | What it does |
 |---|---|
 | Preset | Fills in a 10-, 12- or 14-team full-PPR league with a standard roster. The 14-team preset uses a 6-player bench so the sample data has enough players. |
@@ -145,13 +147,15 @@ The simulator needs more players than the draft has picks, or the last picks run
 
 **None are needed to self-host.** With no environment variables, every hosted feature is off and the free draft room works fully.
 
-The variables exist for the paid hosted version, and those features aren't built yet. They're read in one place, `src/lib/config.ts`, and documented in `.env.example`. To set them, copy `.env.example` to `.env.local` and fill in values (both `npm run dev` and `npm start` read it), or export them in the environment that runs the server.
+The variables exist for the paid hosted version. Accounts and cross-device sync are built (see [database.md](database.md) for the Postgres setup). AI plans and payments aren't yet. They're read in one place, `src/lib/config.ts`, and documented in `.env.example`. To set them, copy `.env.example` to `.env.local` and fill in values (both `npm run dev` and `npm start` read it), or export them in the environment that runs the server.
 
 | Variable | Turns on | Also requires | Status |
 |---|---|---|---|
-| `DATABASE_URL` | Accounts and cross-device league sync | `NEXTAUTH_SECRET` | Planned |
-| `NEXTAUTH_SECRET` | Signing auth sessions | `DATABASE_URL` | Planned |
-| `NEXTAUTH_URL` | Public URL used in auth callbacks | cloud features | Planned |
+| `DATABASE_URL` | Accounts and cross-device league sync | `NEXTAUTH_SECRET`, and at least one sign-in method | Available |
+| `NEXTAUTH_SECRET` | Signing auth sessions. Generate with `openssl rand -base64 32`. | `DATABASE_URL` | Available |
+| `NEXTAUTH_URL` | The site's public URL, e.g. `https://warroom.example.com`. **Required in production**, where sign-in otherwise rejects requests. | cloud features | Available |
+| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Sign in with Google. Set the OAuth redirect URI to `<NEXTAUTH_URL>/api/auth/callback/google`. | cloud features | Available |
+| `AUTH_RESEND_KEY`, `EMAIL_FROM` | Sign in with an emailed magic link, sent through [Resend](https://resend.com). `EMAIL_FROM` must be on a domain verified in Resend. | cloud features | Available |
 | `ANTHROPIC_API_KEY` | AI-written draft plan | cloud features (database + auth secret) | Planned |
 | `STRIPE_SECRET_KEY` | Payments | cloud features | Planned |
 | `SPORTSDATA_API_KEY` | The [data pipeline](data-pipeline.md), for refreshing player data from SportsDataIO | nothing | Available |

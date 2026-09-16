@@ -15,6 +15,8 @@ npm run lint         # eslint .
 npm test             # vitest run
 npm run build        # runs check-data first via prebuild
 npm run check-data   # validates the loaded player dataset only
+npm run db:generate  # after editing src/lib/db/schema.ts: writes a migration into drizzle/
+npm run db:migrate   # applies migrations to DATABASE_URL (see docs/database.md)
 ```
 
 CI (`.github/workflows/ci.yml`) runs typecheck → lint → test → build on every PR; all four must pass.
@@ -27,11 +29,11 @@ npx vitest run -t "snake"          # by test name
 npx vitest src/lib/draft           # watch mode on a directory
 ```
 
-Vitest only picks up `src/**/*.test.ts` (node environment, `@` → `src`). There are no component/DOM tests — all tests target the pure engine under `src/lib/`.
+Vitest only picks up `src/**/*.test.ts` (node environment, `@` → `src`). There are no component/DOM tests — tests target `src/lib/`: the pure engine, the stores (with an in-memory `Storage`), and the database layer on PGlite.
 
 ## Architecture
 
-A Next.js 16 App Router app with exactly one route. `src/app/page.tsx` calls `connection()` (so flags reflect runtime, not build-time env) and renders `<WarRoom flags={publicFlags}>`; everything below it is client-side. There is no API layer, database, or auth yet — all state lives in the browser.
+A Next.js 16 App Router app with exactly one page, plus API routes for hosted features. `src/app/page.tsx` calls `connection()` (so flags reflect runtime, not build-time env) and renders `<WarRoom flags={publicFlags} user={await getSessionUser()}>`; everything below it is client-side. With cloud features off (the default), all state lives in the browser and the API routes 404.
 
 **Three layers, strictly separated:**
 
@@ -41,11 +43,13 @@ A Next.js 16 App Router app with exactly one route. `src/app/page.tsx` calls `co
 
 **Data.** `src/lib/data/index.ts` exports a single `dataset`, validated at import time by `loadDataset.ts` (throws `DatasetError` naming the first bad field). Self-hosters swap `sample-2026.json`, which is why `check-data` runs before every build. `scripts/extract-prototype-data.mts` regenerated that JSON from the prototype once; its output is committed.
 
-**Persistence.** UI code never touches `localStorage` — it calls `getStores()` from `@/lib/storage`, whose every method is async so a server-backed implementation can be dropped in at `storage/index.ts`. `UiPrefs` is deliberately separate from `DraftState` so future cloud sync carries only picks.
+**Persistence.** UI code never touches `localStorage` or `fetch` for data — it calls `getStores()` from `@/lib/storage`. `configureStores()` (called by `WarRoom`, whose provider tree is keyed by user) picks `createLocalStores()` when signed out, or `createServerStores()` when signed in: local-first writes into a per-user localStorage cache, pushed to `/api/leagues` by a background queue (see the header comment in `storage/server.ts`). Leagues are `LeagueRecord`s with ids; drafts are keyed by league id. `UiPrefs` stay device-local and never sync. Validators in `storage/records.ts` are shared by the browser and the API.
+
+**Hosted (cloud) features.** `src/lib/db/` is the Drizzle schema (`getDb()` connects lazily; tests use `createTestDb()` on PGlite, no Docker). `src/lib/auth/` is Auth.js v5 with database sessions, built per request and null when cloud is off. `src/lib/server/leagues.ts` is user-scoped data access used by the route handlers in `src/app/api/leagues/`, which are wrapped in `withUser()` (404 when cloud off, 401 signed out, 403 cross-origin writes). Migrations in `drizzle/` are generated, committed, and never hand-edited.
 
 **Config.** `src/lib/config.ts` is `server-only` and the only module allowed to read `process.env`. The app must boot with zero env vars set; hosted features (`cloudEnabled`, `aiEnabled`, `paymentsEnabled`, `dataPipelineEnabled`) switch on when their credentials appear, and partial setups warn rather than throw. Client components get booleans via the `publicFlags` prop, never `config`. New env vars go in both `config.ts` and `.env.example`.
 
-Two of these rules are ESLint-enforced (`eslint.config.mjs`): direct `process.env` access outside `config.ts`, and direct `localStorage`/`sessionStorage` access outside `src/lib/storage/`, are errors.
+Two of these rules are ESLint-enforced (`eslint.config.mjs`): direct `process.env` access outside `config.ts` (and the two CLI env readers), and direct `localStorage`/`sessionStorage` access outside `src/lib/storage/`, are errors.
 
 ## Conventions
 

@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import type { SessionUser } from "@/lib/auth/types";
 import type { PublicFlags } from "@/lib/config";
+import { DATASET_ID } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
+import { configureStores } from "@/lib/storage";
+import { AccountMenu, AccountProvider } from "./Account";
 import { MockBar, SimProvider, useSim } from "./Simulator";
 import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
 import { BestAvailableStrip } from "./BestAvailableStrip";
@@ -11,9 +15,11 @@ import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
+import { SyncNotices } from "./SyncNotices";
 import { FlagsProvider } from "./Flags";
 import { FocusView, PlanDrawer, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
+import { ImportPrompt } from "./ImportPrompt";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { NeedsStrip } from "./NeedsStrip";
@@ -27,28 +33,36 @@ const REPORT_MOCKS = 300;
 const PLAN_MOCKS = 100;
 
 /** The war room app: providers plus the active view. */
-export function WarRoom({ flags }: { flags: PublicFlags }) {
+export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser | null }) {
+  // Chooses local or server-backed persistence before any provider below reads from it. Idempotent.
+  configureStores({ cloudEnabled: flags.cloudEnabled, userId: user?.userId ?? null });
   return (
     <FlagsProvider flags={flags}>
-      <ToastProvider>
-        <ConfirmProvider>
-          <PrefsProvider>
-            <LeagueProvider>
-              <LeagueGate />
-            </LeagueProvider>
-          </PrefsProvider>
-        </ConfirmProvider>
-      </ToastProvider>
+      {/* Keyed by user: signing in or out swaps the stores, so every provider below reloads from the new ones. */}
+      <AccountProvider key={user?.userId ?? "signed-out"} user={user}>
+        <ToastProvider>
+          <SyncNotices />
+          <ConfirmProvider>
+            <PrefsProvider>
+              <LeagueProvider>
+                <ImportPrompt />
+                <LeagueGate />
+              </LeagueProvider>
+            </PrefsProvider>
+          </ConfirmProvider>
+        </ToastProvider>
+      </AccountProvider>
     </FlagsProvider>
   );
 }
 
 /** Waits for the saved league, then mounts the draft for it. */
 function LeagueGate() {
-  const { league, hydrated } = useLeague();
+  const { league, active, hydrated } = useLeague();
   if (!hydrated) return <div className={cx("root", "loading")}>Loading your league…</div>;
+  // Keyed by league so switching leagues remounts the draft, model and simulator from scratch.
   return (
-    <DraftProvider totalPicks={totalPicks(league)}>
+    <DraftProvider key={active?.id ?? "new"} draftKey={active?.id ?? null} totalPicks={totalPicks(league)}>
       <DraftModelProvider league={league}>
         <SimProvider>
           <WarRoomView />
@@ -67,7 +81,7 @@ function WarRoomView() {
   const { state, hydrated } = useDraft();
   const model = useModel();
   const { prefs, setPrefs } = usePrefs();
-  const { configured } = useLeague();
+  const { configured, active } = useLeague();
   const { draftWithIntent, intentFrom, undo } = useDraftActions();
   const toast = useToast();
   const columns = useBoardColumns();
@@ -77,8 +91,20 @@ function WarRoomView() {
   const sim = useSim();
   const { room } = sim;
 
-  const [setupOpen, setSetupOpen] = useState(false);
-  const showSetup = setupOpen || !configured; // first run: setup until a league is saved
+  const [setup, setSetup] = useState<"edit" | "create" | null>(null);
+  const setupMode = configured ? setup : "create"; // first run: setup until a league is saved
+  const closeSetup = useCallback(() => setSetup(null), [setSetup]);
+  const showSetup = setupMode !== null;
+
+  /* ---- flag picks logged against different player data (e.g. sample data swapped for a live run) ---- */
+  const staleWarned = useRef(false);
+  useEffect(() => {
+    if (!hydrated || !active || staleWarned.current || active.datasetId === DATASET_ID) return;
+    const missing = state.picks.filter((p) => !model.player(p.playerId)).length;
+    if (!missing) return;
+    staleWarned.current = true;
+    toast(`${missing} logged pick${missing === 1 ? " is" : "s are"} for players missing from the current player data`);
+  }, [hydrated, active, state.picks, model, toast]);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   /* ---- auto-switch plan / best available when the turn changes (prototype refresh()) ---- */
@@ -163,7 +189,8 @@ function WarRoomView() {
         onQueryChange={onQueryChange}
         onQueryKeyDown={onQueryKeyDown}
         hint={hint}
-        onOpenLeague={() => setSetupOpen(true)}
+        onOpenLeague={() => setSetup("edit")}
+        onNewLeague={() => setSetup("create")}
         needs={<NeedsStrip />}
         actions={
           <>
@@ -183,6 +210,7 @@ function WarRoomView() {
             </button>
           </>
         }
+        account={<AccountMenu />}
       >
         <div className={s.seg} role="tablist" aria-label="View">
           {(["focus", "board"] as const).map((v) => (
@@ -205,7 +233,7 @@ function WarRoomView() {
       )}
       {drawerOpen && <PlanDrawer planOdds={planOdds} onClose={() => setDrawerOpen(false)} />}
       {report.open && <AvailabilityReport data={report.data} running={report.running} onClose={closeReport} />}
-      {showSetup && <LeagueSetupDialog dataset={model.dataset} firstRun={!configured} onClose={() => setSetupOpen(false)} />}
+      {setupMode && <LeagueSetupDialog key={setupMode} dataset={model.dataset} mode={setupMode} firstRun={!configured} onClose={closeSetup} />}
     </div>
   );
 }

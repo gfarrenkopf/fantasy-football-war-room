@@ -39,6 +39,7 @@ export const useToast = () => useContext(ToastContext);
 interface ConfirmOptions {
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   danger?: boolean;
 }
 
@@ -91,7 +92,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             <p id="confirm-message">{pending.message}</p>
             <div className={s.dialogActions}>
               <button className={s.btn} onClick={() => close(false)}>
-                Cancel
+                {pending.cancelLabel ?? "Cancel"}
               </button>
               <button className={cx("btn", pending.danger ? "danger" : "primary")} onClick={() => close(true)} autoFocus>
                 {pending.confirmLabel ?? "OK"}

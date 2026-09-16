@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { LEAGUE_PRESETS } from "@/lib/data";
+import { useEffect, useMemo, useState } from "react";
+import { DATASET_ID, LEAGUE_PRESETS } from "@/lib/data";
 import { leagueChanged, MAX_TEAMS, MIN_TEAMS, rosterFromCounts, SLOT_DEFS, slotCounts, validateLeague } from "@/lib/draft/league";
 import { formatRoundPick, totalPicks } from "@/lib/draft/snake";
 import type { Dataset, LeagueSettings, ScoringFormat } from "@/lib/draft/types";
+import { MAX_LEAGUE_NAME } from "@/lib/storage";
 import { cx, s } from "./cx";
 import { useDraft } from "./DraftProvider";
 import { useConfirm, useToast } from "./Feedback";
@@ -19,15 +20,26 @@ const SCORING: { value: ScoringFormat; label: string }[] = [
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 /**
- * League settings: preset, team count, draft slot, scoring, roster slots and Value/Reach threshold.
- * Opens automatically on first run. Saving a league that changes the draft's shape resets logged picks (after confirming).
+ * League settings: name, preset, team count, draft slot, scoring, roster slots and Value/Reach threshold.
+ * "create" makes a new league (and opens automatically on first run); "edit" changes the open one.
+ * Saving a league that changes the draft's shape resets logged picks (after confirming).
  */
-export function LeagueSetupDialog({ dataset, onClose, firstRun }: { dataset: Dataset; onClose(): void; firstRun: boolean }) {
-  const { league, saveLeague } = useLeague();
+export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { dataset: Dataset; onClose(): void; mode: "create" | "edit"; firstRun: boolean }) {
+  const { league, leagues, active, updateLeague, createLeague, deleteLeague } = useLeague();
   const draft = useDraft();
   const confirm = useConfirm();
   const toast = useToast();
+  const creating = mode === "create";
+  // A new league starts from the open league's settings (or the default league on first run).
   const [form, setForm] = useState<LeagueSettings>(league);
+  const [name, setName] = useState(creating ? (leagues.length ? `League ${leagues.length + 1}` : "My league") : (active?.name ?? ""));
+  const pickCount = creating ? 0 : draft.state.picks.length;
+  /** Logged picks reference players missing from the loaded data. */
+  const stalePicks = useMemo(() => {
+    if (creating || !active || active.datasetId === DATASET_ID) return false;
+    const ids = new Set(dataset.players.map((p) => p.id));
+    return draft.state.picks.some((p) => !ids.has(p.playerId));
+  }, [creating, active, dataset, draft.state.picks]);
 
   useEffect(() => {
     if (firstRun) return;
@@ -37,6 +49,7 @@ export function LeagueSetupDialog({ dataset, onClose, firstRun }: { dataset: Dat
   }, [firstRun, onClose]);
   const counts = slotCounts(form.roster);
   const errors = validateLeague(form, dataset);
+  if (!name.trim()) errors.unshift("Give the league a name.");
 
   const update = (patch: Partial<LeagueSettings>) =>
     setForm((f) => {
@@ -47,17 +60,40 @@ export function LeagueSetupDialog({ dataset, onClose, firstRun }: { dataset: Dat
 
   const save = async () => {
     if (errors.length) return;
-    if (leagueChanged(league, form) && draft.state.picks.length) {
+    const trimmed = name.trim().slice(0, MAX_LEAGUE_NAME);
+    if (creating) {
+      createLeague(trimmed, form);
+      toast(`${trimmed} created`);
+      onClose();
+      return;
+    }
+    let reset = false;
+    if (leagueChanged(league, form) && pickCount) {
       const ok = await confirm({
-        message: `These settings change the draft order or roster, so your ${draft.state.picks.length} logged pick${draft.state.picks.length === 1 ? "" : "s"} will be cleared. Continue?`,
+        message: `These settings change the draft order or roster, so your ${pickCount} logged pick${pickCount === 1 ? "" : "s"} will be cleared. Continue?`,
         confirmLabel: "Save and reset draft",
         danger: true,
       });
       if (!ok) return;
       draft.reset();
+      reset = true;
     }
-    saveLeague(form);
+    // Picks still on the board were logged against the league's original data; an empty draft now matches this data.
+    updateLeague({ name: trimmed, settings: form, datasetId: reset || !pickCount ? DATASET_ID : (active?.datasetId ?? DATASET_ID) });
     toast("League settings saved");
+    onClose();
+  };
+
+  const remove = async () => {
+    if (!active) return;
+    const ok = await confirm({
+      message: `Delete ${active.name}${pickCount ? ` and its ${pickCount} logged pick${pickCount === 1 ? "" : "s"}` : ""}? This can't be undone.`,
+      confirmLabel: "Delete league",
+      danger: true,
+    });
+    if (!ok) return;
+    deleteLeague(active.id);
+    toast(`${active.name} deleted`);
     onClose();
   };
 
@@ -66,7 +102,7 @@ export function LeagueSetupDialog({ dataset, onClose, firstRun }: { dataset: Dat
       <div className={s.scrim} onClick={firstRun ? undefined : onClose} />
       <div className={s.setup} role="dialog" aria-modal="true" aria-labelledby="league-setup-title">
         <div className={s.setupHead}>
-          <b id="league-setup-title">{firstRun ? "Set up your league" : "League settings"}</b>
+          <b id="league-setup-title">{firstRun ? "Set up your league" : creating ? "New league" : "League settings"}</b>
           {!firstRun && (
             <button className={s.btn} onClick={onClose}>
               Close
@@ -75,6 +111,11 @@ export function LeagueSetupDialog({ dataset, onClose, firstRun }: { dataset: Dat
         </div>
         <div className={s.setupBody}>
           {firstRun && <p className={s.setupIntro}>Tell the war room about your draft. You can change this any time from the League button.</p>}
+
+          <label className={s.field}>
+            <span className={s.fieldLabel}>Name</span>
+            <input className={s.input} type="text" value={name} maxLength={MAX_LEAGUE_NAME} onChange={(e) => setName(e.target.value)} autoFocus={creating} />
+          </label>
 
           <div className={s.field}>
             <span className={s.fieldLabel}>Preset</span>
@@ -172,9 +213,17 @@ export function LeagueSetupDialog({ dataset, onClose, firstRun }: { dataset: Dat
           )}
         </div>
         <div className={s.setupFoot}>
-          <span className={s.lbl}>Player data: {dataset.label}</span>
+          <span className={s.lbl}>
+            Player data: {dataset.label}
+            {stalePicks && <span className={s.staleNote}> · some logged picks are for players missing from this data</span>}
+          </span>
+          {!creating && active && (
+            <button className={cx("btn", "danger")} onClick={() => void remove()}>
+              Delete league
+            </button>
+          )}
           <button className={cx("btn", "primary")} onClick={() => void save()} disabled={errors.length > 0}>
-            {firstRun ? "Start drafting" : "Save"}
+            {firstRun ? "Start drafting" : creating ? "Create league" : "Save"}
           </button>
         </div>
       </div>

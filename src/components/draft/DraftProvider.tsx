@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import { draftReducer, emptyDraftState, type DraftAction } from "@/lib/draft/state";
 import type { DraftPick, DraftState } from "@/lib/draft/types";
-import { getStores, LOCAL_DRAFT_KEY } from "@/lib/storage";
+import { getStores } from "@/lib/storage";
 
 interface DraftContextValue {
   state: DraftState;
@@ -25,19 +25,22 @@ const DraftContext = createContext<DraftContextValue | null>(null);
  */
 export function DraftProvider({
   totalPicks,
-  draftKey = LOCAL_DRAFT_KEY,
+  draftKey,
   children,
 }: {
   totalPicks: number;
-  draftKey?: string;
+  /** The league whose draft this is. Null before any league exists: the draft is kept in memory only. */
+  draftKey: string | null;
   children: React.ReactNode;
 }) {
   const [state, dispatch] = useReducer(draftReducer, undefined, emptyDraftState);
   // The draft key whose saved state has been loaded into the reducer.
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const hydrated = loadedKey === draftKey;
+  // Without a league there's nothing to load: the draft starts (and stays) empty in memory.
+  const hydrated = draftKey === null || loadedKey === draftKey;
 
   useEffect(() => {
+    if (draftKey === null) return;
     let cancelled = false;
     getStores()
       .draft.getDraftState(draftKey)
@@ -53,7 +56,7 @@ export function DraftProvider({
 
   useEffect(() => {
     // Don't overwrite the saved draft with the empty initial state before it has loaded.
-    if (!hydrated) return;
+    if (!hydrated || draftKey === null) return;
     void getStores().draft.saveDraftState(draftKey, state);
   }, [state, hydrated, draftKey]);
 

@@ -1622,3 +1622,49 @@
   background: var(--color-chip);
   color: var(--color-text);
 }
+
+/* ---------- league switcher ---------- */
+.leagueSelect {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 1px 2px;
+  margin: 2px 0 1px -3px;
+  max-width: 200px;
+  cursor: pointer;
+}
+.leagueSelect:hover,
+.leagueSelect:focus-visible {
+  border-color: var(--color-line);
+  background: var(--color-panel2);
+}
+.staleNote {
+  color: var(--color-warn);
+}
+.setupFoot .btn {
+  white-space: nowrap;
+}
+
+/* ---------- account ---------- */
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.accountEmail {
+  color: var(--color-muted);
+  font-size: 11.5px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}

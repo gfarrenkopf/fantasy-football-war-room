@@ -34,3 +34,6 @@ next-env.d.ts
 # environment-specific. Committed fixtures live in src/lib/data/__fixtures__/.
 data/snapshots/
 data/live.json
+
+# database backups (scripts/db-backup.sh)
+backups/
