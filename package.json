@@ -10,7 +10,9 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "check-data": "vitest run src/lib/data/loaded-dataset.test.ts",
-    "prebuild": "npm run check-data"
+    "prebuild": "npm run check-data",
+    "ingest": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/index.mts",
+    "capture-fixtures": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/capture-fixtures.mts"
   },
   "dependencies": {
     "next": "16.3.5",

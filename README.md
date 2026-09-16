@@ -24,6 +24,8 @@ No API keys or environment variables are needed. The app ships with clearly labe
 
 **[Self-hosting guide →](docs/self-hosting.md)**: running on a server, league setup, using your own player data, and what the optional environment variables do.
 
+**[Data pipeline →](docs/data-pipeline.md)**: optional. With a SportsDataIO key, refreshes ADP and projections into a dataset, with a QA gate that refuses to publish bad data and one-command rollback.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

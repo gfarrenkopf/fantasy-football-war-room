@@ -24,7 +24,16 @@ export interface Player {
   team: string;
   /** Bye week number for the player's team. */
   bye: number;
-  /** Expert consensus overall rank (the prototype's ECR). Lower is better. */
+  /**
+   * Overall rank by merit rather than by market, independent of `adp`. Lower is better.
+   *
+   * The source depends on where the dataset came from: the prototype and the bundled
+   * sample use expert consensus rank (ECR), while the SportsDataIO pipeline derives it
+   * from projected points via value over replacement, because that vendor has no ECR
+   * (see docs/data-pipeline.md). Either way it must be independent of `adp` — the two
+   * columns are compared against each other to produce Value/Reach tags, and a dataset
+   * where they share a source has no Value/Reach signal at all.
+   */
   consensusRank: number;
   /** Platform average draft position (the prototype's ESPN rank). See Dataset.adpSource. */
   adp: number;
