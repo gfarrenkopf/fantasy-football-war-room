@@ -15,6 +15,7 @@ Following this from a fresh droplet should take under an hour.
 7. [HTTPS](#7-https)
 8. [Backups](#8-backups)
 9. [Day to day](#9-day-to-day)
+10. [Deploy on merge](#10-deploy-on-merge)
 
 ---
 
@@ -210,7 +211,7 @@ sudo systemctl start warroom
 | Deploy `main` | `sudo -iu warroom current/deploy/deploy.sh` |
 | Deploy a branch, tag or commit | `sudo -iu warroom current/deploy/deploy.sh <ref>` |
 | Roll back (run again to undo) | `sudo -iu warroom current/deploy/deploy.sh rollback` |
-| What's live | `cat /srv/warroom/current/REVISION` |
+| What's live | `sudo cat /srv/warroom/current/REVISION` |
 | App logs | `journalctl -u warroom -f` |
 | Restart | `sudo systemctl restart warroom` |
 | Change a secret | edit `/etc/warroom/.env`, then restart. No rebuild needed. |
@@ -220,3 +221,40 @@ sudo systemctl start warroom
 If a deploy fails partway, the live app isn't touched. Fix the problem and run the deploy again; a build that already succeeded is reused.
 
 When changing `deploy/*.service`, `.timer` or `Caddyfile`, copy the new versions into place as in §6 and §7 after deploying. `deploy.sh` doesn't install them.
+
+## 10. Deploy on merge
+
+`.github/workflows/deploy.yml` deploys every push to `main` once CI passes on it. You can follow it in the repo's **Actions** tab and under **Environments → production**. You can also start it by hand from the Actions tab (**Deploy → Run workflow**), which deploys the current `main`.
+
+The workflow connects as `warroom` with a key that can only run [`deploy/ci-deploy.sh`](../deploy/ci-deploy.sh). That script accepts one commit sha that is already on `main` and passes it to `deploy.sh`. Rollback and anything else still happen over SSH (§9).
+
+### Setup
+
+Generate a key pair used only for this. Its public half goes on the server:
+
+```sh
+ssh-keygen -t ed25519 -N "" -C github-actions-deploy -f deploy_key
+sudo install -d -m 700 -o warroom -g warroom /srv/warroom/.ssh
+echo "restrict,command=\"/srv/warroom/current/deploy/ci-deploy.sh\" $(cat deploy_key.pub)" \
+  | sudo tee -a /srv/warroom/.ssh/authorized_keys >/dev/null
+sudo chown warroom:warroom /srv/warroom/.ssh/authorized_keys && sudo chmod 600 /srv/warroom/.ssh/authorized_keys
+```
+
+Then add these to the GitHub repo, and delete the private key file:
+
+| Name | Kind | Value |
+|---|---|---|
+| `DEPLOY_SSH_KEY` | secret | contents of `deploy_key` (the private key) |
+| `DEPLOY_HOST` | secret | the droplet's IP or hostname |
+| `DEPLOY_KNOWN_HOSTS` | secret | output of `ssh-keyscan -t ed25519 <host>`. Check its fingerprint against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server. |
+| `DEPLOY_URL` | variable | the public URL, e.g. `https://warroom.example.com` |
+
+```sh
+gh secret set DEPLOY_SSH_KEY < deploy_key && rm deploy_key deploy_key.pub
+gh secret set DEPLOY_HOST --body <host>
+ssh-keyscan -t ed25519 <host> | gh secret set DEPLOY_KNOWN_HOSTS
+gh variable set DEPLOY_URL --body https://warroom.example.com
+```
+
+To revoke the key, delete its line from `/srv/warroom/.ssh/authorized_keys`.
+
