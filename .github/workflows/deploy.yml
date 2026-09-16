@@ -1,0 +1,53 @@
+name: Deploy
+
+# Deploys main to the production droplet after CI passes on it. See docs/deployment.md §10.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time, and never cancel one halfway through a migration.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Forks and self-hosted copies of the repo have no droplet; skip there.
+    if: >-
+      github.repository == 'gfarrenkopf/fantasy-football-war-room' && (
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_repository.full_name == github.repository)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+    steps:
+      - name: Deploy
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The server's forced command (deploy/ci-deploy.sh) reads the sha and runs deploy.sh.
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "warroom@$DEPLOY_HOST" "$SHA"
+
+      - name: Check the public site
+        run: curl -fsS -o /dev/null --retry 5 --retry-delay 3 --retry-all-errors "$DEPLOY_URL"
+        env:
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
