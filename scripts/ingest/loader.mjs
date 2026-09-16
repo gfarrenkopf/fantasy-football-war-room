@@ -64,7 +64,8 @@ export function resolve(specifier, context, nextResolve) {
     if (resolved) return found(resolved);
   }
 
-  if (specifier.startsWith(".") && context.parentURL?.startsWith("file:")) {
+  // Only for our own sources: packages resolve their relative imports (and CommonJS files) themselves.
+  if (specifier.startsWith(".") && context.parentURL?.startsWith("file:") && !context.parentURL.includes("/node_modules/")) {
     const parentDir = dirname(fileURLToPath(context.parentURL));
     const resolved = withExtension(resolvePath(parentDir, specifier));
     if (resolved) return found(resolved);

@@ -4,9 +4,10 @@ import { planInputHash, planSeed } from "@/lib/ai/planHash";
 import { buildPlanInput } from "@/lib/ai/planInput";
 import { NO_PLAN, type PlanView } from "@/lib/ai/planView";
 import { PLAN_PROMPT_VERSION } from "@/lib/ai/prompt";
-import { PlanModelError, type PlanModel } from "@/lib/ai/provider";
+import { costUsd } from "@/lib/ai/pricing";
+import { PlanModelError, type ModelUsage, type PlanModel } from "@/lib/ai/provider";
 import { DATASET_ID, dataset } from "@/lib/data";
-import { aiPlans, leagues, type AiPlanStatus } from "@/lib/db/schema";
+import { aiGenerations, aiPlans, leagues, type AiPlanStatus, type GenerationOutcome } from "@/lib/db/schema";
 
 export type { PlanView } from "@/lib/ai/planView";
 import type { Db } from "@/lib/db/types";
@@ -163,8 +164,10 @@ export async function requestPlan(db: Db, userId: string, leagueId: string, now 
 /**
  * Writes the plan for a claimed job. Builds the input from the league's stored settings and the
  * bundled player data, calls the model, and saves the result, but only while `jobId` is still the
- * row's current job. Never throws: failures are recorded on the row, and unexpected ones are also
- * logged as [server-error] lines (errors inside after() never reach onRequestError).
+ * row's current job. Every model call is logged to `ai_generations` with its usage and cost, including
+ * failed and superseded ones, since those are paid for too. Never throws: failures are recorded on
+ * the row, and unexpected ones are also logged as [server-error] lines (errors inside after() never
+ * reach onRequestError).
  */
 export async function runPlanJob(
   db: Db,
@@ -173,6 +176,8 @@ export async function runPlanJob(
   { model, timeoutMs = JOB_TIMEOUT_MS }: { model: PlanModel; timeoutMs?: number },
 ): Promise<void> {
   const current = and(eq(aiPlans.leagueId, leagueId), eq(aiPlans.jobId, jobId));
+  /** Set once the model is called, so the call gets logged however the job ends. */
+  let call: { userId: string; startedAt: number; usage?: ModelUsage } | null = null;
   try {
     const [job] = await db.select({ userId: leagues.userId }).from(aiPlans).innerJoin(leagues, eq(leagues.id, aiPlans.leagueId)).where(current);
     const league = job && (await findLeague(db, job.userId, leagueId));
@@ -194,10 +199,12 @@ export async function runPlanJob(
     const input = buildPlanInput(league.settings, dataset, {
       rng: mulberry32(planSeed(hash)),
     });
+    call = { userId: job.userId, startedAt: performance.now() };
     const generated = await generateAiPlan(model, input, {
       signal: AbortSignal.timeout(timeoutMs),
     });
-    await db
+    call.usage = generated.usage;
+    const saved = await db
       .update(aiPlans)
       .set({
         status: "ready",
@@ -211,13 +218,19 @@ export async function runPlanJob(
         leaseExpiresAt: null,
         completedAt: new Date(),
       })
-      .where(current);
+      .where(current)
+      .returning({ leagueId: aiPlans.leagueId });
+    await logGeneration(db, model, { leagueId, jobId, ...call, outcome: saved.length ? "ready" : "superseded" });
   } catch (error) {
     const kind = error instanceof PlanModelError ? error.kind : "internal";
     if (kind === "internal") {
       console.error(
         formatServerError(error, { method: "JOB", path: `/api/leagues/${leagueId}/plan` }, { routePath: "/api/leagues/[id]/plan", routeType: "after" }),
       );
+    }
+    if (call) {
+      const usage = error instanceof PlanModelError ? (error.usage ?? call.usage) : call.usage;
+      await logGeneration(db, model, { leagueId, jobId, ...call, usage, outcome: kind });
     }
     await db
       .update(aiPlans)
@@ -229,5 +242,34 @@ export async function runPlanJob(
       })
       .where(current)
       .catch(() => {}); // the database itself is failing; the lease will expire and a poll retries
+  }
+}
+
+/** Records one model call in `ai_generations`. Never throws: losing a log line mustn't fail the job. */
+async function logGeneration(
+  db: Db,
+  model: PlanModel,
+  entry: { leagueId: string; jobId: string; userId: string; startedAt: number; usage?: ModelUsage; outcome: GenerationOutcome },
+): Promise<void> {
+  const { usage } = entry;
+  try {
+    await db.insert(aiGenerations).values({
+      leagueId: entry.leagueId,
+      userId: entry.userId,
+      jobId: entry.jobId,
+      provider: model.provider,
+      model: model.model,
+      promptVersion: PLAN_PROMPT_VERSION,
+      outcome: entry.outcome,
+      inputTokens: usage?.inputTokens ?? null,
+      cachedInputTokens: usage ? (usage.cachedInputTokens ?? 0) : null,
+      outputTokens: usage?.outputTokens ?? null,
+      costUsd: usage ? costUsd(model.provider, model.model, usage) : null,
+      durationMs: Math.round(performance.now() - entry.startedAt),
+    });
+  } catch (error) {
+    console.error(
+      formatServerError(error, { method: "JOB", path: `/api/leagues/${entry.leagueId}/plan` }, { routePath: "/api/leagues/[id]/plan", routeType: "after" }),
+    );
   }
 }

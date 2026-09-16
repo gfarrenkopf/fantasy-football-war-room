@@ -215,6 +215,7 @@ sudo systemctl start warroom
 | App logs | `journalctl -u warroom -f` |
 | Restart | `sudo systemctl restart warroom` |
 | Change a secret | edit `/etc/warroom/.env`, then restart. No rebuild needed. |
+| AI plan costs (see [database §6](database.md#6-ai-plan-costs)) | `sudo -iu warroom bash -c 'set -a; . /etc/warroom/.env; set +a; cd current && npm run ai:costs -- --from 2026-09-01'` |
 
 **Rollback only swaps code.** Migrations stay applied, so write schema changes to work with both the old and new code (add a column in one release, start relying on it in the next). To undo a bad migration, restore the dump that `deploy.sh` took just before it (§8).
 

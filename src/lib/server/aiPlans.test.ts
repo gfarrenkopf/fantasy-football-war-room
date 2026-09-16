@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PlanModelError, type ModelRequest } from "@/lib/ai/provider";
 import { createFakePlanModel } from "@/lib/ai/providers/fake";
 import { DATASET_ID, standardRoster } from "@/lib/data";
-import { aiPlans } from "@/lib/db/schema";
+import { aiGenerations, aiPlans } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import type { LeagueRecord } from "@/lib/storage/types";
@@ -21,6 +21,7 @@ beforeAll(async () => {
 afterAll(() => close());
 beforeEach(async () => {
   await db.delete(aiPlans);
+  await db.delete(aiGenerations);
   alice = await createTestUser(db);
   bob = await createTestUser(db);
 });
@@ -261,6 +262,47 @@ describe("AI plan jobs", () => {
     }
     expect(errors).toEqual([expect.stringMatching(/^\[server-error\] .*"TypeError: boom"/)]);
     expect(result(await getPlanStatus(db, alice, league.id)).view.error).toEqual({ kind: "internal", retryable: true });
+  });
+
+  it("logs every model call with its usage and cost: saved, failed, and superseded", async () => {
+    const generations = async (leagueId: string) =>
+      (await db.select().from(aiGenerations).where(eq(aiGenerations.leagueId, leagueId)).orderBy(aiGenerations.createdAt)).map((row) => ({
+        outcome: row.outcome,
+        jobId: row.jobId,
+        userId: row.userId,
+        tokens: [row.inputTokens, row.outputTokens],
+        costUsd: row.costUsd,
+      }));
+    const sonnet = (respond: Parameters<typeof createFakePlanModel>[0]) => Object.assign(createFakePlanModel(respond), { provider: "anthropic", model: "claude-sonnet-5" });
+
+    const league = await createLeague(alice);
+    const first = result(await requestPlan(db, alice, league.id)).claimedJobId!;
+    await runPlanJob(db, league.id, first, { model: planModel() });
+    expect(await generations(league.id)).toEqual([{ outcome: "ready", jobId: first, userId: alice, tokens: [10, 5], costUsd: null }]); // the fake model has no price
+
+    await updateSettings(alice, league, { mySlot: 3 });
+    const failing = result(await requestPlan(db, alice, league.id)).claimedJobId!;
+    await runPlanJob(db, league.id, failing, {
+      model: sonnet(() => {
+        throw new PlanModelError("truncated", "too long", { inputTokens: 10_000, outputTokens: 32_000 });
+      }),
+    });
+
+    const stale = result(await requestPlan(db, alice, league.id)).claimedJobId!;
+    const good = planModel();
+    const outrun = sonnet(async (request) => {
+      // The user changes settings and asks again while this job's model call is running.
+      await updateSettings(alice, { ...league, updatedAt: "2026-09-01T00:00:05.000Z" }, { mySlot: 4 });
+      await requestPlan(db, alice, league.id);
+      return good.generate(request);
+    });
+    await runPlanJob(db, league.id, stale, { model: outrun });
+
+    const logged = await generations(league.id);
+    expect(logged.slice(1)).toEqual([
+      { outcome: "truncated", jobId: failing, userId: alice, tokens: [10_000, 32_000], costUsd: 0.34 },
+      { outcome: "superseded", jobId: stale, userId: alice, tokens: [10, 5], costUsd: expect.closeTo(0.00007, 6) },
+    ]);
   });
 
   it("rejects leagues that don't fit the player data", async () => {

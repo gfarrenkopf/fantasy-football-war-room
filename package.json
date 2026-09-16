@@ -13,6 +13,7 @@
     "prebuild": "npm run check-data",
     "ingest": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/index.mts",
     "ai:eval": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ai/eval-plan.mts",
+    "ai:costs": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ai/cost-report.mts",
     "capture-fixtures": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/capture-fixtures.mts",
     "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
     "db:generate": "drizzle-kit generate",

@@ -9,6 +9,7 @@ The hosted features (accounts and syncing leagues across devices) store data in 
 3. [Tests](#3-tests)
 4. [League API](#4-league-api)
 5. [Backups and restore](#5-backups-and-restore)
+6. [AI plan costs](#6-ai-plan-costs)
 
 ---
 
@@ -38,6 +39,8 @@ The schema lives in `src/lib/db/schema.ts`, written with [Drizzle](https://orm.d
 | `leagues` | One row per league: settings as JSON, the dataset fingerprint, and a soft-delete `deleted_at`. |
 | `drafts` | One row per league: the picks as JSON, plus a `revision` that increases on every save. |
 | `entitlements` | What a league has paid for. Written by the payments feature. |
+| `ai_plans` | One row per league: its AI game plan and the background job that writes it. |
+| `ai_generations` | Append-only: one row per AI model call, with token usage, cost in USD and outcome. See [§6](#6-ai-plan-costs). |
 
 To change the schema:
 
@@ -114,3 +117,26 @@ docker exec "$PG_DOCKER_CONTAINER" psql -U warroom -d warroom -c "select count(*
 ### Not covered here
 
 The hosted droplet backs up nightly with a systemd timer and before every deploy, and keeps 14 days of dumps. See [deployment.md §8](deployment.md#8-backups). Off the server, DigitalOcean's weekly droplet backups include the dumps. A backup that only lives on the database's own disk doesn't survive losing that disk.
+
+## 6. AI plan costs
+
+Every model call made for an AI game plan is logged in `ai_generations`, including calls that failed or were outrun by a newer request, since those are paid for too. Cost is priced when the row is written, from `src/lib/ai/pricing.ts`. Update that table when a provider's prices change; rows already logged keep the price that applied at the time.
+
+```sh
+npm run ai:costs                                        # the last 30 days
+npm run ai:costs -- --from 2026-09-01 --to 2026-10-01   # UTC dates, end exclusive
+npm run ai:costs -- --json
+```
+
+The headline is **average cost per league**: all calls for a league, including retries and regenerations, divided by the number of leagues. Check it against the price one league pays. The same numbers in SQL:
+
+```sql
+select count(*)                                   as calls,
+       count(distinct league_id)                  as leagues,
+       sum(cost_usd)                              as total_usd,
+       sum(cost_usd) / nullif(count(distinct league_id), 0) as avg_usd_per_league
+from ai_generations
+where created_at >= '2026-09-01' and created_at < '2026-10-01';
+```
+
+Calls with a null `cost_usd` have no known price, or reported no usage (for example, a call cut off at its deadline). They're left out of the totals.

@@ -15,6 +15,8 @@ const KEYS: Record<PlanProviderName, string> = { anthropic: "ANTHROPIC_API_KEY" 
 export const env = Object.freeze({
   provider: read("AI_PROVIDER"),
   model: read("AI_MODEL"),
+  /** For the cost report. */
+  databaseUrl: read("DATABASE_URL"),
 });
 
 export function apiKeyFor(provider: string): string {
