@@ -2,16 +2,18 @@
 
 import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { AiPlanTurn } from "@/lib/ai/planSchema";
-import { isWorking, nextPollDelay, planFallback, type FallbackReason, type PlanView } from "@/lib/ai/planView";
+import { FREE_REGENERATIONS, isWorking, nextPollDelay, planFallback, type FallbackReason, type PlanView } from "@/lib/ai/planView";
 import { roundOf } from "@/lib/draft/snake";
 import { getStores, type AiPlanResult } from "@/lib/storage";
 import { useAccount } from "./Account";
+import { BuySeasonPass, isAwaitingPass, passArrived } from "./Checkout";
 import { POS_COLOR } from "./Board";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { useToast } from "./Feedback";
 import type { PlanOdds } from "./FocusView";
 import { useFlags } from "./Flags";
+import { useLeague } from "./LeagueProvider";
 import { LiveTurnPlans } from "./LiveTurnPlans";
 
 /* ================= state ================= */
@@ -25,6 +27,8 @@ interface AiPlanValue {
   problem: string | null;
   /** Seconds the current job has been waiting or running. */
   waitingSeconds: number;
+  /** The league needs a season pass, and the user just paid for it: waiting for the purchase to be recorded. */
+  awaitingPass: boolean;
   /** Asks for a plan for the current settings, or with `regenerate`, a new version of an up-to-date one. */
   request(regenerate?: boolean): void;
 }
@@ -33,6 +37,10 @@ const AiPlanContext = createContext<AiPlanValue | null>(null);
 
 /** The AI plan for the active league, or null when AI plans aren't available here. */
 export const useAiPlan = () => useContext(AiPlanContext);
+
+/** How often, and how many times, to look for a season pass after returning from checkout. */
+const PASS_CHECK_MS = 2_000;
+const PASS_CHECKS = 15;
 
 const PROBLEMS: Record<Exclude<AiPlanResult, { ok: true }>["reason"], string> = {
   offline: "Can't reach the server right now. Your league is saved on this device; try again in a moment.",
@@ -78,6 +86,7 @@ function AiPlanTracker({ leagueId, children }: { leagueId: string; children: Rea
     }
     setProblem(null);
     const next = result.view;
+    if (view?.needsPurchase && !next.needsPurchase) toast("Season pass unlocked");
     if (next.limitReached) toast("You've used this league's free rewrites, so your saved plan was kept");
     if (isWorking(next)) watched.current = true;
     else if (watched.current) {
@@ -94,14 +103,22 @@ function AiPlanTracker({ leagueId, children }: { leagueId: string; children: Rea
     pollNow();
   }, [leagueId]);
 
+  // Back from paying: Stripe's webhook usually lands within seconds of the redirect, so check again until the pass shows up.
+  const [passChecks, setPassChecks] = useState(0);
+  const awaitingPass = !!view?.needsPurchase && isAwaitingPass(leagueId) && passChecks < PASS_CHECKS;
+  useEffect(() => {
+    if (view && (!view.needsPurchase || passChecks >= PASS_CHECKS)) passArrived(leagueId);
+  }, [view, passChecks, leagueId]);
+
   // Poll while a job is waiting or running. Paused in background tabs; resumes as soon as the tab is visible.
   const since = view?.startedAt ?? view?.requestedAt ?? null;
   const waitingMs = since ? Math.max(0, now - Date.parse(since)) : 0;
-  const delay = view ? nextPollDelay(view, waitingMs) : null;
+  const delay = view ? (awaitingPass ? PASS_CHECK_MS : nextPollDelay(view, waitingMs)) : null;
   useEffect(() => {
     if (delay === null) return;
     const tick = setInterval(tickNow, 1000);
     const timer = setTimeout(() => {
+      if (awaitingPass) setPassChecks((n) => n + 1);
       if (document.visibilityState === "visible") pollNow();
       else tickNow(); // re-arms this effect, so the next tick while visible polls
     }, delay);
@@ -114,7 +131,7 @@ function AiPlanTracker({ leagueId, children }: { leagueId: string; children: Rea
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [delay, view]);
+  }, [delay, view, awaitingPass]);
 
   function request(regenerate = false) {
     setSending(true);
@@ -133,6 +150,7 @@ function AiPlanTracker({ leagueId, children }: { leagueId: string; children: Rea
     sending,
     problem,
     waitingSeconds: Math.floor(waitingMs / 1000),
+    awaitingPass,
     request,
   };
   return <AiPlanContext.Provider value={value}>{children}</AiPlanContext.Provider>;
@@ -215,6 +233,7 @@ const FALLBACK_TEXT: Record<FallbackReason, string> = {
 export function AiPlanTab({ planOdds, onShowLive }: { planOdds: PlanOdds | null; onShowLive(): void }) {
   const plan = useAiPlan();
   const model = useModel();
+  const { active } = useLeague();
   if (!plan) return null;
   const { view, sending, problem, request, waitingSeconds } = plan;
   const working = !!view && isWorking(view);
@@ -238,6 +257,25 @@ export function AiPlanTab({ planOdds, onShowLive }: { planOdds: PlanOdds | null;
   return (
     <div className={s.aiPlan}>
       {!view && <p>Loading your game plan…</p>}
+
+      {view?.needsPurchase && (
+        <>
+          <div className={s.aiCallout}>
+            <p>
+              An AI analyst writes a game plan for your draft slot: who to target at each of your turns, who to fall back on, and who not to count on, from 300
+              mock drafts of your room.
+            </p>
+            {active && !plan.awaitingPass && <BuySeasonPass leagueId={active.id} label="Unlock with a season pass" />}
+            <div className={s.lbl}>
+              {plan.awaitingPass
+                ? "Payment received. Unlocking your game plan…"
+                : `One payment for this league, this season: your plan plus ${FREE_REGENERATIONS} rewrites. The board, mock drafts and live odds stay free.`}
+            </div>
+          </div>
+          <p className={s.aiFallback}>Meanwhile, here&apos;s the live turn plan{mocks}. % is the chance a player survives to that turn.</p>
+          <LiveTurnPlans planOdds={planOdds} />
+        </>
+      )}
 
       {view?.status === "none" && (
         <div className={s.aiCallout}>

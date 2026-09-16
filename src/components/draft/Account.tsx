@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { SessionUser } from "@/lib/auth/types";
 import { signOutAction } from "@/app/actions/auth";
-import { getStores } from "@/lib/storage";
+import { formatMoney } from "@/lib/money";
+import { getStores, type Purchase } from "@/lib/storage";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
 import { useFlags } from "./Flags";
@@ -19,9 +20,10 @@ export const useAccount = () => useContext(AccountContext);
 
 /** Sign-in link, or the signed-in email with sign-out. Renders nothing when cloud features are off. */
 export function AccountMenu() {
-  const { cloudEnabled } = useFlags();
+  const { cloudEnabled, paymentsEnabled } = useFlags();
   const user = useAccount();
   const confirm = useConfirm();
+  const [showPurchases, setShowPurchases] = useState(false);
   if (!cloudEnabled) return null;
 
   if (!user) {
@@ -56,9 +58,75 @@ export function AccountMenu() {
       <span className={s.accountEmail} title={user.email ?? undefined}>
         {user.email ?? "Signed in"}
       </span>
+      {paymentsEnabled && (
+        <button className={cx("btn")} onClick={() => setShowPurchases(true)}>
+          Purchases
+        </button>
+      )}
       <button className={cx("btn")} onClick={() => void signOut()}>
         Sign out
       </button>
+      {showPurchases && <PurchasesDialog onClose={() => setShowPurchases(false)} />}
     </span>
+  );
+}
+
+/** What the user has paid for and when. */
+function PurchasesDialog({ onClose }: { onClose(): void }) {
+  /** undefined while loading, null when it couldn't load. */
+  const [purchases, setPurchases] = useState<Purchase[] | null | undefined>(undefined);
+
+  useEffect(() => {
+    let live = true;
+    void getStores()
+      .checkout?.purchases()
+      .then((list) => live && setPurchases(list));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className={s.scrim} onClick={onClose} />
+      <div className={s.dialog} role="dialog" aria-modal="true" aria-labelledby="purchases-title">
+        <h3 id="purchases-title">Purchases</h3>
+        {purchases === undefined && <p className={s.lbl}>Loading…</p>}
+        {purchases === null && <p>Couldn&apos;t load your purchases. Try again in a moment.</p>}
+        {purchases?.length === 0 && <p>No purchases yet. A season pass unlocks the AI game plan for one league.</p>}
+        {!!purchases?.length && (
+          <ul className={s.purchases}>
+            {purchases.map((p) => (
+              <li key={`${p.leagueId}:${p.kind}`}>
+                <div>
+                  <b>Season pass</b>: {p.leagueName} ({p.season}){p.leagueDeleted && <span className={s.lbl}> · league deleted</span>}
+                </div>
+                <div className={s.lbl}>
+                  {new Date(p.purchasedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                  {p.amountTotal !== null && p.currency && ` · ${formatMoney(p.amountTotal, p.currency)}`}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className={s.dialogActions}>
+          <button className={cx("btn", "primary")} onClick={onClose} autoFocus>
+            Close
+          </button>
+        </div>
+      </div>
+    </>
   );
 }

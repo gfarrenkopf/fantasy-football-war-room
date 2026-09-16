@@ -38,7 +38,7 @@ The schema lives in `src/lib/db/schema.ts`, written with [Drizzle](https://orm.d
 | `users`, `accounts`, `sessions`, `verification_tokens` | Auth.js sign-in data. Their property names must match what `@auth/drizzle-adapter` expects. |
 | `leagues` | One row per league: settings as JSON, the dataset fingerprint, and a soft-delete `deleted_at`. |
 | `drafts` | One row per league: the picks as JSON, plus a `revision` that increases on every save. |
-| `entitlements` | What a league has paid for. Written by the payments feature. |
+| `entitlements` | What a league has paid for: one row per league and kind, with the Stripe session and amount. Written only by the Stripe webhook (see [payments.md](payments.md)). |
 | `ai_plans` | One row per league: its AI game plan and the background job that writes it. |
 | `ai_generations` | Append-only: one row per AI model call, with token usage, cost in USD and outcome. See [§6](#6-ai-plan-costs). |
 
@@ -69,7 +69,7 @@ The browser syncs through these routes. `src/lib/storage/server.ts` is their onl
 | `GET /api/leagues/:id/draft` | `{ state, revision }`, where `state` is null and `revision` is 0 before the first save. |
 | `PUT /api/leagues/:id/draft` | `{ state, baseRevision }`. Saves only if `baseRevision` is the stored revision and returns `{ revision }`. Otherwise it returns 409 with what's stored. |
 
-AI game plans use `GET` and `POST /api/leagues/:id/plan` (`src/lib/server/aiPlans.ts`). `POST` with `{ "regenerate": true }` asks for a new version of an up-to-date plan. A league gets its first plan plus 3 rewrites (`FREE_REGENERATIONS`), whether they come from regenerating or from a settings change. Only saved plans count, so retrying a failure is free. The server enforces the limit by counting `ready` rows in `ai_generations`: past it, nothing is queued, and the response is the stored plan with `limitReached: true`. `planAllowance()` in `src/lib/server/ai` is where entitlements will raise it.
+AI game plans use `GET` and `POST /api/leagues/:id/plan` (`src/lib/server/aiPlans.ts`). `POST` with `{ "regenerate": true }` asks for a new version of an up-to-date plan. A league gets its first plan plus 3 rewrites (`FREE_REGENERATIONS`), whether they come from regenerating or from a settings change. Only saved plans count, so retrying a failure is free. The server enforces the limit by counting `ready` rows in `ai_generations`: past it, nothing is queued, and the response is the stored plan with `limitReached: true`. Who may use AI plans at all is decided by `planAccess()` in `src/lib/server/ai`: with payments on, a league needs a season pass (reads return `needsPurchase: true`, and requests get `402`). See [payments.md](payments.md#5-what-the-season-pass-unlocks).
 
 Data access lives in `src/lib/server/leagues.ts`, and its tests (including the cross-user cases) run on PGlite.
 

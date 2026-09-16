@@ -2,7 +2,7 @@ import { and, count, eq, gt, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { generateAiPlan } from "@/lib/ai/generatePlan";
 import { planInputHash, planSeed } from "@/lib/ai/planHash";
 import { buildPlanInput } from "@/lib/ai/planInput";
-import { NO_PLAN, type PlanView } from "@/lib/ai/planView";
+import { FREE_REGENERATIONS, NO_PLAN, type PlanView } from "@/lib/ai/planView";
 import { PLAN_PROMPT_VERSION } from "@/lib/ai/prompt";
 import { costUsd } from "@/lib/ai/pricing";
 import { PlanModelError, type ModelUsage, type PlanModel } from "@/lib/ai/provider";
@@ -40,9 +40,9 @@ export const JOB_TIMEOUT_MS = 3 * 60_000;
 /**
  * Plans a league may have written: its first plan plus FREE_REGENERATIONS rewrites, whether asked for
  * with Regenerate or after its settings changed. Only saved plans count, so retrying a failure is free.
- * The route gets the real allowance from planAllowance() (src/lib/server/ai), which entitlements replace.
+ * The route gets the league's allowance from planAccess() (src/lib/server/ai).
  */
-export const FREE_REGENERATIONS = 3;
+export { FREE_REGENERATIONS };
 export const DEFAULT_PLAN_ALLOWANCE = 1 + FREE_REGENERATIONS;
 /** Plans written at once, across all users. A soft cap: two simultaneous claims can pass it by one. */
 export const MAX_CONCURRENT_GENERATIONS = 4;
@@ -121,6 +121,7 @@ async function toView(db: Db, row: PlanRow | null, currentHash: string, now: Dat
     error: status === "failed" && row.errorKind ? { kind: row.errorKind, retryable: row.errorKind !== "invalid_league" } : null,
     regenerationsLeft: written > 0 ? Math.max(0, allowance - written) : null,
     limitReached: false,
+    needsPurchase: false,
   };
 }
 

@@ -17,6 +17,7 @@ Following this from a fresh droplet should take under an hour.
 9. [Day to day](#9-day-to-day)
 10. [Deploy on merge](#10-deploy-on-merge)
 11. [Monitoring](#11-monitoring)
+12. [Payments](#12-payments)
 
 ---
 
@@ -291,3 +292,21 @@ Use DigitalOcean's built-in uptime checks: **Monitoring → Uptime → Create Up
 
 This catches what the droplet can't report about itself: the whole server down, Caddy down, or DNS and certificate problems.
 
+## 12. Payments
+
+Stripe setup, and what checkout and the webhook do, are in [payments.md](payments.md). On the droplet:
+
+1. In the Stripe dashboard (test mode first), go to **Developers → Webhooks → Add endpoint**:
+   - URL: `https://<your domain>/api/stripe/webhook`
+   - Events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`
+2. Add all three variables to `/etc/warroom/.env`, then restart. Payments stay off until all three are set (the `[config]` warning in `journalctl -u warroom` names any that are missing):
+
+   ```sh
+   sudo nano /etc/warroom/.env    # STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (the endpoint's signing secret), STRIPE_PRICE_ID
+   sudo systemctl restart warroom
+   ```
+
+3. Buy a pass with test card `4242 4242 4242 4242`. The endpoint's page in the dashboard should show the delivery with a `200`.
+4. To go live, repeat steps 1 and 2 in live mode. Live mode has its own endpoint, signing secret, key and price.
+
+Failed deliveries show on the endpoint's page, and Stripe retries them for three days. A `500` from the webhook is also logged as `[server-error]`, which sends an alert email (§11).

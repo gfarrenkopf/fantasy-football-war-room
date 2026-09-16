@@ -2,7 +2,9 @@ import "server-only";
 import type { PlanModel } from "@/lib/ai/provider";
 import { createPlanModel, isPlanProvider } from "@/lib/ai/providers";
 import { config } from "@/lib/config";
-import { DEFAULT_PLAN_ALLOWANCE } from "@/lib/server/aiPlans";
+import type { Db } from "@/lib/db/types";
+import { hasEntitlement, SEASON_PASS } from "@/lib/server/entitlements";
+import { decidePlanAccess, type PlanAccess } from "@/lib/server/planAccess";
 
 /** The configured plan model, or null when AI plans are off. */
 export function getPlanModel(): PlanModel | null {
@@ -13,19 +15,12 @@ export function getPlanModel(): PlanModel | null {
   });
 }
 
-/**
- * Whether this account may generate AI plans. Until payments exist (Epic 4.4 replaces this with an
- * entitlement check), AI_ALLOWLIST limits it to listed emails; an empty list allows everyone.
- */
-export function canUseAiPlan(email: string | null): boolean {
-  if (!config.aiAllowlist.length) return true;
-  return email !== null && config.aiAllowlist.includes(email.toLowerCase());
-}
-
-/**
- * How many plans a league may have written: its first plus the free regenerations. The seam for
- * entitlements (Epic 4.4), which will take the league and look up what it has paid for here.
- */
-export async function planAllowance(): Promise<number> {
-  return DEFAULT_PLAN_ALLOWANCE;
+/** Whether this account may use AI plans for this league, and how many it may have written. See decidePlanAccess(). */
+export function planAccess(db: Db, leagueId: string, email: string | null): Promise<PlanAccess> {
+  return decidePlanAccess({
+    paymentsEnabled: config.paymentsEnabled,
+    allowlist: config.aiAllowlist,
+    email,
+    isEntitled: () => hasEntitlement(db, leagueId, SEASON_PASS),
+  });
 }

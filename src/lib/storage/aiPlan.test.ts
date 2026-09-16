@@ -19,6 +19,12 @@ function fakeFetch(respond: (url: string, init: RequestInit) => Response | Promi
 }
 
 describe("AI plan store", () => {
+  it("returns the paywall view when the league needs a season pass (402)", async () => {
+    const { fetch } = fakeFetch(() => Response.json({ ...NO_PLAN, needsPurchase: true }, { status: 402 }));
+    const store = createAiPlanStore({ fetch, flush: async () => true });
+    expect(await store.request("l1")).toEqual({ ok: true, view: { ...NO_PLAN, needsPurchase: true } });
+  });
+
   it("flushes league edits before asking for a plan, then returns the job", async () => {
     const order: string[] = [];
     const { fetch, calls } = fakeFetch(() => {

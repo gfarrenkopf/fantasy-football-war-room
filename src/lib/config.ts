@@ -25,12 +25,19 @@ const anthropicApiKey = readEnv("ANTHROPIC_API_KEY");
 /** Which model provider writes the AI plan (see src/lib/ai/providers), and optionally which of its models. */
 const aiProvider = readEnv("AI_PROVIDER") ?? "anthropic";
 const aiModel = readEnv("AI_MODEL");
-/** Comma-separated emails allowed to generate AI plans until payments gate them. Empty = every signed-in user. */
+/**
+ * Comma-separated emails. Payments off: only these may generate AI plans (empty = every signed-in user).
+ * Payments on: these skip the season pass paywall (empty = nobody does).
+ */
 const aiAllowlist = (readEnv("AI_ALLOWLIST") ?? "")
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
 const stripeSecretKey = readEnv("STRIPE_SECRET_KEY");
+/** Signs the events Stripe sends to /api/stripe/webhook. */
+const stripeWebhookSecret = readEnv("STRIPE_WEBHOOK_SECRET");
+/** The one-time price of a league's season pass. */
+const stripePriceId = readEnv("STRIPE_PRICE_ID");
 const sportsDataApiKey = readEnv("SPORTSDATA_API_KEY");
 
 /** Accounts + server-backed persistence. Requires a database and auth. */
@@ -44,6 +51,10 @@ const aiApiKeys: Record<string, { env: string; key: string | undefined }> = {
 };
 const aiProviderKnown = Object.hasOwn(aiApiKeys, aiProvider);
 const aiApiKey = aiProviderKnown ? aiApiKeys[aiProvider].key : undefined;
+/** Payments need all three: a key alone could start checkouts the webhook can never grant. */
+const stripeVars = { STRIPE_SECRET_KEY: stripeSecretKey, STRIPE_WEBHOOK_SECRET: stripeWebhookSecret, STRIPE_PRICE_ID: stripePriceId };
+const stripeMissing = Object.keys(stripeVars).filter((name) => !stripeVars[name as keyof typeof stripeVars]);
+const stripeAnySet = stripeMissing.length < Object.keys(stripeVars).length;
 
 export const config = Object.freeze({
   databaseUrl,
@@ -61,6 +72,8 @@ export const config = Object.freeze({
   aiApiKey,
   aiAllowlist,
   stripeSecretKey,
+  stripeWebhookSecret,
+  stripePriceId,
   sportsDataApiKey,
 
   cloudEnabled,
@@ -69,7 +82,7 @@ export const config = Object.freeze({
   /** AI-generated draft plan. A paid, hosted feature, so it needs accounts. */
   aiEnabled: cloudEnabled && Boolean(aiApiKey),
   /** Stripe checkout + entitlements. Needs accounts to attach purchases to. */
-  paymentsEnabled: cloudEnabled && Boolean(stripeSecretKey),
+  paymentsEnabled: cloudEnabled && stripeMissing.length === 0,
   /** Live ADP/projections ingestion. Without it the app uses the bundled sample data. */
   dataPipelineEnabled: Boolean(sportsDataApiKey),
 });
@@ -114,8 +127,10 @@ if (!aiProviderKnown) {
 if (aiApiKey && !cloudEnabled) {
   warnings.push(`${aiApiKeys[aiProvider].env} is set but cloud features are disabled, so the AI plan is off.`);
 }
-if (stripeSecretKey && !cloudEnabled) {
-  warnings.push("STRIPE_SECRET_KEY is set but cloud features are disabled, so payments are off.");
+if (stripeAnySet && !cloudEnabled) {
+  warnings.push("Stripe variables are set but cloud features are disabled, so payments are off.");
+} else if (stripeAnySet && stripeMissing.length) {
+  warnings.push(`${stripeMissing.join(" and ")} ${stripeMissing.length > 1 ? "are" : "is"} not set, so payments are off.`);
 }
 for (const warning of warnings) {
   console.warn(`[config] ${warning}`);

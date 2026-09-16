@@ -5,6 +5,9 @@ import type { AiPlan } from "./planSchema";
  * Built by src/lib/server/aiPlans.ts, read by the plan store and UI.
  */
 
+/** Rewrites a league gets after its first plan. The server enforces it (src/lib/server/aiPlans.ts); the UI quotes it. */
+export const FREE_REGENERATIONS = 3;
+
 export type PlanJobStatus = "queued" | "generating" | "ready" | "failed";
 
 export interface PlanError {
@@ -31,6 +34,8 @@ export interface PlanView {
   regenerationsLeft: number | null;
   /** This request asked for a new plan past the league's allowance, so the stored one was kept. */
   limitReached: boolean;
+  /** Payments are on and the league has no season pass: nothing is written until it's bought. */
+  needsPurchase: boolean;
 }
 
 export const NO_PLAN: PlanView = {
@@ -44,7 +49,11 @@ export const NO_PLAN: PlanView = {
   error: null,
   regenerationsLeft: null,
   limitReached: false,
+  needsPurchase: false,
 };
+
+/** What a league without a season pass sees. */
+export const NEEDS_PURCHASE: PlanView = { ...NO_PLAN, needsPurchase: true };
 
 /** A job is waiting or running: keep polling. */
 export const isWorking = (view: PlanView) => view.status === "queued" || view.status === "generating";
@@ -106,5 +115,6 @@ export function parsePlanView(raw: unknown): PlanView | null {
     error: error && typeof error.kind === "string" ? { kind: error.kind, retryable: error.retryable === true } : null,
     regenerationsLeft: typeof v.regenerationsLeft === "number" ? v.regenerationsLeft : null,
     limitReached: v.limitReached === true,
+    needsPurchase: v.needsPurchase === true,
   };
 }
