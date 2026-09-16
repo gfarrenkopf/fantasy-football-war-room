@@ -1,7 +1,7 @@
 import type { Dataset } from "@/lib/draft/types";
 
 /** FNV-1a, 32-bit. Not cryptographic: it only has to notice that the player list changed. */
-function fnv1a(text: string): string {
+export function fnv1a(text: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);

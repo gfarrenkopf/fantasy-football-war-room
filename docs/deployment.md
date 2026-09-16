@@ -218,6 +218,8 @@ sudo systemctl start warroom
 
 **Rollback only swaps code.** Migrations stay applied, so write schema changes to work with both the old and new code (add a column in one release, start relying on it in the next). To undo a bad migration, restore the dump that `deploy.sh` took just before it (§8).
 
+**AI game plans survive deploys.** A plan takes a minute or more to write, and a restart stops the one being written. Its job stays in `ai_plans` with a 4-minute lease: once the lease runs out, the user's next status poll picks the job up again and writes the plan from scratch, so nothing is lost but the time (and the tokens already spent).
+
 If a deploy fails partway, the live app isn't touched. Fix the problem and run the deploy again; a build that already succeeded is reused.
 
 When changing `deploy/*.service`, `.timer` or `Caddyfile`, copy the new versions into place as in §6 and §7 after deploying, then `sudo systemctl daemon-reload`. `deploy.sh` doesn't install them.

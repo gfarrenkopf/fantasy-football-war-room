@@ -7,6 +7,7 @@ import { DATASET_ID } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
 import { configureStores } from "@/lib/storage";
 import { AccountMenu, AccountProvider } from "./Account";
+import { AiPlanProvider } from "./AiPlan";
 import { MockBar, SimProvider, useSim } from "./Simulator";
 import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
 import { BestAvailableStrip } from "./BestAvailableStrip";
@@ -17,7 +18,7 @@ import { DraftProvider, useDraft } from "./DraftProvider";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
 import { FlagsProvider } from "./Flags";
-import { FocusView, PlanDrawer, type PlanOdds } from "./FocusView";
+import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
 import { ImportPrompt } from "./ImportPrompt";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
@@ -65,7 +66,9 @@ function LeagueGate() {
     <DraftProvider key={active?.id ?? "new"} draftKey={active?.id ?? null} totalPicks={totalPicks(league)}>
       <DraftModelProvider league={league}>
         <SimProvider>
-          <WarRoomView />
+          <AiPlanProvider leagueId={active?.id ?? null}>
+            <WarRoomView />
+          </AiPlanProvider>
         </SimProvider>
       </DraftModelProvider>
     </DraftProvider>
@@ -105,7 +108,8 @@ function WarRoomView() {
     staleWarned.current = true;
     toast(`${missing} logged pick${missing === 1 ? " is" : "s are"} for players missing from the current player data`);
   }, [hydrated, active, state.picks, model, toast]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  /** The plan drawer's open tab, or null when closed. */
+  const [drawer, setDrawer] = useState<PlanDrawerTab | null>(null);
 
   /* ---- auto-switch plan / best available when the turn changes (prototype refresh()) ---- */
   const lastOnClock = useRef<boolean | null>(null);
@@ -161,7 +165,7 @@ function WarRoomView() {
   const onGlobalKey = useEffectEvent((e: KeyboardEvent) => {
     if (e.defaultPrevented || showSetup) return;
     if (e.key === "Escape") {
-      setDrawerOpen(false);
+      setDrawer(null);
       return;
     }
     if (isTyping()) return;
@@ -205,7 +209,7 @@ function WarRoomView() {
             >
               Mock draft
             </button>
-            <button className={cx("btn", "plan")} onClick={() => setDrawerOpen(true)}>
+            <button className={cx("btn", "plan")} onClick={() => setDrawer((tab) => tab ?? "live")}>
               Turn plan
             </button>
           </>
@@ -224,14 +228,14 @@ function WarRoomView() {
       {!hydrated ? (
         <div className={s.loading}>Loading your draft…</div>
       ) : prefs.view === "focus" ? (
-        <FocusView planOdds={planOdds} planStale={planStale} />
+        <FocusView planOdds={planOdds} planStale={planStale} onOpenAiPlan={() => setDrawer("ai")} />
       ) : (
         <div className={s.boardView}>
           <BestAvailableStrip />
           <Board query={q} hitId={hit?.id ?? null} />
         </div>
       )}
-      {drawerOpen && <PlanDrawer planOdds={planOdds} onClose={() => setDrawerOpen(false)} />}
+      {drawer && <PlanDrawer planOdds={planOdds} tab={drawer} onTab={setDrawer} onClose={() => setDrawer(null)} />}
       {report.open && <AvailabilityReport data={report.data} running={report.running} onClose={closeReport} />}
       {setupMode && <LeagueSetupDialog key={setupMode} dataset={model.dataset} mode={setupMode} firstRun={!configured} onClose={closeSetup} />}
     </div>

@@ -1,0 +1,271 @@
+import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { PlanModelError, type ModelRequest } from "@/lib/ai/provider";
+import { createFakePlanModel } from "@/lib/ai/providers/fake";
+import { DATASET_ID, standardRoster } from "@/lib/data";
+import { aiPlans } from "@/lib/db/schema";
+import { createTestDb, createTestUser } from "@/lib/db/testing";
+import type { Db } from "@/lib/db/types";
+import type { LeagueRecord } from "@/lib/storage/types";
+import { getPlanStatus, MAX_CONCURRENT_GENERATIONS, PLAN_LEASE_MS, requestPlan, runPlanJob, type PlanResult, type RequestPlanResult } from "./aiPlans";
+import { upsertLeague } from "./leagues";
+
+let db: Db;
+let close: () => Promise<void>;
+let alice: string;
+let bob: string;
+
+beforeAll(async () => {
+  ({ db, close } = await createTestDb());
+});
+afterAll(() => close());
+beforeEach(async () => {
+  await db.delete(aiPlans);
+  alice = await createTestUser(db);
+  bob = await createTestUser(db);
+});
+
+let seq = 0;
+async function createLeague(userId: string, patch: Partial<LeagueRecord["settings"]> = {}): Promise<LeagueRecord> {
+  const league: LeagueRecord = {
+    id: `plan-league-${++seq}`,
+    name: "Home league",
+    season: 2026,
+    datasetId: DATASET_ID,
+    settings: {
+      teams: 12,
+      mySlot: 1,
+      scoring: "ppr",
+      valueThreshold: 10,
+      roster: standardRoster(),
+      ...patch,
+    },
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+  };
+  await upsertLeague(db, userId, league);
+  return league;
+}
+
+async function updateSettings(userId: string, league: LeagueRecord, patch: Partial<LeagueRecord["settings"]>) {
+  const updatedAt = new Date(Date.parse(league.updatedAt) + 1000).toISOString();
+  await upsertLeague(db, userId, {
+    ...league,
+    settings: { ...league.settings, ...patch },
+    updatedAt,
+  });
+}
+
+/**
+ * A fake model that answers from the prompt's own candidates: for every turn, the first candidates
+ * as targets and take. Enough to produce a valid plan without parsing the prompt.
+ */
+function planModel() {
+  return createFakePlanModel((request: ModelRequest) => {
+    const turns = [...request.user.matchAll(/^## picks? ([\d &]+) \(/gm)].map((m) => m[1].split(" & ").map(Number));
+    const sections = request.user.split(/^## /m).slice(1);
+    return {
+      json: {
+        intro: "Plan.",
+        turns: turns.map((picks, i) => {
+          const refs = [...sections[i].matchAll(/^\[(p\d+)\]/gm)].map((m) => m[1]);
+          return {
+            pick: picks[0],
+            open: "",
+            note: "Why.",
+            take: refs.slice(0, picks.length),
+            targets: refs.slice(0, 3),
+            fallbacks: [],
+            letGo: [],
+          };
+        }),
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+    };
+  });
+}
+
+const result = (r: RequestPlanResult | PlanResult | null): PlanResult => {
+  if (!r || "invalidLeague" in r) throw new Error(`expected a plan result, got ${JSON.stringify(r)}`);
+  return r;
+};
+
+const minutes = (base: Date, n: number) => new Date(base.getTime() + n * 60_000);
+
+describe("AI plan jobs", () => {
+  it("queues and claims a job, then serves the finished plan without calling the model again", async () => {
+    const league = await createLeague(alice);
+    const now = new Date();
+    const requested = result(await requestPlan(db, alice, league.id, now));
+    expect(requested.view).toMatchObject({
+      status: "generating",
+      plan: null,
+      stale: false,
+    });
+    expect(requested.claimedJobId).toEqual(expect.any(String));
+
+    const model = planModel();
+    await runPlanJob(db, league.id, requested.claimedJobId!, { model });
+    expect(model.calls).toHaveLength(1);
+
+    const reloaded = result(await getPlanStatus(db, alice, league.id));
+    expect(reloaded.claimedJobId).toBeNull();
+    expect(reloaded.view).toMatchObject({
+      status: "ready",
+      stale: false,
+      error: null,
+    });
+    expect(reloaded.view.plan!.turns.map((t) => t.picks[0])).toEqual([1, 24, 48, 72, 96, 120, 144, 168, 192]);
+    expect(reloaded.view.generatedAt).toEqual(expect.any(String));
+
+    // Asking again for the same settings returns the plan without a new job.
+    const again = result(await requestPlan(db, alice, league.id));
+    expect(again).toMatchObject({
+      claimedJobId: null,
+      view: { status: "ready" },
+    });
+    expect(model.calls).toHaveLength(1);
+  });
+
+  it("returns the running job to a second request instead of starting another", async () => {
+    const league = await createLeague(alice);
+    const first = result(await requestPlan(db, alice, league.id));
+    const second = result(await requestPlan(db, alice, league.id));
+    expect(second).toMatchObject({
+      claimedJobId: null,
+      view: { status: "generating" },
+    });
+    const [row] = await db.select().from(aiPlans).where(eq(aiPlans.leagueId, league.id));
+    expect(row).toMatchObject({ jobId: first.claimedJobId, attempts: 1 });
+  });
+
+  it("reclaims a job whose lease expired, and fences out the dead job's late result", async () => {
+    const league = await createLeague(alice);
+    const start = new Date();
+    const dead = result(await requestPlan(db, alice, league.id, start));
+
+    // Before the lease runs out, polls leave the job alone.
+    expect(result(await getPlanStatus(db, alice, league.id, minutes(start, 1))).claimedJobId).toBeNull();
+
+    const later = new Date(start.getTime() + PLAN_LEASE_MS + 1000);
+    const revived = result(await getPlanStatus(db, alice, league.id, later));
+    expect(revived.claimedJobId).toEqual(expect.any(String));
+    expect(revived.claimedJobId).not.toBe(dead.claimedJobId);
+
+    // The original job finishes after all: its result is dropped.
+    await runPlanJob(db, league.id, dead.claimedJobId!, { model: planModel() });
+    expect(result(await getPlanStatus(db, alice, league.id, later)).view).toMatchObject({ status: "generating", plan: null });
+
+    await runPlanJob(db, league.id, revived.claimedJobId!, {
+      model: planModel(),
+    });
+    expect(result(await getPlanStatus(db, alice, league.id, later)).view.status).toBe("ready");
+  });
+
+  it("queues past the concurrency cap and claims on a later poll once there's room", async () => {
+    const now = new Date();
+    const running: { league: LeagueRecord; jobId: string }[] = [];
+    for (let i = 0; i < MAX_CONCURRENT_GENERATIONS; i++) {
+      const league = await createLeague(alice);
+      running.push({
+        league,
+        jobId: result(await requestPlan(db, alice, league.id, now)).claimedJobId!,
+      });
+    }
+    const waiting = await createLeague(bob);
+    const queued = result(await requestPlan(db, bob, waiting.id, minutes(now, 0.1)));
+    expect(queued).toMatchObject({
+      claimedJobId: null,
+      view: { status: "queued", queuePosition: 1 },
+    });
+    expect(result(await getPlanStatus(db, bob, waiting.id, minutes(now, 0.2))).claimedJobId).toBeNull();
+
+    await runPlanJob(db, running[0].league.id, running[0].jobId, {
+      model: planModel(),
+    });
+    const claimed = result(await getPlanStatus(db, bob, waiting.id, minutes(now, 0.3)));
+    expect(claimed.claimedJobId).toEqual(expect.any(String));
+    expect(claimed.view.status).toBe("generating");
+  });
+
+  it("records a failure, keeps the previous plan, and lets the user try again", async () => {
+    const league = await createLeague(alice);
+    await runPlanJob(db, league.id, result(await requestPlan(db, alice, league.id)).claimedJobId!, { model: planModel() });
+
+    await updateSettings(alice, league, { mySlot: 6 });
+    const stale = result(await getPlanStatus(db, alice, league.id));
+    expect(stale.view).toMatchObject({ status: "ready", stale: true });
+
+    const retry = result(await requestPlan(db, alice, league.id));
+    const failing = createFakePlanModel(() => {
+      throw new PlanModelError("timeout", "slow");
+    });
+    await runPlanJob(db, league.id, retry.claimedJobId!, { model: failing });
+    const failed = result(await getPlanStatus(db, alice, league.id));
+    expect(failed.view).toMatchObject({
+      status: "failed",
+      stale: true,
+      error: { kind: "timeout", retryable: true },
+    });
+    expect(failed.view.plan).not.toBeNull();
+
+    const again = result(await requestPlan(db, alice, league.id));
+    expect(again.claimedJobId).toEqual(expect.any(String));
+    await runPlanJob(db, league.id, again.claimedJobId!, {
+      model: planModel(),
+    });
+    const fresh = result(await getPlanStatus(db, alice, league.id));
+    expect(fresh.view).toMatchObject({
+      status: "ready",
+      stale: false,
+      error: null,
+    });
+    expect(fresh.view.plan!.turns[0].picks).toEqual([6]);
+  });
+
+  it("discards a job's result when the settings changed and a new job was requested mid-run", async () => {
+    const league = await createLeague(alice);
+    const old = result(await requestPlan(db, alice, league.id));
+    await updateSettings(alice, league, { mySlot: 12 });
+    const replaced = result(await requestPlan(db, alice, league.id));
+    expect(replaced.claimedJobId).not.toBe(old.claimedJobId);
+
+    await runPlanJob(db, league.id, old.claimedJobId!, { model: planModel() });
+    expect(result(await getPlanStatus(db, alice, league.id)).view.plan).toBeNull();
+  });
+
+  it("logs unexpected errors and marks the job failed", async () => {
+    const league = await createLeague(alice);
+    const job = result(await requestPlan(db, alice, league.id));
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (line: string) => void errors.push(line);
+    try {
+      await runPlanJob(db, league.id, job.claimedJobId!, {
+        model: createFakePlanModel(() => Promise.reject(new TypeError("boom"))),
+      });
+    } finally {
+      console.error = original;
+    }
+    expect(errors).toEqual([expect.stringMatching(/^\[server-error\] .*"TypeError: boom"/)]);
+    expect(result(await getPlanStatus(db, alice, league.id)).view.error).toEqual({ kind: "internal", retryable: true });
+  });
+
+  it("rejects leagues that don't fit the player data", async () => {
+    const league = await createLeague(alice, {
+      teams: 20,
+      roster: standardRoster(20),
+    });
+    expect(await requestPlan(db, alice, league.id)).toEqual({
+      invalidLeague: [expect.any(String)],
+    });
+  });
+
+  it("never shows or starts another user's plan", async () => {
+    const league = await createLeague(alice);
+    await requestPlan(db, alice, league.id);
+    expect(await getPlanStatus(db, bob, league.id)).toBeNull();
+    expect(await requestPlan(db, bob, league.id)).toBeNull();
+    expect(await getPlanStatus(db, alice, "missing")).toBeNull();
+  });
+});
