@@ -4,7 +4,11 @@ import { forwardRef } from "react";
 import { formatRoundPick, isMyPick, nextMyPick, roundOf } from "@/lib/draft/snake";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
+import { useLeague } from "./LeagueProvider";
 import { useDraftActions } from "./useDraftActions";
+
+/** Option value in the league switcher that opens the new-league dialog instead of switching. */
+const NEW_LEAGUE = "__new__";
 
 const SCORING_LABEL = { ppr: "Full-PPR", half: "Half-PPR", std: "Standard" } as const;
 
@@ -17,6 +21,7 @@ interface HeaderProps {
   onQueryKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void;
   hint: string;
   onOpenLeague(): void;
+  onNewLeague(): void;
   /** Controls rendered after the brand (view switch). */
   children?: React.ReactNode;
   /** Buttons rendered at the start of the action group. */
@@ -26,9 +31,10 @@ interface HeaderProps {
 }
 
 /** Pick box, turn state, click-mode hint, search and draft actions. Ported from renderHeader(). */
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, children, actions, needs }, searchRef) {
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, onNewLeague, children, actions, needs }, searchRef) {
   const model = useModel();
   const { undo, reset } = useDraftActions();
+  const { leagues, active, switchLeague } = useLeague();
   const { current: cur, total, done, onClock, league } = model;
 
   let turn: React.ReactNode;
@@ -91,6 +97,22 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
     <header className={s.header}>
       <div className={s.brand}>
         <b>Fantasy War Room</b>
+        {active ? (
+          <select
+            className={s.leagueSelect}
+            aria-label="League"
+            title={leagueSummary(league)}
+            value={active.id}
+            onChange={(e) => (e.target.value === NEW_LEAGUE ? onNewLeague() : switchLeague(e.target.value))}
+          >
+            {leagues.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+            <option value={NEW_LEAGUE}>+ New league…</option>
+          </select>
+        ) : null}
         <span>{leagueSummary(league)}</span>
       </div>
       {children}

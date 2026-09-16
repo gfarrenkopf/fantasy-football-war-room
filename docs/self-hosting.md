@@ -59,6 +59,8 @@ Each browser keeps its own draft. If you open the app on a second device, it sta
 
 On first run the **Set up your league** dialog opens. You can reopen it any time with the **League** button in the header.
 
+You can keep several leagues, each with its own draft. Switch between them, or add one with **+ New league…**, from the league menu under the app name. **League** → **Delete league** removes the open league and its picks.
+
 | Setting | What it does |
 |---|---|
 | Preset | Fills in a 10-, 12- or 14-team full-PPR league with a standard roster. The 14-team preset uses a 6-player bench so the sample data has enough players. |

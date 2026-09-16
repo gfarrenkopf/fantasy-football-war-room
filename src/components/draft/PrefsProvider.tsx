@@ -5,7 +5,7 @@ import { CPU_STYLES } from "@/lib/draft/sim";
 import type { UiPrefs } from "@/lib/draft/types";
 import { getStores } from "@/lib/storage";
 
-export const DEFAULT_PREFS: UiPrefs = { view: "focus", center: "ba", baMode: "pos", mockOn: false, room: null };
+export const DEFAULT_PREFS: UiPrefs = { view: "focus", center: "ba", baMode: "pos", mockOn: false, room: null, activeLeagueId: null };
 
 /** Accepts only well-formed prefs fields, falling back to defaults per field. */
 export function parsePrefs(raw: unknown): UiPrefs {
@@ -16,17 +16,20 @@ export function parsePrefs(raw: unknown): UiPrefs {
     baMode: p.baMode === "all" ? "all" : "pos",
     mockOn: p.mockOn === true,
     room: Array.isArray(p.room) && p.room.every((s) => CPU_STYLES.includes(s)) ? p.room : null,
+    activeLeagueId: typeof p.activeLeagueId === "string" ? p.activeLeagueId : null,
   };
 }
 
 interface PrefsContextValue {
   prefs: UiPrefs;
+  /** False until saved prefs have loaded. */
+  hydrated: boolean;
   setPrefs(patch: Partial<UiPrefs>): void;
 }
 
 const PrefsContext = createContext<PrefsContextValue | null>(null);
 
-/** Per-device UI preferences (view, open panel, best-available mode, mock room), saved through the PrefsStore. */
+/** Per-device UI preferences (view, open panel, best-available mode, mock room, open league), saved through the PrefsStore. */
 export function PrefsProvider({ children }: { children: React.ReactNode }) {
   const [prefs, setState] = useState<UiPrefs>(DEFAULT_PREFS);
   const [loaded, setLoaded] = useState(false);
@@ -50,7 +53,7 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
   }, [prefs, loaded]);
 
   const setPrefs = useCallback((patch: Partial<UiPrefs>) => setState((p) => ({ ...p, ...patch })), []);
-  const value = useMemo(() => ({ prefs, setPrefs }), [prefs, setPrefs]);
+  const value = useMemo(() => ({ prefs, hydrated: loaded, setPrefs }), [prefs, loaded, setPrefs]);
   return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;
 }
 

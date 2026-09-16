@@ -1,16 +1,30 @@
-import { DRAFT_STATE_VERSION } from "@/lib/draft/state";
-import type { DraftPick, DraftState, LeagueSettings, UiPrefs } from "@/lib/draft/types";
-import type { Stores } from "./types";
+import type { DraftState, UiPrefs } from "@/lib/draft/types";
+import { newId, nowIso } from "./ids";
+import { migrateDraftState, parseLeagueRecord } from "./records";
+import type { LeagueRecord, Stores } from "./types";
 
-const PREFIX = "fwr:v1";
-export const storageKeys = {
-  draft: (draftKey: string) => `${PREFIX}:draft:${draftKey}`,
-  prefs: `${PREFIX}:prefs`,
-  league: `${PREFIX}:league`,
+export { migrateDraftState } from "./records";
+
+/** Keys from before leagues had ids: one league and one draft per browser. Read only by the migration. */
+export const legacyKeys = {
+  league: "fwr:v1:league",
+  draft: "fwr:v1:draft:local",
 };
 
+/** Keys under which a set of stores keeps its data. A namespace keeps one account's cache apart from signed-out data. */
+export function storageKeys(namespace?: string) {
+  const prefix = namespace ? `fwr:v2:u:${namespace}` : "fwr:v2";
+  return {
+    prefix,
+    leagues: `${prefix}:leagues`,
+    draft: (leagueId: string) => `${prefix}:draft:${leagueId}`,
+    /** Device-wide, never namespaced. */
+    prefs: "fwr:v1:prefs",
+  };
+}
+
 /** The browser's localStorage, or null when unavailable (SSR, private mode, blocked site data). */
-function browserStorage(): Storage | null {
+export function browserStorage(): Storage | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage;
   } catch {
@@ -18,7 +32,7 @@ function browserStorage(): Storage | null {
   }
 }
 
-function read(storage: Storage | null, key: string): unknown {
+export function readJson(storage: Storage | null, key: string): unknown {
   try {
     const raw = storage?.getItem(key);
     return raw ? JSON.parse(raw) : null;
@@ -27,7 +41,7 @@ function read(storage: Storage | null, key: string): unknown {
   }
 }
 
-function write(storage: Storage | null, key: string, value: unknown): void {
+export function writeJson(storage: Storage | null, key: string, value: unknown): void {
   try {
     storage?.setItem(key, JSON.stringify(value));
   } catch {
@@ -35,7 +49,7 @@ function write(storage: Storage | null, key: string, value: unknown): void {
   }
 }
 
-function remove(storage: Storage | null, key: string): void {
+export function removeKey(storage: Storage | null, key: string): void {
   try {
     storage?.removeItem(key);
   } catch {
@@ -43,57 +57,100 @@ function remove(storage: Storage | null, key: string): void {
   }
 }
 
-const isPick = (p: unknown): p is DraftPick =>
-  typeof p === "object" && p !== null && typeof (p as DraftPick).playerId === "string" && typeof (p as DraftPick).mine === "boolean";
+/** What the one-time migration needs to know about the data the legacy league was drafted against. */
+export interface LegacyContext {
+  season: number;
+  datasetId: string;
+}
+
+export interface LocalStoreOptions {
+  /** Keeps these stores' leagues and drafts separate (an account's cache). Prefs are always shared. */
+  namespace?: string;
+  /** When given, a pre-multi-league league and draft are moved into the first league record. */
+  legacy?: LegacyContext;
+}
 
 /**
- * Validates and upgrades a stored draft. Add a case here when DRAFT_STATE_VERSION changes.
- * Anything unrecognizable is discarded rather than crashing the app.
+ * Moves the single league and draft saved before leagues had ids into a league record.
+ * Runs once: it does nothing when there's no legacy league or leagues have already been saved.
  */
-export function migrateDraftState(raw: unknown): DraftState | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const { version, picks } = raw as Partial<DraftState>;
-  if (version !== DRAFT_STATE_VERSION || !Array.isArray(picks) || !picks.every(isPick)) return null;
-  return { version, picks: picks.map(({ playerId, mine }) => ({ playerId, mine })) };
+export function migrateLegacyLeague(storage: Storage | null, legacy: LegacyContext): void {
+  const keys = storageKeys();
+  if (readJson(storage, keys.leagues) !== null) return;
+  const settings = readJson(storage, legacyKeys.league);
+  if (settings === null) return;
+  const now = nowIso();
+  const record = parseLeagueRecord({ id: newId(), name: "My league", season: legacy.season, datasetId: legacy.datasetId, settings, createdAt: now, updatedAt: now });
+  if (record) {
+    const draft = migrateDraftState(readJson(storage, legacyKeys.draft));
+    if (draft) writeJson(storage, keys.draft(record.id), draft);
+    writeJson(storage, keys.leagues, [record]);
+  }
+  // A malformed legacy league is dropped, as the app already ignored it.
+  removeKey(storage, legacyKeys.league);
+  removeKey(storage, legacyKeys.draft);
 }
 
 /** Stores backed by localStorage. Pass a Storage to use something else (tests use an in-memory fake). */
-export function createLocalStores(storage: Storage | null = browserStorage()): Stores {
-  const getDraft = (draftKey: string) => migrateDraftState(read(storage, storageKeys.draft(draftKey)));
+export function createLocalStores(storage: Storage | null = browserStorage(), options: LocalStoreOptions = {}): Stores {
+  const keys = storageKeys(options.namespace);
+  if (options.legacy && !options.namespace) migrateLegacyLeague(storage, options.legacy);
+
+  const getDraft = (id: string) => migrateDraftState(readJson(storage, keys.draft(id)));
+  const readLeagues = (): LeagueRecord[] => {
+    const raw = readJson(storage, keys.leagues);
+    if (!Array.isArray(raw)) return [];
+    return raw.map(parseLeagueRecord).filter((r): r is LeagueRecord => r !== null);
+  };
 
   return {
     draft: {
       async getDraftState(draftKey) {
         return getDraft(draftKey);
       },
-      async saveDraftState(draftKey, state) {
-        write(storage, storageKeys.draft(draftKey), state);
+      async saveDraftState(draftKey, state: DraftState) {
+        writeJson(storage, keys.draft(draftKey), state);
       },
       async deletePick(draftKey, index) {
         const state = getDraft(draftKey);
         if (!state) return null;
         const next = { ...state, picks: state.picks.filter((_, i) => i !== index) };
-        write(storage, storageKeys.draft(draftKey), next);
+        writeJson(storage, keys.draft(draftKey), next);
         return next;
       },
       async resetDraft(draftKey) {
-        remove(storage, storageKeys.draft(draftKey));
+        removeKey(storage, keys.draft(draftKey));
       },
     },
     prefs: {
       async getPrefs() {
-        return (read(storage, storageKeys.prefs) as UiPrefs | null) ?? null;
+        return (readJson(storage, keys.prefs) as UiPrefs | null) ?? null;
       },
       async savePrefs(prefs) {
-        write(storage, storageKeys.prefs, prefs);
+        writeJson(storage, keys.prefs, prefs);
       },
     },
     league: {
-      async getLeague() {
-        return (read(storage, storageKeys.league) as LeagueSettings | null) ?? null;
+      async listLeagues() {
+        return readLeagues();
+      },
+      async getLeague(id) {
+        return readLeagues().find((l) => l.id === id) ?? null;
       },
       async saveLeague(league) {
-        write(storage, storageKeys.league, league);
+        const leagues = readLeagues();
+        const i = leagues.findIndex((l) => l.id === league.id);
+        if (i === -1) leagues.push(league);
+        else leagues[i] = league;
+        writeJson(storage, keys.leagues, leagues);
+      },
+      async deleteLeague(id) {
+        writeJson(
+          storage,
+          keys.leagues,
+          readLeagues().filter((l) => l.id !== id),
+        );
+        removeKey(storage, keys.draft(id));
       },
     },
   };

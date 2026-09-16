@@ -2,9 +2,22 @@ import type { DraftState, LeagueSettings, UiPrefs } from "@/lib/draft/types";
 
 /**
  * Persistence interfaces. UI code talks only to these (via getStores()), never to
- * localStorage directly, so Epic 3 can swap in a server-backed implementation.
+ * localStorage or fetch directly, so the local and server-backed implementations are interchangeable.
  * Every method is async for that reason, even though localStorage is synchronous.
  */
+
+/** A saved league: the engine's settings plus the metadata needed to keep several of them. */
+export interface LeagueRecord {
+  id: string;
+  name: string;
+  season: number;
+  /** Fingerprint of the player data the league's picks were logged against (see datasetId()). */
+  datasetId: string;
+  settings: LeagueSettings;
+  /** ISO timestamps. */
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface DraftStore {
   /** The saved draft, or null if none exists or it can't be read. */
@@ -21,15 +34,37 @@ export interface PrefsStore {
 }
 
 export interface LeagueStore {
-  getLeague(): Promise<LeagueSettings | null>;
-  saveLeague(league: LeagueSettings): Promise<void>;
+  /** Every saved league, oldest first. */
+  listLeagues(): Promise<LeagueRecord[]>;
+  getLeague(id: string): Promise<LeagueRecord | null>;
+  /** Creates or replaces the league with this id. */
+  saveLeague(league: LeagueRecord): Promise<void>;
+  /** Deletes the league and its draft. */
+  deleteLeague(id: string): Promise<void>;
+}
+
+/** Leagues saved on this device while signed out, which a signed-in user can copy into their account. */
+export interface ImportStore {
+  /** Local leagues the account doesn't have and the user hasn't declined. */
+  pending(): Promise<LeagueRecord[]>;
+  /** Copies these local leagues (and their drafts) into the account. */
+  importLeagues(ids: string[]): Promise<void>;
+  /** Stops offering these leagues. */
+  dismiss(ids: string[]): Promise<void>;
+}
+
+/** Background sync state, present only on server-backed stores. */
+export interface SyncControl {
+  /** Tries to push every unsynced change now. Resolves true when nothing is left unsynced. */
+  flush(): Promise<boolean>;
 }
 
 export interface Stores {
   draft: DraftStore;
   prefs: PrefsStore;
   league: LeagueStore;
+  /** Present when signed in. */
+  imports?: ImportStore;
+  /** Present when signed in. */
+  sync?: SyncControl;
 }
-
-/** Key of the single local draft. Server-backed stores will use real league/draft ids. */
-export const LOCAL_DRAFT_KEY = "local";

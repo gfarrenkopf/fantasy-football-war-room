@@ -100,6 +100,8 @@ export interface UiPrefs {
   mockOn: boolean;
   /** CPU style for every other team, in draft-slot order skipping mySlot. Null = default room. */
   room: CpuStyle[] | null;
+  /** The league open on this device. Null, or an id that no longer exists, means the first saved league. */
+  activeLeagueId: string | null;
 }
 
 export interface Dataset {
