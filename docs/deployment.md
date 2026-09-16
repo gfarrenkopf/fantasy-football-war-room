@@ -16,6 +16,7 @@ Following this from a fresh droplet should take under an hour.
 8. [Backups](#8-backups)
 9. [Day to day](#9-day-to-day)
 10. [Deploy on merge](#10-deploy-on-merge)
+11. [Monitoring](#11-monitoring)
 
 ---
 
@@ -40,7 +41,7 @@ The files installed on the server live in [`deploy/`](../deploy): `deploy.sh`, `
 - **Image:** Ubuntu 24.04 LTS.
 - **Size:** Basic, **2 GB RAM** / 1 vCPU or larger. `next build` runs on the droplet and can run out of memory with 1 GB, even with swap.
 - **Authentication:** SSH key only.
-- **Backups:** turn on DigitalOcean's droplet backups. They're your off-server copy of the database dumps (§8).
+- **Backups:** turn on DigitalOcean's droplet backups. They're the off-server copy of the database dumps (§8).
 - **DNS:** add an `A` record for your domain (e.g. `warroom.example.com`) pointing at the droplet's IP. Do it now so it has propagated by §7.
 
 Every command below runs over SSH. Replace `warroom.example.com` with your domain.
@@ -153,9 +154,8 @@ sudo -iu warroom bash -c '
 Then install and start the units from the release:
 
 ```sh
-# /srv/warroom is warroom's home and closed to other users, so use full paths with sudo
-d=/srv/warroom/current/deploy
-sudo cp $d/warroom.service $d/warroom-backup.service $d/warroom-backup.timer /etc/systemd/system/
+# /srv/warroom is warroom's home and closed to other users, so copy as root
+sudo sh -c 'cp /srv/warroom/current/deploy/*.service /srv/warroom/current/deploy/*.timer /etc/systemd/system/'
 sudo systemctl daemon-reload
 sudo systemctl enable --now warroom warroom-backup.timer
 curl -sI http://127.0.0.1:3000 | head -1     # HTTP/1.1 200 OK
@@ -194,7 +194,7 @@ Open `https://warroom.example.com` and sign in. Create a league, then open the s
   ```
 
 - **Before every deploy:** `deploy.sh` takes a dump before it migrates. A failed backup stops the deploy.
-- **Off the server:** dumps on the droplet's own disk don't survive losing the droplet. For now, DigitalOcean droplet backups (§2) are the off-server copy. Copying dumps to DigitalOcean Spaces is tracked in APE-108.
+- **Off the server:** dumps on the droplet's own disk don't survive losing the droplet. DigitalOcean's weekly droplet backups (§2) copy the whole disk, dumps included, so losing the droplet loses at most a week of data. For a shorter window, copy `/var/backups/warroom` to object storage (e.g. `rclone` to Spaces) after the nightly run.
 
 Restoring is covered in [database.md §5](database.md#5-backups-and-restore). On the droplet, the tools are already installed, so leave `PG_DOCKER_CONTAINER` unset and run the scripts as `warroom` with the env loaded:
 
@@ -220,7 +220,7 @@ sudo systemctl start warroom
 
 If a deploy fails partway, the live app isn't touched. Fix the problem and run the deploy again; a build that already succeeded is reused.
 
-When changing `deploy/*.service`, `.timer` or `Caddyfile`, copy the new versions into place as in §6 and §7 after deploying. `deploy.sh` doesn't install them.
+When changing `deploy/*.service`, `.timer` or `Caddyfile`, copy the new versions into place as in §6 and §7 after deploying, then `sudo systemctl daemon-reload`. `deploy.sh` doesn't install them.
 
 ## 10. Deploy on merge
 
@@ -257,4 +257,34 @@ gh variable set DEPLOY_URL --body https://warroom.example.com
 ```
 
 To revoke the key, delete its line from `/srv/warroom/.ssh/authorized_keys`.
+
+## 11. Monitoring
+
+### Error and failure alerts
+
+Server errors and failures are emailed through Resend, using the same `AUTH_RESEND_KEY` and `EMAIL_FROM` as sign-in links. There's no separate error-tracking service; the details stay in the journal.
+
+- **Server errors.** `src/instrumentation.ts` logs each error Next captures as one `[server-error] {…}` line (method, path without the query string, route, message). Every 5 minutes, `warroom-alerts.timer` emails any new ones, plus any crash of the app process. You get one email per check, however many errors it finds.
+- **Failed units.** If `warroom.service` crash-loops (5 starts in 5 minutes) or a nightly backup fails, `OnFailure=` emails right away.
+- **Failed deploys.** GitHub emails you when the Deploy workflow fails.
+
+Setup: add the recipient to `/etc/warroom/.env`, install the units (§6 copies all of them), then send a test email:
+
+```sh
+sudo nano /etc/warroom/.env                  # add ALERT_EMAIL=you@example.com
+sudo systemctl daemon-reload
+sudo systemctl enable --now warroom-alerts.timer
+sudo -u warroom bash -c 'set -a; . /etc/warroom/.env; set +a; /srv/warroom/current/deploy/warroom-alerts.sh test'
+```
+
+To look into an alert, run `sudo journalctl -u warroom --since '-15min'`. Stack traces are in the lines next to the `[server-error]` line.
+
+### Uptime
+
+Use DigitalOcean's built-in uptime checks: **Monitoring → Uptime → Create Uptime check**.
+
+- **URL:** `https://warroom.example.com/`, type HTTPS, from at least two regions.
+- **Alerts:** add an email alert for **Down** and another for **SSL certificate expires soon**.
+
+This catches what the droplet can't report about itself: the whole server down, Caddy down, or DNS and certificate problems.
 

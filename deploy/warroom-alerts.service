@@ -1,0 +1,19 @@
+# Emails new server errors and app crashes to ALERT_EMAIL. Started every 5 minutes by
+# warroom-alerts.timer; see deploy/warroom-alerts.sh and docs/deployment.md §11.
+
+[Unit]
+Description=Fantasy War Room error alerts
+
+[Service]
+Type=oneshot
+User=warroom
+Group=warroom
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/warroom/.env
+StateDirectory=warroom-alerts
+ExecStart=/srv/warroom/current/deploy/warroom-alerts.sh scan
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict

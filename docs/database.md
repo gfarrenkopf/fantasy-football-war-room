@@ -113,4 +113,4 @@ docker exec "$PG_DOCKER_CONTAINER" psql -U warroom -d warroom -c "select count(*
 
 ### Not covered here
 
-The hosted droplet backs up nightly with a systemd timer and before every deploy, and keeps 14 days of dumps. See [deployment.md §8](deployment.md#8-backups). Copying dumps off the server is still tracked in Epic 6 (APE-108). A backup that only lives on the database's own disk doesn't survive losing that disk.
+The hosted droplet backs up nightly with a systemd timer and before every deploy, and keeps 14 days of dumps. See [deployment.md §8](deployment.md#8-backups). Off the server, DigitalOcean's weekly droplet backups include the dumps. A backup that only lives on the database's own disk doesn't survive losing that disk.

@@ -10,6 +10,7 @@
 [Unit]
 Description=Fantasy War Room database backup
 After=postgresql.service
+OnFailure=warroom-alert-failed@%n.service
 
 [Service]
 Type=oneshot
