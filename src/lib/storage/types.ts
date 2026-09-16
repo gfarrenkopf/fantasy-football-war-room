@@ -1,3 +1,4 @@
+import type { PlanView } from "@/lib/ai/planView";
 import type { DraftState, LeagueSettings, UiPrefs } from "@/lib/draft/types";
 
 /**
@@ -59,6 +60,24 @@ export interface SyncControl {
   flush(): Promise<boolean>;
 }
 
+export type AiPlanResult =
+  | { ok: true; view: PlanView }
+  | {
+      ok: false;
+      /** offline: unreachable, or league edits couldn't sync first. unavailable: not allowed on this account. */
+      reason: "offline" | "signed-out" | "unavailable" | "not-found" | "invalid-league";
+      /** The server's explanation, when it gave one. */
+      message?: string;
+    };
+
+/** The league's AI-written game plan, written on the server in the background. */
+export interface AiPlanStore {
+  /** The plan and its job status. Also resumes a job a server restart interrupted. */
+  get(leagueId: string): Promise<AiPlanResult>;
+  /** Syncs league edits, then asks for a plan for the league's current settings. Idempotent. */
+  request(leagueId: string): Promise<AiPlanResult>;
+}
+
 export interface Stores {
   draft: DraftStore;
   prefs: PrefsStore;
@@ -67,4 +86,6 @@ export interface Stores {
   imports?: ImportStore;
   /** Present when signed in. */
   sync?: SyncControl;
+  /** Present when signed in. Whether AI plans are enabled is a separate flag (PublicFlags.aiEnabled). */
+  aiPlan?: AiPlanStore;
 }

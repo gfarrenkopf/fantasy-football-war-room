@@ -8,6 +8,9 @@ import type { PlanCandidate, PlanInput } from "./planInput";
  * compact table per turn. Candidates come from buildPlanInput(); the model answers with their refs.
  */
 
+/** Bump when the prompt or the input it's built from changes meaningfully. Recorded with each plan, not used for staleness. */
+export const PLAN_PROMPT_VERSION = 1;
+
 export const PLAN_SYSTEM_PROMPT = `You are a fantasy football strategist who has won several league championships, writing a pre-draft game plan for one manager in a snake draft. The goal is to win the league: the roster whose starters score the most points. Write like a sharp, plain-spoken analyst.
 
 For each of the manager's turns you get the candidates a draft simulator considers relevant, with their odds of still being available at this turn and at the manager's next turn.

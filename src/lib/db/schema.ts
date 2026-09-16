@@ -1,4 +1,6 @@
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import type { AiPlan } from "@/lib/ai/planSchema";
+import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
 
 /**
@@ -118,4 +120,46 @@ export const entitlements = pgTable(
     source: text("source").notNull(),
   },
   (t) => [primaryKey({ columns: [t.leagueId, t.kind] })],
+);
+
+/** Where a league's AI plan job stands. See src/lib/server/aiPlans.ts. */
+export type AiPlanStatus = PlanJobStatus;
+
+/**
+ * A league's AI-written game plan and the background job that writes it. One row per league.
+ * `job_id` changes on every claim and fences writes: a job only saves its result if it's still current.
+ * `plan` keeps the last good plan while a new job runs or fails.
+ */
+export const aiPlans = pgTable(
+  "ai_plans",
+  {
+    leagueId: text("league_id")
+      .primaryKey()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    status: text("status").$type<AiPlanStatus>().notNull(),
+    jobId: text("job_id"),
+    /** planInputHash() the latest request was made for. */
+    inputHash: text("input_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    /** A generating job whose lease has passed is presumed dead (e.g. a restart) and can be claimed again. */
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    errorKind: text("error_kind"),
+    plan: jsonb("plan").$type<AiPlan>(),
+    /** planInputHash() the stored plan was built from; differs from the league's current hash when stale. */
+    planInputHash: text("plan_input_hash"),
+    issues: jsonb("issues").$type<string[]>(),
+    provider: text("provider"),
+    model: text("model"),
+    promptVersion: integer("prompt_version"),
+    requestedAt: timestamp("requested_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => [index("ai_plans_status_idx").on(t.status)],
 );

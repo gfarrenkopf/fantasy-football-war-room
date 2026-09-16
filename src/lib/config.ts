@@ -25,6 +25,11 @@ const anthropicApiKey = readEnv("ANTHROPIC_API_KEY");
 /** Which model provider writes the AI plan (see src/lib/ai/providers), and optionally which of its models. */
 const aiProvider = readEnv("AI_PROVIDER") ?? "anthropic";
 const aiModel = readEnv("AI_MODEL");
+/** Comma-separated emails allowed to generate AI plans until payments gate them. Empty = every signed-in user. */
+const aiAllowlist = (readEnv("AI_ALLOWLIST") ?? "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 const stripeSecretKey = readEnv("STRIPE_SECRET_KEY");
 const sportsDataApiKey = readEnv("SPORTSDATA_API_KEY");
 
@@ -54,6 +59,7 @@ export const config = Object.freeze({
   aiModel,
   /** The configured AI provider's API key. */
   aiApiKey,
+  aiAllowlist,
   stripeSecretKey,
   sportsDataApiKey,
 

@@ -29,7 +29,8 @@ const toRecord = (row: LeagueRow): LeagueRecord => ({
 
 const owned = (userId: string, leagueId: string) => and(eq(leagues.id, leagueId), eq(leagues.userId, userId), isNull(leagues.deletedAt));
 
-async function findLeague(db: Db, userId: string, leagueId: string): Promise<LeagueRow | null> {
+/** The user's live league row, or null if it doesn't exist, is deleted, or belongs to someone else. */
+export async function findLeague(db: Db, userId: string, leagueId: string): Promise<LeagueRow | null> {
   const [row] = await db.select().from(leagues).where(owned(userId, leagueId));
   return row ?? null;
 }

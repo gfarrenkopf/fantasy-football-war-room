@@ -13,6 +13,7 @@ import { PlayerCard, posLabel } from "./PlayerCard";
 import { usePrefs } from "./PrefsProvider";
 import { ByePanel, RosterPanel } from "./RosterPanels";
 import { useFlags } from "./Flags";
+import { AiPlanTab, AiTurnNote, useAiPlan } from "./AiPlan";
 
 export interface PlanOdds {
   /** Picks the odds were computed from. */
@@ -21,7 +22,7 @@ export interface PlanOdds {
 }
 
 /** The Focus view: turn state and pick log, plan / best-available accordion, roster and byes. */
-export function FocusView({ planOdds, planStale }: { planOdds: PlanOdds | null; planStale: boolean }) {
+export function FocusView({ planOdds, planStale, onOpenAiPlan }: { planOdds: PlanOdds | null; planStale: boolean; onOpenAiPlan(): void }) {
   return (
     <div className={s.focus}>
       <div className={s.fcol}>
@@ -29,7 +30,7 @@ export function FocusView({ planOdds, planStale }: { planOdds: PlanOdds | null; 
         <PickLog />
       </div>
       <div className={s.fcol}>
-        <PlanPanel planOdds={planOdds} stale={planStale} />
+        <PlanPanel planOdds={planOdds} stale={planStale} onOpenAiPlan={onOpenAiPlan} />
         <BestAvailablePanel />
       </div>
       <div className={s.fcol}>
@@ -164,7 +165,7 @@ function Accordion({ id, head, hint, children }: { id: "plan" | "ba"; head: Reac
   );
 }
 
-function PlanPanel({ planOdds, stale }: { planOdds: PlanOdds | null; stale: boolean }) {
+function PlanPanel({ planOdds, stale, onOpenAiPlan }: { planOdds: PlanOdds | null; stale: boolean; onOpenAiPlan(): void }) {
   const model = useModel();
   const { state } = useDraft();
   const flags = useFlags();
@@ -201,6 +202,7 @@ function PlanPanel({ planOdds, stale }: { planOdds: PlanOdds | null; stale: bool
         <div className={s.planSub}>No picks left for you.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
+          <AiTurnNote onOpen={onOpenAiPlan} />
           <div className={s.planSub}>
             {model.onClock
               ? "The best players for your roster right now, in priority order."
@@ -296,8 +298,12 @@ function BestAvailablePanel() {
 
 /* ================= turn plan drawer ================= */
 
-export function PlanDrawer({ planOdds, onClose }: { planOdds: PlanOdds | null; onClose(): void }) {
+export type PlanDrawerTab = "live" | "ai";
+
+export function PlanDrawer({ planOdds, tab, onTab, onClose }: { planOdds: PlanOdds | null; tab: PlanDrawerTab; onTab(tab: PlanDrawerTab): void; onClose(): void }) {
   const model = useModel();
+  const aiPlan = useAiPlan();
+  const showing = aiPlan ? tab : "live";
   const plans: TurnPlan[] = useMemo(
     () => (planOdds ? planOdds.result.turns.map((_, i) => computeTurnPlan(planOdds.picks, planOdds.result, model.ctx, i)).filter((p): p is TurnPlan => !!p) : []),
     [planOdds, model.ctx],
@@ -320,54 +326,70 @@ export function PlanDrawer({ planOdds, onClose }: { planOdds: PlanOdds | null; o
       <aside className={s.drawer} aria-label="Turn plan">
         <div className={s.drawerHead}>
           <b>Turn plan from {formatRoundPick(model.league.mySlot, model.league.teams)}</b>
+          {aiPlan && (
+            <span className={cx("seg", "drawerTabs")} role="tablist" aria-label="Plan">
+              <button role="tab" aria-selected={showing === "live"} className={cx(showing === "live" && "on")} onClick={() => onTab("live")}>
+                Live odds
+              </button>
+              <button role="tab" aria-selected={showing === "ai"} className={cx(showing === "ai" && "on")} onClick={() => onTab("ai")}>
+                AI game plan
+              </button>
+            </span>
+          )}
           <button className={s.btn} onClick={onClose}>
             Close
           </button>
         </div>
-        <div className={s.drawerBody}>
-          <p>
-            You pick at <b>{planOdds?.result.turns.map((t) => t.join("/")).join(", ") || "—"}</b>. Plans are rebuilt after every pick from{" "}
-            {planOdds?.result.n ?? "—"} mocks of your room. % is the chance a player survives to that turn.
-          </p>
-          {!planOdds && <p>Estimating…</p>}
-          {plans.map((pl, i) => (
-            <section key={pl.picks[0]} className={cx("planSection", i === 0 && "now")}>
-              <h4>
-                Pick{pl.picks.length > 1 ? "s" : ""} {pl.picks.join(" & ")}
-              </h4>
-              <ul>
-                <li>
-                  <b>Targets:</b> {pl.targets.length ? list(pl.targets) : "—"}
-                </li>
-                {pl.fallbacks.length > 0 && (
+        {showing === "ai" ? (
+          <div className={s.drawerBody}>
+            <AiPlanTab />
+          </div>
+        ) : (
+          <div className={s.drawerBody}>
+            <p>
+              You pick at <b>{planOdds?.result.turns.map((t) => t.join("/")).join(", ") || "—"}</b>. Plans are rebuilt after every pick from{" "}
+              {planOdds?.result.n ?? "—"} mocks of your room. % is the chance a player survives to that turn.
+            </p>
+            {!planOdds && <p>Estimating…</p>}
+            {plans.map((pl, i) => (
+              <section key={pl.picks[0]} className={cx("planSection", i === 0 && "now")}>
+                <h4>
+                  Pick{pl.picks.length > 1 ? "s" : ""} {pl.picks.join(" & ")}
+                </h4>
+                <ul>
                   <li>
-                    <b>Fallbacks:</b> {list(pl.fallbacks)}
+                    <b>Targets:</b> {pl.targets.length ? list(pl.targets) : "—"}
                   </li>
-                )}
-                {pl.letGo.length > 0 && (
-                  <li>
-                    <b>Let go:</b> {list(pl.letGo)}
-                  </li>
-                )}
-              </ul>
-            </section>
-          ))}
-          <h4>Controls</h4>
-          <ul>
-            <li>Click a player: logs the pick for whoever is on the clock (you on your picks, another team otherwise).</li>
-            <li>
-              <kbd className={s.kbd}>Cmd</kbd>/<kbd className={s.kbd}>Ctrl</kbd>-click, right-click, or the <kbd className={s.kbd}>✕</kbd> button: drafted by
-              another team, regardless of whose pick it is.
-            </li>
-            <li>
-              <kbd className={s.kbd}>Shift</kbd>-click: force onto your roster (pick trades, keepers).
-            </li>
-            <li>
-              Click a taken player to put him back. <kbd className={s.kbd}>/</kbd> focuses search, <kbd className={s.kbd}>Enter</kbd> drafts the top match,{" "}
-              <kbd className={s.kbd}>Ctrl/Cmd+Z</kbd> undoes, <kbd className={s.kbd}>1</kbd>/<kbd className={s.kbd}>2</kbd> switch views.
-            </li>
-          </ul>
-        </div>
+                  {pl.fallbacks.length > 0 && (
+                    <li>
+                      <b>Fallbacks:</b> {list(pl.fallbacks)}
+                    </li>
+                  )}
+                  {pl.letGo.length > 0 && (
+                    <li>
+                      <b>Let go:</b> {list(pl.letGo)}
+                    </li>
+                  )}
+                </ul>
+              </section>
+            ))}
+            <h4>Controls</h4>
+            <ul>
+              <li>Click a player: logs the pick for whoever is on the clock (you on your picks, another team otherwise).</li>
+              <li>
+                <kbd className={s.kbd}>Cmd</kbd>/<kbd className={s.kbd}>Ctrl</kbd>-click, right-click, or the <kbd className={s.kbd}>✕</kbd> button: drafted by
+                another team, regardless of whose pick it is.
+              </li>
+              <li>
+                <kbd className={s.kbd}>Shift</kbd>-click: force onto your roster (pick trades, keepers).
+              </li>
+              <li>
+                Click a taken player to put him back. <kbd className={s.kbd}>/</kbd> focuses search, <kbd className={s.kbd}>Enter</kbd> drafts the top match,{" "}
+                <kbd className={s.kbd}>Ctrl/Cmd+Z</kbd> undoes, <kbd className={s.kbd}>1</kbd>/<kbd className={s.kbd}>2</kbd> switch views.
+              </li>
+            </ul>
+          </div>
+        )}
       </aside>
     </>
   );
