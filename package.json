@@ -12,19 +12,27 @@
     "check-data": "vitest run src/lib/data/loaded-dataset.test.ts",
     "prebuild": "npm run check-data",
     "ingest": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/index.mts",
-    "capture-fixtures": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/capture-fixtures.mts"
+    "capture-fixtures": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/capture-fixtures.mts",
+    "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db/migrate.mts"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "next": "16.3.5",
+    "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.13.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
