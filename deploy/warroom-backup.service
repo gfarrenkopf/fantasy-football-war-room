@@ -15,7 +15,7 @@ After=postgresql.service
 Type=oneshot
 User=warroom
 Group=warroom
-EnvironmentFile=/etc/warroom/env
+EnvironmentFile=/etc/warroom/.env
 ExecStart=/srv/warroom/current/scripts/db-backup.sh /var/backups/warroom
 ExecStartPost=/usr/bin/find /var/backups/warroom -name "warroom-*.dump" -mtime +14 -delete
 

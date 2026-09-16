@@ -29,7 +29,7 @@ internet ─443─▶ Caddy (TLS) ─▶ 127.0.0.1:3000 warroom.service (next st
 | `/srv/warroom/releases/<sha>/` | One built checkout per deployed commit. The last 5 are kept. |
 | `/srv/warroom/current`, `previous` | Symlinks to the live release and the one `rollback` returns to. |
 | `/srv/warroom/repo.git` | A mirror of the GitHub repo, fetched on each deploy. |
-| `/etc/warroom/env` | Secrets, read by the app, the deploy script and the backup job. |
+| `/etc/warroom/.env` | Secrets, read by the app, the deploy script and the backup job. |
 | `/var/backups/warroom/` | Nightly and pre-deploy database dumps. |
 
 The files installed on the server live in [`deploy/`](../deploy): `deploy.sh`, `warroom.service`, `warroom-backup.service` and `.timer`, and `Caddyfile`. Each has a header comment explaining it.
@@ -122,11 +122,11 @@ sudo chmod 440 /etc/sudoers.d/warroom
 
 # Secrets
 sudo install -d -m 750 -o root -g warroom /etc/warroom
-sudo install -m 640 -o root -g warroom /dev/null /etc/warroom/env
-echo "DATABASE_URL=postgres://warroom:$DB_PASSWORD@localhost:5432/warroom" | sudo tee -a /etc/warroom/env >/dev/null
-echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)" | sudo tee -a /etc/warroom/env >/dev/null
-echo "NEXTAUTH_URL=https://warroom.example.com" | sudo tee -a /etc/warroom/env >/dev/null
-sudo nano /etc/warroom/env
+sudo install -m 640 -o root -g warroom /dev/null /etc/warroom/.env
+echo "DATABASE_URL=postgres://warroom:$DB_PASSWORD@localhost:5432/warroom" | sudo tee -a /etc/warroom/.env >/dev/null
+echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)" | sudo tee -a /etc/warroom/.env >/dev/null
+echo "NEXTAUTH_URL=https://warroom.example.com" | sudo tee -a /etc/warroom/.env >/dev/null
+sudo nano /etc/warroom/.env
 ```
 
 In the editor, add at least one sign-in method. The variables are described in [self-hosting.md §6](self-hosting.md#6-environment-variables-and-hosted-features) and `.env.example`:
@@ -198,7 +198,7 @@ Restoring is covered in [database.md §5](database.md#5-backups-and-restore). On
 
 ```sh
 sudo systemctl stop warroom
-sudo -iu warroom bash -c 'set -a; . /etc/warroom/env; set +a; cd current && npm run db:restore -- /var/backups/warroom/<dump> --yes && npm run db:migrate'
+sudo -iu warroom bash -c 'set -a; . /etc/warroom/.env; set +a; cd current && npm run db:restore -- /var/backups/warroom/<dump> --yes && npm run db:migrate'
 sudo systemctl start warroom
 ```
 
@@ -212,7 +212,7 @@ sudo systemctl start warroom
 | What's live | `cat /srv/warroom/current/REVISION` |
 | App logs | `journalctl -u warroom -f` |
 | Restart | `sudo systemctl restart warroom` |
-| Change a secret | edit `/etc/warroom/env`, then restart. No rebuild needed. |
+| Change a secret | edit `/etc/warroom/.env`, then restart. No rebuild needed. |
 
 **Rollback only swaps code.** Migrations stay applied, so write schema changes to work with both the old and new code (add a column in one release, start relying on it in the next). To undo a bad migration, restore the dump that `deploy.sh` took just before it (§8).
 
