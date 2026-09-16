@@ -12,6 +12,7 @@
     "check-data": "vitest run src/lib/data/loaded-dataset.test.ts",
     "prebuild": "npm run check-data",
     "ingest": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/index.mts",
+    "ai:eval": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ai/eval-plan.mts",
     "capture-fixtures": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/capture-fixtures.mts",
     "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
     "db:generate": "drizzle-kit generate",
@@ -20,6 +21,7 @@
     "db:restore": "scripts/db-restore.sh"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
     "@auth/drizzle-adapter": "^1.11.3",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.5",
