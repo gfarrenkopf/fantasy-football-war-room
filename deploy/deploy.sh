@@ -21,7 +21,7 @@ set -euo pipefail
 
 root="${WARROOM_ROOT:-/srv/warroom}"
 repo_url="${WARROOM_REPO:-https://github.com/gfarrenkopf/fantasy-football-war-room.git}"
-env_file="${WARROOM_ENV_FILE:-/etc/warroom/env}"
+env_file="${WARROOM_ENV_FILE:-/etc/warroom/.env}"
 backup_dir="${WARROOM_BACKUP_DIR:-/var/backups/warroom}"
 restart_cmd="${WARROOM_RESTART:-sudo -n systemctl restart warroom}"
 health_url="${WARROOM_HEALTH_URL-http://127.0.0.1:3000/}"
