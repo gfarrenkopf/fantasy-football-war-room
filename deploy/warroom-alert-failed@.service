@@ -1,0 +1,19 @@
+# Emails ALERT_EMAIL when the unit named by the instance fails. Units opt in with:
+#
+#   OnFailure=warroom-alert-failed@%n.service
+
+[Unit]
+Description=Fantasy War Room alert: %i failed
+
+[Service]
+Type=oneshot
+User=warroom
+Group=warroom
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/warroom/.env
+ExecStart=/srv/warroom/current/deploy/warroom-alerts.sh failed %i
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict

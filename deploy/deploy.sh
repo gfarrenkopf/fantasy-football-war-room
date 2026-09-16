@@ -51,7 +51,7 @@ restart_and_check() {
   $restart_cmd
   [[ -n "$health_url" ]] || return 0
   for _ in $(seq 1 30); do
-    if curl -fsS -o /dev/null "$health_url"; then
+    if curl -fs -o /dev/null "$health_url"; then
       log "Healthy: $health_url"
       return 0
     fi

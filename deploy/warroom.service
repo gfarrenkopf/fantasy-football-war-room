@@ -11,6 +11,10 @@
 Description=Fantasy War Room
 After=network-online.target postgresql.service
 Wants=network-online.target
+# Crash-looping (5 starts in 5 minutes) marks the unit failed, which emails ALERT_EMAIL.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+OnFailure=warroom-alert-failed@%n.service
 
 [Service]
 Type=simple
@@ -24,6 +28,8 @@ Environment=NEXT_TELEMETRY_DISABLED=1
 ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
 Restart=on-failure
 RestartSec=5
+# Next waits for open connections before exiting; don't let that hold a restart for 90s.
+TimeoutStopSec=10
 
 NoNewPrivileges=true
 PrivateTmp=true
