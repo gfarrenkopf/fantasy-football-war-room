@@ -4,7 +4,7 @@
 #   sudo systemctl enable --now warroom
 #
 # deploy/deploy.sh points /srv/warroom/current at a built release and restarts this unit.
-# Secrets come from /etc/warroom/env (KEY=value lines, no quotes or `export`); see .env.example.
+# Secrets come from /etc/warroom/env: KEY=value lines, no `export`; double-quote values with spaces.
 # Next listens on localhost only; Caddy (deploy/Caddyfile) serves the public HTTPS site.
 
 [Unit]
