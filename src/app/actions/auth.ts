@@ -2,8 +2,8 @@
 
 import { authjs } from "@/lib/auth";
 
-/** Signs out and returns to the war room. */
+/** Ends the session. The caller reloads the page, so every store and provider starts fresh for the signed-out user. */
 export async function signOutAction(): Promise<void> {
   if (!authjs) return;
-  await authjs.signOut({ redirectTo: "/" });
+  await authjs.signOut({ redirect: false });
 }

@@ -155,3 +155,18 @@ export function createLocalStores(storage: Storage | null = browserStorage(), op
     },
   };
 }
+
+/** Removes every key a namespace owns (an account's cached leagues, drafts and sync state). */
+export function clearNamespace(storage: Storage | null, namespace: string): void {
+  const prefix = `${storageKeys(namespace).prefix}:`;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < (storage?.length ?? 0); i++) {
+      const key = storage?.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    keys.forEach((key) => removeKey(storage, key));
+  } catch {
+    // ignore
+  }
+}

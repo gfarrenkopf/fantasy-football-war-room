@@ -1,23 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { DraftState, LeagueSettings, UiPrefs } from "@/lib/draft/types";
 import { createLocalStores, legacyKeys, migrateDraftState, storageKeys } from "./localStorage";
+import { memoryStorage } from "./testing";
 import type { LeagueRecord } from "./types";
-
-/** Minimal in-memory Storage. */
-function memoryStorage(): Storage & { data: Map<string, string> } {
-  const data = new Map<string, string>();
-  return {
-    data,
-    get length() {
-      return data.size;
-    },
-    clear: () => data.clear(),
-    getItem: (k) => data.get(k) ?? null,
-    key: (i) => [...data.keys()][i] ?? null,
-    removeItem: (k) => void data.delete(k),
-    setItem: (k, v) => void data.set(k, String(v)),
-  };
-}
 
 const draft: DraftState = {
   version: 1,

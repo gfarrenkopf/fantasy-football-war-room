@@ -5,6 +5,7 @@ import type { SessionUser } from "@/lib/auth/types";
 import type { PublicFlags } from "@/lib/config";
 import { DATASET_ID } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
+import { configureStores } from "@/lib/storage";
 import { AccountMenu, AccountProvider } from "./Account";
 import { MockBar, SimProvider, useSim } from "./Simulator";
 import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
@@ -14,6 +15,7 @@ import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
+import { SyncNotices } from "./SyncNotices";
 import { FlagsProvider } from "./Flags";
 import { FocusView, PlanDrawer, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
@@ -31,10 +33,14 @@ const PLAN_MOCKS = 100;
 
 /** The war room app: providers plus the active view. */
 export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser | null }) {
+  // Chooses local or server-backed persistence before any provider below reads from it. Idempotent.
+  configureStores({ cloudEnabled: flags.cloudEnabled, userId: user?.userId ?? null });
   return (
     <FlagsProvider flags={flags}>
-      <AccountProvider user={user}>
+      {/* Keyed by user: signing in or out swaps the stores, so every provider below reloads from the new ones. */}
+      <AccountProvider key={user?.userId ?? "signed-out"} user={user}>
         <ToastProvider>
+          <SyncNotices />
           <ConfirmProvider>
             <PrefsProvider>
               <LeagueProvider>

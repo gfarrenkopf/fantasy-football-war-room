@@ -46,6 +46,9 @@ export function AccountMenu() {
       if (!ok) return;
     }
     await signOutAction();
+    // A full reload, not router.push(): stores and providers must all start over for the signed-out user.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/");
   };
 
   return (
