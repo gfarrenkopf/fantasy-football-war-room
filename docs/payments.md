@@ -8,7 +8,8 @@ The hosted app sells a one-time **season pass** per league through Stripe. It un
 
 1. [How it's switched on](#1-how-its-switched-on)
 2. [Stripe product setup](#2-stripe-product-setup)
-3. [Local testing](#3-local-testing)
+3. [Checkout](#3-checkout)
+4. [Local testing](#4-local-testing)
 
 ---
 
@@ -35,7 +36,16 @@ Do this once in test mode, then again in live mode (test and live objects are se
 
 The price lives only in Stripe. To change it, create a new price and update `STRIPE_PRICE_ID`. No code change is needed.
 
-## 3. Local testing
+## 3. Checkout
+
+`POST /api/leagues/:id/checkout` (signed in) creates a Stripe Checkout session for the league's season pass and returns `{ url }`. The browser goes there, and Stripe sends the user back to `/?checkout=success` or `/?checkout=cancel`.
+
+- The league must already be on the server. The client syncs league edits before asking.
+- The session's `metadata` carries `leagueId`, `userId` and `kind`, which the webhook uses to record the purchase. Coming back to `?checkout=success` doesn't grant anything by itself.
+- Responses: **404** when payments are off or the league isn't the user's, **409** when the league already has a pass, and **503** when Stripe can't be reached (logged as `[server-error]`, so alerts fire).
+- Success and cancel links use `NEXTAUTH_URL`, because behind the proxy the request URL is the internal address.
+
+## 4. Local testing
 
 1. Run cloud features locally (see [database.md](database.md)) and set `STRIPE_SECRET_KEY` to a test key and `STRIPE_PRICE_ID` to the test price.
 2. Install the [Stripe CLI](https://docs.stripe.com/stripe-cli), then run `stripe login`.

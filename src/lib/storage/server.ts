@@ -1,6 +1,7 @@
 import { emptyDraftState } from "@/lib/draft/state";
 import type { DraftState } from "@/lib/draft/types";
 import { createAiPlanStore } from "./aiPlan";
+import { createCheckoutStore } from "./checkout";
 import { browserStorage, createLocalStores, readJson, storageKeys, writeJson, type LegacyContext } from "./localStorage";
 import { migrateDraftState, parseLeagueRecord } from "./records";
 import type { LeagueRecord, Stores } from "./types";
@@ -429,6 +430,7 @@ export function createServerStores(options: ServerStoreOptions): Stores {
     },
 
     aiPlan: createAiPlanStore({ fetch: doFetch, flush: () => stores.sync!.flush() }),
+    checkout: createCheckoutStore({ fetch: doFetch, flush: () => stores.sync!.flush() }),
   };
   return stores;
 }

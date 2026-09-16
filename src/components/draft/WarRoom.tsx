@@ -8,6 +8,7 @@ import { totalPicks } from "@/lib/draft/snake";
 import { configureStores } from "@/lib/storage";
 import { AccountMenu, AccountProvider } from "./Account";
 import { AiPlanProvider } from "./AiPlan";
+import { CheckoutReturn } from "./Checkout";
 import { MockBar, SimProvider, useSim } from "./Simulator";
 import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
 import { BestAvailableStrip } from "./BestAvailableStrip";
@@ -43,6 +44,7 @@ export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser
       <AccountProvider key={user?.userId ?? "signed-out"} user={user}>
         <ToastProvider>
           <SyncNotices />
+          <CheckoutReturn />
           <ConfirmProvider>
             <PrefsProvider>
               <LeagueProvider>

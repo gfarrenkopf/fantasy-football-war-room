@@ -6,12 +6,14 @@ import { isWorking, nextPollDelay, planFallback, type FallbackReason, type PlanV
 import { roundOf } from "@/lib/draft/snake";
 import { getStores, type AiPlanResult } from "@/lib/storage";
 import { useAccount } from "./Account";
+import { BuySeasonPass } from "./Checkout";
 import { POS_COLOR } from "./Board";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { useToast } from "./Feedback";
 import type { PlanOdds } from "./FocusView";
 import { useFlags } from "./Flags";
+import { useLeague } from "./LeagueProvider";
 import { LiveTurnPlans } from "./LiveTurnPlans";
 
 /* ================= state ================= */
@@ -215,6 +217,7 @@ const FALLBACK_TEXT: Record<FallbackReason, string> = {
 export function AiPlanTab({ planOdds, onShowLive }: { planOdds: PlanOdds | null; onShowLive(): void }) {
   const plan = useAiPlan();
   const model = useModel();
+  const { active } = useLeague();
   if (!plan) return null;
   const { view, sending, problem, request, waitingSeconds } = plan;
   const working = !!view && isWorking(view);
@@ -246,6 +249,8 @@ export function AiPlanTab({ planOdds, onShowLive }: { planOdds: PlanOdds | null;
             mock drafts of your room.
           </p>
           {button("Write my game plan", { counted: false })}
+          {/* Until 4.4 gates the plan on it, offered to every league when payments are on. */}
+          {active && <BuySeasonPass leagueId={active.id} />}
           <div className={s.lbl}>Takes about a minute. You can keep drafting while it&apos;s written.</div>
         </div>
       )}

@@ -3,7 +3,7 @@ import { browserStorage, clearNamespace, createLocalStores, readJson, removeKey,
 import { createServerStores, hasUnsyncedChanges, type SyncIssue } from "./server";
 import type { Stores } from "./types";
 
-export type { AiPlanResult, AiPlanStore, DraftStore, ImportStore, LeagueRecord, LeagueStore, PrefsStore, Stores, SyncControl } from "./types";
+export type { AiPlanResult, AiPlanStore, CheckoutResult, CheckoutStore, DraftStore, ImportStore, LeagueRecord, LeagueStore, PrefsStore, Stores, SyncControl } from "./types";
 export type { SyncIssue } from "./server";
 export { newId, nowIso } from "./ids";
 export { MAX_LEAGUE_NAME } from "./records";

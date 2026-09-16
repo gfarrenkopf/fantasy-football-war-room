@@ -81,6 +81,20 @@ export interface AiPlanStore {
   request(leagueId: string, options?: { regenerate?: boolean }): Promise<AiPlanResult>;
 }
 
+export type CheckoutResult =
+  | { ok: true; url: string }
+  | {
+      ok: false;
+      /** not-found: the league isn't on the server (or payments are off). unavailable: the server or Stripe failed. */
+      reason: "offline" | "signed-out" | "not-found" | "already-paid" | "unavailable";
+    };
+
+/** Buying a league's season pass. Whether payments are enabled is a separate flag (PublicFlags.paymentsEnabled). */
+export interface CheckoutStore {
+  /** Syncs league edits, then returns the Stripe Checkout URL to send the user to. */
+  start(leagueId: string): Promise<CheckoutResult>;
+}
+
 export interface Stores {
   draft: DraftStore;
   prefs: PrefsStore;
@@ -91,4 +105,6 @@ export interface Stores {
   sync?: SyncControl;
   /** Present when signed in. Whether AI plans are enabled is a separate flag (PublicFlags.aiEnabled). */
   aiPlan?: AiPlanStore;
+  /** Present when signed in. */
+  checkout?: CheckoutStore;
 }
