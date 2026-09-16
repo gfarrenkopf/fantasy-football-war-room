@@ -7,7 +7,7 @@ import { aiGenerations, aiPlans } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import type { LeagueRecord } from "@/lib/storage/types";
-import { getPlanStatus, MAX_CONCURRENT_GENERATIONS, PLAN_LEASE_MS, requestPlan, runPlanJob, type PlanResult, type RequestPlanResult } from "./aiPlans";
+import { DEFAULT_PLAN_ALLOWANCE, FREE_REGENERATIONS, getPlanStatus, MAX_CONCURRENT_GENERATIONS, PLAN_LEASE_MS, requestPlan, runPlanJob, type PlanResult, type RequestPlanResult } from "./aiPlans";
 import { upsertLeague } from "./leagues";
 
 let db: Db;
@@ -321,5 +321,74 @@ describe("AI plan jobs", () => {
     expect(await getPlanStatus(db, bob, league.id)).toBeNull();
     expect(await requestPlan(db, bob, league.id)).toBeNull();
     expect(await getPlanStatus(db, alice, "missing")).toBeNull();
+  });
+});
+
+describe("regeneration limits", () => {
+  /** Requests a plan and, if that started a job, writes it with `model`. */
+  async function write(league: LeagueRecord, model = planModel(), options: { regenerate?: boolean; allowance?: number } = {}) {
+    const requested = result(await requestPlan(db, alice, league.id, new Date(), options));
+    if (requested.claimedJobId) await runPlanJob(db, league.id, requested.claimedJobId, { model });
+    return requested;
+  }
+  const status = async (league: LeagueRecord) => result(await getPlanStatus(db, alice, league.id)).view;
+
+  it("writes a new version of an up-to-date plan only when asked, counting down the rewrites", async () => {
+    const league = await createLeague(alice);
+    expect((await status(league)).regenerationsLeft).toBeNull();
+    const model = planModel();
+    await write(league, model);
+    expect(await status(league)).toMatchObject({ status: "ready", regenerationsLeft: FREE_REGENERATIONS });
+
+    await write(league, model); // same settings, no regenerate: the saved plan
+    expect(model.calls).toHaveLength(1);
+
+    const again = await write(league, model, { regenerate: true });
+    expect(again.claimedJobId).toEqual(expect.any(String));
+    expect(model.calls).toHaveLength(2);
+    expect(await status(league)).toMatchObject({ status: "ready", regenerationsLeft: FREE_REGENERATIONS - 1, limitReached: false });
+  });
+
+  it("re-serves the saved plan past the allowance, for regenerations and settings rewrites alike", async () => {
+    const league = await createLeague(alice);
+    const model = planModel();
+    await write(league, model);
+    for (let i = 0; i < FREE_REGENERATIONS; i++) await write(league, model, { regenerate: true });
+    expect(model.calls).toHaveLength(DEFAULT_PLAN_ALLOWANCE);
+
+    const refused = await write(league, model, { regenerate: true });
+    expect(refused).toMatchObject({ claimedJobId: null, view: { status: "ready", stale: false, regenerationsLeft: 0, limitReached: true } });
+
+    await updateSettings(alice, league, { mySlot: 9 });
+    const stale = await write(league, model);
+    expect(stale).toMatchObject({ claimedJobId: null, view: { status: "ready", stale: true, limitReached: true } });
+    expect(stale.view.plan).not.toBeNull();
+
+    expect(model.calls).toHaveLength(DEFAULT_PLAN_ALLOWANCE);
+    const [row] = await db.select().from(aiPlans).where(eq(aiPlans.leagueId, league.id));
+    expect(row.status).toBe("ready");
+    expect(await db.select().from(aiGenerations).where(eq(aiGenerations.leagueId, league.id))).toHaveLength(DEFAULT_PLAN_ALLOWANCE);
+
+    // A bigger allowance (what a paid entitlement would grant) lifts the limit.
+    const lifted = await write(league, model, { allowance: 10 });
+    expect(lifted.claimedJobId).toEqual(expect.any(String));
+    expect(await status(league)).toMatchObject({ status: "ready", stale: false });
+  });
+
+  it("doesn't count failed or outrun attempts", async () => {
+    const league = await createLeague(alice);
+    await write(league);
+    const failing = createFakePlanModel(() => {
+      throw new PlanModelError("unavailable", "down");
+    });
+    for (let i = 0; i < DEFAULT_PLAN_ALLOWANCE; i++) await write(league, failing, { regenerate: true });
+    expect(await status(league)).toMatchObject({ status: "failed", regenerationsLeft: FREE_REGENERATIONS });
+
+    const outrun = result(await requestPlan(db, alice, league.id, new Date(), { regenerate: true }));
+    await updateSettings(alice, league, { mySlot: 2 });
+    const replacement = result(await requestPlan(db, alice, league.id));
+    await runPlanJob(db, league.id, outrun.claimedJobId!, { model: planModel() });
+    await runPlanJob(db, league.id, replacement.claimedJobId!, { model: planModel() });
+    expect(await status(league)).toMatchObject({ status: "ready", stale: false, regenerationsLeft: FREE_REGENERATIONS - 1 });
   });
 });

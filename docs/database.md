@@ -69,6 +69,8 @@ The browser syncs through these routes. `src/lib/storage/server.ts` is their onl
 | `GET /api/leagues/:id/draft` | `{ state, revision }`, where `state` is null and `revision` is 0 before the first save. |
 | `PUT /api/leagues/:id/draft` | `{ state, baseRevision }`. Saves only if `baseRevision` is the stored revision and returns `{ revision }`. Otherwise it returns 409 with what's stored. |
 
+AI game plans use `GET` and `POST /api/leagues/:id/plan` (`src/lib/server/aiPlans.ts`). `POST` with `{ "regenerate": true }` asks for a new version of an up-to-date plan. A league gets its first plan plus 3 rewrites (`FREE_REGENERATIONS`), whether they come from regenerating or from a settings change. Only saved plans count, so retrying a failure is free. The server enforces the limit by counting `ready` rows in `ai_generations`: past it, nothing is queued, and the response is the stored plan with `limitReached: true`. `planAllowance()` in `src/lib/server/ai` is where entitlements will raise it.
+
 Data access lives in `src/lib/server/leagues.ts`, and its tests (including the cross-user cases) run on PGlite.
 
 ## 5. Backups and restore

@@ -1,4 +1,4 @@
-import { and, count, eq, gt, lt, or, sql } from "drizzle-orm";
+import { and, count, eq, gt, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { generateAiPlan } from "@/lib/ai/generatePlan";
 import { planInputHash, planSeed } from "@/lib/ai/planHash";
 import { buildPlanInput } from "@/lib/ai/planInput";
@@ -37,6 +37,13 @@ import { findLeague } from "./leagues";
 /** Longer than a slow generation (the model call itself is cut off at JOB_TIMEOUT_MS). */
 export const PLAN_LEASE_MS = 4 * 60_000;
 export const JOB_TIMEOUT_MS = 3 * 60_000;
+/**
+ * Plans a league may have written: its first plan plus FREE_REGENERATIONS rewrites, whether asked for
+ * with Regenerate or after its settings changed. Only saved plans count, so retrying a failure is free.
+ * The route gets the real allowance from planAllowance() (src/lib/server/ai), which entitlements replace.
+ */
+export const FREE_REGENERATIONS = 3;
+export const DEFAULT_PLAN_ALLOWANCE = 1 + FREE_REGENERATIONS;
 /** Plans written at once, across all users. A soft cap: two simultaneous claims can pass it by one. */
 export const MAX_CONCURRENT_GENERATIONS = 4;
 
@@ -80,8 +87,18 @@ async function tryClaim(db: Db, leagueId: string, now: Date): Promise<string | n
   return claimed ? jobId : null;
 }
 
-async function toView(db: Db, row: PlanRow | null, currentHash: string, now: Date): Promise<PlanView> {
+/** Plans saved for the league so far: the generation log's successful calls (APE-103). */
+async function plansWritten(db: Db, leagueId: string): Promise<number> {
+  const [{ n }] = await db
+    .select({ n: count() })
+    .from(aiGenerations)
+    .where(and(eq(aiGenerations.leagueId, leagueId), eq(aiGenerations.outcome, "ready")));
+  return n;
+}
+
+async function toView(db: Db, row: PlanRow | null, currentHash: string, now: Date, allowance: number): Promise<PlanView> {
   if (!row) return NO_PLAN;
+  const written = await plansWritten(db, row.leagueId);
 
   // A generating job past its lease is dead; until something claims it again, it's waiting in line.
   const status: AiPlanStatus = row.status === "generating" && !leaseLive(row, now) ? "queued" : row.status;
@@ -102,6 +119,8 @@ async function toView(db: Db, row: PlanRow | null, currentHash: string, now: Dat
     startedAt: status === "generating" ? iso(row.startedAt) : null,
     queuePosition,
     error: status === "failed" && row.errorKind ? { kind: row.errorKind, retryable: row.errorKind !== "invalid_league" } : null,
+    regenerationsLeft: written > 0 ? Math.max(0, allowance - written) : null,
+    limitReached: false,
   };
 }
 
@@ -109,7 +128,13 @@ async function toView(db: Db, row: PlanRow | null, currentHash: string, now: Dat
  * The league's plan and job status, or null if the user has no such league. Also the self-healing
  * path: a queued job with room to run, or a generating one whose lease expired, is claimed here.
  */
-export async function getPlanStatus(db: Db, userId: string, leagueId: string, now = new Date()): Promise<PlanResult | null> {
+export async function getPlanStatus(
+  db: Db,
+  userId: string,
+  leagueId: string,
+  now = new Date(),
+  allowance = DEFAULT_PLAN_ALLOWANCE,
+): Promise<PlanResult | null> {
   const league = await findLeague(db, userId, leagueId);
   if (!league) return null;
   let row = await readRow(db, leagueId);
@@ -120,7 +145,7 @@ export async function getPlanStatus(db: Db, userId: string, leagueId: string, no
     if (claimedJobId) row = await readRow(db, leagueId);
   }
   return {
-    view: await toView(db, row, planInputHash(league.settings, DATASET_ID), now),
+    view: await toView(db, row, planInputHash(league.settings, DATASET_ID), now, allowance),
     claimedJobId,
   };
 }
@@ -129,11 +154,20 @@ export type RequestPlanResult = PlanResult | { invalidLeague: string[] };
 
 /**
  * Asks for a plan for the league's current settings. Idempotent: a job already queued or running
- * for these settings is returned as is, and a finished plan for them is returned without a new job.
- * Otherwise (never written, settings changed, or the last attempt failed) queues a job and tries to
- * claim it. Returns null if the user has no such league.
+ * for these settings is returned as is, and a finished plan for them is returned without a new job
+ * unless `regenerate` asks for a new version. Otherwise (never written, settings changed, the last
+ * attempt failed, or regenerating) queues a job and tries to claim it, provided the league hasn't
+ * used up its `allowance` of written plans. Past it, nothing is queued and the stored plan is
+ * returned with `limitReached`: the limit holds however the request is made. Returns null if the
+ * user has no such league.
  */
-export async function requestPlan(db: Db, userId: string, leagueId: string, now = new Date()): Promise<RequestPlanResult | null> {
+export async function requestPlan(
+  db: Db,
+  userId: string,
+  leagueId: string,
+  now = new Date(),
+  { regenerate = false, allowance = DEFAULT_PLAN_ALLOWANCE }: { regenerate?: boolean; allowance?: number } = {},
+): Promise<RequestPlanResult | null> {
   const league = await findLeague(db, userId, leagueId);
   if (!league) return null;
   const problems = validateLeague(league.settings, dataset);
@@ -143,7 +177,12 @@ export async function requestPlan(db: Db, userId: string, leagueId: string, now 
   const row = await readRow(db, leagueId);
   const inFlight = row && (row.status === "queued" || row.status === "generating") && row.inputHash === hash;
   const upToDate = row && row.status === "ready" && row.planInputHash === hash;
-  if (inFlight || upToDate) return getPlanStatus(db, userId, leagueId, now);
+  if (inFlight || (upToDate && !regenerate)) return getPlanStatus(db, userId, leagueId, now, allowance);
+
+  if ((await plansWritten(db, leagueId)) >= allowance) {
+    const status = await getPlanStatus(db, userId, leagueId, now, allowance);
+    return status && { ...status, view: { ...status.view, limitReached: true } };
+  }
 
   // A job running for older settings keeps going, but clearing job_id means its result is discarded.
   const queued = {
@@ -154,11 +193,17 @@ export async function requestPlan(db: Db, userId: string, leagueId: string, now 
     leaseExpiresAt: null,
     errorKind: null,
   };
+  // Conditional, so two simultaneous requests can't both replace the row: the second finds the job
+  // the first queued for the same settings and leaves it be, instead of superseding a paid call.
   await db
     .insert(aiPlans)
     .values({ leagueId, ...queued })
-    .onConflictDoUpdate({ target: aiPlans.leagueId, set: queued });
-  return getPlanStatus(db, userId, leagueId, now);
+    .onConflictDoUpdate({
+      target: aiPlans.leagueId,
+      set: queued,
+      setWhere: or(notInArray(aiPlans.status, ["queued", "generating"]), ne(aiPlans.inputHash, hash)),
+    });
+  return getPlanStatus(db, userId, leagueId, now, allowance);
 }
 
 /**

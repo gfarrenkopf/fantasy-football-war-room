@@ -27,6 +27,10 @@ export interface PlanView {
   /** 1-based place in line while queued. */
   queuePosition: number | null;
   error: PlanError | null;
+  /** New versions the league may still have written, or null before its first plan. */
+  regenerationsLeft: number | null;
+  /** This request asked for a new plan past the league's allowance, so the stored one was kept. */
+  limitReached: boolean;
 }
 
 export const NO_PLAN: PlanView = {
@@ -38,6 +42,8 @@ export const NO_PLAN: PlanView = {
   startedAt: null,
   queuePosition: null,
   error: null,
+  regenerationsLeft: null,
+  limitReached: false,
 };
 
 /** A job is waiting or running: keep polling. */
@@ -98,5 +104,7 @@ export function parsePlanView(raw: unknown): PlanView | null {
     startedAt: str(v.startedAt),
     queuePosition: typeof v.queuePosition === "number" ? v.queuePosition : null,
     error: error && typeof error.kind === "string" ? { kind: error.kind, retryable: error.retryable === true } : null,
+    regenerationsLeft: typeof v.regenerationsLeft === "number" ? v.regenerationsLeft : null,
+    limitReached: v.limitReached === true,
   };
 }

@@ -17,11 +17,12 @@ export function createAiPlanStore({
 }): AiPlanStore {
   const path = (leagueId: string) => `/api/leagues/${encodeURIComponent(leagueId)}/plan`;
 
-  async function call(method: "GET" | "POST", leagueId: string): Promise<AiPlanResult> {
+  async function call(method: "GET" | "POST", leagueId: string, payload?: unknown): Promise<AiPlanResult> {
     let response: Response;
     try {
       response = await doFetch(path(leagueId), {
         method,
+        ...(payload === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }),
         credentials: "same-origin",
         cache: "no-store",
         signal: AbortSignal.timeout(timeoutMs),
@@ -56,9 +57,9 @@ export function createAiPlanStore({
 
   return {
     get: (leagueId) => call("GET", leagueId),
-    async request(leagueId) {
+    async request(leagueId, { regenerate = false } = {}) {
       if (!(await flush())) return { ok: false, reason: "offline" };
-      return call("POST", leagueId);
+      return call("POST", leagueId, regenerate ? { regenerate: true } : undefined);
     },
   };
 }

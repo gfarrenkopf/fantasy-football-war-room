@@ -1,6 +1,7 @@
 import { after } from "next/server";
+import { isWorking } from "@/lib/ai/planView";
 import { runPlanJob, getPlanStatus, requestPlan } from "@/lib/server/aiPlans";
-import { canUseAiPlan, getPlanModel } from "@/lib/server/ai";
+import { canUseAiPlan, getPlanModel, planAllowance } from "@/lib/server/ai";
 import type { Db } from "@/lib/db";
 import { withUser } from "@/lib/server/api";
 import { formatServerError } from "@/lib/server/errorLog";
@@ -45,7 +46,7 @@ export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => 
   if (blocked) return blocked;
   const { id } = await ctx.params;
   return guarded(request, ROUTE, async () => {
-    const result = await getPlanStatus(db, userId, id);
+    const result = await getPlanStatus(db, userId, id, new Date(), await planAllowance());
     if (!result) return error(404, "League not found");
     runAfterResponse(db, id, result.claimedJobId);
     return json(200, result.view);
@@ -54,17 +55,21 @@ export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => 
 
 /**
  * POST /api/leagues/:id/plan → 202 PlanView while the plan is written in the background, or 200 when
- * an up-to-date plan already exists. Built from the league as stored on the server.
+ * there's nothing to wait for. Built from the league as stored on the server. An optional JSON
+ * body `{ "regenerate": true }` asks for a new version of an up-to-date plan. Past the league's
+ * allowance nothing is written: 200 with the stored plan and `limitReached: true`.
  */
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const blocked = unavailable(email);
   if (blocked) return blocked;
   const { id } = await ctx.params;
   return guarded(request, ROUTE, async () => {
-    const result = await requestPlan(db, userId, id);
+    const body: unknown = await request.json().catch(() => null);
+    const regenerate = (body as { regenerate?: unknown } | null)?.regenerate === true;
+    const result = await requestPlan(db, userId, id, new Date(), { regenerate, allowance: await planAllowance() });
     if (!result) return error(404, "League not found");
     if ("invalidLeague" in result) return error(422, result.invalidLeague[0]);
     runAfterResponse(db, id, result.claimedJobId);
-    return json(result.view.status === "ready" ? 200 : 202, result.view);
+    return json(isWorking(result.view) ? 202 : 200, result.view);
   });
 });

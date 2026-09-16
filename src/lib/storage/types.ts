@@ -74,8 +74,11 @@ export type AiPlanResult =
 export interface AiPlanStore {
   /** The plan and its job status. Also resumes a job a server restart interrupted. */
   get(leagueId: string): Promise<AiPlanResult>;
-  /** Syncs league edits, then asks for a plan for the league's current settings. Idempotent. */
-  request(leagueId: string): Promise<AiPlanResult>;
+  /**
+   * Syncs league edits, then asks for a plan for the league's current settings. Idempotent unless
+   * `regenerate` asks for a new version; the server enforces the league's limit on those.
+   */
+  request(leagueId: string, options?: { regenerate?: boolean }): Promise<AiPlanResult>;
 }
 
 export interface Stores {
