@@ -7,6 +7,7 @@ The hosted features (accounts and syncing leagues across devices) store data in 
 1. [Local Postgres](#1-local-postgres)
 2. [Schema and migrations](#2-schema-and-migrations)
 3. [Tests](#3-tests)
+4. [League API](#4-league-api)
 
 ---
 
@@ -51,3 +52,17 @@ npm run db:migrate    # applies pending migrations to DATABASE_URL
 ## 3. Tests
 
 Database tests use [PGlite](https://pglite.dev), which is Postgres compiled to WebAssembly and running in-process. `npm test` and CI need no Docker or database server. `createTestDb()` in `src/lib/db/testing.ts` returns a fresh database with every committed migration applied, so a migration that doesn't run on a clean database fails the tests.
+
+## 4. League API
+
+The browser syncs through these routes. `src/lib/storage/server.ts` is their only caller, and UI code never uses them directly. Every route returns 404 when cloud features are off and 401 when signed out. Writes that carry another site's `Origin` get 403. Queries are limited to the signed-in user, so another user's league (or a deleted one) returns 404, the same as a league that doesn't exist.
+
+| Route | Does |
+|---|---|
+| `GET /api/leagues` | `{ leagues }`, oldest first. |
+| `PUT /api/leagues/:id` | Creates or updates a league from a `LeagueRecord`. The newest `updatedAt` wins: if the stored league is newer, it's returned with `applied: false`. Accounts are capped at 100 leagues (422). |
+| `DELETE /api/leagues/:id` | Soft-deletes the league (204). |
+| `GET /api/leagues/:id/draft` | `{ state, revision }`, where `state` is null and `revision` is 0 before the first save. |
+| `PUT /api/leagues/:id/draft` | `{ state, baseRevision }`. Saves only if `baseRevision` is the stored revision and returns `{ revision }`. Otherwise it returns 409 with what's stored. |
+
+Data access lives in `src/lib/server/leagues.ts`, and its tests (including the cross-user cases) run on PGlite.
