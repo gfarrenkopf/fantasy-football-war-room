@@ -8,5 +8,8 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     environment: "node",
+    // Database tests run on in-memory Postgres (PGlite), which is CPU-bound: with several such files in
+    // parallel on a small CI runner, a slow one can pass the 5s default without anything being wrong.
+    testTimeout: 20_000,
   },
 });
