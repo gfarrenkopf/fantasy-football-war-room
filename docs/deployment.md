@@ -152,8 +152,9 @@ sudo -iu warroom bash -c '
 Then install and start the units from the release:
 
 ```sh
-cd /srv/warroom/current/deploy
-sudo cp warroom.service warroom-backup.service warroom-backup.timer /etc/systemd/system/
+# /srv/warroom is warroom's home and closed to other users, so use full paths with sudo
+d=/srv/warroom/current/deploy
+sudo cp $d/warroom.service $d/warroom-backup.service $d/warroom-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now warroom warroom-backup.timer
 curl -sI http://127.0.0.1:3000 | head -1     # HTTP/1.1 200 OK
