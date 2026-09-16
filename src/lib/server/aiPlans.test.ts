@@ -223,6 +223,18 @@ describe("AI plan jobs", () => {
     expect(fresh.view.plan!.turns[0].picks).toEqual([6]);
   });
 
+  it("gives up on a model that never answers, so the user falls back instead of waiting on a held lease", async () => {
+    const league = await createLeague(alice);
+    const job = result(await requestPlan(db, alice, league.id));
+    const hung = createFakePlanModel(() => new Promise(() => {}));
+    await runPlanJob(db, league.id, job.claimedJobId!, { model: hung, timeoutMs: 20 });
+    expect(result(await getPlanStatus(db, alice, league.id)).view).toMatchObject({
+      status: "failed",
+      plan: null,
+      error: { kind: "timeout", retryable: true },
+    });
+  });
+
   it("discards a job's result when the settings changed and a new job was requested mid-run", async () => {
     const league = await createLeague(alice);
     const old = result(await requestPlan(db, alice, league.id));

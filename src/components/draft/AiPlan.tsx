@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { AiPlanTurn } from "@/lib/ai/planSchema";
-import { isWorking, nextPollDelay, type PlanView } from "@/lib/ai/planView";
+import { isWorking, nextPollDelay, planFallback, type FallbackReason, type PlanView } from "@/lib/ai/planView";
 import { roundOf } from "@/lib/draft/snake";
 import { getStores, type AiPlanResult } from "@/lib/storage";
 import { useAccount } from "./Account";
@@ -10,7 +10,9 @@ import { POS_COLOR } from "./Board";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { useToast } from "./Feedback";
+import type { PlanOdds } from "./FocusView";
 import { useFlags } from "./Flags";
+import { LiveTurnPlans } from "./LiveTurnPlans";
 
 /* ================= state ================= */
 
@@ -181,16 +183,42 @@ function Progress({ plan }: { plan: AiPlanValue }) {
   );
 }
 
+/** Why a job failed, for the user. */
+function failureText(kind: string): string {
+  switch (kind) {
+    case "invalid_league":
+      return "These league settings don't fit the player data.";
+    case "timeout":
+      return "The AI took too long this time.";
+    case "unavailable":
+      return "The AI service is down or didn't respond.";
+    default:
+      return "The AI didn't produce a usable plan this time.";
+  }
+}
+
+const FALLBACK_TEXT: Record<FallbackReason, string> = {
+  failed: "Until then, here's the live turn plan",
+  unreachable: "While the AI plan is out of reach, here's the live turn plan",
+  slow: "This is taking longer than usual. Meanwhile, here's the live turn plan",
+  writing: "While yours is written, here's the live turn plan",
+};
+
 /* ================= drawer tab ================= */
 
-/** The "AI game plan" tab of the plan drawer. */
-export function AiPlanTab() {
+/**
+ * The "AI game plan" tab of the plan drawer. Whenever there's no AI plan to show (it's being written,
+ * it failed, or the server can't be reached) the live turn plan fills in, so the tab is never a dead end.
+ */
+export function AiPlanTab({ planOdds, onShowLive }: { planOdds: PlanOdds | null; onShowLive(): void }) {
   const plan = useAiPlan();
   const model = useModel();
   if (!plan) return null;
-  const { view, sending, problem, request } = plan;
+  const { view, sending, problem, request, waitingSeconds } = plan;
   const working = !!view && isWorking(view);
   const stored = view?.plan ?? null;
+  const fallback = planFallback(view, problem !== null, waitingSeconds * 1000);
+  const mocks = planOdds ? ` from ${planOdds.result.n} mocks of your room` : "";
 
   const button = (label: string) => (
     <button className={cx("btn", "primary")} onClick={request} disabled={sending || working}>
@@ -219,7 +247,7 @@ export function AiPlanTab() {
         <div className={cx("aiCallout", "aiFailed")}>
           <p>
             <b>Couldn&apos;t write your game plan.</b>{" "}
-            {view.error.kind === "invalid_league" ? "These league settings don't fit the player data." : "The AI service didn't come through this time."}
+            {failureText(view.error.kind)}
             {stored && " Your previous plan is below."}
           </p>
           {view.error.retryable && button("Try again")}
@@ -234,6 +262,24 @@ export function AiPlanTab() {
       )}
 
       {problem && <p className={s.aiProblem}>{problem}</p>}
+
+      {fallback && stored && (
+        <p className={s.lbl}>
+          The live turn plan{mocks} is always up to date.{" "}
+          <button className={s.linkBtn} onClick={onShowLive}>
+            Show live odds
+          </button>
+        </p>
+      )}
+      {fallback && !stored && (
+        <>
+          <p className={s.aiFallback}>
+            {FALLBACK_TEXT[fallback]}
+            {mocks}. % is the chance a player survives to that turn.
+          </p>
+          <LiveTurnPlans planOdds={planOdds} />
+        </>
+      )}
 
       {stored && (
         <>
@@ -292,7 +338,17 @@ export function AiTurnNote({ onOpen }: { onOpen(): void }) {
     );
   }
   const turn = view.plan && !view.stale ? currentTurn(view.plan.turns, model.next) : null;
-  if (!turn) return null;
+  if (!turn) {
+    if (view.status !== "failed") return null;
+    return (
+      <div className={cx("aiTurn", "lbl")}>
+        AI game plan unavailable; the live plan below still works.{" "}
+        <button className={s.linkBtn} onClick={onOpen}>
+          Details
+        </button>
+      </div>
+    );
+  }
   return (
     <div className={s.aiTurn}>
       <div>
