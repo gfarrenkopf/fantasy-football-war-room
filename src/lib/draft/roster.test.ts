@@ -6,6 +6,7 @@ import {
   conflicts,
   positionCounts,
   rosterNeeds,
+  slotLabel,
   starterByeCounts,
   type PlayerLookup,
 } from "./roster";
@@ -107,6 +108,26 @@ describe("buildRoster", () => {
     const sf = [slot("QB", "QB"), slot("RB", "RB"), slot("SUPERFLEX", "QB", "RB", "WR", "TE"), slot("FLEX", "RB", "WR", "TE"), slot("BN")];
     const { slots } = buildRoster(mine(allen, gibbs, caleb, swift), lookup, sf);
     expect(slots.map((s) => s.player?.name ?? null)).toEqual(["Josh Allen", "Jahmyr Gibbs", "Caleb Williams", "D'Andre Swift", null]);
+  });
+});
+
+describe("slotLabel", () => {
+  const slots = roster(gibbs, chaseBrown, collins, ajBrown, caleb, swift, warren, lionsDst);
+
+  it("numbers slots the league has more than one of", () => {
+    expect(slotLabel(slots, chaseBrown.id)).toBe("RB2");
+    expect(slotLabel(slots, collins.id)).toBe("WR1");
+  });
+
+  it("names single, flex, D/ST and bench slots plainly", () => {
+    expect(slotLabel(slots, caleb.id)).toBe("QB");
+    expect(slotLabel(slots, swift.id)).toBe("FLEX");
+    expect(slotLabel(slots, lionsDst.id)).toBe("D/ST");
+    expect(slotLabel(slots, warren.id)).toBe("Bench");
+  });
+
+  it("is null for a player not on the roster", () => {
+    expect(slotLabel(slots, higgins.id)).toBeNull();
   });
 });
 

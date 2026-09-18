@@ -250,7 +250,7 @@ The app is a single full-height flex column at `100dvh` with `overflow: hidden` 
 
 - **≥1100px — the full board.** Six weighted columns, the header as one wrapping flex row, hover-revealed controls.
 - **768–1099px — the carousel.** The six columns stop fitting, so the board becomes a horizontally snapping track of `46%`-wide pages. The header is unchanged.
-- **≤767px — the phone.** The header keeps only what is read under a clock (pick number, turn state, search, roster needs) as a four-row grid; the view switch and every draft action move to a fixed bottom bar in the thumb zone; the board track goes to `88%` pages so the next column peeks; the focus view's three columns flatten (`.fcol { display: contents }`) into one scrolling column re-ordered by decision value, with the pick log last. Picking comes first there: the hero, then the turn plan / best available accordion, while My roster, Starter byes and Recent picks fold to one tappable summary line each (a stacked bye week shows ⚠ on the folded line). The hero is the one statement of the pick number and turn state; the header drops both in focus view. A search on the board replaces the carousel with one consensus-ordered list of matches, whose top row is what Enter drafts, and a tap clears it. Modifier-key instructions are hidden, because there are none.
+- **≤767px — the phone.** The header keeps only what is read under a clock (pick number, turn state, search, roster needs) as a four-row grid; the view switch and every draft action move to a fixed bottom bar in the thumb zone; the board track goes to `88%` pages so the next column peeks; the focus view's three columns flatten (`.fcol { display: contents }`) into one scrolling column re-ordered by decision value, with the pick log last. Picking comes first there: the turn plan / best available accordion, while My roster, Starter byes and Recent picks fold to one tappable summary line each (a stacked bye week shows ⚠ on the folded line). The header's pick box and turn banner are the one statement of the pick number and turn state, in every view — they sit in the pinned header, so they never scroll away — and the phone drops the focus hero instead. Every phone form control is 16px, the size below which iOS zooms the page on focus; pinch zoom stays enabled. A search on the board replaces the carousel with one consensus-ordered list of matches, whose top row is what Enter drafts, and a tap clears it. Modifier-key instructions are hidden, because there are none.
 
 **Touch.** Target sizing switches on `(pointer: coarse), (max-width: 767px)` — either signal earns it, so a touchscreen laptop gets thumb targets without losing its columns, and a phone browser that misreports its pointer still gets them. Rows go to 44px by padding alone; no information is dropped. The `✕` "another team" control leaves `:hover` and becomes permanently visible, because it is the only way to log someone else's pick without a modifier key.
 
@@ -286,7 +286,7 @@ The one thing the app surface *does* get is **ring-glow as urgency**: `box-shado
 
 ### Named Rules
 
-**The Glow-Means-Now Rule.** An animated ring means "this concerns your very next action." It is the scarcest signal in the system — two instances product-wide — and adding a third without removing one devalues both.
+**The Glow-Means-Now Rule.** An animated ring means "this concerns your very next action." It is the scarcest signal in the system — two instances product-wide — and adding a third without removing one devalues both. On a phone the on-clock glow moves from the (hidden) hero to the header's turn banner; it is still one on-clock glow, not a second.
 
 ## Shapes
 
@@ -350,6 +350,17 @@ The only pill in the system (`999px`), `3px 8px` on panel fill with a `line` bor
 ### Status Pills
 
 The turn box and hero state block share one escalation vocabulary across three states: **rest** (neutral `line` border on raised slate) → **near** (amber border, amber bold text, 8% amber fill on the hero) → **on-clock** (green border, green bold text, 12–14% green fill, plus the animated glow ring on the hero).
+
+### Pick Card — your pick
+
+The one celebration in the product, for the one moment it builds to: a pick the user logs as their own by hand (never simulated picks, never a player moved between rosters). It replaces the toast for that case.
+
+- **Form:** floats above the app, so it takes the overlay lift and the 10px dialog radius; 400px wide, bottom-centered, above the phone's action bar. Panel fill lit from the top with a 16% mine-green wash and a 55% mine border.
+- **Content:** the mine ✓ badge at 32px, the player name at 20px/700 (the card's display moment), position flag, team, positional rank and bye, the overall pick number at 24px with round.pick, the roster slot he starts at ("RB2", "FLEX", bench), the Value/Reach verdict when there is one, and the next turn — "You're still up: pick N" in green on back-to-back picks.
+- **Bye clash:** carried inside the card as an amber callout, with the border and wash turning amber, so the warning can't hide behind the celebration.
+- **Motion:** a 520ms arrival (rise, un-blur, settle), one pass of light across it, the ✓ stamped in; a 2px hairline at its foot shrinks over its life (1.8s back-to-back, 2.6s normal, 4.2s with a clash). No scrim, no focus trap; a tap dismisses. Reduced motion: a fade, no sweep, no stamp.
+
+**On-clock arrival.** When a logged pick puts the user on the clock, the turn banner (and the desktop hero's state block) takes one pass of green light and the header's pick number pops in green; the tab title reads "● Pick N: you're on the clock" for the second-screen user. Not on load, not on undo, not during a full auto mock.
 
 ### Pick Track
 
