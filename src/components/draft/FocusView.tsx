@@ -11,7 +11,8 @@ import { useModel } from "./DraftModel";
 import { useDraft } from "./DraftProvider";
 import { PlayerCard, posLabel } from "./PlayerCard";
 import { usePrefs } from "./PrefsProvider";
-import { ByePanel, RosterPanel } from "./RosterPanels";
+import { ByePanel, Fold, RosterPanel } from "./RosterPanels";
+import { PHONE, useMediaQuery } from "./useMediaQuery";
 import { useFlags } from "./Flags";
 import { AiPlanTab, AiTurnNote, useAiPlan } from "./AiPlan";
 import { LiveTurnPlans, pct } from "./LiveTurnPlans";
@@ -24,19 +25,21 @@ export interface PlanOdds {
 
 /** The Focus view: turn state and pick log, plan / best-available accordion, roster and byes. */
 export function FocusView({ planOdds, planStale, onOpenAiPlan }: { planOdds: PlanOdds | null; planStale: boolean; onOpenAiPlan(): void }) {
+  // On a phone the picking panels lead and the supporting ones fold down to their summary line.
+  const fold = useMediaQuery(PHONE);
   return (
     <div className={s.focus}>
       <div className={s.fcol}>
         <HeroCard />
-        <PickLog />
+        <PickLog collapsible={fold} />
       </div>
       <div className={s.fcol}>
         <PlanPanel planOdds={planOdds} stale={planStale} onOpenAiPlan={onOpenAiPlan} />
         <BestAvailablePanel />
       </div>
       <div className={s.fcol}>
-        <RosterPanel />
-        <ByePanel />
+        <RosterPanel collapsible={fold} />
+        <ByePanel collapsible={fold} />
       </div>
     </div>
   );
@@ -109,17 +112,14 @@ function HeroCard() {
 
 /* ================= pick log ================= */
 
-function PickLog() {
+function PickLog({ collapsible }: { collapsible: boolean }) {
   const { state } = useDraft();
   const model = useModel();
   const recent = state.picks.slice(-30).map((p, i, arr) => ({ ...p, n: state.picks.length - arr.length + i + 1 })).reverse();
   return (
     // `pickLog` is a positioning hook: on mobile the focus columns flatten and this panel
     // sorts to the end, behind the plan and roster it would otherwise push down.
-    <div className={cx("panel", "panelGrow", "pickLog")}>
-      <h3 className={s.panelTitle}>
-        Recent picks <span>{state.picks.length ? `${state.picks.length} made` : ""}</span>
-      </h3>
+    <Fold collapsible={collapsible} classes={["panelGrow", "pickLog"]} title="Recent picks" meta={state.picks.length ? `${state.picks.length} made` : ""}>
       <div className={s.scroll}>
         {recent.length ? (
           recent.map((p) => {
@@ -143,7 +143,7 @@ function PickLog() {
           </div>
         )}
       </div>
-    </div>
+    </Fold>
   );
 }
 

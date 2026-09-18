@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { byeRelevantStarters, byeWeekList, myPlayers, positionCounts, starterByeCounts } from "@/lib/draft/roster";
 import { POSITIONS, type Position } from "@/lib/draft/types";
 import { useDraft } from "./DraftProvider";
@@ -7,8 +8,49 @@ import { useModel } from "./DraftModel";
 import { cx, s } from "./cx";
 import { posLabel } from "./PlayerCard";
 
+/**
+ * A panel whose title can fold it away. With `collapsible` (the phone focus view) the title is a
+ * button and the panel starts closed, still showing its one-line summary; without it the panel is
+ * the plain always-open desktop panel. The body is not rendered while closed.
+ */
+export function Fold({
+  collapsible = false,
+  title,
+  meta,
+  classes = [],
+  children,
+}: {
+  collapsible?: boolean;
+  title: string;
+  meta?: React.ReactNode;
+  /** Extra CSS-module class names for the panel. */
+  classes?: string[];
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const shown = !collapsible || open;
+  return (
+    <div className={cx("panel", ...classes, collapsible && "acc", collapsible && open && "open")}>
+      <h3 className={s.panelTitle}>
+        {collapsible ? (
+          <button className={cx("accHead", "foldHead")} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            <span className={s.chev} />
+            {title}
+            <span className={s.foldMeta}>{meta}</span>
+          </button>
+        ) : (
+          <>
+            {title} <span>{meta}</span>
+          </>
+        )}
+      </h3>
+      {shown && children}
+    </div>
+  );
+}
+
 /** Roster count chips + slot rows with bye-conflict badges. Ported from renderRoster(). */
-export function RosterPanel() {
+export function RosterPanel({ collapsible }: { collapsible?: boolean }) {
   const { state } = useDraft();
   const model = useModel();
   const mine = myPlayers(state.picks, model.player);
@@ -19,13 +61,7 @@ export function RosterPanel() {
   const ideal = (pos: Position) => (pos === "RB" || pos === "WR" ? rules[pos].soft - 1 : rules[pos].cap);
 
   return (
-    <div className={cx("panel", "panelGrow")}>
-      <h3 className={s.panelTitle}>
-        My roster{" "}
-        <span>
-          {mine.length} / {model.ctx.rounds}
-        </span>
-      </h3>
+    <Fold collapsible={collapsible} classes={["panelGrow"]} title="My roster" meta={`${mine.length} / ${model.ctx.rounds}`}>
       <div className={s.counts}>
         {POSITIONS.filter((pos) => rules[pos].need > 0 || counts[pos] > 0).map((pos) => {
           const min = rules[pos].need;
@@ -69,12 +105,12 @@ export function RosterPanel() {
           );
         })}
       </div>
-    </div>
+    </Fold>
   );
 }
 
 /** Starters out per bye week, with a summary footer. Ported from renderRoster(). */
-export function ByePanel() {
+export function ByePanel({ collapsible }: { collapsible?: boolean }) {
   const model = useModel();
   const weeks = byeWeekList(model.dataset.byeWeeks);
   const counts = starterByeCounts(model.slots, weeks);
@@ -88,15 +124,15 @@ export function ByePanel() {
     ? "Draft a starter to populate. A card whose bye would put 2+ starters out the same week gets an amber ⚠ chip (red at 3+)."
     : `${stacked.length ? `Stacked weeks: ${stacked.join(", ")}. ` : "No two starters share a bye. "}${hot ? `Starter byes: ${hot}.` : ""}`;
 
+  // Folded, the title is all that shows, so a stacked week has to surface there rather than hide.
+  const meta = collapsible && stacked.length ? (
+    <span className={s.foldWarn}>⚠ {stacked.join(", ")}</span>
+  ) : (
+    `${weeks.length ? `weeks ${weeks[0]}–${weeks.at(-1)}` : ""}${gaps.length ? `, no byes wk ${gaps.join(", ")}` : ""}`
+  );
+
   return (
-    <div className={s.panel}>
-      <h3 className={s.panelTitle}>
-        Starter byes{" "}
-        <span>
-          {weeks.length ? `weeks ${weeks[0]}–${weeks.at(-1)}` : ""}
-          {gaps.length ? `, no byes wk ${gaps.join(", ")}` : ""}
-        </span>
-      </h3>
+    <Fold collapsible={collapsible} title="Starter byes" meta={meta}>
       <div className={s.byes} style={{ "--weeks": weeks.length } as React.CSSProperties}>
         {counts.map(({ week, n }) => (
           <div key={week} className={cx("bw", n >= 2 ? "two" : n === 1 && "one")}>
@@ -106,6 +142,6 @@ export function ByePanel() {
         ))}
       </div>
       <div className={s.foot}>{foot}</div>
-    </div>
+    </Fold>
   );
 }
