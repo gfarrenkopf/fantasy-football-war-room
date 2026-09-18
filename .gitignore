@@ -30,6 +30,9 @@ next-env.d.ts
 .DS_Store
 .vercel
 
+# local design tooling (impeccable): config, sidecar, and live-mode session state
+.impeccable/
+
 # ingestion pipeline: raw API snapshots are large and re-fetchable; live.json is
 # environment-specific. Committed fixtures live in src/lib/data/__fixtures__/.
 data/snapshots/

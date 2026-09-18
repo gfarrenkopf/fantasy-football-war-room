@@ -202,8 +202,17 @@
   position: relative;
   border-left: 3px solid transparent;
 }
-.card:hover {
-  background: var(--color-hover);
+/* Hover-gated: on touch a :hover background sticks to the last-tapped row after the finger
+   leaves, so the board ends up with a phantom highlight. Touch gets :active instead. */
+@media (hover: hover) {
+  .card:hover {
+    background: var(--color-hover);
+  }
+}
+@media (hover: none) {
+  .card:active {
+    background: var(--color-hover);
+  }
 }
 .card.QB {
   border-left-color: var(--color-qb);
@@ -1755,4 +1764,484 @@ a.btn {
   color: var(--color-sky);
   text-decoration: underline;
   font-size: 11.5px;
+}
+
+/* ============================================================================
+ * Mobile and touch
+ *
+ * The desktop war room is a six-column board read at 1440px with a mouse. Phones get the same
+ * information and the same interaction model, re-seated for one thumb:
+ *
+ *   - the header keeps only what you read under a clock (pick number, turn state, search, needs);
+ *   - the view switch and every draft action move to a fixed bottom bar in the thumb zone;
+ *   - the board becomes a swipeable carousel of full-width position columns, so the information
+ *     architecture is identical rather than reduced;
+ *   - the focus view flattens to one scrolling column, ordered by decision value;
+ *   - the ✕ "another team" button stops being hover-only, because Cmd-click does not exist on
+ *     touch and it is the only way to log a pick you did not make.
+ *
+ * Layout switches on width; target sizing switches on `pointer: coarse`, so a touchscreen laptop
+ * gets thumb-sized targets without losing its columns.
+ * ========================================================================= */
+
+/* ---------- action bar plumbing (desktop: no visual change) ---------- */
+/*
+ * `.bar` wraps the view switch and the action group. On desktop it dissolves, leaving both as
+ * direct flex children of `.header` in their original places; `.actions` keeps the trailing slot
+ * it had when it was the header's last child.
+ */
+.bar {
+  display: contents;
+}
+.actions {
+  order: 1;
+}
+
+/* ---------- browser surfaces ---------- */
+.root ::selection {
+  background: color-mix(in srgb, var(--color-focus) 35%, transparent);
+  color: var(--color-text);
+}
+.root input {
+  caret-color: var(--color-focus);
+}
+
+/* ---------- touch targets ----------
+ * Either signal earns thumb-sized targets: a coarse pointer at any width (touchscreen laptop,
+ * tablet), or a phone-width viewport whatever the browser claims its pointer is — some Android
+ * browsers report `fine`, and a 20px target behind a bad UA string is still a missed tap.
+ */
+@media (pointer: coarse), (max-width: 767px) {
+  .root {
+    /* A mid-draft pull-to-refresh is a lost place in the list, not lost data. */
+    overscroll-behavior-y: contain;
+  }
+  .card,
+  .chip,
+  .btn,
+  .seg button,
+  .othBtn,
+  .accHead,
+  .stepper button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* 44px rows. Information density is untouched — only the padding grows. */
+  .card {
+    padding: 7px 8px;
+    grid-template-columns: 30px minmax(0, 1fr) auto 34px;
+  }
+  .ba .card,
+  .ba.all .card {
+    grid-template-columns: 30px minmax(0, 1fr) auto 34px;
+  }
+
+  /*
+   * The one genuinely broken affordance on touch: `✕` was revealed by `.card:hover`, so on a
+   * phone there was no way to log a pick as another team's. It is always visible here.
+   */
+  .othBtn {
+    width: 34px;
+    height: 34px;
+    position: relative;
+    border-color: var(--color-line2);
+    color: var(--color-muted);
+  }
+  .othBtn::after {
+    /*
+     * Expands the tap area to 44px tall without changing the drawn button. It grows mostly
+     * upward and outward: reaching left across the Value/Reach tag would turn a mis-tap on the
+     * row into "drafted by another team", which is the one intent that is annoying to undo.
+     */
+    content: "";
+    position: absolute;
+    inset: -5px -4px -5px -2px;
+  }
+  .othBtn:active {
+    color: var(--color-soft-red);
+    border-color: var(--color-reach);
+  }
+
+  .btn,
+  .seg button {
+    min-height: 44px;
+  }
+  .btn {
+    padding: 9px 12px;
+  }
+  .seg button {
+    padding: 10px 14px;
+  }
+  .chip {
+    min-height: 40px;
+    padding: 7px 12px;
+  }
+  .chip:active {
+    background: var(--color-btn-hover);
+  }
+  .accHead {
+    padding: 4px 0;
+    min-height: 44px;
+  }
+  .stepper {
+    grid-template-columns: 1fr 36px 36px 36px;
+  }
+  .stepper button {
+    height: 36px;
+  }
+  .input,
+  .simSelect,
+  .leagueSelect {
+    min-height: 40px;
+  }
+  .simbar .btn {
+    min-height: 44px;
+  }
+}
+
+/* ---------- board carousel: tablet and below ---------- */
+@media (max-width: 1099px) {
+  /*
+   * Below ~1100px the six weighted columns stop fitting and the old layout became a 1605px
+   * horizontal scroll with nothing to snap to. Each column becomes a page instead; the trailing
+   * peek of the next one is the affordance, and the sticky column title says where you are.
+   */
+  .board {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 46%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+  }
+  .board > * {
+    scroll-snap-align: start;
+  }
+  .side {
+    min-width: 0;
+  }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 767px) {
+  .root {
+    /* Reserved for the fixed action bar; every view sits above it. */
+    --bar-h: 64px;
+    padding-bottom: calc(var(--bar-h) + env(safe-area-inset-bottom));
+  }
+
+  /* ----- header: pick number, turn state, search, needs. Nothing else. ----- */
+  .header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 8px;
+    padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 8px
+      max(10px, env(safe-area-inset-left));
+  }
+  .brand {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+  .brand b {
+    font-size: 13px;
+  }
+  /* The league summary lives in the League dialog; the switcher stays. */
+  .brand > span {
+    display: none;
+  }
+  .leagueSelect {
+    max-width: 100%;
+  }
+  .pickbox {
+    grid-area: 1 / 2;
+    gap: 8px;
+    padding: 4px 8px;
+  }
+  .big {
+    font-size: 20px;
+  }
+  .turn {
+    grid-area: 2 / 1 / 3 / 3;
+    min-width: 0;
+  }
+  /*
+   * Modifier-key instructions ("Cmd/Ctrl-click = another team"). There are no modifier keys here;
+   * the always-visible ✕ carries that intent instead.
+   */
+  .clickmode {
+    display: none;
+  }
+  .search {
+    grid-area: 3 / 1 / 4 / 3;
+    flex: none;
+    min-width: 0;
+    max-width: none;
+  }
+  .needs {
+    grid-area: 4 / 1 / 5 / 3;
+    min-width: 0;
+    max-width: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .needs::-webkit-scrollbar {
+    display: none;
+  }
+  .needs .nxt {
+    margin-left: 8px;
+  }
+  /* In focus view the 56px hero number is directly below this one. One is enough. */
+  .root:has(> .focus) .pickbox {
+    display: none;
+  }
+
+  /* ----- the bottom bar ----- */
+  .bar {
+    display: flex;
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 18;
+    align-items: center;
+    gap: 8px;
+    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
+    background: var(--color-panel);
+    border-top: 1px solid var(--color-line);
+    /* It floats over the board, so it casts — directional, like the drawer. */
+    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.35);
+  }
+  .bar > .seg {
+    flex: none;
+  }
+  .actions {
+    order: 1;
+    margin-left: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .actions::-webkit-scrollbar {
+    display: none;
+  }
+  .actions > * {
+    flex: none;
+  }
+  /* Thumb order: the two you reach for mid-draft first, the destructive one last. */
+  .btn.undo {
+    order: -2;
+  }
+  .btn.plan {
+    order: -1;
+  }
+  .account {
+    order: 1;
+  }
+  .btn.danger {
+    order: 2;
+  }
+
+  /* ----- board ----- */
+  .board {
+    grid-auto-columns: 88%;
+    gap: 8px;
+    padding: 8px;
+  }
+  .strip {
+    /* Was a fixed 34px with overflow:hidden, which simply clipped the chips away. */
+    height: auto;
+    min-height: 44px;
+    padding: 6px 10px;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .strip::-webkit-scrollbar {
+    display: none;
+  }
+  /* "Best available (ECR), click to log the pick:" would sit in front of every chip forever. */
+  .stripLabel {
+    display: none;
+  }
+
+  /* ----- focus view: one column, ordered by decision value ----- */
+  .focus {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: row;
+    gap: 8px;
+    padding: 8px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  /* Flattens the three columns so their panels can be ordered individually. */
+  .fcol {
+    display: contents;
+  }
+  .focus > .panel {
+    min-height: 0;
+  }
+  /* The page scrolls now, so panels size to their content instead of scrolling internally. */
+  .focus .scroll {
+    overflow-y: visible;
+    flex: none;
+  }
+  /* Reference, not a decision: it sorts below the plan, best available, roster and byes. */
+  .pickLog {
+    order: 9;
+  }
+  .pickLog .scroll {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .hero {
+    padding: 12px 14px;
+  }
+  .heroNum {
+    font-size: clamp(40px, 12vw, 56px);
+  }
+  .tgt,
+  .ba,
+  .ba.all {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* ----- panel titles -----
+   * The title carries a heading, sometimes a segmented toggle, sometimes a hint. Wrapped they
+   * stack; unwrapped at 390px they collide. */
+  .panelTitle {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 8px 10px;
+  }
+  /* Modifier-key advice that does not apply to touch. */
+  .deskHint {
+    display: none;
+  }
+
+  /* ----- mock draft bar -----
+   * Five controls, a speed select and two sentences of explanation wrapped to 183px of vertical
+   * space — most of a phone screen, above the board it exists to run. It becomes one scrolling
+   * rail, like the action bar, and the prose drops. */
+  .simbar,
+  .room {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 6px 10px;
+    scrollbar-width: none;
+  }
+  .simbar::-webkit-scrollbar,
+  .room::-webkit-scrollbar {
+    display: none;
+  }
+  .simbar > *,
+  .room > * {
+    flex: none;
+  }
+  .simTxt,
+  .simbar .sep {
+    display: none;
+  }
+
+  /* ----- overlays ----- */
+  .drawer {
+    width: 100vw;
+  }
+  .drawerHead {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+  .drawerHead button {
+    margin-left: auto;
+  }
+  .drawerBody {
+    padding-bottom: calc(30px + env(safe-area-inset-bottom));
+  }
+  .report {
+    inset: 8px;
+  }
+  .reportBody {
+    padding: 10px 12px 16px;
+  }
+  /* Eleven numeric columns will not fit. Scroll them rather than crush them. */
+  .reportTable {
+    min-width: 560px;
+  }
+  .reportHead {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* ----- league setup ----- */
+  .setup {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  .setupBody {
+    padding: 12px;
+  }
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 4px;
+  }
+  .input {
+    max-width: none;
+    width: 100%;
+  }
+  /*
+   * One slot per row. Two columns leaves ~67px for the label, and "SUPERFLEX (QB/RB/WR/TE)"
+   * then pushes its own + button off the dialog.
+   */
+  .slotGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setupHead,
+  .setupFoot {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .setupFoot {
+    flex-wrap: wrap;
+  }
+  .dialog {
+    width: calc(100vw - 16px);
+    top: auto;
+    bottom: 12px;
+    transform: translateX(-50%);
+  }
+  .toast {
+    /* Clears the action bar. */
+    bottom: calc(var(--bar-h) + 12px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* ---------- phone, landscape: vertical space is the scarce axis ---------- */
+@media (max-width: 899px) and (max-height: 500px) {
+  .header {
+    gap: 4px 8px;
+    padding-top: max(4px, env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+  .needs {
+    display: none;
+  }
+  .root {
+    --bar-h: 52px;
+  }
+  .bar {
+    padding-top: 4px;
+  }
+  .btn,
+  .seg button {
+    min-height: 40px;
+  }
 }
