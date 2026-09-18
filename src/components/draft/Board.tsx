@@ -7,6 +7,7 @@ import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { PlayerCard } from "./PlayerCard";
 import { ByePanel, RosterPanel } from "./RosterPanels";
+import { PHONE, useMediaQuery } from "./useMediaQuery";
 
 export const POS_COLOR: Record<Position, string> = {
   QB: "var(--color-qb)",
@@ -45,11 +46,18 @@ export function useBoardColumns() {
   );
 }
 
-/** The Board view: one column per position with tier headers, plus roster and byes. */
-export function Board({ query, hitId }: { query: string; hitId: string | null }) {
+/**
+ * The Board view: one column per position with tier headers, plus roster and byes. On a phone a
+ * search replaces the carousel with one list of matches, since filtering the pages in place left
+ * the hits two swipes away behind empty columns.
+ */
+export function Board({ query, hitId, onClearQuery }: { query: string; hitId: string | null; onClearQuery(): void }) {
   const model = useModel();
   const columns = useBoardColumns();
+  const phone = useMediaQuery(PHONE);
   const { rounds } = model.ctx;
+
+  if (phone && query) return <SearchResults query={query} hitId={hitId} onPicked={onClearQuery} />;
 
   return (
     <div className={s.board}>
@@ -89,6 +97,28 @@ export function Board({ query, hitId }: { query: string; hitId: string | null })
         <ByePanel />
       </aside>
     </div>
+  );
+}
+
+/** Every player matching the search, available first, each by consensus rank. */
+function SearchResults({ query, hitId, onPicked }: { query: string; hitId: string | null; onPicked(): void }) {
+  const { ctx, taken } = useModel();
+  const matches = ctx.byConsensus.filter((p) => matchesQuery(p, query));
+  // Available first; `sort` is stable, so each group keeps its consensus order.
+  matches.sort((a, b) => Number(taken.has(a.id)) - Number(taken.has(b.id)));
+
+  return (
+    <section className={cx("panel", "results")} aria-label="Search results">
+      <h2 className={s.panelTitle}>
+        {matches.length ? `${matches.length} ${matches.length === 1 ? "match" : "matches"}` : "No players match"}
+      </h2>
+      {/* A card handles its tap first (draft, ✕, or put back); after that the search has done its job. */}
+      <div className={s.scroll} onClick={(e) => (e.target as HTMLElement).closest("[data-player-id]") && onPicked()}>
+        {matches.map((p) => (
+          <PlayerCard key={p.id} player={p} hit={p.id === hitId} />
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -2114,6 +2114,11 @@ a.btn {
   .strip::-webkit-scrollbar {
     display: none;
   }
+  /* A phone search: one list of matches in the board's place, the full width under the header. */
+  .results {
+    flex: 1;
+    margin: 8px;
+  }
   /* "Best available (ECR), click to log the pick:" would sit in front of every chip forever. */
   .stripLabel {
     display: none;
