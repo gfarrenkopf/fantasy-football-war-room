@@ -2018,6 +2018,21 @@ a.btn {
     min-width: 0;
     max-width: none;
   }
+  /*
+   * iOS zooms the page in on focusing any control under 16px, and pinching back out is how people
+   * refresh by accident. 16px on every phone control keeps the viewport still; pinch zoom stays on.
+   */
+  .search input,
+  .leagueSelect,
+  .input,
+  .simSelect {
+    font-size: 16px;
+  }
+  .search svg,
+  .hint {
+    top: 50%;
+    transform: translateY(-50%);
+  }
   .needs {
     grid-area: 4 / 1 / 5 / 3;
     min-width: 0;
