@@ -22,6 +22,8 @@ interface HeaderProps {
   hint: string;
   onOpenLeague(): void;
   onNewLeague(): void;
+  /** Bumped each time a pick puts the user on the clock; replays the pick box and turn banner's arrival. */
+  arrival: number;
   /** Controls rendered after the brand (view switch). */
   children?: React.ReactNode;
   /** Buttons rendered at the start of the action group. */
@@ -33,7 +35,7 @@ interface HeaderProps {
 }
 
 /** Pick box, turn state, click-mode hint, search and draft actions. Ported from renderHeader(). */
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, onNewLeague, children, actions, account, needs }, searchRef) {
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, onNewLeague, arrival, children, actions, account, needs }, searchRef) {
   const model = useModel();
   const { undo, reset } = useDraftActions();
   const { leagues, active, switchLeague } = useLeague();
@@ -140,7 +142,10 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
       </div>
       <div className={s.pickbox}>
         <div>
-          <div className={s.big}>{Math.min(cur, total)}</div>
+          {/* Keyed by arrival so the number pops again each time the clock comes back to the user. */}
+          <div key={arrival} className={cx("big", arrival > 0 && onClock && "pop")}>
+            {Math.min(cur, total)}
+          </div>
           <div className={s.lbl}>current pick</div>
         </div>
         <div>
@@ -149,6 +154,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         </div>
       </div>
       <div className={cx("turn", turnClass)} aria-live="polite">
+        {arrival > 0 && onClock && <span key={arrival} className={s.sweep} aria-hidden="true" />}
         {turn}
       </div>
       <div className={cx("clickmode", onClock && "me")}>{mode}</div>

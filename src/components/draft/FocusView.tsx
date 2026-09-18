@@ -24,13 +24,13 @@ export interface PlanOdds {
 }
 
 /** The Focus view: turn state and pick log, plan / best-available accordion, roster and byes. */
-export function FocusView({ planOdds, planStale, onOpenAiPlan }: { planOdds: PlanOdds | null; planStale: boolean; onOpenAiPlan(): void }) {
+export function FocusView({ arrival, planOdds, planStale, onOpenAiPlan }: { arrival: number; planOdds: PlanOdds | null; planStale: boolean; onOpenAiPlan(): void }) {
   // On a phone the picking panels lead and the supporting ones fold down to their summary line.
   const fold = useMediaQuery(PHONE);
   return (
     <div className={s.focus}>
       <div className={s.fcol}>
-        <HeroCard />
+        <HeroCard arrival={arrival} />
         <PickLog collapsible={fold} />
       </div>
       <div className={s.fcol}>
@@ -47,7 +47,7 @@ export function FocusView({ planOdds, planStale, onOpenAiPlan }: { planOdds: Pla
 
 /* ================= hero ================= */
 
-function HeroCard() {
+function HeroCard({ arrival }: { arrival: number }) {
   const { current: cur, total, done, onClock, next: nxt, league } = useModel();
   const { teams } = league;
 
@@ -93,6 +93,7 @@ function HeroCard() {
         </div>
       </div>
       <div className={s.heroState} aria-live="polite">
+        {arrival > 0 && onClock && <span key={arrival} className={s.sweep} aria-hidden="true" />}
         <b>{state}</b>
         <small>{sub}</small>
       </div>

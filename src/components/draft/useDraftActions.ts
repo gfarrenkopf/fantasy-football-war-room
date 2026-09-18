@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback } from "react";
-import { buildRoster, conflicts } from "@/lib/draft/roster";
+import { buildRoster, conflicts, slotLabel } from "@/lib/draft/roster";
 import { draftReducer } from "@/lib/draft/state";
-import { isMyPick } from "@/lib/draft/snake";
+import { isMyPick, nextMyPick } from "@/lib/draft/snake";
+import { valueTag } from "@/lib/draft/value";
 import { useDraft } from "./DraftProvider";
 import { useModel } from "./DraftModel";
 import { useConfirm, useToast } from "./Feedback";
+import { useCelebrate } from "./PickCelebration";
 import { useSim } from "./Simulator";
 
 /** Briefly highlights every rendered card and roster row for a player (the prototype's flashCards). */
@@ -28,6 +30,7 @@ export function useDraftActions() {
   const model = useModel();
   const toast = useToast();
   const confirm = useConfirm();
+  const celebrate = useCelebrate();
   const sim = useSim();
 
   /** Logs a pick for an available player, or moves a taken player between rosters. */
@@ -65,10 +68,25 @@ export function useDraftActions() {
       }
       draftCtx.draft(playerId, mine);
       const next = draftReducer(draftCtx.state, { type: "draft", playerId, mine, totalPicks: model.total });
-      if (mine) afterMine(next.picks, `Pick ${next.picks.length}: ${p.name} is yours`);
-      else toast(`Pick ${next.picks.length}: ${p.name} to another team`);
+      const pickNo = next.picks.length;
+      if (!mine) return toast(`Pick ${pickNo}: ${p.name} to another team`);
+      // The user's own pick is the moment the whole draft builds to: the pick card, not a toast.
+      // It carries any bye clash itself, so the warning can't be lost behind it.
+      const { slots } = buildRoster(next.picks, model.player, model.league.roster);
+      const clash = conflicts(slots).get(playerId) ?? null;
+      if (clash) flash(playerId);
+      celebrate({
+        player: p,
+        pickNo,
+        teams: model.league.teams,
+        slot: slotLabel(slots, playerId),
+        tag: valueTag(p, model.league.valueThreshold),
+        clash,
+        next: nextMyPick(pickNo + 1, model.league),
+        total: model.total,
+      });
     },
-    [draftCtx, model, toast, confirm],
+    [draftCtx, model, toast, confirm, celebrate],
   );
 
   const untake = useCallback(

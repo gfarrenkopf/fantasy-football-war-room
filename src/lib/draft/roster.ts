@@ -80,6 +80,21 @@ export function buildRoster(
   return { slots, overflow };
 }
 
+/**
+ * The slot a rostered player landed in, as the roster panel would name it: "WR2" when the league
+ * has more than one WR slot, "FLEX" or "QB" when it has one, "Bench" for the bench. Null when the
+ * player isn't on the roster (not the user's, or overflow past the last slot).
+ */
+export function slotLabel(slots: FilledSlot[], playerId: string): string | null {
+  const i = slots.findIndex((s) => s.player?.id === playerId);
+  if (i < 0) return null;
+  const { key } = slots[i].slot;
+  if (key === "BN") return "Bench";
+  const name = key === "DST" ? "D/ST" : key;
+  const same = slots.filter((s) => s.slot.key === key);
+  return same.length > 1 ? `${name}${same.indexOf(slots[i]) + 1}` : name;
+}
+
 /** Starters who count toward bye conflicts: every non-bench slot except K and D/ST, which are streamable. */
 export function byeRelevantStarters(slots: FilledSlot[]): RosteredPlayer[] {
   return slots

@@ -25,6 +25,7 @@ import { ImportPrompt } from "./ImportPrompt";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { NeedsStrip } from "./NeedsStrip";
+import { PickCelebrationProvider } from "./PickCelebration";
 import { PrefsProvider, usePrefs } from "./PrefsProvider";
 import { useAvailability } from "./useAvailability";
 import { PHONE, useMediaQuery } from "./useMediaQuery";
@@ -70,7 +71,9 @@ function LeagueGate() {
       <DraftModelProvider league={league}>
         <SimProvider>
           <AiPlanProvider leagueId={active?.id ?? null}>
-            <WarRoomView />
+            <PickCelebrationProvider>
+              <WarRoomView />
+            </PickCelebrationProvider>
           </AiPlanProvider>
         </SimProvider>
       </DraftModelProvider>
@@ -117,11 +120,37 @@ function WarRoomView() {
 
   /* ---- auto-switch plan / best available when the turn changes (prototype refresh()) ---- */
   const lastOnClock = useRef<boolean | null>(null);
+  const lastPickCount = useRef(0);
+  /** Counts the times a logged pick put the user on the clock; the header and hero replay their arrival on each. */
+  const [arrival, setArrival] = useState(0);
   useEffect(() => {
     if (!hydrated) return;
-    if (lastOnClock.current !== null && lastOnClock.current !== model.onClock) setPrefs({ center: model.onClock ? "plan" : "ba" });
+    const was = lastOnClock.current;
+    const advanced = state.picks.length > lastPickCount.current;
     lastOnClock.current = model.onClock;
-  }, [hydrated, model.onClock, setPrefs]);
+    lastPickCount.current = state.picks.length;
+    if (was === null || was === model.onClock) return;
+    setPrefs({ center: model.onClock ? "plan" : "ba" });
+    // Not on first load, not on an undo back onto the clock, and not while a full mock drafts for the user.
+    if (model.onClock && advanced && sim.running !== "all") {
+      setArrival((n) => n + 1);
+      navigator.vibrate?.([30, 60, 30, 60, 60]);
+    }
+  }, [hydrated, model.onClock, state.picks.length, sim.running, setPrefs]);
+
+  /* ---- the tab title says so too, for the second-screen user whose draft is in another window ---- */
+  const baseTitle = useRef<string | null>(null);
+  const { onClock, current } = model;
+  useEffect(() => {
+    baseTitle.current ??= document.title;
+    document.title = hydrated && onClock ? `● Pick ${current}: you're on the clock · ${baseTitle.current}` : baseTitle.current;
+  }, [hydrated, onClock, current]);
+  useEffect(
+    () => () => {
+      if (baseTitle.current !== null) document.title = baseTitle.current;
+    },
+    [],
+  );
 
   /* ---- live turn plan: rerun mocks after every pick ---- */
   const runPlan = useAvailability();
@@ -202,6 +231,7 @@ function WarRoomView() {
         hint={hint}
         onOpenLeague={() => setSetup("edit")}
         onNewLeague={() => setSetup("create")}
+        arrival={arrival}
         needs={<NeedsStrip />}
         actions={
           <>
@@ -235,7 +265,7 @@ function WarRoomView() {
       {!hydrated ? (
         <div className={s.loading}>Loading your draft…</div>
       ) : prefs.view === "focus" ? (
-        <FocusView planOdds={planOdds} planStale={planStale} onOpenAiPlan={() => setDrawer("ai")} />
+        <FocusView arrival={arrival} planOdds={planOdds} planStale={planStale} onOpenAiPlan={() => setDrawer("ai")} />
       ) : (
         <div className={s.boardView}>
           {/* On a phone the search results take the strip's place, directly under the search field. */}
