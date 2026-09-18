@@ -27,6 +27,7 @@ import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { NeedsStrip } from "./NeedsStrip";
 import { PrefsProvider, usePrefs } from "./PrefsProvider";
 import { useAvailability } from "./useAvailability";
+import { PHONE, useMediaQuery } from "./useMediaQuery";
 import { useDraftActions } from "./useDraftActions";
 
 /** Mocks per availability report, as in the prototype. */
@@ -93,6 +94,7 @@ function WarRoomView() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
+  const phone = useMediaQuery(PHONE);
   const sim = useSim();
   const { room } = sim;
 
@@ -145,7 +147,10 @@ function WarRoomView() {
   };
 
   /* ---- search ---- */
-  const hit = q ? columns.flatMap((c) => c.players).find((p) => !model.taken.has(p.id) && matchesQuery(p, q)) ?? null : null;
+  // Enter drafts the first available match in reading order: left to right across the board's
+  // columns, or top to bottom in the phone's single consensus-ordered results list.
+  const searchOrder = phone ? model.ctx.byConsensus : columns.flatMap((c) => c.players);
+  const hit = q ? searchOrder.find((p) => !model.taken.has(p.id) && matchesQuery(p, q)) ?? null : null;
   const hint = q ? (hit ? `Enter → ${hit.name} (${model.onClock ? "you" : "another team"})` : "no available match") : "";
   const onQueryChange = (value: string) => {
     setQuery(value);
@@ -233,8 +238,9 @@ function WarRoomView() {
         <FocusView planOdds={planOdds} planStale={planStale} onOpenAiPlan={() => setDrawer("ai")} />
       ) : (
         <div className={s.boardView}>
-          <BestAvailableStrip />
-          <Board query={q} hitId={hit?.id ?? null} />
+          {/* On a phone the search results take the strip's place, directly under the search field. */}
+          {!(phone && q) && <BestAvailableStrip />}
+          <Board query={q} hitId={hit?.id ?? null} onClearQuery={() => setQuery("")} />
         </div>
       )}
       {drawer && <PlanDrawer planOdds={planOdds} tab={drawer} onTab={setDrawer} onClose={() => setDrawer(null)} />}
