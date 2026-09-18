@@ -114,7 +114,9 @@ function PickLog() {
   const model = useModel();
   const recent = state.picks.slice(-30).map((p, i, arr) => ({ ...p, n: state.picks.length - arr.length + i + 1 })).reverse();
   return (
-    <div className={cx("panel", "panelGrow")}>
+    // `pickLog` is a positioning hook: on mobile the focus columns flatten and this panel
+    // sorts to the end, behind the plan and roster it would otherwise push down.
+    <div className={cx("panel", "panelGrow", "pickLog")}>
       <h3 className={s.panelTitle}>
         Recent picks <span>{state.picks.length ? `${state.picks.length} made` : ""}</span>
       </h3>
@@ -262,7 +264,8 @@ function BestAvailablePanel() {
       hint={
         <>
           {toggle}
-          <span className={s.accHint}>click to log the pick; Cmd/Ctrl-click or ✕ forces &quot;another team&quot;</span>
+          {/* `deskHint` marks modifier-key advice that mobile hides: there is no Cmd-click on a phone. */}
+          <span className={cx("accHint", "deskHint")}>click to log the pick; Cmd/Ctrl-click or ✕ forces &quot;another team&quot;</span>
         </>
       }
     >

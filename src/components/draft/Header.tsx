@@ -117,7 +117,27 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         ) : null}
         <span>{leagueSummary(league)}</span>
       </div>
-      {children}
+      {/*
+       * The view switch and the draft actions are wrapped together so mobile can lift the pair
+       * into a fixed bottom bar in one move. On desktop `.bar` is display:contents, so both stay
+       * direct flex children of the header exactly as before and `.actions` keeps its own order.
+       */}
+      <div className={s.bar}>
+        {children}
+        <div className={s.actions}>
+          {actions}
+          <button className={s.btn} onClick={onOpenLeague} title="League size, draft slot, scoring and roster">
+            League
+          </button>
+          <button className={cx("btn", "undo")} onClick={undo} title="Undo the last logged pick">
+            Undo
+          </button>
+          <button className={cx("btn", "danger")} onClick={() => void reset()}>
+            Reset draft
+          </button>
+          {account}
+        </div>
+      </div>
       <div className={s.pickbox}>
         <div>
           <div className={s.big}>{Math.min(cur, total)}</div>
@@ -151,19 +171,6 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         <span className={s.hint}>{hint}</span>
       </div>
       {needs}
-      <div className={s.actions}>
-        {actions}
-        <button className={s.btn} onClick={onOpenLeague} title="League size, draft slot, scoring and roster">
-          League
-        </button>
-        <button className={s.btn} onClick={undo}>
-          Undo last pick
-        </button>
-        <button className={cx("btn", "danger")} onClick={() => void reset()}>
-          Reset draft
-        </button>
-        {account}
-      </div>
     </header>
   );
 });
