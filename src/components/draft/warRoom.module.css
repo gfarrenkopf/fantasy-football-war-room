@@ -2001,9 +2001,23 @@ a.btn {
   .big {
     font-size: 20px;
   }
+  /*
+   * The pick box and turn state are the one thing that must never leave the screen. The header
+   * stays put while each view scrolls under it, so they live here in every view. (They used to
+   * hide in focus view behind `.root:has(> .focus)`, but the hero that replaced them scrolls away,
+   * and WebKit didn't always re-match `:has()` after a view switch, so the board lost them too.)
+   */
   .turn {
     grid-area: 2 / 1 / 3 / 3;
     min-width: 0;
+    padding: 5px 10px;
+  }
+  .turn b {
+    font-size: 13px;
+  }
+  .turn small {
+    display: inline;
+    margin-left: 6px;
   }
   /*
    * Modifier-key instructions ("Cmd/Ctrl-click = another team"). There are no modifier keys here;
@@ -2046,21 +2060,6 @@ a.btn {
   }
   .needs .nxt {
     margin-left: 8px;
-  }
-  /*
-   * In focus view the hero directly below restates both: the 56px pick number, and the turn
-   * state with its near / on-clock escalation. One of each is enough.
-   */
-  .root:has(> .focus) .pickbox,
-  .root:has(> .focus) .turn {
-    display: none;
-  }
-  /* …and search and needs move up into the turn row, so its empty track adds no gap. */
-  .root:has(> .focus) .search {
-    grid-row: 2;
-  }
-  .root:has(> .focus) .needs {
-    grid-row: 3;
   }
 
   /* ----- the bottom bar ----- */
@@ -2178,14 +2177,8 @@ a.btn {
     max-height: 60vh;
     overflow-y: auto;
   }
+  /* The header's pick box and turn banner say all of this, and they don't scroll away. */
   .hero {
-    padding: 12px 14px;
-  }
-  .heroNum {
-    font-size: clamp(40px, 12vw, 56px);
-  }
-  /* The squares already sit under a sentence that says the same thing in numbers. */
-  .trackLabel {
     display: none;
   }
   .tgt,
