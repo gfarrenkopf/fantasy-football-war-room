@@ -453,6 +453,25 @@ The display face is **Big Shoulders** (SIL OFL 1.1, weights 700–900), committe
 
 **The Opening Night Exception.** This overlay is the one place the product deliberately breaks its own muted grammar: a second typeface, a filled saturated slab and button, a text halo, stage lighting, screen shake and confetti. The exception is scoped to this overlay and this moment — the start of a draft someone has waited a season for — and it buys nothing anywhere else. Every number on it is the league's own; it is shown once per new league, and it is always skippable.
 
+### Sign-in Dialog (`/draft`, hosted only)
+
+The war room's route to an account, framed as keeping what you've built: an 18px/700 title ("Take your war room everywhere"), one muted line on what signing in does, and **Coming with you**, a recessed `strip`-ground group listing this device's leagues by name with each one's shape (`leagueSummary()`) beside a mine-green sync mark. The form is the landing's sign-in at door scale (16px input, 44px button), with sending as the outlined sky primary. It centers on desktop by inset and auto margins and becomes a bottom sheet on phones. It arrives on the pick card's curve, lit sky from the top, with one pass of sky light. When it opens on its own (an expired link), an amber notice says why.
+
+**Check your inbox.** After sending, a dashed sky arc draws from a dot (you) while an envelope rides it (`offset-path`) and lands with the mine ✓ stamped on its corner. Below that: the address, an "Open Gmail →"-style primary for known webmail (Gmail opens a search that includes Spam), where to look if it isn't there, and "Send another link" after a 30-second countdown. If the link is opened in another tab, this one changes to "You're in." with a stamped ✓ and "Continue here →". Reduced motion shows the envelope already landed.
+
+### Welcome Card (`/draft`, on sign-in)
+
+The pick card's form, used for the arrival: the same lift, 10px radius, mine wash from the top, ✓ stamped in and one sweep.
+
+- **New account** (`?welcome=new`, from Auth.js `pages.newUser`): "You're in." at 20px/700, the email, then three facts marked with 7px mine squares from the pick track, arriving on a stagger. If leagues saved on this device aren't in the account yet, a recessed group asks to bring them in ("Add to account" / "Keep on this device"). The card waits for an answer, takes focus, closes on Esc or ×, and ends on "Let's draft →". First-run league setup is held until the card closes, so a new account is never asked to set up a league while it's being offered its own.
+- **Returning** (`?welcome=1`): "Welcome back." and a league count. It behaves like a pick card: a tap dismisses it, and the life hairline runs 3.2s. With leagues waiting to import, it holds like the new-account card.
+
+**The Welcome Exception.** A new account's card fires a short fountain of confetti up from behind it: the Opening Night confetti, in the six position hues and amber, at about half the density, for 2s. It happens once, at account creation, and never for a returning sign-in. Reduced motion gets the card fading in, with no stamp, no sweep and no confetti.
+
+### Sign-in Email (off-app)
+
+The magic link arrives as the room, not as Auth.js's template: a Room Black ground, a letter-spaced "FANTASY WAR ROOM" wordmark with a mine dot, a panel card with a six-segment position-hue stripe across its top, a 26px headline, and a **filled Signal Green button with near-black ink**. Email clients ignore stylesheets and variables, so every color is a literal copy of a token, named in `src/lib/auth/email.ts`. The filled button is the email's exception to "no filled primary": it's an off-app surface, and the link has to win in a crowded inbox. A new account's subject is "Your seat in the war room is ready"; a returning one's is "Back to the war room".
+
 ### Pick Track
 
 A wrapped row of 14px squares at 3px radius representing every pick in the draft: chip-grey for future, `#4a5566` for completed, pure white for the current pick, green for the user's picks, and green at 55% opacity once one has been used. The single most information-dense element per pixel in the product.

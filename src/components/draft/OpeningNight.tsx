@@ -208,10 +208,23 @@ function CountUp({ to, delay, still }: { to: number; delay: number; still: boole
 }
 
 /**
- * Two cannons of confetti from the bottom corners, in the six position colors and amber. Canvas,
- * one burst, about three seconds, then it stops drawing and the canvas is removed with the stage.
+ * Confetti in the six position colors and amber. Canvas, one burst, then it stops drawing and the
+ * canvas is removed with its host. Opening Night fires two cannons from the bottom corners for
+ * about three seconds; the welcome card (Welcome.tsx) fires a smaller fountain up from itself.
  */
-function Confetti() {
+export function Confetti({
+  from = "corners",
+  life = 3100,
+  density = 1,
+  className = s.confetti,
+}: {
+  from?: "corners" | "bottom";
+  /** Total run in ms; the last 700ms fade out. */
+  life?: number;
+  /** Scales the number of pieces. */
+  density?: number;
+  className?: string;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = canvas.current;
@@ -225,14 +238,17 @@ function Confetti() {
     ctx.scale(dpr, dpr);
     const styles = getComputedStyle(document.documentElement);
     const colors = CONFETTI.map((v) => styles.getPropertyValue(v).trim() || "#ffffff");
-    const count = w < 600 ? 110 : 190;
+    const count = Math.round((w < 600 ? 110 : 190) * density);
+    const fountain = from === "bottom";
     const bits = Array.from({ length: count }, (_, i) => {
       const left = i % 2 === 0;
-      const angle = (left ? -60 : -120) * (Math.PI / 180) + (Math.random() - 0.5) * 0.7;
-      const speed = (w < 600 ? 13 : 19) + Math.random() * 9;
+      const angle = fountain
+        ? -Math.PI / 2 + (Math.random() - 0.5) * 1.1
+        : (left ? -60 : -120) * (Math.PI / 180) + (Math.random() - 0.5) * 0.7;
+      const speed = fountain ? (w < 600 ? 10 : 13) + Math.random() * 8 : (w < 600 ? 13 : 19) + Math.random() * 9;
       return {
-        x: left ? 0 : w,
-        y: h,
+        x: fountain ? w / 2 + (Math.random() - 0.5) * Math.min(320, w * 0.6) : left ? 0 : w,
+        y: fountain ? h - 90 : h,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         r: Math.random() * Math.PI,
@@ -246,7 +262,7 @@ function Confetti() {
     const draw = (now: number) => {
       const t = now - started;
       ctx.clearRect(0, 0, w, h);
-      ctx.globalAlpha = t > 2400 ? Math.max(0, 1 - (t - 2400) / 700) : 1;
+      ctx.globalAlpha = t > life - 700 ? Math.max(0, 1 - (t - (life - 700)) / 700) : 1;
       for (const b of bits) {
         b.vy += 0.42;
         b.vx *= 0.985;
@@ -262,11 +278,11 @@ function Confetti() {
         ctx.fillRect(-b.size / 2, (-b.size / 4) * Math.abs(Math.cos(b.r * 2)), b.size, (b.size / 2) * Math.abs(Math.cos(b.r * 2)) + 1);
         ctx.restore();
       }
-      if (t < 3100) frame = requestAnimationFrame(draw);
+      if (t < life) frame = requestAnimationFrame(draw);
       else ctx.clearRect(0, 0, w, h);
     };
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-  }, []);
-  return <canvas ref={canvas} className={s.confetti} aria-hidden="true" />;
+  }, [from, life, density]);
+  return <canvas ref={canvas} className={className} aria-hidden="true" />;
 }

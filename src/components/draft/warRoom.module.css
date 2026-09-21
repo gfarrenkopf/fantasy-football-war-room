@@ -972,6 +972,117 @@
   background: color-mix(in srgb, var(--color-warn) 70%, transparent);
 }
 
+/* ---------- welcome ----------
+ * Arriving signed in, in the pick card's form: the same lift, mine wash, stamped ✓ and one sweep.
+ * "Welcome back" with nothing to decide behaves exactly like a pick card (tap to dismiss, a life
+ * hairline). A card that holds a question or a first welcome `holds`: it waits, takes focus, and
+ * reads as a small dialog. A new account's card also gets a fountain of confetti behind it.
+ */
+.pickCard.welcome {
+  width: min(420px, calc(100vw - 24px));
+  padding: 14px 16px 16px;
+}
+.pickCard.holds {
+  cursor: default;
+  user-select: text;
+}
+.welcomeConfetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 30;
+}
+.wcClose {
+  flex: none;
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px 0 0;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-muted);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wcClose:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+/* Facts, each marked with a pick-track square in mine green: yours, now. */
+.wcFacts {
+  position: relative;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--color-line);
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+.wcFacts li {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  animation: pcIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wcFacts li:nth-child(1) { animation-delay: 260ms; }
+.wcFacts li:nth-child(2) { animation-delay: 340ms; }
+.wcFacts li:nth-child(3) { animation-delay: 420ms; }
+.wcFacts li::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--color-mine);
+  translate: 0 -1px;
+}
+.wcAsk {
+  position: relative;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--color-strip);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.wcAsk p {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+.wcAsk b {
+  color: var(--color-text);
+}
+.wcAsk .wcActions {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+.wcBad {
+  color: var(--color-reach-ink);
+}
+.wcActions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wcFacts li {
+    animation: none;
+  }
+}
+
 /* On the clock: one pass of light across the turn banner (and the hero), and the pick number pops. */
 .turn,
 .heroState {

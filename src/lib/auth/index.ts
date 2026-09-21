@@ -27,6 +27,9 @@ function authConfig(): NextAuthConfig {
     providers,
     secret: config.nextAuthSecret,
     session: { strategy: "database" },
+    // A first sign-in lands on the welcome card's new-account moment (see Welcome.tsx); every other
+    // successful sign-in follows its own redirectTo (`?welcome=1`).
+    pages: { newUser: "/draft?welcome=new" },
     // In production, only trust the request's Host when NEXTAUTH_URL pins the public origin (see config warnings).
     trustHost: Boolean(config.nextAuthUrl) || !config.isProduction,
     // Auth.js renders its sign-in page outside the app, so it takes a literal color: --color-value from globals.css.
