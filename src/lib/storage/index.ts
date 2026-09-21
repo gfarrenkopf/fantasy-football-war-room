@@ -6,6 +6,7 @@ import type { Stores } from "./types";
 export type { AiPlanResult, AiPlanStore, CheckoutResult, CheckoutStore, DraftStore, ImportStore, LeagueRecord, LeagueStore, PrefsStore, Purchase, Stores, SyncControl } from "./types";
 export type { SyncIssue } from "./server";
 export { newId, nowIso } from "./ids";
+export { newLeagueRecord } from "./newLeague";
 export { MAX_LEAGUE_NAME } from "./records";
 
 /** The account whose data this device has cached, so it can be cleared once that user signs out. */

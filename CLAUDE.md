@@ -33,7 +33,7 @@ Vitest only picks up `src/**/*.test.ts` (node environment, `@` → `src`). There
 
 ## Architecture
 
-A Next.js 16 App Router app with exactly one page, plus API routes for hosted features. `src/app/page.tsx` calls `connection()` (so flags reflect runtime, not build-time env) and renders `<WarRoom flags={publicFlags} user={await getSessionUser()}>`; everything below it is client-side. With cloud features off (the default), all state lives in the browser and the API routes 404.
+A Next.js 16 App Router app with two pages — a door and a room — plus API routes for hosted features. `src/app/draft/page.tsx` calls `connection()` (so flags reflect runtime, not build-time env) and renders `<WarRoom flags={publicFlags} user={await getSessionUser()}>`; everything below it is client-side. `src/app/page.tsx` is the hosted site's landing page (`src/components/landing/`); it forwards to `/draft` whenever cloud features are off (self-hosting), the visitor has a session, or a league is saved on this device, carrying the query string along. With cloud features off (the default), all state lives in the browser and the API routes 404.
 
 **Three layers, strictly separated:**
 

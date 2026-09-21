@@ -2603,3 +2603,318 @@ a.btn {
     min-height: 40px;
   }
 }
+
+/* ---------- opening night ----------
+ * The one time a year this room is allowed to shout. When a league opens for the first time, the
+ * war room goes dark and announces the draft like a broadcast: stage lights sweep, the year slams
+ * onto the stage and shakes it, the league's shape counts up, and your slot is called on a
+ * skewed green slab — the "on the clock" graphic every fan knows — while the position colors go
+ * off in both corners. Then the whole stage irises down into the header's pick box, where the
+ * real clock lives, and the room is itself again.
+ *
+ * Deliberately outside the room's muted grammar (DESIGN.md, "The Opening Night Exception"): a
+ * display face, a filled saturated slab and button, a text halo and confetti — scoped to this
+ * overlay, shown once per new league, and always skippable.
+ */
+.opening {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  color: var(--color-text);
+  background:
+    radial-gradient(ellipse 70% 42% at 50% 104%, color-mix(in srgb, var(--color-sky) 16%, transparent), transparent 70%),
+    radial-gradient(ellipse 90% 70% at 50% 40%, #11151b, #07090c 80%);
+  cursor: default;
+  animation: stageUp 380ms ease-out both;
+}
+.openingInner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  font-family: var(--font-stage), var(--font-sans);
+}
+
+/* Two follow-spots from the wings, sweeping the stage. */
+.beams {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.beams i {
+  position: absolute;
+  bottom: -10%;
+  width: 46vmax;
+  height: 130vh;
+  transform-origin: 50% 100%;
+  background: linear-gradient(to top, color-mix(in srgb, #ffffff 22%, transparent), color-mix(in srgb, var(--color-sky) 6%, transparent) 70%, transparent);
+  clip-path: polygon(46% 100%, 54% 100%, 100% 0, 0 0);
+  filter: blur(6px);
+  mix-blend-mode: screen;
+}
+.beams i:first-child {
+  left: -12vmax;
+  animation: sweepL 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+.beams i:last-child {
+  right: -12vmax;
+  animation: sweepR 2600ms 300ms cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+
+.openingStage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: min(980px, 100%);
+}
+.openingStage.shake {
+  animation: shake 420ms 170ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.openingTitle {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.84;
+  text-transform: uppercase;
+}
+.otYear {
+  /* Sized by the shorter side: the whole stage has to fit a laptop screen, not just a tall one. */
+  font-size: clamp(16px, min(3vw, 4vh), 34px);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  margin-bottom: 0.25em;
+  color: var(--color-sky);
+  opacity: 0;
+}
+.otYear.in {
+  animation: riseIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.otDraft {
+  font-size: clamp(76px, min(30vw, 24vh), 260px);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-shadow:
+    0 0 40px color-mix(in srgb, var(--color-sky) 35%, transparent),
+    0 6px 0 rgb(0 0 0 / 0.35);
+  opacity: 0;
+}
+.otDraft.in {
+  animation: slam 420ms cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+
+.otLeague {
+  margin: 14px 0 0;
+  font-family: var(--font-sans);
+  font-size: clamp(14px, 1.6vw, 17px);
+  font-weight: 600;
+  color: var(--color-muted);
+  opacity: 0;
+}
+.otLeague.in {
+  animation: riseIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.otStats {
+  display: flex;
+  justify-content: center;
+  gap: clamp(18px, 5vw, 64px);
+  margin: clamp(12px, 3vh, 34px) 0 0;
+}
+.otStat {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  opacity: 0;
+}
+.otStat.in {
+  animation: statIn 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.otStat dt {
+  font-size: clamp(12px, 1.4vw, 15px);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.otStat dd {
+  margin: 0;
+  font-size: clamp(38px, min(11vw, 9vh), 92px);
+  font-weight: 900;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The broadcast's "on the clock" slab: skewed, saturated, dark heavy type, wiped in. */
+.otSlot {
+  margin: clamp(14px, 3.5vh, 40px) 0 0;
+  padding: 0.08em 0.42em 0.02em;
+  font-size: clamp(40px, min(13vw, 11vh), 136px);
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  transform: skewX(-9deg);
+  box-shadow: 0 18px 60px color-mix(in srgb, var(--color-mine) 38%, transparent);
+  clip-path: inset(0 100% 0 0);
+}
+.otSlot.in {
+  animation: wipe 460ms cubic-bezier(0.7, 0, 0.2, 1) both;
+}
+
+.otClock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-top: clamp(14px, 3.5vh, 36px);
+  opacity: 0;
+}
+.otClock.in {
+  animation: riseIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.otClock p {
+  margin: 0;
+  max-width: 46ch;
+  font-family: var(--font-sans);
+  font-size: clamp(14px, 1.6vw, 17px);
+  line-height: 1.45;
+  color: var(--color-text);
+}
+.otGo {
+  font-family: var(--font-stage), var(--font-sans);
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 34px 10px;
+  min-height: 52px;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 120ms ease-out, filter 120ms ease-out;
+}
+.otGo:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.otGo:active {
+  transform: translateY(1px);
+}
+.otGo:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.openingSkip {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: 16px;
+  z-index: 2;
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: transparent;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.openingSkip:hover {
+  color: var(--color-text);
+  border-color: var(--color-line2);
+}
+
+.confetti {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Out: the whole stage closes down onto the header's pick box. */
+.opening.irisOut {
+  animation: iris 700ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+@keyframes stageUp {
+  from { opacity: 0; }
+}
+@keyframes sweepL {
+  from { transform: rotate(22deg); }
+  to { transform: rotate(-8deg); }
+}
+@keyframes sweepR {
+  from { transform: rotate(-22deg); }
+  to { transform: rotate(8deg); }
+}
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes slam {
+  from { opacity: 0; transform: scale(2.8); filter: blur(14px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes shake {
+  10%, 90% { transform: translate(-2px, 1px); }
+  20%, 80% { transform: translate(4px, -2px); }
+  30%, 50%, 70% { transform: translate(-7px, 3px); }
+  40%, 60% { transform: translate(7px, -3px); }
+}
+@keyframes statIn {
+  from { opacity: 0; transform: translateY(26px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes iris {
+  from { clip-path: circle(150vmax at var(--iris-x, 50%) var(--iris-y, 40px)); }
+  to { clip-path: circle(0 at var(--iris-x, 50%) var(--iris-y, 40px)); }
+}
+
+/* Reduced motion: the same announcement, all at once and still, dismissed by the button. */
+.opening.still,
+.opening.still .otYear,
+.opening.still .otDraft,
+.opening.still .otLeague,
+.opening.still .otStat,
+.opening.still .otClock {
+  animation: pcFade 200ms ease-out both;
+  opacity: 1;
+}
+.opening.still .otSlot {
+  animation: none;
+  clip-path: none;
+}
+.opening.still .beams {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .openingStage.shake,
+  .beams i {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .otStats {
+    gap: 18px;
+  }
+  .otGo {
+    width: 100%;
+  }
+}

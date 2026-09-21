@@ -5,6 +5,7 @@ import type { SessionUser } from "@/lib/auth/types";
 import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
 import { getStores, type Purchase } from "@/lib/storage";
+import { SignIn } from "@/components/landing/SignIn";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
 import { useFlags } from "./Flags";
@@ -20,19 +21,25 @@ export const useAccount = () => useContext(AccountContext);
 
 /** Sign-in link, or the signed-in email with sign-out. Renders nothing when cloud features are off. */
 export function AccountMenu() {
-  const { cloudEnabled, paymentsEnabled } = useFlags();
+  const flags = useFlags();
+  const { cloudEnabled, paymentsEnabled } = flags;
   const user = useAccount();
   const confirm = useConfirm();
   const [showPurchases, setShowPurchases] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
   if (!cloudEnabled) return null;
 
   if (!user) {
+    // The same sign-in the landing page shows, in a dialog. Anyone who started an anonymous
+    // draft is redirected away from `/` from then on, so this is their only route to an account.
+    if (!flags.emailAuthEnabled && !flags.googleAuthEnabled) return null;
     return (
-      // A full page load on purpose: the Auth.js sign-in page is a server route, not an app page.
-      // eslint-disable-next-line @next/next/no-html-link-for-pages
-      <a className={s.btn} href="/api/auth/signin?callbackUrl=%2F" title="Sign in to sync your leagues across devices">
-        Sign in
-      </a>
+      <>
+        <button className={s.btn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
+          Sign in
+        </button>
+        {showSignIn && <SignInDialog onClose={() => setShowSignIn(false)} />}
+      </>
     );
   }
 
@@ -50,7 +57,7 @@ export function AccountMenu() {
     await signOutAction();
     // A full reload, not router.push(): stores and providers must all start over for the signed-out user.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/");
+    window.location.assign("/draft");
   };
 
   return (
@@ -124,6 +131,38 @@ function PurchasesDialog({ onClose }: { onClose(): void }) {
         <div className={s.dialogActions}>
           <button className={cx("btn", "primary")} onClick={onClose} autoFocus>
             Close
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** The landing page's sign-in, in the war room's dialog shell. */
+function SignInDialog({ onClose }: { onClose(): void }) {
+  const flags = useFlags();
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className={s.scrim} onClick={onClose} />
+      <div className={s.dialog} role="dialog" aria-modal="true" aria-labelledby="signin-title">
+        <h3 id="signin-title">Sign in</h3>
+        <SignIn flags={flags} title={null} />
+        <div className={s.dialogActions}>
+          <button className={cx("btn")} onClick={onClose}>
+            Not now
           </button>
         </div>
       </div>

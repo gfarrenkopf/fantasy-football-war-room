@@ -25,8 +25,10 @@ export async function startCheckout(
   if (!league) return { status: "not-found" };
   if (await hasEntitlement(db, leagueId, SEASON_PASS)) return { status: "already-paid" };
 
+  // Straight back into the war room, where CheckoutReturn reads the outcome. (`/` is the landing
+  // page; it forwards its query string too, for sessions started before the route moved.)
   const back = (outcome: "success" | "cancel") => {
-    const url = new URL("/", baseUrl);
+    const url = new URL("/draft", baseUrl);
     url.searchParams.set("checkout", outcome);
     url.searchParams.set("league", leagueId);
     return url.toString();

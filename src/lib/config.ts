@@ -92,6 +92,9 @@ export type Config = typeof config;
 /** Booleans only, safe to pass from server components to client components as props. */
 export const publicFlags = Object.freeze({
   cloudEnabled: config.cloudEnabled,
+  /** Which sign-in methods exist, so the landing page never renders a button that 404s. */
+  googleAuthEnabled: config.googleAuthEnabled,
+  emailAuthEnabled: config.emailAuthEnabled,
   aiEnabled: config.aiEnabled,
   paymentsEnabled: config.paymentsEnabled,
   dataPipelineEnabled: config.dataPipelineEnabled,

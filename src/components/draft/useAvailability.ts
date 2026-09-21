@@ -3,17 +3,25 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { AvailabilityRequest, AvailabilityResponse } from "@/lib/draft/sim/availability.worker";
 import type { AvailabilityResult } from "@/lib/draft/sim";
-import type { CpuStyle, DraftPick } from "@/lib/draft/types";
+import type { CpuStyle, DraftPick, LeagueSettings, Player } from "@/lib/draft/types";
 import { useModel } from "./DraftModel";
 
 export type RunAvailability = (picks: DraftPick[], room: CpuStyle[], n: number) => Promise<AvailabilityResult | null>;
 
+/** The draft's own availability runner, for everything inside <DraftModelProvider>. */
+export function useAvailability(): RunAvailability {
+  const { league, dataset } = useModel();
+  return useAvailabilityFor(league, dataset.players);
+}
+
 /**
  * Runs Monte Carlo availability in a Web Worker. Each call supersedes the previous one:
  * a stale run resolves to null instead of its (outdated) result.
+ *
+ * Takes the league and players explicitly so surfaces outside the draft's provider tree — the
+ * landing page runs the same mocks to show real survival odds — use the same worker, not a copy.
  */
-export function useAvailability(): RunAvailability {
-  const { league, dataset } = useModel();
+export function useAvailabilityFor(league: LeagueSettings, players: Player[]): RunAvailability {
   const worker = useRef<Worker | null>(null);
   const latest = useRef(0);
   const pending = useRef(new Map<number, (r: AvailabilityResult | null) => void>());
@@ -48,9 +56,9 @@ export function useAvailability(): RunAvailability {
         pending.current.forEach((r, key) => key !== id && r(null));
         pending.current.clear();
         pending.current.set(id, resolve);
-        const request: AvailabilityRequest = { id, picks, league, players: dataset.players, room, n };
+        const request: AvailabilityRequest = { id, picks, league, players, room, n };
         w.postMessage(request);
       }),
-    [league, dataset],
+    [league, players],
   );
 }

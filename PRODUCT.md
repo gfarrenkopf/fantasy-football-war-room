@@ -17,6 +17,13 @@ Prep-day use (building the board, rehearsing mocks) is real but secondary to dra
 
 Self-hosters are a second audience: they clone the repo, swap in their own player dataset, and run it for their own league.
 
+**The hosted site (`draftroom.online`) has its own audience, and the landing page speaks only to it.** These are people who want to use something, not set something up, and who may pay for a season pass to get the AI-written plan. Two kinds, equally important:
+
+- **The casual manager** who doesn't follow football much and wants to be told who to pick.
+- **The power user** running many drafts a season who wants every league in one place, synced, with the draft-day plan on hand for each.
+
+Copy on hosted surfaces never talks about how the product is built (open source, self-hosting, API keys, simulation counts as engineering) — it talks about the draft.
+
 ## Product Purpose
 
 Fantasy War Room is an open-source draft room: a tiered board plus a computed plan for what to do with your next pick. It exists because the draft-day tools inside the major platforms tell you who is available but not what to expect — they leave the manager to guess whether a player survives to their next turn, whether a pick is ahead of or behind the market, and whether their bye weeks are quietly colliding.
@@ -53,9 +60,9 @@ Supporting, not primary: the project is MIT-licensed, self-hostable with no API 
 - **Offline-capable by default.** Signed out, all state lives in the browser; there is no network dependency mid-draft.
 - **Data is swappable.** Player data is a single validated dataset file self-hosters replace. Copy must not assume a particular provider, season, or scoring format.
 - **Player data is not authoritative.** The shipped dataset is clearly labeled sample data. Nothing may present it as live or official.
-- **One page.** The entire product is a single route with API routes behind it; there is no multi-page IA to lean on.
+- **Two pages.** The product is the war room at `/draft` plus, on the hosted site only, a landing page at `/` that is its door; API routes sit behind both. A self-hosted install (cloud features off) sends `/` straight to `/draft`. There is no deeper IA to lean on, and the war room itself remains one route.
 
-**Undecided:** pricing amount; payment flow design; whether a marketing surface exists separately from the app.
+**Undecided:** pricing amount; payment flow design.
 
 ## Brand Commitments
 

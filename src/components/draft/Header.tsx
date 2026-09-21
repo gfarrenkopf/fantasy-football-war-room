@@ -140,7 +140,8 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
           {account}
         </div>
       </div>
-      <div className={s.pickbox}>
+      {/* data-pickbox: where OpeningNight's stage irises down to when the draft starts. */}
+      <div className={s.pickbox} data-pickbox>
         <div>
           {/* Keyed by arrival so the number pops again each time the clock comes back to the user. */}
           <div key={arrival} className={cx("big", arrival > 0 && onClock && "pop")}>
