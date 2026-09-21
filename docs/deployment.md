@@ -136,6 +136,8 @@ In the editor, add at least one sign-in method. The variables are described in [
 
 - **Google:** `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`. In Google Cloud, set the OAuth redirect URI to `https://warroom.example.com/api/auth/callback/google`.
 - **Email link:** `AUTH_RESEND_KEY` and `EMAIL_FROM`. The sender's domain must be verified in Resend.
+  - **Give the sender a name,** e.g. `EMAIL_FROM="Fantasy War Room <gm@warroom.example.com>"`. A bare address shows up in the inbox as `gm`, and people trust a name they recognize.
+  - **Keep sign-in links out of spam.** In Resend's *Domains* page, add every DNS record it lists (the SPF `TXT`, the DKIM `TXT` records and the `MX` for the bounce subdomain) and wait for each to show *Verified*. Then add a DMARC record: `TXT` on `_dmarc.warroom.example.com` with `v=DMARC1; p=none; rua=mailto:you@example.com`. Gmail sends mail from unauthenticated or DMARC-less domains to Junk. Test by sending a link to a Gmail address and choosing *Show original*: SPF, DKIM and DMARC should all read `PASS`.
 
 `NEXTAUTH_URL` must include the scheme (`https://warroom.example.com`, not `warroom.example.com`). Leave unused keys empty or delete them; an empty key counts as unset.
 

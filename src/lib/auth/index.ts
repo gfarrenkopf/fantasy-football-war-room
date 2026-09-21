@@ -1,10 +1,13 @@
 import "server-only";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { eq } from "drizzle-orm";
 import NextAuth, { type NextAuthConfig } from "next-auth";
+import type { EmailConfig } from "next-auth/providers/email";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { config } from "@/lib/config";
 import { getDb, schema } from "@/lib/db";
+import { renderSignInEmail } from "./email";
 import type { SessionUser } from "./types";
 
 export type { SessionUser } from "./types";
@@ -12,7 +15,7 @@ export type { SessionUser } from "./types";
 function authConfig(): NextAuthConfig {
   const providers: NextAuthConfig["providers"] = [];
   if (config.googleAuthEnabled) providers.push(Google({ clientId: config.googleClientId, clientSecret: config.googleClientSecret }));
-  if (config.emailAuthEnabled) providers.push(Resend({ name: "Email", apiKey: config.resendApiKey, from: config.emailFrom }));
+  if (config.emailAuthEnabled) providers.push(Resend({ name: "Email", apiKey: config.resendApiKey, from: config.emailFrom, sendVerificationRequest }));
 
   return {
     adapter: DrizzleAdapter(getDb(), {
@@ -36,6 +39,33 @@ function authConfig(): NextAuthConfig {
     },
   };
 }
+
+/**
+ * Sends the magic link as the war room's own email (see email.ts), through Resend's API the way
+ * the built-in provider does. The account lookup only changes the greeting in the requester's own
+ * inbox; nothing about it reaches the form, so the form still can't probe for registered users.
+ */
+const sendVerificationRequest: EmailConfig["sendVerificationRequest"] = async ({ identifier, url, provider }) => {
+  const existing = await getDb()
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.email, identifier))
+    .limit(1)
+    .catch(() => null);
+  const { subject, html, text } = renderSignInEmail({
+    url,
+    email: identifier,
+    // A failed lookup reads as returning: that copy is true for everyone.
+    isNew: existing !== null && existing.length === 0,
+    hours: Math.round((provider.maxAge ?? 24 * 60 * 60) / 3600),
+  });
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: provider.from, to: identifier, subject, html, text }),
+  });
+  if (!res.ok) throw new Error(`Resend error: ${res.status} ${await res.text()}`);
+};
 
 /**
  * Auth.js, or null when cloud features are off. The config is built per request, so importing
