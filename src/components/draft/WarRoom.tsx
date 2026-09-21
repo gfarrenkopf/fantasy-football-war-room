@@ -19,11 +19,10 @@ import { DraftProvider, useDraft } from "./DraftProvider";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
 import { OpeningNight } from "./OpeningNight";
-import { WelcomeBack } from "./WelcomeBack";
+import { useWelcomeHold, Welcome } from "./Welcome";
 import { FlagsProvider } from "./Flags";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
-import { ImportPrompt } from "./ImportPrompt";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { NeedsStrip } from "./NeedsStrip";
@@ -52,10 +51,10 @@ export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser
           <ConfirmProvider>
             <PrefsProvider>
               <LeagueProvider>
-                <WelcomeBack />
-                <OpeningNight />
-                <ImportPrompt />
-                <LeagueGate />
+                <Welcome>
+                  <OpeningNight />
+                  <LeagueGate />
+                </Welcome>
               </LeagueProvider>
             </PrefsProvider>
           </ConfirmProvider>
@@ -95,6 +94,7 @@ function WarRoomView() {
   const model = useModel();
   const { prefs, setPrefs } = usePrefs();
   const { configured, active } = useLeague();
+  const welcomeHold = useWelcomeHold();
   const { draftWithIntent, intentFrom, undo } = useDraftActions();
   const toast = useToast();
   const columns = useBoardColumns();
@@ -106,7 +106,8 @@ function WarRoomView() {
   const { room } = sim;
 
   const [setup, setSetup] = useState<"edit" | "create" | null>(null);
-  const setupMode = configured ? setup : "create"; // first run: setup until a league is saved
+  // First run: setup until a league is saved, once any sign-in arrival has settled (see Welcome.tsx).
+  const setupMode = configured ? setup : welcomeHold ? null : "create";
   const closeSetup = useCallback(() => setSetup(null), [setSetup]);
   const showSetup = setupMode !== null;
 

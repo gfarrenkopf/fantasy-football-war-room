@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { SessionUser } from "@/lib/auth/types";
 import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
@@ -9,8 +9,21 @@ import { SignIn } from "@/components/landing/SignIn";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
 import { useFlags } from "./Flags";
+import { leagueSummary } from "./Header";
+import { useLeague } from "./LeagueProvider";
 
 const AccountContext = createContext<SessionUser | null>(null);
+
+/**
+ * What Auth.js's error codes mean to the person holding the link. Failures land on `/draft?error=`
+ * (pages.error) instead of Auth.js's own page; the dialog reopens with one of these.
+ */
+const SIGN_IN_ERRORS: Record<string, string> = {
+  Verification: "That link has already been used or has expired. Links work once, for 24 hours. Send yourself a fresh one.",
+  OAuthAccountNotLinked: "That address already signs in with an email link. Send yourself one below.",
+  AccessDenied: "That sign-in was cancelled. Try again whenever you're ready.",
+};
+const SIGN_IN_FAILED = "Sign-in didn't go through. Try again.";
 
 /** The signed-in user (from the server session), or null. */
 export function AccountProvider({ user, children }: { user: SessionUser | null; children: React.ReactNode }) {
@@ -27,6 +40,34 @@ export function AccountMenu() {
   const confirm = useConfirm();
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
+  const [signInNotice, setSignInNotice] = useState<string | undefined>();
+  const signInBtn = useRef<HTMLButtonElement>(null);
+
+  // A sign-in link that failed (used, expired, cancelled) lands here with `?error=`: reopen the
+  // dialog saying what happened. Signed in already, there's nothing to recover, so just tidy up.
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("error");
+    if (code === null) return;
+    // Stripped and acted on together, from a timeout: the dialog opens after the war room's first
+    // paint, and an effect that's cleaned up before it fires (StrictMode) leaves the URL to retry.
+    const t = setTimeout(() => {
+      url.searchParams.delete("error");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      if (user) return;
+      setSignInNotice(SIGN_IN_ERRORS[code] ?? SIGN_IN_FAILED);
+      setShowSignIn(true);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [cloudEnabled, user]);
+
+  const closeSignIn = useCallback(() => {
+    setShowSignIn(false);
+    setSignInNotice(undefined);
+    // Back to where the reader was, not the top of the page.
+    requestAnimationFrame(() => signInBtn.current?.focus());
+  }, []);
   if (!cloudEnabled) return null;
 
   if (!user) {
@@ -35,10 +76,10 @@ export function AccountMenu() {
     if (!flags.emailAuthEnabled && !flags.googleAuthEnabled) return null;
     return (
       <>
-        <button className={s.btn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
+        <button ref={signInBtn} className={s.btn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
           Sign in
         </button>
-        {showSignIn && <SignInDialog onClose={() => setShowSignIn(false)} />}
+        {showSignIn && <SignInDialog onClose={closeSignIn} notice={signInNotice} />}
       </>
     );
   }
@@ -138,9 +179,15 @@ function PurchasesDialog({ onClose }: { onClose(): void }) {
   );
 }
 
-/** The landing page's sign-in, in the war room's dialog shell. */
-function SignInDialog({ onClose }: { onClose(): void }) {
+/**
+ * The landing page's sign-in, in the war room's dialog shell, framed as what it is: taking the
+ * board you've built everywhere you go. The leagues on this device are listed by name, because
+ * seeing your own work about to be kept is the reason to sign in. `notice` explains why the dialog
+ * opened on its own (an expired link, say).
+ */
+export function SignInDialog({ onClose, notice }: { onClose(): void; notice?: string }) {
   const flags = useFlags();
+  const { leagues } = useLeague();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -157,9 +204,35 @@ function SignInDialog({ onClose }: { onClose(): void }) {
   return (
     <>
       <div className={s.scrim} onClick={onClose} />
-      <div className={s.dialog} role="dialog" aria-modal="true" aria-labelledby="signin-title">
-        <h3 id="signin-title">Sign in</h3>
-        <SignIn flags={flags} title={null} />
+      <div className={cx("dialog", "signIn")} role="dialog" aria-modal="true" aria-labelledby="signin-title" aria-describedby="signin-lead">
+        <h3 id="signin-title" className={s.siTitle}>
+          Take your war room everywhere
+        </h3>
+        <p id="signin-lead" className={s.siLead}>
+          Sign in and your leagues sync to your account: the same board on your laptop, your phone, and at the draft table. Nothing about how the room works changes.
+        </p>
+        {notice && (
+          <p className={s.siNotice} role="alert">
+            {notice}
+          </p>
+        )}
+        {leagues.length > 0 && (
+          <section className={s.siComing} aria-labelledby="signin-coming">
+            <h4 id="signin-coming">Coming with you</h4>
+            <ul>
+              {leagues.map((l) => (
+                <li key={l.id}>
+                  <SyncMark />
+                  <span className={s.siLeague}>
+                    <b>{l.name}</b>
+                    <span>{leagueSummary(l.settings)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <SignIn flags={flags} title={null} focused />
         <div className={s.dialogActions}>
           <button className={cx("btn")} onClick={onClose}>
             Not now
@@ -167,5 +240,15 @@ function SignInDialog({ onClose }: { onClose(): void }) {
         </div>
       </div>
     </>
+  );
+}
+
+/** Two arrows chasing each other: this league goes where you go. */
+function SyncMark() {
+  return (
+    <svg className={s.siSync} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M13.5 6.5A5.5 5.5 0 0 0 3.2 4.8M2.5 9.5a5.5 5.5 0 0 0 10.3 1.7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M3 1.8v3.3h3.3M13 14.2v-3.3H9.7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

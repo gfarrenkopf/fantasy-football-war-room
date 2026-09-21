@@ -972,6 +972,117 @@
   background: color-mix(in srgb, var(--color-warn) 70%, transparent);
 }
 
+/* ---------- welcome ----------
+ * Arriving signed in, in the pick card's form: the same lift, mine wash, stamped ✓ and one sweep.
+ * "Welcome back" with nothing to decide behaves exactly like a pick card (tap to dismiss, a life
+ * hairline). A card that holds a question or a first welcome `holds`: it waits, takes focus, and
+ * reads as a small dialog. A new account's card also gets a fountain of confetti behind it.
+ */
+.pickCard.welcome {
+  width: min(420px, calc(100vw - 24px));
+  padding: 14px 16px 16px;
+}
+.pickCard.holds {
+  cursor: default;
+  user-select: text;
+}
+.welcomeConfetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 30;
+}
+.wcClose {
+  flex: none;
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px 0 0;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-muted);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wcClose:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+/* Facts, each marked with a pick-track square in mine green: yours, now. */
+.wcFacts {
+  position: relative;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--color-line);
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+.wcFacts li {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  animation: pcIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wcFacts li:nth-child(1) { animation-delay: 260ms; }
+.wcFacts li:nth-child(2) { animation-delay: 340ms; }
+.wcFacts li:nth-child(3) { animation-delay: 420ms; }
+.wcFacts li::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--color-mine);
+  translate: 0 -1px;
+}
+.wcAsk {
+  position: relative;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--color-strip);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.wcAsk p {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+.wcAsk b {
+  color: var(--color-text);
+}
+.wcAsk .wcActions {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+.wcBad {
+  color: var(--color-reach-ink);
+}
+.wcActions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wcFacts li {
+    animation: none;
+  }
+}
+
 /* On the clock: one pass of light across the turn banner (and the hero), and the pick number pops. */
 .turn,
 .heroState {
@@ -1098,6 +1209,129 @@
 .dialog h3 {
   margin: 0 0 12px;
   font-size: 14px;
+}
+
+/* ---------- sign in ----------
+ * The invitation to keep the board you've built. Centered rather than hung at 30% because it's
+ * taller than a confirm; lit sky from the top (the primary voice), arriving on the pick card's
+ * curve with one pass of light. Centered by inset and auto margins, not a transform: the arrival
+ * animates transform, and Lightning CSS folds a `translate` into it.
+ */
+.dialog.signIn {
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  transform: none;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: hidden auto;
+  padding: 20px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-sky) 8%, transparent), transparent 160px),
+    var(--color-panel);
+  animation: pcIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.dialog.signIn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--color-sky) 14%, transparent) 50%, transparent 70%);
+  animation: sweep 1000ms 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.dialog.signIn h3.siTitle {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.2px;
+  text-wrap: balance;
+}
+.dialog.signIn p.siLead {
+  margin: 0 0 16px;
+  color: var(--color-muted);
+  text-wrap: pretty;
+}
+.dialog.signIn p.siNotice {
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-warn) 45%, transparent);
+  background: color-mix(in srgb, var(--color-warn) 12%, transparent);
+  color: var(--color-warn-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* Recessed like the landing's setup group: these are yours, carved into the dialog. */
+.siComing {
+  margin: 0 0 16px;
+  background: var(--color-strip);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.siComing h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.siComing ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 148px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+.siComing li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: pcIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.siComing li:nth-child(2) { animation-delay: 60ms; }
+.siComing li:nth-child(3) { animation-delay: 120ms; }
+.siComing li:nth-child(n + 4) { animation-delay: 180ms; }
+.siSync {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--color-mine);
+}
+.siLeague {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.siLeague b {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.siLeague span {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.dialog.signIn .dialogActions {
+  margin-top: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog.signIn {
+    animation: pcFade 150ms ease-out both;
+  }
+  .dialog.signIn::after {
+    display: none;
+  }
+  .siComing li {
+    animation: none;
+  }
 }
 .purchases {
   list-style: none;
@@ -2568,6 +2802,11 @@ a.btn {
     top: auto;
     bottom: 12px;
     transform: translateX(-50%);
+  }
+  .dialog.signIn {
+    width: auto;
+    inset: auto 8px 12px;
+    max-height: calc(100dvh - 24px);
   }
   /*
    * Both clear the action bar. They render beside `.root`, not inside it, so `--bar-h` needs its
