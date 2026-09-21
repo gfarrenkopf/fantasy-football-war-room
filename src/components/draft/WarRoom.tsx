@@ -16,6 +16,7 @@ import { Board, matchesQuery, useBoardColumns } from "./Board";
 import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
+import { EspnSyncChip, EspnSyncProvider } from "./EspnSync";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
 import { OpeningNight } from "./OpeningNight";
@@ -71,15 +72,17 @@ function LeagueGate() {
   // Keyed by league so switching leagues remounts the draft, model and simulator from scratch.
   return (
     <DraftProvider key={active?.id ?? "new"} draftKey={active?.id ?? null} totalPicks={totalPicks(league)}>
-      <DraftModelProvider league={league}>
-        <SimProvider>
-          <AiPlanProvider leagueId={active?.id ?? null}>
-            <PickCelebrationProvider>
-              <WarRoomView />
-            </PickCelebrationProvider>
-          </AiPlanProvider>
-        </SimProvider>
-      </DraftModelProvider>
+      <EspnSyncProvider leagueId={active?.id ?? null} league={league}>
+        <DraftModelProvider league={league}>
+          <SimProvider>
+            <AiPlanProvider leagueId={active?.id ?? null}>
+              <PickCelebrationProvider>
+                <WarRoomView />
+              </PickCelebrationProvider>
+            </AiPlanProvider>
+          </SimProvider>
+        </DraftModelProvider>
+      </EspnSyncProvider>
     </DraftProvider>
   );
 }
@@ -240,6 +243,7 @@ function WarRoomView() {
         needs={<NeedsStrip />}
         actions={
           <>
+            <EspnSyncChip />
             <button
               className={cx("btn", prefs.mockOn && "on")}
               title="Mock draft mode: CPU teams make the other picks"

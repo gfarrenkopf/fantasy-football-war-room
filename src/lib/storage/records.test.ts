@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { standardRoster } from "@/lib/data";
-import { parseLeagueRecord } from "./records";
+import { migrateDraftState, parseLeagueRecord } from "./records";
 
 const valid = {
   id: "0123abcd",
@@ -37,5 +37,23 @@ describe("parseLeagueRecord", () => {
   it("rejects non-objects", () => {
     expect(parseLeagueRecord(null)).toBeNull();
     expect(parseLeagueRecord("league")).toBeNull();
+  });
+});
+
+describe("migrateDraftState with off-board picks", () => {
+  const label = { name: "Deep Sleeper", pos: "WR", team: "SEA" };
+
+  it("keeps a valid label and drops unknown fields inside it", () => {
+    expect(migrateDraftState({ version: 1, picks: [{ playerId: "espn:1", mine: false, label: { ...label, extra: 1 } }] })).toEqual({
+      version: 1,
+      picks: [{ playerId: "espn:1", mine: false, label }],
+    });
+    expect(migrateDraftState({ version: 1, picks: [{ playerId: "espn:1", mine: false, label: { name: "Free Agent", pos: null, team: null } }] })).not.toBeNull();
+  });
+
+  it("rejects a draft with a malformed label", () => {
+    for (const bad of [{ ...label, pos: "LB" }, { ...label, name: 5 }, { ...label, team: "TOOLONG" }, "WR"]) {
+      expect(migrateDraftState({ version: 1, picks: [{ playerId: "espn:1", mine: false, label: bad }] })).toBeNull();
+    }
   });
 });

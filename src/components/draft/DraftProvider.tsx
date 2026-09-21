@@ -15,6 +15,8 @@ interface DraftContextValue {
   undo(): void;
   reset(): void;
   appendPicks(picks: DraftPick[]): void;
+  /** Applies picks from an external draft (ESPN live sync). See the syncExternal action. */
+  syncExternal(picks: DraftPick[], mode: "replace" | "merge"): void;
 }
 
 const DraftContext = createContext<DraftContextValue | null>(null);
@@ -72,6 +74,7 @@ export function DraftProvider({
       undo: () => act({ type: "undo" }),
       reset: () => act({ type: "reset" }),
       appendPicks: (picks) => act({ type: "appendPicks", picks, totalPicks }),
+      syncExternal: (picks, mode) => act({ type: "syncExternal", picks, mode, totalPicks }),
     }),
     [state, hydrated, act, totalPicks],
   );

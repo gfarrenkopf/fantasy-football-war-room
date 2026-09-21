@@ -65,11 +65,21 @@ export interface LeagueSettings {
   valueThreshold: number;
 }
 
+/** A drafted player who isn't in the dataset, e.g. a deep pick synced from ESPN: enough to show who went. */
+export interface PickLabel {
+  name: string;
+  pos: Position | null;
+  /** NFL team abbreviation, or null for a free agent. */
+  team: string | null;
+}
+
 /** One logged pick. Named DraftPick so it doesn't shadow TypeScript's Pick<> utility. */
 export interface DraftPick {
   playerId: string;
   /** True if the user drafted this player. */
   mine: boolean;
+  /** Set when `playerId` isn't a dataset player (off the board); says who it was. */
+  label?: PickLabel;
 }
 
 /** Synced state of one draft. The pick number of picks[i] is i + 1. */

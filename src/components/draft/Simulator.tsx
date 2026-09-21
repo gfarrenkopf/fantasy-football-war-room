@@ -6,6 +6,7 @@ import type { CpuStyle, DraftPick } from "@/lib/draft/types";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { useDraft } from "./DraftProvider";
+import { useEspnSync } from "./EspnSync";
 import { useToast } from "./Feedback";
 import { usePrefs } from "./PrefsProvider";
 
@@ -46,6 +47,7 @@ export function SimProvider({ children }: { children: React.ReactNode }) {
   const { done, onClock, current, ctx, league } = useModel();
   const { prefs } = usePrefs();
   const toast = useToast();
+  const { locked } = useEspnSync();
   const room = useMemo(() => roomFor(prefs.room, league.teams), [prefs.room, league.teams]);
   const [running, setRunning] = useState<SimMode | null>(null);
   const [speed, setSpeed] = useState(0);
@@ -60,6 +62,7 @@ export function SimProvider({ children }: { children: React.ReactNode }) {
 
   const run = useCallback(
     (mode: SimMode) => {
+      if (locked) return toast("Mock picks are off while your ESPN draft is live");
       const picks = state.picks;
       const autoMe = mode === "all";
       if (speed > 0) {
@@ -82,11 +85,20 @@ export function SimProvider({ children }: { children: React.ReactNode }) {
         toast(onClock ? "It's already your pick" : "Nothing to simulate");
       }
     },
-    [state.picks, speed, continuation, appendPicks, toast, onClock, done],
+    [state.picks, speed, continuation, appendPicks, toast, onClock, done, locked],
   );
 
+  // ESPN live sync owns the board: going live cancels a timed run for good, so it can't resume into
+  // the real draft if the sync later drops. (Adjusting state while rendering, not in an effect.)
+  const [wasLocked, setWasLocked] = useState(locked);
+  if (locked !== wasLocked) {
+    setWasLocked(locked);
+    if (locked && running) setRunning(null);
+  }
   // Timed runs: one pick per tick, reading the latest picks each time.
+  const ticking = locked ? null : running;
   useEffect(() => {
+    const running = ticking;
     if (!running) return;
     const delay = firstTick.current ? 0 : speed;
     const timer = setTimeout(() => {
@@ -101,9 +113,9 @@ export function SimProvider({ children }: { children: React.ReactNode }) {
       if (running === "one") setRunning(null);
     }, delay);
     return () => clearTimeout(timer);
-  }, [running, state.picks, speed, continuation, appendPicks, toast, done, onClock, current]);
+  }, [ticking, state.picks, speed, continuation, appendPicks, toast, done, onClock, current]);
 
-  const value = useMemo(() => ({ running, speed, setSpeed, room, run, stop }), [running, speed, room, run, stop]);
+  const value = useMemo(() => ({ running: ticking, speed, setSpeed, room, run, stop }), [ticking, speed, room, run, stop]);
   return <SimContext.Provider value={value}>{children}</SimContext.Provider>;
 }
 

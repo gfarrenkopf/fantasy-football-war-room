@@ -130,7 +130,7 @@ function PickLog({ collapsible }: { collapsible: boolean }) {
                 <span className={s.lrowP}>#{p.n}</span>
                 <span className={s.lrowWho}>
                   {pl && <i style={{ color: POS_COLOR[pl.pos] }}>{posLabel(pl.pos)}</i>}
-                  {pl?.name ?? p.playerId}
+                  {pl?.name ?? p.label?.name ?? p.playerId}
                 </span>
                 <span className={s.lrowT}>{p.mine ? "you" : formatRoundPick(p.n, model.league.teams)}</span>
               </div>
