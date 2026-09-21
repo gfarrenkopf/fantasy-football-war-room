@@ -10,6 +10,7 @@ const OFF: PublicFlags = {
   aiEnabled: false,
   paymentsEnabled: false,
   dataPipelineEnabled: false,
+  espnSyncEnabled: false,
 };
 
 const FlagsContext = createContext<PublicFlags>(OFF);

@@ -21,8 +21,9 @@ const eslintConfig = defineConfig([
     },
   },
   // All persistence goes through the stores in src/lib/storage (see getStores()).
+  // The ESPN bridge is exempt: it runs in the user's ESPN tab, not in the app.
   {
-    ignores: ["src/lib/storage/**"],
+    ignores: ["src/lib/storage/**", "public/espn-bridge.js"],
     rules: {
       "no-restricted-globals": [
         "error",

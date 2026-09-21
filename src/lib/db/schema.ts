@@ -201,3 +201,28 @@ export const aiGenerations = pgTable(
   },
   (t) => [index("ai_generations_created_at_idx").on(t.createdAt), index("ai_generations_league_outcome_idx").on(t.leagueId, t.outcome)],
 );
+
+/**
+ * Pairing tokens for the ESPN draft bridge (Epic 8). The bridge runs in the user's ESPN tab, where
+ * our session cookie isn't sent, so it authenticates its relay requests with one of these instead.
+ * Only a SHA-256 of the token is stored. A token is scoped to one war room league and one ESPN
+ * league, and expires; see src/lib/server/espn/bridgeTokens.ts.
+ */
+export const espnBridgeTokens = pgTable(
+  "espn_bridge_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    espnLeagueId: text("espn_league_id").notNull(),
+    espnTeamId: integer("espn_team_id").notNull(),
+    season: integer("season").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (t) => [index("espn_bridge_tokens_league_id_idx").on(t.leagueId), index("espn_bridge_tokens_expires_at_idx").on(t.expiresAt)],
+);
