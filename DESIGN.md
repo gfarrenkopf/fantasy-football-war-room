@@ -445,6 +445,14 @@ The room is paced like a draft feels, not like a clock: picks far from the visit
 
 **The Clock Adds No Glow.** The landing clock uses translucent fills and single, non-repeating sweeps. It never pulses and never rings: the product's two animated glows both belong to `/draft`.
 
+### Opening Night (`/draft`, once per new league)
+
+The first time a league opens — straight from the landing page's "Open the war room", `?new=1` — the war room goes dark and announces the draft like a broadcast, then gets out of the way. Beats, from the lights going down: two follow-spots sweep the stage from the wings (250ms on); "THE {season}" rises in Terminal Sky and "DRAFT" slams onto the stage from 2.8× scale and blur, and the stage shakes on impact; the league's name follows with "welcome to the war room"; its shape counts onto the board as three tabular numbers — teams, rounds, picks — from the league's own settings; at 2.75s the visitor's slot is called on a skewed Signal Green slab wiped in left to right — "YOU PICK 6TH", or "YOU'RE ON THE CLOCK" from slot 1 — while confetti fires from both bottom corners in the six position hues and amber, and phones that can buzz; then "The clock is running.", the picks until their turn, one line of what to do first, and a filled green "LET'S DRAFT →". At 6.2s, or on the button, any key, a tap after the title, or "Skip", the whole stage irises down (`clip-path: circle()`) onto the header's pick box — the clock it just started is that one. It never runs again for that league. Reduced motion gets the same announcement as a still card, dismissed by the button.
+
+The display face is **Big Shoulders** (SIL OFL 1.1, weights 700–900), committed at `src/components/draft/fonts/` and loaded with `next/font/local` so no build ever needs the network. It sizes by the viewport's shorter side (`min(30vw, 24vh)` for "DRAFT") so the whole stage fits a laptop screen and a phone alike.
+
+**The Opening Night Exception.** This overlay is the one place the product deliberately breaks its own muted grammar: a second typeface, a filled saturated slab and button, a text halo, stage lighting, screen shake and confetti. The exception is scoped to this overlay and this moment — the start of a draft someone has waited a season for — and it buys nothing anywhere else. Every number on it is the league's own; it is shown once per new league, and it is always skippable.
+
 ### Pick Track
 
 A wrapped row of 14px squares at 3px radius representing every pick in the draft: chip-grey for future, `#4a5566` for completed, pure white for the current pick, green for the user's picks, and green at 55% opacity once one has been used. The single most information-dense element per pixel in the product.
