@@ -5,7 +5,9 @@ import { EspnPair } from "@/components/espn/EspnPair";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
 import { getDb } from "@/lib/db";
+import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import { lastPairedLeague } from "@/lib/server/espn/bridgeTokens";
+import { hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
 import { listLeagues } from "@/lib/server/leagues";
 
 export const metadata: Metadata = { title: "Connect your ESPN draft · Fantasy War Room" };
@@ -26,12 +28,14 @@ export default async function Pair({ searchParams }: PageProps<"/espn/pair">) {
   const db = user ? getDb() : null;
   const leagues = db && user ? await listLeagues(db, user.userId) : [];
   const remembered = db && user && espn.leagueId ? await lastPairedLeague(db, user.userId, espn.leagueId) : null;
+  const acknowledged = db && user ? await hasAcknowledgedDisclosure(db, user.userId, ESPN_DISCLOSURE_VERSION) : false;
   const newest = [...leagues].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
 
   return (
     <EspnPair
       flags={publicFlags}
       signedIn={!!user}
+      acknowledged={acknowledged}
       espn={espn}
       leagues={leagues.map((l) => ({ id: l.id, name: l.name, teams: l.settings.teams }))}
       defaultLeagueId={remembered && leagues.some((l) => l.id === remembered) ? remembered : newest}

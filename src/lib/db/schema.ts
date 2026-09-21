@@ -226,3 +226,15 @@ export const espnBridgeTokens = pgTable(
   },
   (t) => [index("espn_bridge_tokens_league_id_idx").on(t.leagueId), index("espn_bridge_tokens_expires_at_idx").on(t.expiresAt)],
 );
+
+/**
+ * Which version of the ESPN live sync disclosure (src/lib/espn/disclosure.ts) each user has
+ * acknowledged. Pairing a bridge requires the current version.
+ */
+export const espnDisclosureAcks = pgTable("espn_disclosure_acks", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});

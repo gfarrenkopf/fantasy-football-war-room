@@ -2,8 +2,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { grantEntitlement, SEASON_PASS } from "../entitlements";
+import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import { createTestLeague } from "../testLeagues";
 import { verifyBridgeToken } from "./bridgeTokens";
+import { hasAcknowledgedDisclosure } from "./disclosure";
 
 vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({ db: null as unknown, user: null as { userId: string; email: string | null } | null }));
@@ -46,7 +48,7 @@ const ctx = { params: Promise.resolve({}) };
 describe("POST /api/espn/pair", () => {
   let userId: string;
   let leagueId: string;
-  const body = () => ({ leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
+  const body = () => ({ leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026, acknowledged: ESPN_DISCLOSURE_VERSION });
 
   beforeEach(async () => {
     vi.resetModules();
@@ -67,6 +69,18 @@ describe("POST /api/espn/pair", () => {
     const { token, expiresAt } = await res.json();
     expect(Date.parse(expiresAt)).toBeGreaterThan(Date.now());
     expect(await verifyBridgeToken(db, token)).toMatchObject({ userId, leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
+  });
+
+  it("requires the disclosure once, and remembers it", async () => {
+    const { POST } = await route();
+    await grantEntitlement(db, { leagueId, userId, kind: SEASON_PASS, source: "cs_test", amountTotal: 999, currency: "usd" });
+    const unacknowledged = { ...body(), acknowledged: undefined };
+    const first = await POST(pair(unacknowledged), ctx);
+    expect(first.status).toBe(428);
+    expect(await first.json()).toEqual({ needsDisclosure: ESPN_DISCLOSURE_VERSION });
+    expect((await POST(pair(body()), ctx)).status).toBe(200);
+    expect(await hasAcknowledgedDisclosure(db, userId, ESPN_DISCLOSURE_VERSION)).toBe(true);
+    expect((await POST(pair(unacknowledged), ctx)).status).toBe(200);
   });
 
   it("asks for a season pass when the league has none", async () => {

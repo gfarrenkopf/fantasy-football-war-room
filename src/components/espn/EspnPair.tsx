@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import { listenForSignIn } from "@/lib/auth/channel";
 import { announceEspnPaired } from "@/lib/espn/channel";
+import { ESPN_DISCLOSURE, ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import type { PublicFlags } from "@/lib/config";
 
 /** Where the bridge runs. The token is only ever posted to this origin. */
@@ -25,18 +26,22 @@ interface LeagueOption {
 export function EspnPair({
   flags,
   signedIn,
+  acknowledged,
   espn,
   leagues,
   defaultLeagueId,
 }: {
   flags: PublicFlags;
   signedIn: boolean;
+  /** Already acknowledged the current disclosure; otherwise it's shown and must be ticked. */
+  acknowledged: boolean;
   espn: { leagueId: string; teamId: number; season: number };
   leagues: LeagueOption[];
   defaultLeagueId: string | null;
 }) {
   const [leagueId, setLeagueId] = useState(defaultLeagueId ?? "");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [agreed, setAgreed] = useState(acknowledged);
 
   // Signing in finishes in another tab (the magic link); pick it up here.
   useEffect(() => (signedIn ? undefined : listenForSignIn(() => location.reload())), [signedIn]);
@@ -48,12 +53,18 @@ export function EspnPair({
     const res = await fetch("/api/espn/pair", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ leagueId, espnLeagueId: espn.leagueId, espnTeamId: espn.teamId, season: espn.season }),
+      body: JSON.stringify({
+        leagueId,
+        espnLeagueId: espn.leagueId,
+        espnTeamId: espn.teamId,
+        season: espn.season,
+        ...(acknowledged ? {} : { acknowledged: ESPN_DISCLOSURE_VERSION }),
+      }),
     }).catch(() => null);
     if (!res) return setPhase({ kind: "error", message: "Couldn't reach War Room. Check your connection and try again." });
     if (res.status === 402) return setPhase({ kind: "error", message: "Live sync comes with this league's season pass.", needsPurchase: true });
     if (res.status === 403) return setPhase({ kind: "error", message: "ESPN live sync isn't available on your account yet. It's in a limited beta." });
-    if (res.status === 401) return location.reload();
+    if (res.status === 401 || res.status === 428) return location.reload();
     if (!res.ok) return setPhase({ kind: "error", message: "Something went wrong connecting. Try again." });
     const { token } = (await res.json()) as { token: string };
     const opener = window.opener as Window | null;
@@ -111,6 +122,20 @@ export function EspnPair({
                 ))}
               </select>
             </label>
+            {!acknowledged && (
+              <div className="space-y-2 rounded-card border border-line2 bg-panel2 p-3 text-sm">
+                <p className="font-semibold">Before you connect</p>
+                <ul className="list-disc space-y-1 pl-5 text-muted">
+                  {ESPN_DISCLOSURE.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" className="mt-1" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                  <span>I understand</span>
+                </label>
+              </div>
+            )}
             {phase.kind === "error" && (
               <p className="text-sm text-warn-ink" role="alert">
                 {phase.message}{" "}
@@ -124,12 +149,11 @@ export function EspnPair({
             <button
               type="button"
               className="w-full rounded-card bg-mine px-3 py-2 font-semibold text-mine-ink disabled:opacity-60"
-              disabled={!leagueId || phase.kind === "pairing"}
+              disabled={!leagueId || !agreed || phase.kind === "pairing"}
               onClick={connect}
             >
               {phase.kind === "pairing" ? "Connecting…" : "Connect"}
             </button>
-            <p className="text-xs text-dim">War Room only receives draft data from your ESPN tab: picks and the draft clock. It never sees your ESPN password or cookies.</p>
           </section>
         )}
       </div>
