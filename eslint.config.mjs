@@ -47,6 +47,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Frozen single-file prototype, kept for reference only.
     "prototype/**",
+    // Local research probes, git-ignored (see .gitignore).
+    ".research/**",
   ]),
 ]);
 
