@@ -471,13 +471,15 @@ The pick card's form, used for the arrival: the same lift, 10px radius, mine was
 
 ### Farewell Face (`/` after sign-out)
 
-Signing out goes to the door, not the room: the entry panel opens on a third face, a goodbye with the practice draft still running behind it. The sign-out reads every league and its draft just before this device's copy is cleared and hands the summary to the landing page in this tab's sessionStorage. It's read once, so a reload never replays it, and nothing goes in the URL. It picks one of three goodbyes:
+Signing out goes to the door, not the room: the entry panel opens on a third face, a goodbye with the practice draft still running behind it. The moment sign-out starts, the war room fades to the room's ground ("Signing out…", `html[data-leaving]` in `globals.css`). Clearing the session re-renders the room as an empty signed-out one, and its league setup must never flash on the way out. The sign-out reads every league and its draft before this device's copy is cleared and hands the summary to the landing page in this tab's sessionStorage. It's read once, so a reload never replays it, and nothing goes in the URL.
 
-- **A draft is paused:** "Your seat is saved." Each paused league, in a recessed group, shows its name, "Round 4 · 37 of 192 picks in", and a **round track**: one 14px square per round, the pick track's vocabulary. Played rounds are in the done tone, and the round it paused in is outlined amber (the room's "near": approaching, not alarming). The squares arrive on a 40ms stagger.
-- **Every draft is done:** "That's a wrap." / "Go win it all." in sky, and "Here's to the {season} season." Each finished league gets a **team card** with a mine wash and border, the ✓ stamped in, one sweep of mine light, and the user's first three picks as the board's own mine rows (6px position rail, ✓ badge, green name). No confetti: that stays with account creation and Opening Night.
-- **Nothing drafted, or no hand-off:** "See you on draft day."
+**Every league gets a line**, ordered by what matters on the way out: paused drafts first (furthest along first), then finished ones, then ones still waiting. Each line has the league's name, its status, and a **round track**: one 14px square per round, the pick track's vocabulary.
 
-Every goodbye names the account it signed out of, focuses its heading, and ends on "Sign back in →" (the sign-in face, email pre-filled) and "Start a new draft". Everything plays once, and reduced motion shows it settled.
+- **Paused:** "Round 13 · 150 of 192 picks in". Played rounds are in the done tone, and the round the clock stopped in is outlined amber (the room's "near": approaching, not alarming).
+- **Finished:** "Drafted · 16 rounds" in mine green, on a line with a mine border and wash. The track **runs green**: each round lights in turn, 28ms apart, with a small overshoot. A ✓ is stamped at the end of the run, one sweep of mine light then crosses the line, and the user's first three picks sit under it with the pick card's position flags.
+- **Waiting:** "Not started · you pick 1st", an empty track with round one outlined sky.
+
+The headline follows the most pressing line: "Your seat is saved." if anything is paused, "That's a wrap." / "Go win it all." if everything drafted is done, and otherwise "See you on draft day." The sub-line names the account it signed out of and tallies the rest ("2 drafts paused, 1 in the books, 1 still to come"). It ends on "Sign back in →" (the sign-in face, email pre-filled) and "Start a new draft". Everything plays once, no confetti (that stays with account creation and Opening Night), and reduced motion shows the tracks settled.
 
 ### Sign-in Email (off-app)
 

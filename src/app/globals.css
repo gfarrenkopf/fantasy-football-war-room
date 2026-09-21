@@ -86,3 +86,35 @@
     outline-offset: 1px;
   }
 }
+
+/*
+ * Signing out (AccountMenu sets `data-leaving` on <html>). The page fades to the room's ground the
+ * moment sign-out starts and stays that way until the landing page's goodbye loads. It lives here,
+ * outside the React tree, because clearing the session re-renders the war room as a signed-out
+ * room with no leagues, which would otherwise flash league setup on its way out.
+ */
+html[data-leaving] body > * {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+}
+html[data-leaving] body::after {
+  content: "Signing out…";
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--color-muted);
+  animation: leaving-in 400ms 250ms ease-out both;
+}
+@keyframes leaving-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-leaving] body > * {
+    transition: none;
+  }
+}

@@ -11,6 +11,8 @@ export interface FarewellLeague {
   name: string;
   season: number;
   teams: number;
+  /** The user's draft slot. */
+  slot: number;
   rounds: number;
   /** Picks in the whole draft. */
   total: number;
@@ -27,6 +29,7 @@ export interface Farewell {
 
 /** Unfinished beats done: a paused draft is the reason to come back. */
 export type FarewellMood = "unfinished" | "done" | "fresh";
+export type LeagueStage = "paused" | "done" | "waiting";
 
 const KEY = "fwr:v1:farewell";
 /** How many of the user's picks a finished league's team card shows. */
@@ -34,6 +37,18 @@ const CORE = 3;
 
 export const isUnfinished = (l: FarewellLeague) => l.logged > 0 && l.logged < l.total;
 export const isDone = (l: FarewellLeague) => l.total > 0 && l.logged >= l.total;
+
+export const stageOf = (l: FarewellLeague): LeagueStage => (isUnfinished(l) ? "paused" : isDone(l) ? "done" : "waiting");
+
+const STAGE_ORDER: Record<LeagueStage, number> = { paused: 0, done: 1, waiting: 2 };
+
+/**
+ * The goodbye's order: paused drafts first (the reason to come back, furthest along first), then
+ * finished ones (the celebration), then the ones still waiting for draft day.
+ */
+export function farewellOrder(leagues: FarewellLeague[]): FarewellLeague[] {
+  return [...leagues].sort((a, b) => STAGE_ORDER[stageOf(a)] - STAGE_ORDER[stageOf(b)] || b.logged / (b.total || 1) - a.logged / (a.total || 1));
+}
 
 export function farewellMood(f: Farewell | null): FarewellMood {
   if (!f) return "fresh";
@@ -49,6 +64,7 @@ export function summarizeLeague(league: LeagueRecord, draft: DraftState | null):
     name: league.name,
     season: league.season,
     teams: league.settings.teams,
+    slot: league.settings.mySlot,
     rounds: roundsOf(league.settings),
     total: totalPicks(league.settings),
     logged: picks.length,
@@ -106,6 +122,7 @@ function parseFarewell(v: unknown): Farewell | null {
       typeof l.name === "string" &&
       isNum(l.season) &&
       isNum(l.teams) &&
+      isNum(l.slot) &&
       isNum(l.rounds) &&
       isNum(l.total) &&
       isNum(l.logged) &&

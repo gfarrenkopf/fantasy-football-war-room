@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_LEAGUE } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
 import type { DraftState } from "@/lib/draft/types";
-import { farewellMood, saveFarewell, summarizeLeague, takeFarewell, type Farewell } from "./farewell";
+import { farewellMood, farewellOrder, saveFarewell, summarizeLeague, takeFarewell, type Farewell } from "./farewell";
 import { newLeagueRecord } from "./newLeague";
 import { memoryStorage } from "./testing";
 
@@ -37,6 +37,14 @@ describe("farewellMood", () => {
   it("is gentle when nothing was drafted, or nothing was handed over", () => {
     expect(farewellMood(with_(0))).toBe("fresh");
     expect(farewellMood(null)).toBe("fresh");
+  });
+});
+
+describe("farewellOrder", () => {
+  it("lists paused drafts first, furthest along first, then finished, then waiting", () => {
+    const at = (name: string, n: number) => ({ ...summarizeLeague(league, draftOf(n)), name });
+    const order = farewellOrder([at("waiting", 0), at("done", total), at("early", 10), at("late", 150)]);
+    expect(order.map((l) => l.name)).toEqual(["late", "early", "done", "waiting"]);
   });
 });
 

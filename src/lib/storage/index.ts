@@ -7,7 +7,20 @@ export type { AiPlanResult, AiPlanStore, CheckoutResult, CheckoutStore, DraftSto
 export type { SyncIssue } from "./server";
 export { newId, nowIso } from "./ids";
 export { newLeagueRecord } from "./newLeague";
-export { farewellMood, gatherFarewell, isDone, isUnfinished, saveFarewell, takeFarewell, type Farewell, type FarewellLeague, type FarewellMood } from "./farewell";
+export {
+  farewellMood,
+  farewellOrder,
+  gatherFarewell,
+  isDone,
+  isUnfinished,
+  saveFarewell,
+  stageOf,
+  takeFarewell,
+  type Farewell,
+  type FarewellLeague,
+  type FarewellMood,
+  type LeagueStage,
+} from "./farewell";
 export { MAX_LEAGUE_NAME } from "./records";
 
 /** The account whose data this device has cached, so it can be cleared once that user signs out. */

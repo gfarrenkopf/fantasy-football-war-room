@@ -3,18 +3,30 @@
 import { forwardRef } from "react";
 import { dataset } from "@/lib/data";
 import { roundOf } from "@/lib/draft/snake";
-import { farewellMood, isDone, isUnfinished, type Farewell, type FarewellLeague } from "@/lib/storage";
+import { farewellMood, farewellOrder, stageOf, type Farewell, type FarewellLeague, type LeagueStage } from "@/lib/storage";
 import { cx, s } from "./cx";
 
 /** More than this and the rest are counted, not listed: the panel is a goodbye, not a dashboard. */
-const SHOWN = 3;
+const SHOWN = 4;
+/** Per-square delay as a track fills: a round every 28ms, so a 16-round draft fills in under half a second. */
+const STEP = 28;
+/** Per-row delay, so the list reads top to bottom. */
+const ROW = 90;
+
 const players = new Map(dataset.players.map((p) => [p.id, p]));
+
+const ordinal = (n: number) => {
+  const tail = n % 100 >= 11 && n % 100 <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${tail}`;
+};
+const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * The entry panel's goodbye, after signing out (see AccountMenu): walking out of the draft room
- * with your card in hand. A paused draft shows where its clock stopped, one square per round, so
- * coming back is the obvious next move; a finished one shows the core of the team you drafted and
- * sends you into the season; with nothing drafted, it just says see you on draft day.
+ * with your card in hand. Every league gets a line and a track of one square per round, in the
+ * order that matters on the way out: paused drafts first (where each clock stopped, the reason to
+ * come back), then finished ones (the track runs green to a stamped ✓, with the picks that anchor
+ * the team), then the ones still waiting for draft day. The headline follows the most pressing.
  *
  * `farewell` is undefined for the moment between the first paint and reading the hand-off, when
  * the face holds its place empty rather than flash the wrong goodbye.
@@ -24,6 +36,16 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
     if (farewell === undefined) return <div className={s.face} aria-busy="true" />;
 
     const mood = farewellMood(farewell);
+    const leagues = farewellOrder(farewell?.leagues ?? []);
+    const tally = { paused: 0, done: 0, waiting: 0 };
+    for (const l of leagues) tally[stageOf(l)]++;
+    const said = [
+      tally.paused && count(tally.paused, "draft") + " paused",
+      tally.done && `${tally.done} in the books`,
+      tally.waiting && `${tally.waiting} still to come`,
+    ].filter(Boolean);
+    // Nothing drafted yet: the lines below say it, and "1 still to come" would only repeat them.
+    const summary = said.length && mood !== "fresh" ? `${said.join(", ").replace(/^./, (c) => c.toUpperCase())}.` : "";
     const who = farewell?.email ? (
       <>
         Signed out of <b className={s.fwEmail}>{farewell.email}</b>.
@@ -31,50 +53,40 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
     ) : (
       "Signed out."
     );
-    const unfinished = farewell?.leagues.filter(isUnfinished) ?? [];
-    const done = farewell?.leagues.filter(isDone) ?? [];
-    const season = done[0]?.season;
+    const season = leagues.find((l) => stageOf(l) === "done")?.season ?? leagues[0]?.season;
 
     return (
       <div className={s.face}>
-        {mood === "unfinished" ? (
-          <>
-            <h1 className={s.thesis} ref={heading} tabIndex={-1}>
-              Your seat is saved.
-            </h1>
-            <p className={s.sub}>{who} The clock is paused. Sign back in and pick up right where you left off.</p>
-            <ul className={s.fwPaused}>
-              {unfinished.slice(0, SHOWN).map((l, i) => (
-                <Paused key={i} league={l} />
-              ))}
-            </ul>
-            <More n={unfinished.length - SHOWN} what="paused draft" />
-          </>
-        ) : mood === "done" ? (
-          <>
-            <h1 className={s.thesis} ref={heading} tabIndex={-1}>
+        <h1 className={s.thesis} ref={heading} tabIndex={-1}>
+          {mood === "unfinished" ? (
+            "Your seat is saved."
+          ) : mood === "done" ? (
+            <>
               That&apos;s a wrap.
               <br />
               <em>Go win it all.</em>
-            </h1>
-            <p className={s.sub}>
-              {who} Here&apos;s to the {season} season.
-            </p>
-            <div className={s.fwTeams}>
-              {done.slice(0, 2).map((l, i) => (
-                <TeamCard key={i} league={l} delay={i * 160} />
-              ))}
-            </div>
-            <More n={done.length - 2} what="drafted team" />
-          </>
-        ) : (
-          <>
-            <h1 className={s.thesis} ref={heading} tabIndex={-1}>
-              See you on draft day.
-            </h1>
-            <p className={s.sub}>{who} Your leagues are saved to your account, ready when you are.</p>
-          </>
+            </>
+          ) : (
+            "See you on draft day."
+          )}
+        </h1>
+        <p className={s.sub}>
+          {who} {summary}{" "}
+          {mood === "unfinished"
+            ? "Sign back in and pick up right where you left off."
+            : mood === "done"
+              ? `Here's to the ${season} season.`
+              : "Your leagues are saved to your account, ready when you are."}
+        </p>
+
+        {leagues.length > 0 && (
+          <ul className={s.fwLeagues}>
+            {leagues.slice(0, SHOWN).map((l, i) => (
+              <LeagueLine key={i} league={l} delay={i * ROW} />
+            ))}
+          </ul>
         )}
+        {leagues.length > SHOWN && <p className={s.fwMore}>and {count(leagues.length - SHOWN, "more league")}</p>}
 
         <div className={s.fwActions}>
           <button type="button" className={cx("btn", "primary", "wide")} onClick={onSignIn}>
@@ -90,69 +102,59 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
 );
 
 /**
- * A paused draft: its name, where the clock stopped, and a track of one square per round — played
- * rounds filled in the done tone, the round it paused in outlined amber (the room's "near").
+ * One league on the way out. The track is one square per round, the pick track's vocabulary:
+ * - paused: played rounds in the done tone, the round the clock stopped in outlined amber (the
+ *   room's "near": approaching, not alarming);
+ * - done: every round runs mine green, left to right, and a ✓ is stamped at the end of the run;
+ * - waiting: an empty track, with draft day's first round outlined sky.
  */
-function Paused({ league: l }: { league: FarewellLeague }) {
-  const round = roundOf(l.logged + 1, l.teams);
+function LeagueLine({ league: l, delay }: { league: FarewellLeague; delay: number }) {
+  const stage = stageOf(l);
   const played = Math.floor(l.logged / l.teams);
+  const status: Record<LeagueStage, string> = {
+    paused: `Round ${roundOf(l.logged + 1, l.teams)} · ${l.logged} of ${l.total} picks in`,
+    done: `Drafted · ${l.rounds} rounds`,
+    waiting: `Not started · you pick ${ordinal(l.slot)}`,
+  };
+  const core = stage === "done" ? l.mine.map((id) => players.get(id)).filter((p) => p !== undefined) : [];
+  const finish = delay + l.rounds * STEP;
+
   return (
-    <li className={s.fwLeague}>
+    <li className={cx("fwLeague", stage)} style={{ animationDelay: `${delay}ms`, "--sweep-at": `${finish + 200}ms` } as React.CSSProperties}>
       <div className={s.fwLeagueHead}>
         <b>{l.name}</b>
-        <span>
-          Round {round} · {l.logged} of {l.total} picks in
-        </span>
+        <span>{status[stage]}</span>
       </div>
       <div className={s.fwTrack} aria-hidden="true">
         {Array.from({ length: l.rounds }, (_, i) => (
-          <i key={i} className={cx(i < played && "played", i === played && "paused")} style={{ animationDelay: `${i * 40}ms` }} />
+          <i
+            key={i}
+            className={cx(
+              stage === "paused" && i < played && "played",
+              stage === "paused" && i === played && "paused",
+              stage === "done" && "won",
+              stage === "waiting" && i === 0 && "ready",
+            )}
+            style={{ animationDelay: `${delay + i * STEP}ms` }}
+          />
         ))}
-      </div>
-    </li>
-  );
-}
-
-/** A finished draft's card: the mine ✓ stamped in, then the first picks as the board's own mine rows. */
-function TeamCard({ league: l, delay }: { league: FarewellLeague; delay: number }) {
-  const core = l.mine.map((id) => players.get(id)).filter((p) => p !== undefined);
-  return (
-    <article className={s.fwTeam} style={{ animationDelay: `${delay}ms` }}>
-      <div className={s.fwTeamHead}>
-        <span className={s.fwCheck} aria-hidden="true">
-          ✓
-        </span>
-        <div>
-          <b>{l.name}</b>
-          <span>
-            Drafted · {l.teams} teams · {l.rounds} rounds
-          </span>
-        </div>
+        {stage === "done" && (
+          <b className={s.fwStamp} style={{ animationDelay: `${finish + 60}ms` }}>
+            ✓
+          </b>
+        )}
       </div>
       {core.length > 0 && (
-        <ol className={s.fwCore} aria-label="Your first picks">
+        <p className={s.fwCore}>
+          <span className={s.srOnly}>Your first picks: </span>
           {core.map((p) => (
-            <li key={p.id} className={cx("card", p.pos, "mine")}>
-              <span className={s.rank}>✓</span>
-              <span className={s.name}>{p.name}</span>
-              <span className={s.meta}>
-                {p.pos === "DST" ? "D/ST" : p.pos} · {p.team}
-              </span>
-              <span />
-            </li>
+            <span key={p.id} className={s.fwPick} style={{ "--pos": `var(--color-${p.pos.toLowerCase()})` } as React.CSSProperties}>
+              <i>{p.pos === "DST" ? "D/ST" : p.pos}</i>
+              {p.name}
+            </span>
           ))}
-        </ol>
+        </p>
       )}
-    </article>
-  );
-}
-
-function More({ n, what }: { n: number; what: string }) {
-  if (n <= 0) return null;
-  return (
-    <p className={s.fwMore}>
-      and {n} more {what}
-      {n === 1 ? "" : "s"}
-    </p>
+    </li>
   );
 }

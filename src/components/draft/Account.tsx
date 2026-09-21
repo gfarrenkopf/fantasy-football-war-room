@@ -95,9 +95,18 @@ export function AccountMenu() {
       });
       if (!ok) return;
     }
+    // The room fades out now (see globals.css): clearing the session below re-renders it as an
+    // empty signed-out room, which must never be seen on the way to the goodbye.
+    const root = document.documentElement;
+    root.dataset.leaving = "";
     // The goodbye on the landing page is built from what's here now; signing out clears it.
     saveFarewell(await gatherFarewell(getStores(), user.email).catch(() => ({ email: user.email, leagues: [] })));
-    await signOutAction();
+    try {
+      await signOutAction();
+    } catch (error) {
+      delete root.dataset.leaving;
+      throw error;
+    }
     // A full reload, not router.push(): stores and providers must all start over for the signed-out
     // user. To the door, not the room: a signed-out room with no leagues would open on league setup.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
