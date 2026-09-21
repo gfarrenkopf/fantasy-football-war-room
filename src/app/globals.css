@@ -88,33 +88,66 @@
 }
 
 /*
- * Signing out (AccountMenu sets `data-leaving` on <html>). The page fades to the room's ground the
- * moment sign-out starts and stays that way until the landing page's goodbye loads. It lives here,
- * outside the React tree, because clearing the session re-renders the war room as a signed-out
- * room with no leagues, which would otherwise flash league setup on its way out.
+ * Lights down: signing out (AccountMenu sets `data-leaving` on <html>, its value the line to show).
+ * Opening Night in reverse. The room goes dark bank by bank, top to bottom, the way a stadium's
+ * lights click off; then a follow-spot closes onto one quiet line ("Saving your seat…") and holds
+ * until the landing page's goodbye loads. It lives here, outside the React tree, because clearing
+ * the session re-renders the war room as an empty signed-out room, which must never be seen on
+ * the way out. It never delays the sign-out: whichever finishes first, the page moves on.
  */
 html[data-leaving] body > * {
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease-out;
+  opacity: 0;
+  transition: opacity 200ms 380ms ease-in;
 }
-html[data-leaving] body::after {
-  content: "Signing out…";
+/* The banks: a dark curtain that drops in four steps, each a bank of lights switching off. */
+html[data-leaving] body::before {
+  content: "";
   position: fixed;
   inset: 0;
+  z-index: 1000;
+  background: var(--color-bg);
+  animation: lights-down 440ms steps(4, jump-start) both;
+}
+/* The follow-spot, closing onto the line. */
+html[data-leaving] body::after {
+  content: attr(data-line);
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
   display: grid;
   place-items: center;
-  font-size: 13px;
-  color: var(--color-muted);
-  animation: leaving-in 400ms 250ms ease-out both;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-text);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-sky) 9%, transparent), transparent 34%);
+  animation: follow-spot 700ms 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-@keyframes leaving-in {
+@keyframes lights-down {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes follow-spot {
   from {
     opacity: 0;
+    clip-path: circle(120% at 50% 50%);
+  }
+  to {
+    opacity: 1;
+    clip-path: circle(22% at 50% 50%);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   html[data-leaving] body > * {
     transition: none;
+  }
+  html[data-leaving] body::before,
+  html[data-leaving] body::after {
+    animation: none;
   }
 }

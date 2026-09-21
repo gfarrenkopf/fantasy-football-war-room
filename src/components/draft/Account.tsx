@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { SessionUser } from "@/lib/auth/types";
 import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
-import { gatherFarewell, getStores, saveFarewell, type Purchase } from "@/lib/storage";
+import { farewellMood, gatherFarewell, getStores, saveFarewell, type FarewellMood, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
@@ -24,6 +24,13 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   AccessDenied: "That sign-in was cancelled. Try again whenever you're ready.",
 };
 const SIGN_IN_FAILED = "Sign-in didn't go through. Try again.";
+
+/** The follow-spot's line as the room's lights go down on sign-out (globals.css, "Lights down"). */
+const LEAVING_LINE: Record<FarewellMood, string> = {
+  unfinished: "Saving your seat…",
+  done: "That's a wrap.",
+  fresh: "See you on draft day.",
+};
 
 /** The signed-in user (from the server session), or null. */
 export function AccountProvider({ user, children }: { user: SessionUser | null; children: React.ReactNode }) {
@@ -99,8 +106,12 @@ export function AccountMenu() {
     // empty signed-out room, which must never be seen on the way to the goodbye.
     const root = document.documentElement;
     root.dataset.leaving = "";
-    // The goodbye on the landing page is built from what's here now; signing out clears it.
-    saveFarewell(await gatherFarewell(getStores(), user.email).catch(() => ({ email: user.email, leagues: [] })));
+    document.body.dataset.line = "Signing out…";
+    // The goodbye on the landing page is built from what's here now; signing out clears it. The
+    // follow-spot's line says the same thing the goodbye will, a beat early.
+    const farewell = await gatherFarewell(getStores(), user.email).catch(() => ({ email: user.email, leagues: [] }));
+    saveFarewell(farewell);
+    document.body.dataset.line = LEAVING_LINE[farewellMood(farewell)];
     try {
       await signOutAction();
     } catch (error) {
