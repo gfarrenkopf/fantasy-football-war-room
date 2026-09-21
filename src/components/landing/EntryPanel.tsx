@@ -6,8 +6,9 @@ import { dataset, LEAGUE_PRESETS } from "@/lib/data";
 import { MAX_TEAMS, MIN_TEAMS, validateLeague } from "@/lib/draft/league";
 import type { LeagueSettings, ScoringFormat } from "@/lib/draft/types";
 import type { PublicFlags } from "@/lib/config";
-import { getStores, newLeagueRecord } from "@/lib/storage";
+import { getStores, newLeagueRecord, type Farewell } from "@/lib/storage";
 import { cx, s } from "./cx";
+import { FarewellFace } from "./Farewell";
 import { SignIn } from "./SignIn";
 
 const SCORING_LABELS: { value: ScoringFormat; label: string }[] = [
@@ -33,18 +34,29 @@ const TEAM_CHOICES = [8, 10, 12, 14, 16].filter((n) => n >= MIN_TEAMS && n <= MA
  * Nothing here is a preview: the controls edit the league the board behind is actually drafting,
  * and "Open the war room" saves exactly that league and walks into it.
  */
+type Face = "draft" | "signin" | "farewell";
+
 export function EntryPanel({
   flags,
   league,
   onLeague,
+  openOn = "draft",
+  farewell,
 }: {
   flags: PublicFlags;
   league: LeagueSettings;
   onLeague(next: LeagueSettings): void;
+  /** The face on the first paint: "farewell" straight after a sign-out (the server knows). */
+  openOn?: Face;
+  /**
+   * The goodbye's contents: undefined while the sign-out's hand-off is being read, null when there
+   * was none (a fresh tab), which still says goodbye, just without the leagues.
+   */
+  farewell?: Farewell | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [face, setFace] = useState<"draft" | "signin">("draft");
+  const [face, setFace] = useState<Face>(openOn);
   const errors = validateLeague(league, dataset);
   const canSignIn = flags.cloudEnabled && (flags.emailAuthEnabled || flags.googleAuthEnabled);
 
@@ -70,13 +82,20 @@ export function EntryPanel({
   useEffect(() => {
     if (flipped.current) heading.current?.focus();
   }, [face]);
+  // The goodbye is the page's whole message when it arrives, so the reader starts on it.
+  const ready = farewell !== undefined;
+  useEffect(() => {
+    if (ready && face === "farewell") heading.current?.focus({ preventScroll: true });
+    // Only when the goodbye's contents land, not on every flip.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
   /*
    * The panel holds the height of the face it's leaving, so a shorter face doesn't pull the panel
    * up out from beside the landing clock mid-flip. It can still grow (the sent state is taller).
    */
   const panel = useRef<HTMLDivElement>(null);
   const [holdHeight, setHoldHeight] = useState<number | undefined>();
-  const flip = (to: "draft" | "signin") => {
+  const flip = (to: Face) => {
     flipped.current = true;
     setHoldHeight(panel.current?.offsetHeight);
     setFace(to);
@@ -99,18 +118,26 @@ export function EntryPanel({
       <div className={s.brand}>
         <b>Fantasy War Room</b>
         {canSignIn &&
-          (face === "draft" ? (
-            <button type="button" className={s.faceLink} onClick={() => flip("signin")}>
-              Sign in
-            </button>
-          ) : (
+          (face === "signin" ? (
             <button type="button" className={s.faceLink} onClick={() => flip("draft")}>
               ← New draft
+            </button>
+          ) : (
+            <button type="button" className={s.faceLink} onClick={() => flip("signin")}>
+              Sign in
             </button>
           ))}
       </div>
 
-      {face === "draft" ? (
+      {face === "farewell" ? (
+        <FarewellFace
+          key="farewell"
+          ref={heading}
+          farewell={farewell}
+          onSignIn={() => flip(canSignIn ? "signin" : "draft")}
+          onNewDraft={() => flip("draft")}
+        />
+      ) : face === "draft" ? (
         <div key="draft" className={s.face}>
           <h1 className={s.thesis} ref={heading} tabIndex={-1}>
             Your draft is in a week.
@@ -192,6 +219,7 @@ export function EntryPanel({
               flags={flags}
               title={null}
               primary
+              initialEmail={farewell?.email ?? ""}
               describedBy="signin-face-title signin-face-sub"
               fine="No password. We email you a link that signs you in."
             />

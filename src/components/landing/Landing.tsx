@@ -7,7 +7,7 @@ import type { PublicFlags } from "@/lib/config";
 import { dataset } from "@/lib/data";
 import { LATE_POSITIONS, type LeagueSettings } from "@/lib/draft/types";
 import { valueTag } from "@/lib/draft/value";
-import { getStores } from "@/lib/storage";
+import { getStores, takeFarewell, type Farewell } from "@/lib/storage";
 import { cx, s } from "./cx";
 import { EntryPanel, startingLeague } from "./EntryPanel";
 import { LiveBoard } from "./LiveBoard";
@@ -28,7 +28,7 @@ const REDUCED = "(prefers-reduced-motion: reduce)";
  * Anyone who has been here before never sees it: a signed-in session is forwarded on the server,
  * and a league saved on this device is forwarded as soon as the stores answer.
  */
-export function Landing({ flags }: { flags: PublicFlags }) {
+export function Landing({ flags, farewell = false }: { flags: PublicFlags; farewell?: boolean }) {
   const router = useRouter();
   const [league, setLeague] = useState<LeagueSettings>(startingLeague);
   const reduced = useMediaQuery(REDUCED);
@@ -39,6 +39,8 @@ export function Landing({ flags }: { flags: PublicFlags }) {
    * an empty document to a crawler, or to anyone without JavaScript, is not a door.
    */
   useEffect(() => {
+    // Just signed out: stay for the goodbye, even with leagues saved on this device.
+    if (farewell) return;
     let live = true;
     void getStores()
       .league.listLeagues()
@@ -48,7 +50,24 @@ export function Landing({ flags }: { flags: PublicFlags }) {
     return () => {
       live = false;
     };
-  }, [router]);
+  }, [router, farewell]);
+
+  /*
+   * The goodbye's contents, handed over by the sign-out in this tab's sessionStorage. Read (and
+   * the `?farewell=1` stripped) from a timeout: an effect cleaned up before it fires, as React's
+   * development double-run does, then retries rather than losing the one-time hand-off.
+   */
+  const [goodbye, setGoodbye] = useState<Farewell | null | undefined>(undefined);
+  useEffect(() => {
+    if (!farewell) return;
+    const t = setTimeout(() => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("farewell");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      setGoodbye(takeFarewell());
+    }, 0);
+    return () => clearTimeout(t);
+  }, [farewell]);
 
   const mock = useLiveMock(league, reduced);
   const first = useFirstTurnPlan(league, mock.full);
@@ -66,7 +85,7 @@ export function Landing({ flags }: { flags: PublicFlags }) {
         <LiveBoard key={`${shape}-${mock.deal}`} league={league} mock={mock} reduced={reduced} />
         <div className={s.veil} aria-hidden="true" />
         <div className={s.heroInner}>
-          <EntryPanel flags={flags} league={league} onLeague={setLeague} />
+          <EntryPanel flags={flags} league={league} onLeague={setLeague} openOn={farewell ? "farewell" : "draft"} farewell={goodbye} />
           <OnTheClock key={`${shape}-${mock.deal}`} league={league} mock={mock} first={first} />
         </div>
         <p className={s.dataNote}>{dataset.label}</p>

@@ -469,6 +469,16 @@ The pick card's form, used for the arrival: the same lift, 10px radius, mine was
 
 **The Welcome Exception.** A new account's card fires a short fountain of confetti up from behind it: the Opening Night confetti, in the six position hues and amber, at about half the density, for 2s. It happens once, at account creation, and never for a returning sign-in. Reduced motion gets the card fading in, with no stamp, no sweep and no confetti.
 
+### Farewell Face (`/` after sign-out)
+
+Signing out goes to the door, not the room: the entry panel opens on a third face, a goodbye with the practice draft still running behind it. The sign-out reads every league and its draft just before this device's copy is cleared and hands the summary to the landing page in this tab's sessionStorage. It's read once, so a reload never replays it, and nothing goes in the URL. It picks one of three goodbyes:
+
+- **A draft is paused:** "Your seat is saved." Each paused league, in a recessed group, shows its name, "Round 4 · 37 of 192 picks in", and a **round track**: one 14px square per round, the pick track's vocabulary. Played rounds are in the done tone, and the round it paused in is outlined amber (the room's "near": approaching, not alarming). The squares arrive on a 40ms stagger.
+- **Every draft is done:** "That's a wrap." / "Go win it all." in sky, and "Here's to the {season} season." Each finished league gets a **team card** with a mine wash and border, the ✓ stamped in, one sweep of mine light, and the user's first three picks as the board's own mine rows (6px position rail, ✓ badge, green name). No confetti: that stays with account creation and Opening Night.
+- **Nothing drafted, or no hand-off:** "See you on draft day."
+
+Every goodbye names the account it signed out of, focuses its heading, and ends on "Sign back in →" (the sign-in face, email pre-filled) and "Start a new draft". Everything plays once, and reduced motion shows it settled.
+
 ### Sign-in Email (off-app)
 
 The magic link arrives as the room, not as Auth.js's template: a Room Black ground, a letter-spaced "FANTASY WAR ROOM" wordmark with a mine dot, a panel card with a six-segment position-hue stripe across its top, a 26px headline, and a **filled Signal Green button with near-black ink**. Email clients ignore stylesheets and variables, so every color is a literal copy of a token, named in `src/lib/auth/email.ts`. The filled button is the email's exception to "no filled primary": it's an off-app surface, and the link has to win in a crowded inbox. A new account's subject is "Your seat in the war room is ready"; a returning one's is "Back to the war room".

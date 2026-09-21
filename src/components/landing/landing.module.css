@@ -435,6 +435,149 @@
   border-radius: 8px;
 }
 
+/* ---------------------------------------------------------------- farewell (after sign-out)
+ * The panel's goodbye. A paused draft gets a round track (one square per round, the pick track's
+ * vocabulary: played rounds in the done tone, the paused round outlined amber, the room's "near").
+ * A finished draft gets a team card: the mine ✓ stamped in, one sweep of mine light, and the first
+ * picks as the board's own mine rows. Everything plays once.
+ */
+.fwEmail {
+  color: var(--color-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.fwPaused {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.fwLeague {
+  padding: 12px 14px;
+  background: var(--color-strip);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  animation: faceIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwLeagueHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.fwLeagueHead b {
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fwLeagueHead span {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.fwTrack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.fwTrack i {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--color-chip);
+  animation: cardIn 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwTrack i.played {
+  background: var(--color-done);
+}
+.fwTrack i.paused {
+  background: color-mix(in srgb, var(--color-warn) 14%, var(--color-chip));
+  box-shadow: inset 0 0 0 1.5px var(--color-warn);
+}
+.fwTeams {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.fwTeam {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 12px 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-mine) 12%, transparent), transparent 70%), var(--color-strip);
+  border: 1px solid color-mix(in srgb, var(--color-mine) 45%, transparent);
+  border-radius: 8px;
+  animation: faceIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwTeam::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--color-mine) 22%, transparent) 50%, transparent 70%);
+  animation: sweep 1000ms 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwTeamHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.fwTeamHead div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fwTeamHead b {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fwTeamHead div span {
+  font-size: 11.5px;
+  color: var(--color-muted);
+}
+.fwCheck {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--color-mine);
+  color: var(--color-mine-ink);
+  font-size: 16px;
+  font-weight: 800;
+  animation: stamp 440ms 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwCore {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fwCore .card:last-child {
+  border-bottom: 0;
+}
+.fwMore {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: var(--color-dim);
+}
+.fwActions {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.fwActions .linkBtn {
+  font-size: 13px;
+}
+
 /* What signing in gets you: three facts, each marked with a pick-track square in mine green. */
 .perks {
   list-style: none;
@@ -1354,6 +1497,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .fwLeague,
+  .fwTrack i,
+  .fwTeam,
+  .fwCheck,
   .perks li,
   .flightArc,
   .envelope,
@@ -1369,7 +1516,8 @@
   .clock {
     animation: none;
   }
-  .pcLife {
+  .pcLife,
+  .fwTeam::after {
     display: none;
   }
   .card {

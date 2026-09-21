@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { SessionUser } from "@/lib/auth/types";
 import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
-import { getStores, type Purchase } from "@/lib/storage";
+import { gatherFarewell, getStores, saveFarewell, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
@@ -95,10 +95,13 @@ export function AccountMenu() {
       });
       if (!ok) return;
     }
+    // The goodbye on the landing page is built from what's here now; signing out clears it.
+    saveFarewell(await gatherFarewell(getStores(), user.email).catch(() => ({ email: user.email, leagues: [] })));
     await signOutAction();
-    // A full reload, not router.push(): stores and providers must all start over for the signed-out user.
+    // A full reload, not router.push(): stores and providers must all start over for the signed-out
+    // user. To the door, not the room: a signed-out room with no leagues would open on league setup.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/draft");
+    window.location.assign("/?farewell=1");
   };
 
   return (
