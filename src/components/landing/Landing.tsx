@@ -63,7 +63,7 @@ export function Landing({ flags }: { flags: PublicFlags }) {
           * its contents: every card replays its staggered entrance, which is what makes the
           * page's signature interaction something a visitor can actually see happen.
           */}
-        <LiveBoard key={`${shape}-${mock.deal}`} league={league} mock={mock} />
+        <LiveBoard key={`${shape}-${mock.deal}`} league={league} mock={mock} reduced={reduced} />
         <div className={s.veil} aria-hidden="true" />
         <div className={s.heroInner}>
           <EntryPanel flags={flags} league={league} onLeague={setLeague} />

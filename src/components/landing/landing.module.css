@@ -63,21 +63,80 @@
 }
 
 /* The board, at the app's own density, running underneath everything. */
-.board {
+/* The war room's board view, whole: the best-available strip, then the columns under it. */
+.boardLayer {
   position: absolute;
   inset: 0;
   z-index: 0;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
-  padding: 8px;
+  display: flex;
+  flex-direction: column;
   font-size: 13px;
   line-height: 1.3;
   overflow: hidden;
   pointer-events: none;
 }
 
+/* ---- best available: the only 999px radius in the system, as it is in the war room */
+.strip {
+  flex: none;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: var(--color-strip);
+  border-bottom: 1px solid var(--color-line);
+  overflow: hidden;
+}
+.stripLabel {
+  flex: none;
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-panel);
+  white-space: nowrap;
+  font-size: 12px;
+  animation: faceIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.chipPos {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--color-mine-ink);
+  background: var(--color-dst);
+}
+.chipPos.QB { background: var(--color-qb); }
+.chipPos.RB { background: var(--color-rb); }
+.chipPos.WR { background: var(--color-wr); }
+.chipPos.TE { background: var(--color-te); }
+.chipRank {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.board {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+}
+
 .col {
+  display: flex;
+  flex-direction: column;
   background: var(--color-panel);
   border: 1px solid var(--color-line);
   border-radius: 8px;
@@ -112,23 +171,45 @@
 .dot.K { background: var(--color-k); }
 .dot.DST { background: var(--color-dst); }
 
+/* The column's own scroller: the room moves it, the visitor never has to (and can't). */
 .colList {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow: hidden;
 }
 
 .cell {
   display: block;
 }
 
+/* The war room's recessed groove: it pins to the top of the column while its players scroll under. */
 .tier {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 4px 10px;
   font-size: 11px;
   color: var(--color-muted);
   background: var(--color-tier);
   border-top: 1px solid var(--color-line);
   border-bottom: 1px solid var(--color-line);
+}
+.tier:first-child {
+  border-top: 0;
+}
+.tierLeft {
+  margin-left: auto;
+}
+/* A tier with no one left says so, and steps back. */
+.tier.tierGone {
+  color: var(--color-dim);
 }
 
 .card {
@@ -243,7 +324,7 @@
   pointer-events: none;
   background:
     radial-gradient(ellipse 58% 70% at 50% 45%, color-mix(in srgb, var(--color-bg) 72%, transparent), color-mix(in srgb, var(--color-bg) 52%, transparent) 100%),
-    linear-gradient(180deg, var(--color-bg) 0%, transparent 14%, transparent 82%, var(--color-bg) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 35%, transparent) 0%, transparent 12%, transparent 82%, var(--color-bg) 100%);
 }
 
 .dataNote {
@@ -1098,6 +1179,7 @@
   .panel,
   .sent,
   .face,
+  .chip,
   .pickCard,
   .pcCheck,
   .clock {
