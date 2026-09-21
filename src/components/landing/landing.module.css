@@ -435,6 +435,196 @@
   border-radius: 8px;
 }
 
+/* ---------------------------------------------------------------- farewell (after sign-out)
+ * The panel's goodbye: every league on a line with a round track, one square per round (the pick
+ * track's vocabulary). Paused: played rounds in the done tone, the stopped round outlined amber
+ * (the room's "near"). Done: the track runs mine green left to right, a ✓ is stamped at the end
+ * of the run, one sweep of mine light crosses the line, and the picks that anchor the team sit
+ * under it with their position flags. Waiting: an empty track with round one outlined sky.
+ * Everything plays once.
+ */
+.fwEmail {
+  color: var(--color-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.fwLeagues {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.fwLeague {
+  position: relative;
+  overflow: hidden;
+  padding: 11px 14px 12px;
+  background: var(--color-strip);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  animation: faceIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwLeague.done {
+  border-color: color-mix(in srgb, var(--color-mine) 45%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-mine) 10%, transparent), transparent 80%), var(--color-strip);
+}
+/* The finished line's one pass of light, after its track has run green and the ✓ has landed. */
+.fwLeague.done::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--color-mine) 22%, transparent) 50%, transparent 70%);
+  animation: sweep 1000ms var(--sweep-at, 600ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwLeagueHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.fwLeagueHead b {
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fwLeagueHead span {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.fwLeague.done .fwLeagueHead span {
+  color: var(--color-mine);
+  font-weight: 600;
+}
+.fwTrack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+.fwTrack i {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--color-chip);
+  animation: cardIn 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwTrack i.played {
+  background: var(--color-done);
+}
+.fwTrack i.paused {
+  background: color-mix(in srgb, var(--color-warn) 14%, var(--color-chip));
+  box-shadow: inset 0 0 0 1.5px var(--color-warn);
+}
+/* Finished: each round lights mine green in turn, a run to the finish. */
+.fwTrack i.won {
+  background: var(--color-mine);
+  animation: won 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fwStamp {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  border-radius: 4px;
+  background: var(--color-mine);
+  color: var(--color-mine-ink);
+  font-size: 12px;
+  font-weight: 800;
+  animation: stamp 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Not drafted yet: amber, the room's "near", because draft day is coming whether it's rehearsed or not. */
+.fwLeague.waiting {
+  border-color: color-mix(in srgb, var(--color-warn) 35%, var(--color-line));
+}
+.fwLeague.waiting .fwLeagueHead span {
+  color: var(--color-warn-ink);
+  font-weight: 600;
+}
+.fwStakes {
+  margin: 9px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+.fwStakes b {
+  color: var(--color-text);
+  font-weight: 600;
+}
+/*
+ * The ribbon board's housing: a strip darker than anything else on the page, so the lamps have
+ * something to glow against. The dots themselves are drawn on the canvas (Ribbon.tsx).
+ */
+.ribbon {
+  display: block;
+  width: 100%;
+  height: 27px;
+  margin-top: 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-bg) 50%, black);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+.fwMore {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: var(--color-dim);
+}
+.fwActions {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+.fwActions .linkBtn {
+  font-size: 13px;
+}
+@keyframes won {
+  from {
+    background: var(--color-chip);
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  to {
+    background: var(--color-mine);
+    transform: none;
+  }
+}
+
+/* What signing in gets you: three facts, each marked with a pick-track square in mine green. */
+.perks {
+  list-style: none;
+  margin: 16px 2px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.perks li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  animation: faceIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.perks li:nth-child(2) { animation-delay: 60ms; }
+.perks li:nth-child(3) { animation-delay: 120ms; }
+.perks li::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--color-mine);
+  translate: 0 -1px;
+}
+
 .setupHead {
   font-size: 11px;
   font-weight: 700;
@@ -1326,6 +1516,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .fwLeague,
+  .fwTrack i,
+  .fwStamp,
+  .perks li,
   .flightArc,
   .envelope,
   .envelopeCheck,
@@ -1340,7 +1534,8 @@
   .clock {
     animation: none;
   }
-  .pcLife {
+  .pcLife,
+  .fwLeague.done::after {
     display: none;
   }
   .card {
@@ -1400,6 +1595,8 @@
     align-items: flex-start;
     padding: 16px;
     padding-top: max(16px, env(safe-area-inset-top));
+    /* Room for the data note under the panel, which otherwise sits on the panel's foot. */
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
   }
   .board {
     grid-template-columns: repeat(2, minmax(0, 1fr));

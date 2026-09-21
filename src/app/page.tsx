@@ -30,5 +30,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     redirect(qs ? `/draft?${qs}` : "/draft");
   }
 
-  return <Landing flags={publicFlags} />;
+  // Just signed out (see AccountMenu): the panel opens on its goodbye, rendered from the first paint.
+  const farewell = (await searchParams).farewell === "1";
+  return <Landing flags={publicFlags} farewell={farewell} />;
 }

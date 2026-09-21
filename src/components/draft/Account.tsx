@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { SessionUser } from "@/lib/auth/types";
 import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
-import { getStores, type Purchase } from "@/lib/storage";
+import { farewellMood, gatherFarewell, getStores, saveFarewell, type FarewellMood, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
@@ -24,6 +24,13 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   AccessDenied: "That sign-in was cancelled. Try again whenever you're ready.",
 };
 const SIGN_IN_FAILED = "Sign-in didn't go through. Try again.";
+
+/** The follow-spot's line as the room's lights go down on sign-out (globals.css, "Lights down"). */
+const LEAVING_LINE: Record<FarewellMood, string> = {
+  unfinished: "Saving your seat…",
+  done: "That's a wrap.",
+  fresh: "See you on draft day.",
+};
 
 /** The signed-in user (from the server session), or null. */
 export function AccountProvider({ user, children }: { user: SessionUser | null; children: React.ReactNode }) {
@@ -95,10 +102,26 @@ export function AccountMenu() {
       });
       if (!ok) return;
     }
-    await signOutAction();
-    // A full reload, not router.push(): stores and providers must all start over for the signed-out user.
+    // The room fades out now (see globals.css): clearing the session below re-renders it as an
+    // empty signed-out room, which must never be seen on the way to the goodbye.
+    const root = document.documentElement;
+    root.dataset.leaving = "";
+    document.body.dataset.line = "Signing out…";
+    // The goodbye on the landing page is built from what's here now; signing out clears it. The
+    // follow-spot's line says the same thing the goodbye will, a beat early.
+    const farewell = await gatherFarewell(getStores(), user.email).catch(() => ({ email: user.email, leagues: [] }));
+    saveFarewell(farewell);
+    document.body.dataset.line = LEAVING_LINE[farewellMood(farewell)];
+    try {
+      await signOutAction();
+    } catch (error) {
+      delete root.dataset.leaving;
+      throw error;
+    }
+    // A full reload, not router.push(): stores and providers must all start over for the signed-out
+    // user. To the door, not the room: a signed-out room with no leagues would open on league setup.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/draft");
+    window.location.assign("/?farewell=1");
   };
 
   return (
@@ -232,7 +255,7 @@ export function SignInDialog({ onClose, notice }: { onClose(): void; notice?: st
             </ul>
           </section>
         )}
-        <SignIn flags={flags} title={null} focused />
+        <SignIn flags={flags} title={null} primary autoFocus fine={null} />
         <div className={s.dialogActions}>
           <button className={cx("btn")} onClick={onClose}>
             Not now

@@ -431,6 +431,7 @@ The door's whole decision in one floating card: brand row, thesis, sub-line, the
 - **Buttons:** the app's button at door scale — `10px 14px`, 14px/600, `min-height: 44px`, 6px radius. Primary is the same outlined sky-tinted voice (`sky-line` border, `sky` text), with a 10% sky wash into `panel2` on hover. No filled accent button appears anywhere on the page.
 - **A setting the data decides** wears no input chrome at all: when the loaded dataset supports one scoring format, the picker is replaced by a plain bold value plus an 11px dim explanation. A bordered, filled box beside two live selects would read as a control the visitor had broken.
 - **Motion:** a 560ms arrival (rise 18px, un-blur 4px, settle from 0.98) followed by one pass of sky-tinted light across it — the pick card's `sweep`, borrowed once. Board cards arrive on the same 520ms curve, staggered 22ms each and capped at 620ms. Everything uses the app's expo-out easing `cubic-bezier(0.16, 1, 0.3, 1)`. Under `prefers-reduced-motion: reduce` the panel, cards and confirmation lose their animations and the sweep is removed entirely.
+- **Faces:** the panel flips between faces from the link in its corner and never shows two at once. It holds the height of the face it's leaving, so a shorter face never pulls the panel up from beside the landing clock. The **sign-in face** has the draft face's structure: its thesis ("Your leagues are waiting."), a recessed group headed "Sign in" with the email form, sending as the outlined sky primary, and the method stated under it ("No password. We email you a link…"). Below that, three things an account does, each marked with a 7px mine square from the pick track.
 - **Signature interaction:** editing teams, slot or scoring re-deals the board behind the panel (the board is keyed by league shape, so every card replays its entrance), and a polite live region states the re-seat in words for a reader who cannot see it. The board itself is `aria-hidden`; the sections below carry the same claims as text.
 
 ### Turn-Plan Proof Row (`/` only)
@@ -467,6 +468,28 @@ The pick card's form, used for the arrival: the same lift, 10px radius, mine was
 - **Returning** (`?welcome=1`): "Welcome back." and a league count. It behaves like a pick card: a tap dismisses it, and the life hairline runs 3.2s. With leagues waiting to import, it holds like the new-account card.
 
 **The Welcome Exception.** A new account's card fires a short fountain of confetti up from behind it: the Opening Night confetti, in the six position hues and amber, at about half the density, for 2s. It happens once, at account creation, and never for a returning sign-in. Reduced motion gets the card fading in, with no stamp, no sweep and no confetti.
+
+### Lights Down (sign-out, `globals.css`)
+
+Opening Night in reverse, the room's way of saying goodnight. The moment sign-out starts, `html[data-leaving]` takes over outside the React tree, because clearing the session re-renders the war room as an empty signed-out room whose league setup must never flash on the way out:
+
+- A dark curtain in the room's ground drops over the page in **four steps**, 440ms in all, each one a bank of stadium lights clicking off, top to bottom.
+- A **follow-spot** then closes (`clip-path: circle()`, 120% → 22%, with a faint sky glow at its center) onto one line that says what the goodbye will say: "Saving your seat…" when a draft is paused, "That's a wrap." when everything drafted is done, and "See you on draft day." otherwise.
+- The spot holds until the landing page's goodbye loads, and it never delays the sign-out. Reduced motion gets the dark page and the line with no steps and no spot.
+
+### Farewell Face (`/` after sign-out)
+
+The entry panel's third face: a goodbye with the practice draft still running behind it. The sign-out reads every league and its draft before this device's copy is cleared and hands the summary to the landing page in this tab's sessionStorage. It's read once, so a reload never replays it, and nothing goes in the URL.
+
+**Every league gets a line**, ordered by what matters on the way out: paused drafts first (furthest along first), then finished ones, then ones not drafted yet. Each line has the league's name, its status, and a **round track**: one 14px square per round, the pick track's vocabulary.
+
+- **Paused:** "Round 13 · 150 of 192 picks in". Played rounds are in the done tone, and the round the clock stopped in is outlined amber. Under the track, the league's **ribbon board is switched off**: its standing line ("PAUSED · 42 TO GO") sits in the lamps at a faint amber, and finishing the draft is what would light it.
+- **Finished:** "Drafted · 16 rounds" in mine green, on a line with a mine border and wash. The track runs green round by round, 28ms apart, to a stamped ✓, and one sweep of mine light crosses the line. Then the **ribbon board lights**: the draft's first picks run across it once, right to left, each in their position's hue, and the board settles on "✓ IN THE BOOKS", lit.
+- **Not drafted yet:** urgency, told truthfully. The status "Not drafted yet · you pick 6th" is amber, the line has an amber border, and round one is outlined amber. Beneath it is what's at stake at the first pick, from the loaded data's average draft positions: "At 1.06, **Christian McCaffrey** is usually still there. **Jaxon Smith-Njigba** usually isn't." At slot 1 it reads "the whole board is yours. Most rooms open with …". No date is claimed, because none is stored.
+
+**The ribbon board** (`Ribbon.tsx`, `dotFont.ts`) is a stadium LED ribbon drawn on a canvas: a 5×7 dot font (a browser font turns to mush at seven rows), 3px lamp pitch, and every unlit lamp drawn faintly, because a board is a grid of lamps whether they're on or not. Lit lamps bleed a little light into their neighbors. It runs once at a constant speed and eases only as its standing line parks. The loop then stops for good, a hidden tab or reduced motion gets the parked board, and the canvas carries its full text as an accessible name. It is the goodbye's one overdrive: lit versus dark is the argument for finishing.
+
+The headline follows the most pressing line: "Your seat is saved." if anything is paused, "That's a wrap." / "Go win it all." if everything drafted is done, "Draft day is coming." if leagues exist but none has drafted, and otherwise "See you on draft day." The sub-line names the account it signed out of and tallies the rest. It ends on "Sign back in →" (the sign-in face, email pre-filled) and "Start a new draft". Everything plays once, with no confetti.
 
 ### Sign-in Email (off-app)
 
