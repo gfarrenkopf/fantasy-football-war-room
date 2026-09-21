@@ -14,6 +14,17 @@ import { useLeague } from "./LeagueProvider";
 
 const AccountContext = createContext<SessionUser | null>(null);
 
+/**
+ * What Auth.js's error codes mean to the person holding the link. Failures land on `/draft?error=`
+ * (pages.error) instead of Auth.js's own page; the dialog reopens with one of these.
+ */
+const SIGN_IN_ERRORS: Record<string, string> = {
+  Verification: "That link has already been used or has expired. Links work once, for 24 hours. Send yourself a fresh one.",
+  OAuthAccountNotLinked: "That address already signs in with an email link. Send yourself one below.",
+  AccessDenied: "That sign-in was cancelled. Try again whenever you're ready.",
+};
+const SIGN_IN_FAILED = "Sign-in didn't go through. Try again.";
+
 /** The signed-in user (from the server session), or null. */
 export function AccountProvider({ user, children }: { user: SessionUser | null; children: React.ReactNode }) {
   return <AccountContext.Provider value={user}>{children}</AccountContext.Provider>;
@@ -29,9 +40,31 @@ export function AccountMenu() {
   const confirm = useConfirm();
   const [showPurchases, setShowPurchases] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
+  const [signInNotice, setSignInNotice] = useState<string | undefined>();
   const signInBtn = useRef<HTMLButtonElement>(null);
+
+  // A sign-in link that failed (used, expired, cancelled) lands here with `?error=`: reopen the
+  // dialog saying what happened. Signed in already, there's nothing to recover, so just tidy up.
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("error");
+    if (code === null) return;
+    // Stripped and acted on together, from a timeout: the dialog opens after the war room's first
+    // paint, and an effect that's cleaned up before it fires (StrictMode) leaves the URL to retry.
+    const t = setTimeout(() => {
+      url.searchParams.delete("error");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      if (user) return;
+      setSignInNotice(SIGN_IN_ERRORS[code] ?? SIGN_IN_FAILED);
+      setShowSignIn(true);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [cloudEnabled, user]);
+
   const closeSignIn = useCallback(() => {
     setShowSignIn(false);
+    setSignInNotice(undefined);
     // Back to where the reader was, not the top of the page.
     requestAnimationFrame(() => signInBtn.current?.focus());
   }, []);
@@ -46,7 +79,7 @@ export function AccountMenu() {
         <button ref={signInBtn} className={s.btn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
           Sign in
         </button>
-        {showSignIn && <SignInDialog onClose={closeSignIn} />}
+        {showSignIn && <SignInDialog onClose={closeSignIn} notice={signInNotice} />}
       </>
     );
   }
