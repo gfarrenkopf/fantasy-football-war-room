@@ -24,17 +24,26 @@ const MESSAGES = {
 export function SignIn({
   flags,
   title = "Already have leagues here?",
-  focused = false,
+  primary = false,
+  autoFocus = false,
+  fine = "Signing in syncs your leagues across devices. It never changes how the draft room works.",
+  initialEmail = "",
+  describedBy,
 }: {
   flags: PublicFlags;
   title?: string | null;
-  /**
-   * Signing in is the host's whole purpose (the war room's dialog, which someone opened to type
-   * into): the field takes focus, sending is the primary action, and the host says the fine print.
-   */
-  focused?: boolean;
+  /** Sending is the host's main action (the dialog, the landing's sign-in face): the sky primary. */
+  primary?: boolean;
+  /** Focus the email field on mount, for a host someone opened in order to type into. */
+  autoFocus?: boolean;
+  /** The line under the form, or null when the host says it itself. */
+  fine?: string | null;
+  /** Pre-fills the address, e.g. for someone who just signed out and is one tap from coming back. */
+  initialEmail?: string;
+  /** Ids of the host's copy that describes the field (its heading and sub-line). */
+  describedBy?: string;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [state, setState] = useState<State>({ kind: "idle" });
   const [pending, start] = useTransition();
   const sentHeading = useRef<HTMLParagraphElement>(null);
@@ -72,7 +81,8 @@ export function SignIn({
             inputMode="email"
             autoComplete="email"
             placeholder="you@example.com"
-            autoFocus={focused}
+            autoFocus={autoFocus}
+            aria-describedby={describedBy}
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
@@ -80,7 +90,7 @@ export function SignIn({
             }}
             required
           />
-          <button type="submit" className={cx("btn", focused && "primary")} disabled={pending}>
+          <button type="submit" className={cx("btn", primary && "primary")} disabled={pending}>
             {pending ? "Sending…" : "Send me a link"}
           </button>
         </form>
@@ -99,7 +109,7 @@ export function SignIn({
           </button>
         </form>
       )}
-      {!focused && <p className={s.fine}>Signing in syncs your leagues across devices. It never changes how the draft room works.</p>}
+      {fine && <p className={s.fine}>{fine}</p>}
     </div>
   );
 }

@@ -70,8 +70,15 @@ export function EntryPanel({
   useEffect(() => {
     if (flipped.current) heading.current?.focus();
   }, [face]);
+  /*
+   * The panel holds the height of the face it's leaving, so a shorter face doesn't pull the panel
+   * up out from beside the landing clock mid-flip. It can still grow (the sent state is taller).
+   */
+  const panel = useRef<HTMLDivElement>(null);
+  const [holdHeight, setHoldHeight] = useState<number | undefined>();
   const flip = (to: "draft" | "signin") => {
     flipped.current = true;
+    setHoldHeight(panel.current?.offsetHeight);
     setFace(to);
   };
 
@@ -87,7 +94,7 @@ export function EntryPanel({
   };
 
   return (
-    <div className={s.panel}>
+    <div ref={panel} className={s.panel} style={holdHeight ? { minHeight: holdHeight } : undefined}>
       <div className={s.sweep} aria-hidden="true" />
       <div className={s.brand}>
         <b>Fantasy War Room</b>
@@ -173,13 +180,28 @@ export function EntryPanel({
         </div>
       ) : (
         <div key="signin" className={s.face}>
-          <h1 className={s.thesis} ref={heading} tabIndex={-1}>
+          <h1 id="signin-face-title" className={s.thesis} ref={heading} tabIndex={-1}>
             Your leagues are waiting.
           </h1>
-          <p className={s.sub}>Sign in and they&apos;re on this device too, picks and all.</p>
+          <p id="signin-face-sub" className={s.sub}>
+            Sign in and they&apos;re on this device too, picks and all.
+          </p>
           <div className={s.setup}>
-            <SignIn flags={flags} title={null} />
+            <div className={s.setupHead}>Sign in</div>
+            <SignIn
+              flags={flags}
+              title={null}
+              primary
+              describedBy="signin-face-title signin-face-sub"
+              fine="No password. We email you a link that signs you in."
+            />
           </div>
+          {/* What an account does, in the room's own mark: a pick-track square in mine green. */}
+          <ul className={s.perks}>
+            <li>Every league, on your phone and your laptop</li>
+            <li>Picks save as you log them</li>
+            <li>Your seat is kept mid-draft</li>
+          </ul>
         </div>
       )}
     </div>

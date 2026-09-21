@@ -232,7 +232,7 @@ export function SignInDialog({ onClose, notice }: { onClose(): void; notice?: st
             </ul>
           </section>
         )}
-        <SignIn flags={flags} title={null} focused />
+        <SignIn flags={flags} title={null} primary autoFocus fine={null} />
         <div className={s.dialogActions}>
           <button className={cx("btn")} onClick={onClose}>
             Not now

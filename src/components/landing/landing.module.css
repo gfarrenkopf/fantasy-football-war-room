@@ -435,6 +435,34 @@
   border-radius: 8px;
 }
 
+/* What signing in gets you: three facts, each marked with a pick-track square in mine green. */
+.perks {
+  list-style: none;
+  margin: 16px 2px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.perks li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  animation: faceIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.perks li:nth-child(2) { animation-delay: 60ms; }
+.perks li:nth-child(3) { animation-delay: 120ms; }
+.perks li::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--color-mine);
+  translate: 0 -1px;
+}
+
 .setupHead {
   font-size: 11px;
   font-weight: 700;
@@ -1326,6 +1354,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .perks li,
   .flightArc,
   .envelope,
   .envelopeCheck,
@@ -1400,6 +1429,8 @@
     align-items: flex-start;
     padding: 16px;
     padding-top: max(16px, env(safe-area-inset-top));
+    /* Room for the data note under the panel, which otherwise sits on the panel's foot. */
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
   }
   .board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
