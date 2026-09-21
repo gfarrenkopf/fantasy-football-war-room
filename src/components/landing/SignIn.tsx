@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { signInWithEmail, signInWithGoogle } from "@/app/actions/auth";
+import { listenForSignIn } from "@/lib/auth/channel";
+import { mailboxFor } from "@/lib/auth/mailbox";
 import type { PublicFlags } from "@/lib/config";
 import { cx, s } from "./cx";
 
@@ -43,21 +45,7 @@ export function SignIn({
     if (state.kind === "sent") sentHeading.current?.focus();
   }, [state.kind]);
 
-  if (state.kind === "sent") {
-    return (
-      <div className={s.sent}>
-        <p className={s.sentHead} ref={sentHeading} tabIndex={-1}>
-          Check your email.
-        </p>
-        <p>
-          A sign-in link is on its way to <span className={s.sentAddr}>{state.email}</span>. Open it on any device and your leagues come with you.
-        </p>
-        <button type="button" className={s.linkBtn} onClick={() => setState({ kind: "idle" })}>
-          Use a different address
-        </button>
-      </div>
-    );
-  }
+  if (state.kind === "sent") return <Sent email={state.email} headingRef={sentHeading} onChangeAddress={() => setState({ kind: "idle" })} />;
 
   return (
     // Structural only — the children below own their own spacing in both hosts.
@@ -112,6 +100,127 @@ export function SignIn({
         </form>
       )}
       {!focused && <p className={s.fine}>Signing in syncs your leagues across devices. It never changes how the draft room works.</p>}
+    </div>
+  );
+}
+
+/** Seconds before another link can be sent: long enough for the first to arrive. */
+const RESEND_AFTER = 30;
+
+/**
+ * "Check your inbox", made useful: the link is seen leaving, the reader's own webmail is one tap
+ * away when we know it, a second link is there if the first went astray, and if the link gets
+ * opened in another tab, this one finds out and says so instead of waiting forever.
+ */
+function Sent({
+  email,
+  headingRef,
+  onChangeAddress,
+}: {
+  email: string;
+  headingRef: React.RefObject<HTMLParagraphElement | null>;
+  onChangeAddress(): void;
+}) {
+  const mailbox = mailboxFor(email);
+  const [sentAt, setSentAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  const [resend, setResend] = useState<{ kind: "idle" } | { kind: "sent" } | { kind: "error"; message: string }>({ kind: "idle" });
+  const [pending, start] = useTransition();
+  const [elsewhere, setElsewhere] = useState(false);
+  const continueBtn = useRef<HTMLButtonElement>(null);
+
+  const wait = Math.max(0, RESEND_AFTER - Math.floor((now - sentAt) / 1000));
+  useEffect(() => {
+    if (wait === 0) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [wait]);
+
+  useEffect(() => listenForSignIn(() => setElsewhere(true)), []);
+  useEffect(() => {
+    if (elsewhere) continueBtn.current?.focus();
+  }, [elsewhere]);
+
+  if (elsewhere) {
+    return (
+      <div className={cx("sent", "arrived")}>
+        <div className={s.arrivedHead}>
+          <span className={s.arrivedCheck} aria-hidden="true">
+            ✓
+          </span>
+          <p className={s.sentHead}>You&apos;re in.</p>
+        </div>
+        <p>
+          <span className={s.sentAddr}>{email}</span> signed in on another tab. Your leagues are synced.
+        </p>
+        {/* A full load, not router.push(): the stores and providers have to start over signed in. */}
+        {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
+        <button ref={continueBtn} type="button" className={cx("btn", "primary", "wide")} onClick={() => window.location.assign("/draft")}>
+          Continue here →
+        </button>
+      </div>
+    );
+  }
+
+  const again = () =>
+    start(async () => {
+      const result = await signInWithEmail(email);
+      if (result.ok) {
+        setSentAt(Date.now());
+        setNow(Date.now());
+        setResend({ kind: "sent" });
+      } else setResend({ kind: "error", message: MESSAGES[result.reason] });
+    });
+
+  return (
+    <div className={s.sent}>
+      <Flight />
+      <p className={s.sentHead} ref={headingRef} tabIndex={-1}>
+        Check your inbox.
+      </p>
+      <p>
+        A sign-in link is on its way to <span className={s.sentAddr}>{email}</span>. Open it on any device and your leagues come with you.
+      </p>
+      {mailbox && (
+        <a className={cx("btn", "primary", "wide")} href={mailbox.url} target="_blank" rel="noopener noreferrer">
+          Open {mailbox.name} →
+        </a>
+      )}
+      <p className={s.sentHelp}>Not there after a minute? Check spam or junk for a subject with &ldquo;war room&rdquo; in it.</p>
+      <div className={s.sentActions}>
+        <button type="button" className={s.linkBtn} onClick={again} disabled={pending || wait > 0}>
+          {pending ? "Sending…" : wait > 0 ? `Send another link in ${wait}s` : "Send another link"}
+        </button>
+        <span aria-hidden="true">·</span>
+        <button type="button" className={s.linkBtn} onClick={onChangeAddress}>
+          Use a different address
+        </button>
+      </div>
+      <p className={cx("sentNote", resend.kind === "error" && "bad")} role="status">
+        {resend.kind === "sent" ? "Sent another. The newest link is the one to use." : resend.kind === "error" ? resend.message : ""}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The link leaving: an envelope rides a dashed arc from you to your inbox and lands with a green
+ * check. CSS offset-path does the riding; reduced motion shows it already landed.
+ */
+function Flight() {
+  return (
+    <div className={s.flight} aria-hidden="true">
+      <svg className={s.flightArc} viewBox="0 0 240 44" preserveAspectRatio="none">
+        <path d="M8 38 Q 120 -10 226 26" />
+      </svg>
+      <span className={s.flightFrom} />
+      <span className={s.envelope}>
+        <svg viewBox="0 0 24 18">
+          <rect x="1" y="1" width="22" height="16" rx="2.5" />
+          <path d="M2 2.5 12 10l10-7.5" />
+        </svg>
+        <i className={s.envelopeCheck}>✓</i>
+      </span>
     </div>
   );
 }
