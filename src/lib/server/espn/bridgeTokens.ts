@@ -34,7 +34,7 @@ export interface VerifiedBridge extends BridgeScope {
 export async function mintBridgeToken(db: Db, scope: BridgeScope, now = new Date()): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + BRIDGE_TOKEN_TTL_MS);
-  await db.insert(espnBridgeTokens).values({ tokenHash: hash(token), ...scope, expiresAt });
+  await db.insert(espnBridgeTokens).values({ tokenHash: hash(token), ...scope, createdAt: now, expiresAt });
   return { token, expiresAt };
 }
 

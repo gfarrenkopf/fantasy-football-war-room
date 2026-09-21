@@ -69,6 +69,20 @@ describe("foldFrames", () => {
     expect(feed.picks.at(-1)).toEqual({ overall: 5, teamId: 1, espnPlayerId: 4430878, auto: true });
   });
 
+  it("is anchored when it saw the draft from before the first pick", () => {
+    expect(foldFrames(OPENING).anchored).toBe(true);
+    expect(foldFrames(["STATE 1", "SELECTING 4 60000", "SELECTED 4 1 2"]).anchored).toBe(true);
+  });
+
+  it("isn't anchored when it joined mid-draft, so its pick numbers are only relative", () => {
+    const joinedLate = OPENING.slice(OPENING.indexOf("SELECTING 1 60000\n"));
+    const feed = foldFrames(joinedLate);
+    expect(feed.anchored).toBe(false);
+    expect(feed.picks[0].overall).toBe(1);
+    // A later countdown or STATE 1 can't anchor picks already counted.
+    expect(foldFrames(["CLOCK 0 1000", "STATE 1"], feed).anchored).toBe(false);
+  });
+
   it("records an ERROR frame", () => {
     expect(foldFrames(["ERROR 1 Invalid+security+code"]).error).toEqual({ code: 1, message: "Invalid security code" });
   });

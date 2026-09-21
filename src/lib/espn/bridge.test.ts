@@ -92,7 +92,8 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
   const bridge = () => (context.__warRoomBridge as { state(): Record<string, unknown> }).state();
   const Socket = () => context.WebSocket as typeof FakeSocket;
   const postMessage = (data: unknown, origin = WAR_ROOM) => windowListeners.forEach((fn) => fn({ data, origin }));
-  const bodies = () => fetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; seq: number; frames: string[] });
+  const bodies = () =>
+    fetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[] });
   return { load, bridge, Socket, postMessage, fetch, open, storage, shadow, bodies };
 }
 
@@ -121,6 +122,7 @@ describe("ESPN bridge", () => {
     expect((init.headers as Record<string, string>).authorization).toBe("Bearer tok-1");
     expect(p.bodies()[0]).toEqual({
       espnLeagueId: "704343562",
+      session: expect.stringMatching(/^[a-z0-9]{8,}$/),
       seq: 0,
       frames: ["INIT", "TOKEN", "SELECTED 1 4362628 4 {00000000-0000-0000-0000-000000000000}", "SELECTED 4 4429795 2"],
     });
@@ -191,6 +193,20 @@ describe("ESPN bridge", () => {
     await vi.advanceTimersByTimeAsync(600);
     const last = p.bodies().at(-1)!;
     expect(last).toMatchObject({ seq: 0, frames: ["SELECTED 1 1 1", "SELECTED 2 2 1", "SELECTED 3 3 1"] });
+  });
+
+  it("names each page load's frame log with its own session id", async () => {
+    const a = page({ stored: "tok-1" });
+    a.load();
+    const b = page({ stored: "tok-1" });
+    b.load();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5300);
+    const sessionsA = new Set(a.bodies().map((x) => x.session));
+    const sessionsB = new Set(b.bodies().map((x) => x.session));
+    expect(sessionsA.size).toBe(1);
+    expect(sessionsB.size).toBe(1);
+    expect([...sessionsA][0]).not.toBe([...sessionsB][0]);
   });
 
   it("heartbeats while idle so War Room knows the tab is still there", async () => {

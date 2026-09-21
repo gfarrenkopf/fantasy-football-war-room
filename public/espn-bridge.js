@@ -39,6 +39,11 @@
   const espnTeamId = Number(params.get("teamId")) || 0;
   const season = Number(params.get("seasonId")) || new Date().getFullYear();
   const TOKEN_KEY = `warroom-bridge:${espnLeagueId}`;
+  /**
+   * This page load's id. A reloaded ESPN tab starts a fresh frame log; the session id tells War Room
+   * it's a new log continuing the same draft, not a gap in the old one.
+   */
+  const session = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   /** Sanitized frames since the bridge attached, in order. */
   const log = /** @type {string[]} */ ([]);
@@ -131,7 +136,7 @@
         mode: "cors",
         credentials: "omit",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ espnLeagueId, seq: sent, frames }),
+        body: JSON.stringify({ espnLeagueId, session, seq: sent, frames }),
       });
       if (res.status === 200 || res.status === 409) {
         // 409: War Room holds a different number of frames (e.g. it restarted); resend from there.

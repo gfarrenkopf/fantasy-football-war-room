@@ -22,6 +22,12 @@ export type FeedStatus = "waiting" | "live" | "complete";
 
 export interface DraftFeed {
   status: FeedStatus;
+  /**
+   * True when the feed saw the draft from before its first pick (the pre-draft countdown or STATE 1),
+   * so `overall` numbers are real pick numbers. A bridge attached mid-draft counts from wherever it
+   * joined, and its numbers are only relative.
+   */
+  anchored: boolean;
   picks: FeedPick[];
   /** Team on the clock and its time left, from the latest SELECTING or CLOCK frame. */
   onClock: { teamId: number; msRemaining: number } | null;
@@ -36,6 +42,7 @@ export interface DraftFeed {
 
 export const emptyFeed = (): DraftFeed => ({
   status: "waiting",
+  anchored: false,
   picks: [],
   onClock: null,
   autodraft: [],
@@ -48,13 +55,14 @@ export function applyFrame(feed: DraftFeed, frame: EspnFrame): DraftFeed {
   switch (frame.kind) {
     case "state":
       if (frame.state === 2) return { ...feed, status: "complete", onClock: null };
-      if (frame.state === 1 && feed.status === "waiting") return { ...feed, status: "live" };
+      if (frame.state === 1 && feed.status === "waiting") return { ...feed, status: "live", anchored: feed.anchored || feed.picks.length === 0 };
       return feed;
     case "selecting":
       return { ...feed, status: feed.status === "waiting" ? "live" : feed.status, onClock: { teamId: frame.teamId, msRemaining: frame.msAllowed } };
     case "clock":
-      // Team 0 is the pre-draft countdown, not a team on the clock.
-      return frame.teamId === 0 ? feed : { ...feed, onClock: { teamId: frame.teamId, msRemaining: frame.msRemaining } };
+      // Team 0 is the pre-draft countdown, not a team on the clock: seeing it means no pick has been missed.
+      if (frame.teamId === 0) return feed.picks.length || feed.anchored ? feed : { ...feed, anchored: true };
+      return { ...feed, onClock: { teamId: frame.teamId, msRemaining: frame.msRemaining } };
     case "autodraft": {
       const others = feed.autodraft.filter((t) => t !== frame.teamId);
       return { ...feed, autodraft: frame.on ? [...others, frame.teamId].sort((a, b) => a - b) : others };
