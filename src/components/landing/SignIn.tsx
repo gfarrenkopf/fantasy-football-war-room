@@ -19,7 +19,19 @@ const MESSAGES = {
  * Each method renders only when its credentials exist (see publicFlags). Used by the landing
  * page and by the war room's account menu, so there is exactly one sign-in surface.
  */
-export function SignIn({ flags, title = "Already have leagues here?" }: { flags: PublicFlags; title?: string | null }) {
+export function SignIn({
+  flags,
+  title = "Already have leagues here?",
+  focused = false,
+}: {
+  flags: PublicFlags;
+  title?: string | null;
+  /**
+   * Signing in is the host's whole purpose (the war room's dialog, which someone opened to type
+   * into): the field takes focus, sending is the primary action, and the host says the fine print.
+   */
+  focused?: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
   const [pending, start] = useTransition();
@@ -72,6 +84,7 @@ export function SignIn({ flags, title = "Already have leagues here?" }: { flags:
             inputMode="email"
             autoComplete="email"
             placeholder="you@example.com"
+            autoFocus={focused}
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
@@ -79,7 +92,7 @@ export function SignIn({ flags, title = "Already have leagues here?" }: { flags:
             }}
             required
           />
-          <button type="submit" className={cx("btn")} disabled={pending}>
+          <button type="submit" className={cx("btn", focused && "primary")} disabled={pending}>
             {pending ? "Sending…" : "Send me a link"}
           </button>
         </form>
@@ -98,7 +111,7 @@ export function SignIn({ flags, title = "Already have leagues here?" }: { flags:
           </button>
         </form>
       )}
-      <p className={s.fine}>Signing in syncs your leagues across devices. It never changes how the draft room works.</p>
+      {!focused && <p className={s.fine}>Signing in syncs your leagues across devices. It never changes how the draft room works.</p>}
     </div>
   );
 }
