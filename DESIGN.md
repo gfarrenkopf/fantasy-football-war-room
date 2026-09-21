@@ -69,12 +69,31 @@ typography:
     fontSize: "10.5px"
     fontWeight: 700
     lineHeight: 1.15
+  door-display:
+    fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif"
+    fontSize: "clamp(26px, 3.2vw, 38px)"
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  door-lead:
+    fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif"
+    fontSize: "clamp(27px, 2.6vw, 36px)"
+    fontWeight: 700
+    lineHeight: 1.08
+    letterSpacing: "-0.02em"
+  odds:
+    fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif"
+    fontSize: "24px"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "-0.02em"
 rounded:
   xs: "2px"
   sm: "3px"
   md: "4px"
   lg: "6px"
   xl: "8px"
+  dialog: "10px"
   pill: "999px"
 spacing:
   hair: "3px"
@@ -144,6 +163,24 @@ components:
     textColor: "{colors.muted}"
     typography: "{typography.label}"
     padding: "4px 10px"
+  entry-panel:
+    backgroundColor: "color-mix(in srgb, #22272f 92%, transparent)"
+    textColor: "{colors.text}"
+    rounded: "{rounded.dialog}"
+    padding: "18px 20px 20px"
+    width: "min(446px, 100%)"
+  button-door:
+    backgroundColor: "{colors.panel2}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.lg}"
+    padding: "10px 14px"
+    height: "44px"
+  button-door-primary:
+    backgroundColor: "{colors.panel2}"
+    textColor: "{colors.sky}"
+    rounded: "{rounded.lg}"
+    padding: "10px 14px"
+    height: "44px"
 ---
 
 # Design System: Fantasy War Room
@@ -158,6 +195,8 @@ The density is deliberate and it is not an apology. Base font size is 13px, line
 
 The personality lives entirely in the gap between rest and alarm. Chrome recedes — buttons are 7px-padded panels that barely separate from their background, hover is a tone shift of a few percent, the segmented control's only tell is a slightly lighter fill. Then state arrives and the system commits completely: the mine card takes a 6px green rail, floods 16% green, swaps its rank badge for a checkmark, and turns its name green. There is no middle register, and there should not be.
 
+The system now covers **two surfaces, one world**. `/draft` is the instrument described above. `/` is its door: a landing page that runs a real mock draft of the visitor's own league full-bleed behind one translucent panel holding the entire decision. The door inherits everything — the same ground and panels, the same hairlines, the same six position hues on 3px card rails, the same outlined sky-tinted primary, the same translucent state fills, one shadow and no third animated glow. It departs in exactly three places, each scoped to the route and each recorded as a named exception below: the page scrolls, display type reaches 38px, and survival odds are set at 24px. Nothing else on that page is new vocabulary; where a rule is not exempted by name, it applies.
+
 **Key Characteristics:**
 - Dark-only, five stepped surface tones from `#1a1e25` to `#3d4654`, no light mode
 - 13px root, tabular numerals, 10px–15px working range; one 56px number as the sole display moment
@@ -165,6 +204,7 @@ The personality lives entirely in the gap between rest and alarm. Chrome recedes
 - 1px hairlines instead of shadows; depth by tone, not by lift
 - Escalation as the core grammar: rest → warn (amber) → on-clock (green, pulsing)
 - Reduced-motion honored on every animation in the system
+- Two surfaces: the instrument (`/draft`, 13px, never scrolls) and its door (`/`, 16px, scrolls, display type up to 38px) — the door's exceptions are named and route-scoped, never global
 
 ## Colors
 
@@ -230,11 +270,21 @@ The signal layer, used only on verdicts and states.
 - **Label** (400, 11px, line-height 1.2): secondary facts everywhere — team/bye line, panel subtitles, tier metadata, hints, placeholders.
 - **Micro** (700, 10.5px, line-height 1.15): verdict tags, rank pairs, slot labels. Small but bold, so it survives at the size.
 
+Three further roles exist **on the landing route only** (`src/components/landing/landing.module.css`). They are not available to the instrument.
+
+- **Door Display** (700, `clamp(26px, 3.2vw, 38px)`, line-height 1.1, letter-spacing -0.02em): the landing page's section headings — the proof title, the verdicts title, the closing line.
+- **Door Lead** (700, `clamp(27px, 2.6vw, 36px)`, line-height 1.08, letter-spacing -0.02em, balanced): the entry panel's two-line promise — "Your draft is in a week." over "Or in twenty minutes." in Terminal Sky.
+- **Odds** (700, 24px, line-height 1, letter-spacing -0.02em): the survival percentage on a turn-plan row, inked Value Green / Alert Amber / Dim by band, with a muted 11px `%` beside it.
+
 ### Named Rules
 
 **The Weight-Not-Size Rule.** Hierarchy below 15px is built with weight (400 → 600 → 700) and the three-step text ramp, not with size. The working range is 10px–15px and it stays there; a new element that wants to feel important gets weight and ink, not points.
 
 **The Tabular Rule.** `font-variant-numeric: tabular-nums` is set on `body` and must never be overridden. Ranks, ADPs, pick numbers, and bye weeks are read as columns; proportional digits break the scan.
+
+**The Door Voice Rule** *(route-scoped exception, `/` only).* A door is read across a room; an instrument is read under a clock. The landing page roots at 16px/1.45 and lets headings clamp to 26–38px, above the 10–15px working range the Weight-Not-Size Rule fixes for the app. The exception buys exactly three roles — Door Display, Door Lead and Odds — and buys nothing else: body copy on that page still lives at 11–14px in the same three-step ink ramp. The exception does not travel: a heading above 15px inside `/draft` is a regression, not a precedent.
+
+**The Odds Are The Argument Rule** *(route-scoped exception, `/` only).* 24px/700 is otherwise reserved for exactly one number in the product, the header's pick counter. On the landing page's turn-plan proof, roughly a dozen survival percentages are set at that size on one screen, because those numbers *are* the claim the page is making and the reader is meant to scan them as a column, not hunt them as a signal. This is the one place scarcity is traded for scale, and it is traded knowingly. The odds column is fixed at `min-width: 56px` with tabular figures so a dozen percentages read as a column rather than a dozen ragged strings.
 
 ## Layout
 
@@ -256,11 +306,19 @@ The app is a single full-height flex column at `100dvh` with `overflow: hidden` 
 
 **Safe areas.** `viewport-fit=cover` with `env(safe-area-inset-*)` paid back on the header, the bottom bar, the drawer head and the drawer body.
 
+**The landing route (`/`) is laid out as a document, not as an instrument.** It roots at 16px/1.45 and scrolls normally; the war room's `100dvh` / `overflow: hidden` root is untouched and unshared. The hero is a `100dvh`, `overflow: hidden` band holding three stacked layers: the live board (z 0), the veil (z 1), and — at z 2, anchored from the top at 18vh — **the pair**: the entry panel and the landing clock side by side, centred as one composition with a 28px gap, with the dataset label pinned bottom-right. The sections below it — turn-plan proof, who it's for, verdicts, close, footer — are 1120px-max columns separated by a single top hairline each, at `88px 24px` of padding (`56px 16px` below 640px); the footer runs `48px 24px`. Inner grids are self-sizing: plan columns at `repeat(auto-fit, minmax(260px, 1fr))`, verdict cards at 240px, both gapped 10px. Prose is capped at 54–62ch.
+
+The board layer keeps the app's own density — `font-size: 13px`, `line-height: 1.3`, 8px grid gap and padding, the same 8px panels and 7px 10px column headers — inside a 16px-rooted page. It is the instrument running, not an illustration of it; shrinking it to match the page would make it a picture of the product.
+
+The landing route carries its own three breakpoints, and they are the page's, not the app's (`1100 / 900 / 640` against the app's `1100 / 768 / 767`). At ≥1100px the board runs full-bleed behind the centred pair with a 236px column floor, so its last column bleeds off the right edge — the board continues past the window rather than fitting inside it. At ≤900px the pair stacks, clock first, in a fixed 184px slot above the panel (the pick card replaces the banner inside it, so nothing under a thumb moves when a pick lands), the running team list is dropped, the board goes to three columns and the veil turns vertical. At ≤640px the board drops to two columns, the panel goes full width, and the email row stacks.
+
 Anything that must overflow does so as a named, snapping or scrolling rail — the action bar, needs strip, mock bar, best-available strip, board track. The document itself never scrolls sideways at any width.
 
 ### Named Rules
 
 **The Page Never Scrolls Rule.** The root is `100dvh` / `overflow: hidden`. Scrolling belongs to individual panels via `.scroll`, so the header, strip, and column titles stay fixed while a 200-player list moves under them. A new surface that makes the document itself scroll has broken the instrument.
+
+**The Door Scrolls Rule** *(route-scoped exception, `/` only).* The Page Never Scrolls Rule governs the instrument, not its door. The landing page is a normal scrolling document — hero, proof, verdicts, close, footer — because a visitor who has not yet decided anything is reading, not operating. The exception is confined to `/`: `/draft` and every surface inside it keep the `100dvh` / `overflow: hidden` root, and the landing page never imports or relaxes it.
 
 **The Weighted Column Rule.** Board columns are sized by how much the position is drafted, not equally. RB and WR get 1.12fr and a 290px floor; K/DST get 0.82fr and 225px. Equal columns would be tidier and worse.
 
@@ -276,12 +334,14 @@ Shadows appear in exactly three places, all of them things floating *above* the 
 
 The one thing the app surface *does* get is **ring-glow as urgency**: `box-shadow: 0 0 0 3px <color-mix>` animated on an alternating 1.2s–1.6s ease-in-out cycle, amber for an urgent roster need and green for on-clock. This is the only animated elevation in the product and both instances are disabled under `prefers-reduced-motion`.
 
+The landing route adds no new depth vocabulary. Its entry panel takes the documented Overlay lift and nothing else — it is **the one lift on that page** — reinforced by a 92%-opaque panel fill over `backdrop-filter: blur(10px)`, so the board stays visibly present through it rather than being hidden behind it. Separation from the board is otherwise done with light, not shadow: **the veil**, a two-layer non-interactive scrim at z 1 — an elliptical pool of ground behind the centred pair (72% at the centre, 52% at the edges) over a top-and-bottom fade — so the board reads evenly on both sides of the pair and never competes with it (rotated to a vertical fade below 900px, where the pair stacks). Dim room, one lit board — the North Star made literal. There is still no third animated glow: the landing page has none at all.
+
 **Status: this flatness is inherited from the prototype, not chosen.** The user has explicitly marked it open for revision. Treat the current vocabulary as the documented baseline, not an invariant — a future pass may legitimately introduce depth, and should do so deliberately rather than by accretion.
 
 ### Shadow Vocabulary
 
 - **Drawer cast** (`box-shadow: -10px 0 30px rgb(0 0 0 / 0.4)`): the right-edge drawer only, directional so the panel reads as sliding over the board.
-- **Overlay lift** (`box-shadow: 0 20px 60px rgb(0 0 0 / 0.5)`): modal dialogs and the availability report, always paired with the scrim.
+- **Overlay lift** (`box-shadow: 0 20px 60px rgb(0 0 0 / 0.5)`): modal dialogs and the availability report, always paired with the scrim — and the landing page's entry panel, which earns it by genuinely floating over a running board.
 - **Urgency ring** (`box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warn|mine) 35–45%, transparent)`, animated): on-clock hero and urgent needs pill. Never static, never decorative.
 
 ### Named Rules
@@ -290,7 +350,7 @@ The one thing the app surface *does* get is **ring-glow as urgency**: `box-shado
 
 ## Shapes
 
-A restrained, mostly-square form language on a tight radius ladder: **2px** (position dots), **3px** (bye pills, track squares, micro badges), **4px** (rank badges, verdict tags, small buttons), **6px** (buttons, inputs, segmented controls, the turn box — the system's default), **8px** (panels, columns, heroes), **10px** (drawers and dialogs), **999px** (best-available chips only), and **50%** (the 7px injury-note dot).
+A restrained, mostly-square form language on a tight radius ladder: **2px** (position dots), **3px** (bye pills, track squares, micro badges), **4px** (rank badges, verdict tags, small buttons), **6px** (buttons, inputs, segmented controls, the turn box — the system's default), **8px** (panels, columns, heroes), **10px** (drawers, dialogs, and the landing entry panel — the things that float), **999px** (best-available chips only), and **50%** (the 7px injury-note dot).
 
 The rule underneath the ladder is scale-proportional: the smaller the element, the tighter the corner. Nothing exceeds 10px, so no surface ever reads as soft.
 
@@ -362,6 +422,29 @@ The one celebration in the product, for the one moment it builds to: a pick the 
 
 **On-clock arrival.** When a logged pick puts the user on the clock, the turn banner (and the desktop hero's state block) takes one pass of green light and the header's pick number pops in green; the tab title reads "● Pick N: you're on the clock" for the second-screen user. Not on load, not on undo, not during a full auto mock.
 
+### Entry Panel — the landing signature (`/` only)
+
+The door's whole decision in one floating card: brand row, thesis, sub-line, the compact league setup, the outlined primary, then a hairline and the sign-in block.
+
+- **Form:** `min(446px, 100%)` wide, `18px 20px 20px` padding, 10px radius, `line2` border (one step brighter than a panel, because it is off the board), 92%-opaque panel fill over `backdrop-filter: blur(10px)`, Overlay lift.
+- **Controls:** the setup group is a recessed `strip`-ground box at 8px radius with an 11px uppercase letter-spaced header; fields are a two-column grid with a full-width span for scoring. Selects and inputs are the app's input at **16px** — the size below which iOS zooms on focus — rather than the app's 12.5px.
+- **Buttons:** the app's button at door scale — `10px 14px`, 14px/600, `min-height: 44px`, 6px radius. Primary is the same outlined sky-tinted voice (`sky-line` border, `sky` text), with a 10% sky wash into `panel2` on hover. No filled accent button appears anywhere on the page.
+- **A setting the data decides** wears no input chrome at all: when the loaded dataset supports one scoring format, the picker is replaced by a plain bold value plus an 11px dim explanation. A bordered, filled box beside two live selects would read as a control the visitor had broken.
+- **Motion:** a 560ms arrival (rise 18px, un-blur 4px, settle from 0.98) followed by one pass of sky-tinted light across it — the pick card's `sweep`, borrowed once. Board cards arrive on the same 520ms curve, staggered 22ms each and capped at 620ms. Everything uses the app's expo-out easing `cubic-bezier(0.16, 1, 0.3, 1)`. Under `prefers-reduced-motion: reduce` the panel, cards and confirmation lose their animations and the sweep is removed entirely.
+- **Signature interaction:** editing teams, slot or scoring re-deals the board behind the panel (the board is keyed by league shape, so every card replays its entrance), and a polite live region states the re-seat in words for a reader who cannot see it. The board itself is `aria-hidden`; the sections below carry the same claims as text.
+
+### Turn-Plan Proof Row (`/` only)
+
+Three `auto-fit` columns — "Plan on these" / "If they're gone" / "Don't count on it" — built from the app's panel (8px, `panel` fill, hairline), each tinted only at the border via `color-mix` against `line` (Value Green 40%, Alert Amber 34%, neutral). Rows carry the board's own 3px position rail and `row-line` divider; the name sits at 13.5px/600 over an 11px muted meta line, and the survival number right-aligns in the fixed 56px odds column at the Odds role, inked to match its band.
+
+### Landing Clock (`/` only)
+
+The landing hero's second object, beside the entry panel and over the lit half of the board: the war room's turn banner and pick card, counting the landing mock down to the visitor's slot. The banner (opaque `panel`, 10px, `line2` hairline) carries a muted 11px label naming it a mock and the league shape, the pick number at 22px/700 with its round.pick label, the turn state right-aligned, and one 6px square per team in the round — done, now, and the visitor's (outlined green, filled once used). It escalates in the war room's grammar and no other: rest (muted) → near, two picks out (amber border and 8% fill) → on the clock (green border, 12% fill, one sweep of light). When the simulator makes the visitor's pick, the war room's pick card lands under the banner — ✓ stamped in, the name at 22px, one sweep, the 2px life hairline running out over the 3.4s the room holds — and its foot says what only this product can at that moment: who should still be there when the snake comes back, and at what odds, from the same 100 mocks as the proof section. The card then settles into a running "Your team" list on desktop. On a phone the clock takes a fixed 184px slot above the panel, with the card replacing the banner inside it, so nothing under the thumb moves when a pick lands.
+
+The room is paced like a draft feels, not like a clock: picks far from the visitor's go by at 560ms, slow to 950ms and 1.4s as the turn approaches, hold 1.9s on the clock and 3.4s after the pick lands. Only the reveal is timed; every pick is the simulator's. A hidden tab stops the room. Under reduced motion the room does not tick at all: it opens with the visitor's first pick already made.
+
+**The Clock Adds No Glow.** The landing clock uses translucent fills and single, non-repeating sweeps. It never pulses and never rings: the product's two animated glows both belong to `/draft`.
+
 ### Pick Track
 
 A wrapped row of 14px squares at 3px radius representing every pick in the draft: chip-grey for future, `#4a5566` for completed, pure white for the current pick, green for the user's picks, and green at 55% opacity once one has been used. The single most information-dense element per pixel in the product.
@@ -378,6 +461,10 @@ A wrapped row of 14px squares at 3px radius representing every pick in the draft
 - **Do** keep hierarchy below 15px in weight and ink rather than size.
 - **Do** hold a fixed footprint for optional content — the 52px `min-width` on verdict tags exists so absent verdicts don't ragged the column.
 - **Do** gate every hover-revealed control behind a touch equivalent. If a control only appears on `:hover`, it does not exist on a phone.
+- **Do** inherit the whole world on a new surface and depart by exception only. The landing page takes three exceptions — it scrolls, it clamps headings to 38px, it sets odds at 24px — each named, each justified by that surface's job, each written down here. Anything not exempted by name still applies.
+- **Do** give each CSS module its own `cx()` helper bound to that module. `src/components/landing/cx.ts` exists because the draft's `cx()` is bound to `warRoom.module.css` and would silently drop every class name from another stylesheet.
+- **Do** keep an embedded instrument at its own density. The landing board stays at 13px inside a 16px page, because it is the product running, not a screenshot of it.
+- **Do** raise form controls to 16px on any surface a phone will type into — on the landing page that is every select and input, not just the ones below 767px.
 - **Do** let overflow be an explicit rail — snapping, scrollable, and obviously so — rather than a clipped row or a page that slides sideways.
 
 ### Don't:
@@ -388,7 +475,9 @@ A wrapped row of 14px squares at 3px radius representing every pick in the draft
 - **Don't** introduce a new hue for a decorative purpose. Neutrals and the existing signal set cover non-semantic needs. (The six position hues are themselves open for revision — treat them as inherited, not sacred, but do not accrete alongside them.)
 - **Don't** deepen the `--color-rb` / `--color-mine` collision. They share `#3ddc91` by accident; new work should not add meaning to that green until the two are separated.
 - **Don't** add a third animated glow. Two exist; urgency animation is the scarcest signal in the system.
-- **Don't** make the document scroll. Scrolling belongs to panels.
+- **Don't** make the document scroll inside `/draft`. Scrolling belongs to panels. The landing route is the one exception and it does not generalize.
+- **Don't** carry the door's type scale into the instrument. 26–38px headings and 24px odds are licensed on `/` and nowhere else; inside the war room the working range is still 10–15px.
+- **Don't** add a second lift to the landing page. The entry panel takes the Overlay lift because it floats over a live board; everything else there is separated by hairline, tone, or the veil.
 - **Don't** override `font-variant-numeric: tabular-nums`.
 - **Don't** reach for a shadow to separate two app-surface elements. Use a hairline or a tone step — shadows belong to things floating above the app.
 - **Don't** modify `prototype/war_room.html`. It is a frozen behavioral and visual reference.

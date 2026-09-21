@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { dataset, DATASET_ID, DEFAULT_LEAGUE } from "@/lib/data";
+import { DEFAULT_LEAGUE } from "@/lib/data";
 import type { LeagueSettings } from "@/lib/draft/types";
-import { getStores, newId, nowIso, type LeagueRecord } from "@/lib/storage";
+import { getStores, newLeagueRecord, nowIso, type LeagueRecord } from "@/lib/storage";
 import { usePrefs } from "./PrefsProvider";
 
 interface LeagueContextValue {
@@ -69,8 +69,7 @@ export function LeagueProvider({ children }: { children: React.ReactNode }) {
 
   const createLeague = useCallback(
     (name: string, settings: LeagueSettings) => {
-      const now = nowIso();
-      const record: LeagueRecord = { id: newId(), name, season: dataset.season, datasetId: DATASET_ID, settings, createdAt: now, updatedAt: now };
+      const record = newLeagueRecord(name, settings);
       setLeagues((ls) => [...ls, record]);
       setPrefs({ activeLeagueId: record.id });
       void getStores().league.saveLeague(record);

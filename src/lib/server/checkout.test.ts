@@ -50,8 +50,8 @@ describe("startCheckout", () => {
       client_reference_id: id,
       metadata: { leagueId: id, userId: alice, kind: SEASON_PASS },
       customer_email: "alice@example.test",
-      success_url: `https://draftroom.example/?checkout=success&league=${id}`,
-      cancel_url: `https://draftroom.example/?checkout=cancel&league=${id}`,
+      success_url: `https://draftroom.example/draft?checkout=success&league=${id}`,
+      cancel_url: `https://draftroom.example/draft?checkout=cancel&league=${id}`,
     });
   });
 

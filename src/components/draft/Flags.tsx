@@ -3,7 +3,14 @@
 import { createContext, useContext } from "react";
 import type { PublicFlags } from "@/lib/config";
 
-const OFF: PublicFlags = { cloudEnabled: false, aiEnabled: false, paymentsEnabled: false, dataPipelineEnabled: false };
+const OFF: PublicFlags = {
+  cloudEnabled: false,
+  googleAuthEnabled: false,
+  emailAuthEnabled: false,
+  aiEnabled: false,
+  paymentsEnabled: false,
+  dataPipelineEnabled: false,
+};
 
 const FlagsContext = createContext<PublicFlags>(OFF);
 

@@ -32,7 +32,7 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>. The first time, the app asks you to set up your league (see [section 4](#4-set-up-your-league)). After that you're on the draft board.
+Open <http://localhost:3000>; it forwards to the draft board at `/draft`. The first time, the app asks you to set up your league (see [section 4](#4-set-up-your-league)). After that you're on the draft board.
 
 `npm run dev` is the development server: it reloads when you edit code but is slower. For a draft, use the production build in the next section, even on your own laptop.
 

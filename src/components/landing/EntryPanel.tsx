@@ -1,0 +1,190 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { dataset, LEAGUE_PRESETS } from "@/lib/data";
+import { MAX_TEAMS, MIN_TEAMS, validateLeague } from "@/lib/draft/league";
+import type { LeagueSettings, ScoringFormat } from "@/lib/draft/types";
+import type { PublicFlags } from "@/lib/config";
+import { getStores, newLeagueRecord } from "@/lib/storage";
+import { cx, s } from "./cx";
+import { SignIn } from "./SignIn";
+
+const SCORING_LABELS: { value: ScoringFormat; label: string }[] = [
+  { value: "ppr", label: "Full PPR" },
+  { value: "half", label: "Half PPR" },
+  { value: "std", label: "Standard" },
+];
+
+/**
+ * Only the formats the loaded player data actually has rankings for. With the bundled PPR-only
+ * sample there is nothing to choose, so the picker doesn't appear at all; self-hosters with
+ * richer data get it back automatically.
+ */
+const SCORING = SCORING_LABELS.filter((o) => dataset.scoring.includes(o.value));
+
+const TEAM_CHOICES = [8, 10, 12, 14, 16].filter((n) => n >= MIN_TEAMS && n <= MAX_TEAMS);
+
+/**
+ * One panel, two faces. The default face is the whole anonymous path: one line of promise, two
+ * questions, one button. Returning managers flip it to sign in from the link in its corner, and
+ * flip back just as easily — the panel never holds both at once, which is what kept it simple.
+ *
+ * Nothing here is a preview: the controls edit the league the board behind is actually drafting,
+ * and "Open the war room" saves exactly that league and walks into it.
+ */
+export function EntryPanel({
+  flags,
+  league,
+  onLeague,
+}: {
+  flags: PublicFlags;
+  league: LeagueSettings;
+  onLeague(next: LeagueSettings): void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [face, setFace] = useState<"draft" | "signin">("draft");
+  const errors = validateLeague(league, dataset);
+  const canSignIn = flags.cloudEnabled && (flags.emailAuthEnabled || flags.googleAuthEnabled);
+
+  /*
+   * The re-deal, said out loud. Changing the league re-deals the board behind this panel, which a
+   * screen reader can't see (the board is aria-hidden). The region is mounted empty from the first
+   * render so its later content is announced, and is visually hidden: the board says it to the eye.
+   */
+  const [reseat, setReseat] = useState("");
+  const shape = `${league.teams}-${league.mySlot}-${league.scoring}`;
+  // Compared against the shape itself, not a mount flag: React runs effects twice in development,
+  // which would announce a re-deal that never happened.
+  const announced = useRef(shape);
+  useEffect(() => {
+    if (announced.current === shape) return;
+    announced.current = shape;
+    setReseat(`Mock draft re-dealt for ${league.teams} teams, picking ${league.mySlot}`);
+  }, [shape, league.teams, league.mySlot]);
+
+  // Moving between faces moves the reader too, so keyboard and screen-reader users land in the new face.
+  const heading = useRef<HTMLHeadingElement>(null);
+  const flipped = useRef(false);
+  useEffect(() => {
+    if (flipped.current) heading.current?.focus();
+  }, [face]);
+  const flip = (to: "draft" | "signin") => {
+    flipped.current = true;
+    setFace(to);
+  };
+
+  const open = async () => {
+    if (busy || errors.length) return;
+    setBusy(true);
+    const record = newLeagueRecord("My league", league);
+    const stores = getStores();
+    await stores.league.saveLeague(record);
+    const prefs = await stores.prefs.getPrefs();
+    if (prefs) await stores.prefs.savePrefs({ ...prefs, activeLeagueId: record.id });
+    router.push("/draft?new=1");
+  };
+
+  return (
+    <div className={s.panel}>
+      <div className={s.sweep} aria-hidden="true" />
+      <div className={s.brand}>
+        <b>Fantasy War Room</b>
+        {canSignIn &&
+          (face === "draft" ? (
+            <button type="button" className={s.faceLink} onClick={() => flip("signin")}>
+              Sign in
+            </button>
+          ) : (
+            <button type="button" className={s.faceLink} onClick={() => flip("draft")}>
+              ← New draft
+            </button>
+          ))}
+      </div>
+
+      {face === "draft" ? (
+        <div key="draft" className={s.face}>
+          <h1 className={s.thesis} ref={heading} tabIndex={-1}>
+            Your draft is in a week.
+            <br />
+            <em>Or in twenty minutes.</em>
+          </h1>
+          <p className={s.sub}>Either way it takes one screen to set up, nothing to install, and no account to start.</p>
+
+          <div className={s.setup}>
+            <div className={s.setupHead}>Your draft</div>
+            <div className={s.fields}>
+              <label className={s.field}>
+                <span>Teams</span>
+                <select
+                  className={s.select}
+                  value={league.teams}
+                  onChange={(e) => {
+                    const teams = Number(e.target.value);
+                    onLeague({ ...league, teams, mySlot: Math.min(league.mySlot, teams) });
+                  }}
+                >
+                  {TEAM_CHOICES.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={s.field}>
+                <span>You pick</span>
+                <select className={s.select} value={league.mySlot} onChange={(e) => onLeague({ ...league, mySlot: Number(e.target.value) })}>
+                  {Array.from({ length: league.teams }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {SCORING.length > 1 && (
+                <label className={cx("field", "wideField")}>
+                  <span>Scoring</span>
+                  <select className={s.select} value={league.scoring} onChange={(e) => onLeague({ ...league, scoring: e.target.value as ScoringFormat })}>
+                    {SCORING.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            <p className={s.srOnly} role="status" aria-live="polite">
+              {reseat}
+            </p>
+            <button type="button" className={cx("btn", "primary", "wide")} onClick={() => void open()} disabled={busy || errors.length > 0}>
+              {busy ? "Opening…" : "Open the war room →"}
+            </button>
+            {errors.length > 0 && (
+              <p className={s.error} role="alert">
+                {errors[0]}
+              </p>
+            )}
+            <p className={s.fine}>
+              {flags.cloudEnabled ? "No account needed. Sign in later and your draft comes with you." : "No account, no network. Everything stays on this device."}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div key="signin" className={s.face}>
+          <h1 className={s.thesis} ref={heading} tabIndex={-1}>
+            Your leagues are waiting.
+          </h1>
+          <p className={s.sub}>Sign in and they&apos;re on this device too, picks and all.</p>
+          <div className={s.setup}>
+            <SignIn flags={flags} title={null} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The league the page opens on: the standard 12-team PPR draft, from the middle of the room. */
+export const startingLeague = (): LeagueSettings => ({ ...LEAGUE_PRESETS[1].league, mySlot: 6 });

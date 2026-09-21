@@ -18,6 +18,7 @@ import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
+import { WelcomeBack } from "./WelcomeBack";
 import { FlagsProvider } from "./Flags";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
@@ -50,6 +51,7 @@ export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser
           <ConfirmProvider>
             <PrefsProvider>
               <LeagueProvider>
+                <WelcomeBack />
                 <ImportPrompt />
                 <LeagueGate />
               </LeagueProvider>
