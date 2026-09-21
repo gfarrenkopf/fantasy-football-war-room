@@ -22,6 +22,9 @@ export function OPTIONS(request: Request) {
   response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   response.headers.set("Access-Control-Allow-Headers", "authorization, content-type");
   response.headers.set("Access-Control-Max-Age", "600");
+  // Chrome's Private Network Access asks before a public site calls a local server, as it does when
+  // testing the bridge against `next dev` on localhost. Harmless for the hosted site.
+  if (request.headers.get("access-control-request-private-network") === "true") response.headers.set("Access-Control-Allow-Private-Network", "true");
   return withCors(response, request);
 }
 

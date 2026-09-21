@@ -96,6 +96,10 @@ describe("ESPN relay routes", () => {
     expect(ok.status).toBe(204);
     expect(ok.headers.get("access-control-allow-headers")).toContain("authorization");
     expect(frames.OPTIONS(preflight("https://evil.example")).status).toBe(404);
+    const local = frames.OPTIONS(
+      new Request("http://localhost/api/espn/bridge/frames", { method: "OPTIONS", headers: { origin: ESPN, "access-control-request-private-network": "true" } }),
+    );
+    expect(local.headers.get("access-control-allow-private-network")).toBe("true");
   });
 
   it("tells the bridge where the relay is when its offset doesn't match", async () => {
