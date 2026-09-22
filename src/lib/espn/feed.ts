@@ -60,8 +60,10 @@ export function applyFrame(feed: DraftFeed, frame: EspnFrame): DraftFeed {
     case "selecting":
       return { ...feed, status: feed.status === "waiting" ? "live" : feed.status, onClock: { teamId: frame.teamId, msRemaining: frame.msAllowed } };
     case "clock":
-      // Team 0 is the pre-draft countdown, not a team on the clock: seeing it means no pick has been missed.
-      if (frame.teamId === 0) return feed.picks.length || feed.anchored ? feed : { ...feed, anchored: true };
+      // State 0 is the pre-draft countdown, not a team on the clock: seeing it means no pick has been missed.
+      // Other teamless clocks (the bare "CLOCK 4" after the draft) say nothing either way.
+      if (frame.state === 0) return feed.picks.length || feed.anchored ? feed : { ...feed, anchored: true };
+      if (frame.teamId === 0) return feed;
       return { ...feed, onClock: { teamId: frame.teamId, msRemaining: frame.msRemaining } };
     case "autodraft": {
       const others = feed.autodraft.filter((t) => t !== frame.teamId);

@@ -26,6 +26,8 @@ describe("parseFrame", () => {
     expect(parseFrame("CLOCK 0 759977")).toEqual({ kind: "clock", state: 0, teamId: 0, msRemaining: 759977 });
     // During the draft the team on the clock is the third field (seen live: "CLOCK 6 85495 1" after "SELECTING 1 90000").
     expect(parseFrame("CLOCK 6 85495 1")).toEqual({ kind: "clock", state: 6, teamId: 1, msRemaining: 85495 });
+    // After the draft, a bare CLOCK 4 every 20s: no time left, no team. Not malformed.
+    expect(parseFrame("CLOCK 4")).toEqual({ kind: "clock", state: 4, teamId: 0, msRemaining: 0 });
     expect(parseFrame("STATE 1")).toEqual({ kind: "state", state: 1 });
     expect(parseFrame("SELECTING 4 60000")).toEqual({ kind: "selecting", teamId: 4, msAllowed: 60000 });
     expect(parseFrame("AUTOSUGGEST 4429795")).toEqual({ kind: "autosuggest", playerId: 4429795 });
