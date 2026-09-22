@@ -69,6 +69,18 @@ export interface LiveSnapshot {
   request: PickRequestView | null;
   /** ESPN's own league settings, once a bridge has read them. */
   espnLeague: EspnLeague | null;
+  /**
+   * ESPN's protocol has changed under us, or its socket refused something: frames we can't read are
+   * piling up (8.6). Picks stop being applied and the board goes back to being logged by hand.
+   */
+  degraded: DriftReport | null;
+}
+
+/** Why the feed stopped being trusted, in words for the user plus counts for the log. */
+export interface DriftReport {
+  reason: string;
+  unknownFrames: number;
+  malformedFrames: number;
 }
 
 export type LiveEvent =
@@ -77,7 +89,8 @@ export type LiveEvent =
   | { type: "clock"; onClock: LiveSnapshot["onClock"] }
   | { type: "status"; status: LiveStatus; draft: FeedStatus }
   | { type: "request"; request: PickRequestView }
-  | { type: "league"; espnLeague: EspnLeague };
+  | { type: "league"; espnLeague: EspnLeague }
+  | { type: "degraded"; degraded: DriftReport };
 
 /** Resolves the feed's picks from `from` onward (earlier ones are already resolved). */
 export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: number | null, from = 0): LivePick[] {
