@@ -217,4 +217,19 @@ describe("relay", () => {
       expect(relay.snapshot("u1", "L1").request?.state).toBe("pending");
     });
   });
+
+  describe("the overlay's turn plan", () => {
+    const plan = { picks: [5], rounds: "2", onClock: false, targets: [], fallbacks: [], best: [], after: null };
+
+    it("keeps the latest published plan and hands it to a bridge only when its copy is older", async () => {
+      const { relay } = setup();
+      expect(relay.publishPlan("u1", "L1", plan)).toBe(false); // no bridge yet
+      await relay.ingest(scope, "s1", 0, PRE);
+      expect(relay.publishPlan("u1", "L1", plan)).toBe(true);
+      expect(await relay.ingest(scope, "s1", 3, [], undefined, 0)).toEqual({ status: 200, have: 3, plan: { version: 1, plan } });
+      expect(await relay.ingest(scope, "s1", 3, [], undefined, 1)).toEqual({ status: 200, have: 3 });
+      relay.publishPlan("u1", "L1", { ...plan, picks: [8] });
+      expect(await relay.ingest(scope, "s1", 3, [], undefined, 1)).toMatchObject({ plan: { version: 2, plan: { picks: [8] } } });
+    });
+  });
 });

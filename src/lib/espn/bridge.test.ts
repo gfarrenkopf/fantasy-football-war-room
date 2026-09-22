@@ -35,23 +35,45 @@ class FakeSocket {
   }
 }
 
+/** Just enough DOM for the overlay: static elements by selector, and built elements with children. */
 class FakeEl {
   hidden = false;
-  textContent = "";
+  className = "";
+  type = "";
+  title = "";
   style: Record<string, string> = {};
   onclick: (() => void) | null = null;
-  children = new Map<string, FakeEl>();
+  own = "";
+  kids: FakeEl[] = [];
+  selectors = new Map<string, FakeEl>();
+  get textContent(): string {
+    return this.own + this.kids.map((k) => k.textContent).join(" ");
+  }
+  set textContent(value: string) {
+    this.own = value;
+    this.kids = [];
+  }
   set innerHTML(_html: string) {}
   setAttribute() {}
   attachShadow() {
     return this;
   }
   querySelector(sel: string) {
-    if (!this.children.has(sel)) this.children.set(sel, new FakeEl());
-    return this.children.get(sel)!;
+    if (!this.selectors.has(sel)) this.selectors.set(sel, new FakeEl());
+    return this.selectors.get(sel)!;
   }
   appendChild(el: FakeEl) {
     return el;
+  }
+  append(...els: FakeEl[]) {
+    this.kids.push(...els);
+  }
+  replaceChildren(...els: FakeEl[]) {
+    this.kids = els;
+  }
+  /** Every descendant, depth first. */
+  all(): FakeEl[] {
+    return this.kids.flatMap((k) => [k, ...k.all()]);
   }
 }
 
@@ -62,12 +84,17 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ have: 0 }), { status: 200 }));
   const open = vi.fn();
   const shadow = new FakeEl();
+  const keyListeners: ((e: { key: string; preventDefault(): void }) => void)[] = [];
   const document = {
     currentScript: { src: `${WAR_ROOM}/espn-bridge.js` },
-    createElement: () => shadow,
+    // The overlay's host attaches the shared shadow root; everything else is a fresh element.
+    createElement: () => Object.assign(new FakeEl(), { attachShadow: () => shadow }),
     body: new FakeEl(),
     documentElement: new FakeEl(),
+    activeElement: null,
+    addEventListener: (type: string, fn: (e: { key: string; preventDefault(): void }) => void) => type === "keydown" && keyListeners.push(fn),
   };
+  const press = (key: string) => keyListeners.forEach((fn) => fn({ key, preventDefault() {} }));
   const context: Record<string, unknown> = {
     document,
     location: { hostname: url.hostname, pathname: url.pathname, search: url.search },
@@ -93,8 +120,8 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
   const Socket = () => context.WebSocket as typeof FakeSocket;
   const postMessage = (data: unknown, origin = WAR_ROOM) => windowListeners.forEach((fn) => fn({ data, origin }));
   const bodies = () =>
-    fetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[] });
-  return { load, bridge, Socket, postMessage, fetch, open, storage, shadow, bodies };
+    fetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number });
+  return { load, bridge, Socket, postMessage, fetch, open, storage, shadow, bodies, press };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -123,6 +150,7 @@ describe("ESPN bridge", () => {
     expect(p.bodies()[0]).toEqual({
       espnLeagueId: "704343562",
       session: expect.stringMatching(/^[a-z0-9]{8,}$/),
+      planVersion: 0,
       seq: 0,
       frames: ["INIT", "TOKEN", "SELECTED 1 4362628 4 {00000000-0000-0000-0000-000000000000}", "SELECTED 4 4429795 2"],
     });
@@ -326,6 +354,106 @@ describe("ESPN bridge", () => {
       p.ws.emit("SELECTING 1 60000");
       await vi.advanceTimersByTimeAsync(300);
       expect(p.ws.sent.at(-1)).toBe("SELECT 5");
+    });
+  });
+
+  describe("the turn plan in the overlay", () => {
+    const player = (espnPlayerId: number, name: string, badge = "100%") => ({ playerId: `p${espnPlayerId}`, espnPlayerId, name, pos: "TE", team: "BUF", bye: 7, badge });
+    const plan = {
+      picks: [108],
+      rounds: "11",
+      onClock: false,
+      targets: [player(11, "Dalton Kincaid"), player(12, "Travis Kelce"), player(13, "Isaiah Likely"), player(14, "Jake Ferguson")],
+      fallbacks: [player(15, "Mark Andrews", "99%")],
+      best: [{ ...player(16, "Tony Pollard", "#84"), pos: "RB" }],
+      after: { picks: [113], names: ["Caleb Williams"] },
+    };
+
+    /** A paired, live bridge whose War Room has published `plan`. */
+    async function withPlan() {
+      const p = page({ stored: "tok-1" });
+      p.fetch.mockImplementation(async (_u, init) => {
+        const body = JSON.parse(String(init.body));
+        const reply: Record<string, unknown> = { have: body.seq + body.frames.length };
+        if (body.planVersion < 1) reply.plan = { version: 1, plan };
+        return new Response(JSON.stringify(reply), { status: 200 });
+      });
+      p.load();
+      const ws = new (p.Socket())(DRAFT_URL);
+      ws.emit("CLOCK 0 5000");
+      await vi.advanceTimersByTimeAsync(300);
+      const rows = () => p.shadow.querySelector(".rows").all().filter((e) => e.className.startsWith("p"));
+      const buttons = () => p.shadow.querySelector(".rows").all().filter((e) => e.className.startsWith("d"));
+      return { ...p, ws, rows, buttons, title: () => p.shadow.querySelector(".pt").textContent, note: () => p.shadow.querySelector(".note").textContent };
+    }
+
+    it("shows the top three targets collapsed, and every section expanded", async () => {
+      const p = await withPlan();
+      expect(p.bridge()).toMatchObject({ planVersion: 1 });
+      expect(p.title()).toBe("Your next turn: pick 108");
+      expect(p.rows().map((r) => r.textContent)).toEqual([
+        expect.stringContaining("Dalton Kincaid"),
+        expect.stringContaining("Travis Kelce"),
+        expect.stringContaining("Isaiah Likely"),
+      ]);
+      p.shadow.querySelector(".more").onclick!();
+      expect(p.rows()).toHaveLength(6);
+      expect(p.note()).toContain("After that, pick 113: Caleb Williams");
+      // It asks for the plan once, then only when a newer one exists.
+      await vi.advanceTimersByTimeAsync(5300);
+      expect(p.bodies().at(-1)!.planVersion).toBe(1);
+    });
+
+    it("drops players as soon as they're drafted", async () => {
+      const p = await withPlan();
+      p.ws.emit("SELECTED 3 11 4");
+      expect(p.rows().map((r) => r.textContent).join()).not.toContain("Dalton Kincaid");
+      expect(p.rows()[0].textContent).toContain("Travis Kelce");
+    });
+
+    it("offers Draft only on the user's turn: arm, then confirm, sends it on ESPN's socket", async () => {
+      const p = await withPlan();
+      expect(p.buttons()).toHaveLength(0);
+      p.ws.emit("SELECTING 1 60000");
+      expect(p.title()).toBe("You're on the clock: pick 108");
+      expect(p.buttons().map((b) => b.textContent)).toEqual(["Draft", "Draft", "Draft"]);
+
+      p.buttons()[1].onclick!(); // arm Kelce
+      expect(p.ws.sent).toEqual([]);
+      expect(p.buttons().map((b) => b.textContent)).toEqual(["Draft", "Confirm", "Draft"]);
+      expect(p.note()).toContain("Travis Kelce");
+      p.buttons()[1].onclick!(); // confirm
+      expect(p.ws.sent).toEqual(["SELECT 12\n"]);
+      expect(p.note()).toBe("Drafting Travis Kelce in ESPN…");
+      p.ws.emit("SELECTED 1 12 4");
+      expect(p.bridge()).toMatchObject({ drafting: null });
+    });
+
+    it("drafts the armed player with Enter, cancels with Escape, and disarms when the turn passes", async () => {
+      const p = await withPlan();
+      p.ws.emit("SELECTING 1 60000");
+      p.buttons()[0].onclick!();
+      p.press("Escape");
+      expect(p.bridge()).toMatchObject({ armed: null });
+      p.buttons()[0].onclick!();
+      p.press("Enter");
+      expect(p.ws.sent).toEqual(["SELECT 11\n"]);
+
+      const q = await withPlan();
+      q.ws.emit("SELECTING 1 60000");
+      q.buttons()[0].onclick!();
+      q.ws.emit("SELECTING 2 60000");
+      expect(q.bridge()).toMatchObject({ armed: null });
+      q.press("Enter");
+      expect(q.ws.sent).toEqual([]);
+    });
+
+    it("says where the plan comes from when War Room hasn't published one", async () => {
+      const p = page({ stored: "tok-1" });
+      p.load();
+      new (p.Socket())(DRAFT_URL).emit("CLOCK 0 5000");
+      await vi.advanceTimersByTimeAsync(300);
+      expect(p.shadow.querySelector(".note").textContent).toContain("Open your War Room board");
     });
   });
 });

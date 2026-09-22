@@ -36,6 +36,8 @@ interface FramesRequest {
   frames: string[];
   /** What happened to the last pick command the bridge was handed. */
   result?: CommandResult;
+  /** The version of the overlay's turn plan the bridge already has. */
+  planVersion: number;
 }
 
 function parse(body: unknown): FramesRequest | null {
@@ -47,18 +49,20 @@ function parse(body: unknown): FramesRequest | null {
     r && typeof r.id === "string" && typeof r.sent === "boolean"
       ? { id: r.id.slice(0, 64), sent: r.sent, ...(typeof r.reason === "string" ? { reason: r.reason.slice(0, 64) } : {}) }
       : undefined;
-  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result };
+  const planVersion = Number.isInteger(b.planVersion) && b.planVersion! >= 0 ? b.planVersion! : 0;
+  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result, planVersion };
 }
 
 /**
- * POST /api/espn/bridge/frames { espnLeagueId, session, seq, frames, result? } → { have, command? }
+ * POST /api/espn/bridge/frames { espnLeagueId, session, seq, frames, result?, planVersion? } → { have, command?, plan? }
  *
  * The ESPN bridge (public/espn-bridge.js) relaying draft frames, authenticated by its pairing
  * token rather than the session cookie, which cross-site requests don't carry. `seq` is the offset
  * of the first frame in this session's log: 200 when it matches what the relay holds, 409 with the
  * relay's count when it doesn't (the bridge resends from there). An empty `frames` is a heartbeat.
  * `command` is a pick the user made in War Room, for the bridge to make in ESPN; the bridge reports
- * what it did with it as `result` on its next request.
+ * what it did with it as `result` on its next request. `plan` is the overlay's turn plan, sent only
+ * when it's newer than the bridge's `planVersion`.
  */
 export async function POST(request: Request) {
   if (!config.espnSyncEnabled) return withCors(error(404, "Not found"), request);
@@ -71,8 +75,8 @@ export async function POST(request: Request) {
   if (!body) return withCors(error(400, "Invalid frames"), request);
   if (body.espnLeagueId !== bridge.espnLeagueId) return withCors(error(403, "This bridge is paired to a different ESPN league"), request);
 
-  const result = await getRelay().ingest(bridge, body.session, body.seq, body.frames, body.result);
+  const result = await getRelay().ingest(bridge, body.session, body.seq, body.frames, body.result, body.planVersion);
   if (result.status === 413) return withCors(error(413, "Too many frames"), request);
-  const command = result.status === 200 ? result.command : undefined;
-  return withCors(json(result.status, command ? { have: result.have, command } : { have: result.have }), request);
+  const { status, ...reply } = result;
+  return withCors(json(status, reply), request);
 }

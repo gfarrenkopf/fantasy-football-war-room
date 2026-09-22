@@ -1,4 +1,5 @@
 import type { Crosswalk } from "@/lib/espn/crosswalk";
+import type { OverlayPlan } from "@/lib/espn/overlayPlan";
 import { emptyFeed, foldFrames, type DraftFeed } from "@/lib/espn/feed";
 import { requestActive, resolvePicks, type LiveEvent, type LivePick, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
 
@@ -57,7 +58,16 @@ export interface CommandResult {
   reason?: string;
 }
 
-export type IngestResult = { status: 200; have: number; command?: BridgeCommand } | { status: 409; have: number } | { status: 413 };
+/** The overlay's turn plan, versioned so a bridge only downloads it when it changed. */
+export interface VersionedPlan {
+  version: number;
+  plan: OverlayPlan;
+}
+
+export type IngestResult =
+  | { status: 200; have: number; command?: BridgeCommand; plan?: VersionedPlan }
+  | { status: 409; have: number }
+  | { status: 413 };
 
 export type PickRequestRefusal = "no-bridge" | "bridge-offline" | "not-your-turn" | "taken" | "busy";
 export type PickRequestResult = { ok: true; request: PickRequestView } | { ok: false; reason: PickRequestRefusal };
@@ -74,10 +84,14 @@ interface Channel {
   listeners: Set<Listener>;
   touched: number;
   request: (PickRequestView & { createdAt: number }) | null;
+  plan: VersionedPlan | null;
 }
 
 export interface Relay {
-  ingest(scope: RelayScope, session: string, seq: number, frames: readonly string[], result?: CommandResult): Promise<IngestResult>;
+  /** `planVersion` is the overlay plan the bridge already has; a newer one comes back with the result. */
+  ingest(scope: RelayScope, session: string, seq: number, frames: readonly string[], result?: CommandResult, planVersion?: number): Promise<IngestResult>;
+  /** Publishes the turn plan from a war room for the league's bridge overlay. False when no bridge is connected. */
+  publishPlan(userId: string, leagueId: string, plan: OverlayPlan): boolean;
   /** A pick the user made in War Room, for the bridge to make in ESPN. Refused unless ESPN has the user on the clock. */
   requestPick(userId: string, leagueId: string, pick: { playerId: string; espnPlayerId: number }): PickRequestResult;
   /** Starts watching a league. The snapshot is the draft so far; `listener` gets everything after it. */
@@ -141,6 +155,7 @@ export function createRelay({
         listeners: new Set(),
         touched: now(),
         request: null,
+        plan: null,
       };
       channels.set(k, ch);
     }
@@ -204,10 +219,11 @@ export function createRelay({
     ch.feed = emptyFeed();
     ch.picks = [];
     ch.request = null;
+    ch.plan = null;
   }
 
   return {
-    async ingest(scope, session, seq, frames, result) {
+    async ingest(scope, session, seq, frames, result, planVersion = 0) {
       const walk = await crosswalk(scope.season);
       const ch = channel(scope.userId, scope.leagueId);
       // Re-paired to a different ESPN league (or season): that's a different draft.
@@ -262,7 +278,15 @@ export function createRelay({
       emitStatus(ch);
       const r = ch.request;
       const command = r?.state === "pending" && now() - r.createdAt <= deliverWithinMs ? { id: r.id, select: r.espnPlayerId } : undefined;
-      return command ? { status: 200, have: log.length, command } : { status: 200, have: log.length };
+      const plan = ch.plan && ch.plan.version > planVersion ? ch.plan : undefined;
+      return { status: 200, have: log.length, ...(command ? { command } : {}), ...(plan ? { plan } : {}) };
+    },
+
+    publishPlan(userId, leagueId, plan) {
+      const ch = channels.get(key(userId, leagueId));
+      if (!ch?.scope) return false;
+      ch.plan = { version: (ch.plan?.version ?? 0) + 1, plan };
+      return true;
     },
 
     requestPick(userId, leagueId, pick) {

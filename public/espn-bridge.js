@@ -16,6 +16,10 @@
  * Plain script, no build step, so what's tested (src/lib/espn/bridge.test.ts) is exactly what ships.
  * The frame grammar is documented in docs/espn-protocol.md.
  */
+/**
+ * @typedef {{ playerId: string, espnPlayerId?: number, name: string, pos: string, team: string, bye: number, badge: string,
+ *   tag?: { kind: "value" | "reach", label: string } }} OverlayPlayer
+ */
 (function () {
   "use strict";
   /** @type {any} */
@@ -64,6 +68,20 @@
   let newline = true;
   /** Pick commands already handled, so a repeated delivery can never pick twice. */
   const handled = new Set();
+  /**
+   * The turn plan War Room published for this draft (8.14), and its version.
+   * @type {{ picks: number[], rounds: string, onClock: boolean, targets: OverlayPlayer[], fallbacks: OverlayPlayer[], best: OverlayPlayer[], after: { picks: number[], names: string[] } | null } | null}
+   */
+  let plan = null;
+  let planVersion = 0;
+  /** ESPN ids drafted so far, from SELECTED frames: the plan hides them at once. */
+  const takenEspn = new Set();
+  /** Overlay drafting: the armed player's ESPN id, and a pick sent and not yet announced. */
+  /** @type {number | null} */
+  let armed = null;
+  /** @type {string | null} */
+  let draftingName = null;
+  let expanded = false;
   /** What happened to the last command, reported on the next request. */
   /** @type {{ id: string, sent: boolean, reason?: string } | null} */
   let result = null;
@@ -94,9 +112,17 @@
       const frame = sanitize(e.data);
       if (!frame) return;
       log.push(frame);
-      const [head, team] = frame.split(" ");
-      if (head === "SELECTING") onClockTeam = Number(team);
-      else if (head === "SELECTED") onClockTeam = null;
+      const [head, team, player] = frame.split(" ");
+      if (head === "SELECTING") {
+        onClockTeam = Number(team);
+        render();
+      } else if (head === "SELECTED") {
+        onClockTeam = null;
+        takenEspn.add(Number(player));
+        if (Number(team) === espnTeamId) draftingName = null;
+        armed = null;
+        render();
+      }
     });
     ws.addEventListener("close", () => {
       sockets = Math.max(0, sockets - 1);
@@ -157,7 +183,7 @@
         mode: "cors",
         credentials: "omit",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify(result ? { espnLeagueId, session, seq: sent, frames, result } : { espnLeagueId, session, seq: sent, frames }),
+        body: JSON.stringify({ espnLeagueId, session, seq: sent, frames, planVersion, ...(result ? { result } : {}) }),
       });
       if (res.status === 200 || res.status === 409) {
         // 409: War Room holds a different number of frames (e.g. it restarted); resend from there.
@@ -168,6 +194,10 @@
         if (res.status === 409) lastPost = 0;
         result = null;
         if (body.command) pickFromWarRoom(body.command);
+        if (body.plan && typeof body.plan.version === "number" && body.plan.plan) {
+          planVersion = body.plan.version;
+          plan = body.plan.plan;
+        }
       } else if (res.status === 401) {
         writeToken(null);
         status = "expired";
@@ -202,11 +232,36 @@
     if (!espnTeamId || onClockTeam !== espnTeamId) result = { id, sent: false, reason: "not-on-the-clock" };
     else if (!current) result = { id, sent: false, reason: "no-socket" };
     else {
-      send.call(current, `SELECT ${command.select}${newline ? "\n" : ""}`);
-      onClockTeam = null;
+      select(command.select);
       result = { id, sent: true };
     }
     lastPost = 0; // report straight away
+  }
+
+  /** Sends a pick on ESPN's socket. Callers have checked the user is on the clock. @param {number} espnPlayerId */
+  function select(espnPlayerId) {
+    send.call(/** @type {WebSocket} */ (current), `SELECT ${espnPlayerId}${newline ? "\n" : ""}`);
+    onClockTeam = null;
+  }
+
+  const myTurn = () => !!current && espnTeamId > 0 && onClockTeam === espnTeamId;
+
+  /**
+   * Drafting from the overlay's plan: the first click arms a player, the second (or Enter) sends
+   * him, exactly as War Room's own two-step pick does.
+   * @param {OverlayPlayer} player
+   */
+  function draftFromOverlay(player) {
+    if (!player.espnPlayerId || takenEspn.has(player.espnPlayerId)) return;
+    if (armed !== player.espnPlayerId) {
+      armed = player.espnPlayerId;
+      return render();
+    }
+    armed = null;
+    if (!myTurn()) return render();
+    select(player.espnPlayerId);
+    draftingName = player.name;
+    render();
   }
 
   setInterval(() => {
@@ -238,23 +293,138 @@
   const root = host.attachShadow({ mode: "open" });
   root.innerHTML = `<style>
     .box{position:fixed;left:16px;bottom:16px;z-index:2147483647;font:13px/1.35 system-ui,sans-serif;color:#e8edf2;
-      background:#10161d;border:1px solid #2b3a48;border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:280px}
+      background:#10161d;border:1px solid #2b3a48;border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.35);
+      width:min(360px,calc(100vw - 32px));box-sizing:border-box}
     .t{font-weight:700;letter-spacing:.02em;margin-bottom:2px}.t i{font-style:normal;color:#5fd38d}
     .s{color:#aab7c4}.row{display:flex;gap:8px;margin-top:8px}
     button{font:inherit;border-radius:6px;border:1px solid #2b3a48;background:#1b2530;color:inherit;padding:4px 10px;cursor:pointer}
     button.go{background:#2e7d4f;border-color:#2e7d4f}[hidden]{display:none}
+    .plan{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px}
+    .ph{display:flex;align-items:baseline;gap:8px}.ph b{flex:1}.ph span{color:#8f9aa8;font-size:12px}
+    .ph button{padding:1px 8px;font-size:12px}
+    .rows{max-height:45vh;overflow:auto;margin-top:4px}
+    .h{color:#8f9aa8;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:8px 0 2px}
+    .p{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;border-left:3px solid #f59e42;background:#161e27;margin-top:4px}
+    .p.best{border-left-color:#3ddc91}.p.armed{outline:1px solid #3ddc91}
+    .b{font-weight:700;color:#f59e42;min-width:38px;font-variant-numeric:tabular-nums}.p.best .b{color:#3ddc91}
+    .n{flex:1;min-width:0}.n div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.n small{color:#8f9aa8}
+    .g{font-size:11px;padding:1px 5px;border-radius:4px}.g.value{color:#5ee39a;border:1px solid #2e7d4f}.g.reach{color:#ff8a8a;border:1px solid #8a3434}
+    .d{padding:2px 8px;font-size:12px}.d.on{background:#3ddc91;border-color:#3ddc91;color:#0d1a14;font-weight:700}
+    .note{color:#8f9aa8;font-size:12px;margin-top:6px}
   </style><div class="box"><div class="t">War Room <i>●</i></div><div class="s"></div>
+  <div class="plan" hidden><div class="ph"><b class="pt"></b><span class="pr"></span><button class="more" type="button">More</button></div>
+  <div class="rows"></div><div class="note"></div></div>
   <div class="row"><button class="go" type="button">Connect to War Room</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
   const goEl = /** @type {HTMLButtonElement} */ (root.querySelector(".go"));
   const hideEl = /** @type {HTMLButtonElement} */ (root.querySelector(".x"));
+  const planEl = /** @type {HTMLElement} */ (root.querySelector(".plan"));
+  const planTitleEl = /** @type {HTMLElement} */ (root.querySelector(".pt"));
+  const planRoundEl = /** @type {HTMLElement} */ (root.querySelector(".pr"));
+  const moreEl = /** @type {HTMLButtonElement} */ (root.querySelector(".more"));
+  const rowsEl = /** @type {HTMLElement} */ (root.querySelector(".rows"));
+  const noteEl = /** @type {HTMLElement} */ (root.querySelector(".note"));
   goEl.onclick = pair;
   hideEl.onclick = () => (host.hidden = true);
+  moreEl.onclick = () => {
+    expanded = !expanded;
+    render();
+  };
+
+  // Enter drafts the armed player and Escape disarms, unless the user is typing in ESPN's page.
+  document.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => {
+    if (armed === null) return;
+    const el = document.activeElement;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) return;
+    const player = plan && [...plan.targets, ...plan.fallbacks, ...plan.best].find((p) => p.espnPlayerId === armed);
+    if (e.key === "Enter" && player) {
+      e.preventDefault();
+      draftFromOverlay(player);
+    } else if (e.key === "Escape") {
+      armed = null;
+      render();
+    }
+  });
+
+  /** @param {string} tag @param {string} [cls] @param {string} [text] */
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  /** @param {OverlayPlayer} p @param {boolean} best */
+  function playerRow(p, best) {
+    const row = el("div", `p${best ? " best" : ""}${armed === p.espnPlayerId ? " armed" : ""}`);
+    const name = el("div", "n");
+    name.append(el("div", undefined, p.name), el("small", undefined, `${p.pos} · ${p.team} · Bye ${p.bye}`));
+    row.append(el("span", "b", p.badge), name);
+    if (p.tag) row.append(el("span", `g ${p.tag.kind}`, p.tag.label));
+    if (myTurn() && p.espnPlayerId && !draftingName) {
+      const isArmed = armed === p.espnPlayerId;
+      const button = /** @type {HTMLButtonElement} */ (el("button", `d${isArmed ? " on" : ""}`, isArmed ? "Confirm" : "Draft"));
+      button.type = "button";
+      button.title = isArmed ? `Draft ${p.name} in ESPN` : `Arm ${p.name}; click Confirm to draft him`;
+      button.onclick = () => draftFromOverlay(p);
+      row.append(button);
+    }
+    return row;
+  }
+
+  function renderPlan() {
+    const live = !!token && sockets > 0 && onDraftPage;
+    planEl.hidden = !live;
+    if (!live) return;
+    if (!plan) {
+      planTitleEl.textContent = "Your turn plan";
+      planRoundEl.textContent = "";
+      moreEl.hidden = true;
+      rowsEl.replaceChildren();
+      noteEl.textContent = "Open your War Room board to see your turn plan here.";
+      return;
+    }
+    const open = (/** @type {OverlayPlayer[]} */ list) => list.filter((p) => !p.espnPlayerId || !takenEspn.has(p.espnPlayerId));
+    const targets = open(plan.targets);
+    const fallbacks = open(plan.fallbacks);
+    const best = open(plan.best);
+    const turn = `pick${plan.picks.length > 1 ? "s" : ""} ${plan.picks.join(" & ")}`;
+    planTitleEl.textContent = myTurn() ? `You're on the clock: ${turn}` : `Your next turn: ${turn}`;
+    planRoundEl.textContent = `round ${plan.rounds}`;
+    moreEl.hidden = false;
+    moreEl.textContent = expanded ? "Less" : "More";
+    /** @type {HTMLElement[]} */
+    const nodes = [];
+    const section = (/** @type {string} */ title, /** @type {OverlayPlayer[]} */ list, /** @type {boolean} */ isBest) => {
+      if (!list.length) return;
+      nodes.push(el("div", "h", title), ...list.map((p) => playerRow(p, isBest)));
+    };
+    if (expanded) {
+      section("Targets (in priority order)", targets, false);
+      section("If they're gone", fallbacks, false);
+      section("Best on the board, for your needs", best, true);
+    } else {
+      const top = [...targets, ...fallbacks].slice(0, 3);
+      section("Targets", top.length ? top : best.slice(0, 3), !top.length);
+    }
+    rowsEl.replaceChildren(...nodes);
+    const armedPlayer = armed !== null ? [...targets, ...fallbacks, ...best].find((p) => p.espnPlayerId === armed) : null;
+    noteEl.textContent = draftingName
+      ? `Drafting ${draftingName} in ESPN…`
+      : armedPlayer
+        ? `Click Confirm or press Enter to draft ${armedPlayer.name}. Esc cancels.`
+        : expanded && plan.after
+          ? `After that, pick${plan.after.picks.length > 1 ? "s" : ""} ${plan.after.picks.join(" & ")}: ${plan.after.names.join(", ") || "see your board"}`
+          : myTurn()
+            ? "Draft here or in ESPN."
+            : "";
+  }
 
   const picks = () => log.filter((f) => f.startsWith("SELECTED ")).length;
 
   function render() {
+    if (armed !== null && !myTurn()) armed = null;
     const needsPairing = !token && onDraftPage;
     goEl.hidden = !needsPairing;
     goEl.textContent = status === "expired" ? "Connect again" : "Connect to War Room";
@@ -266,9 +436,10 @@
     else if (!token) text = "Connect this draft to your War Room board.";
     else if (status === "offline") text = "Can't reach War Room. Retrying…";
     else if (!sockets) text = "Connected. Waiting for ESPN's draft room…";
-    else text = `Live. Picks go to your board (${picks()} so far). Keep this tab open.`;
+    else text = `Live · ${picks()} picks synced. Keep this tab open.`;
     statusEl.textContent = text;
     dotEl.style.color = token && sockets && status !== "offline" ? "#5fd38d" : "#e0a100";
+    renderPlan();
   }
 
   (document.body || document.documentElement).appendChild(host);
@@ -281,6 +452,6 @@
       render();
     },
     /** For tests and support: what the bridge is doing. */
-    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage }),
+    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, planVersion, armed, drafting: draftingName }),
   };
 })();

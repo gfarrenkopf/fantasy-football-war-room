@@ -6,6 +6,9 @@ import { samePicks } from "@/lib/draft/state";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { listenForEspnPaired } from "@/lib/espn/channel";
 import { requestActive, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
+import { myPlayers, positionCounts } from "@/lib/draft/roster";
+import { computeTurnPlan } from "@/lib/draft/sim/turnPlan";
+import { buildOverlayPlan } from "@/lib/espn/overlayPlan";
 import { slotMismatch, syncMode, toDraftPicks } from "@/lib/espn/sync";
 import { useAccount } from "./Account";
 import { cx, s } from "./cx";
@@ -13,8 +16,10 @@ import { useModel } from "./DraftModel";
 import { useDraft } from "./DraftProvider";
 import { useToast } from "./Feedback";
 import { useFlags } from "./Flags";
+import type { PlanOdds } from "./FocusView";
 
 export interface EspnSyncValue {
+  leagueId: string | null;
   /** `off`: not signed in, feature off, or this league can't use it. */
   status: LiveStatus | "off";
   /** The board follows ESPN pick for pick; logging picks by hand is paused. */
@@ -33,7 +38,7 @@ export interface EspnSyncValue {
 }
 
 const noop = () => {};
-const OFF: EspnSyncValue = { status: "off", locked: false, myTurn: false, armed: null, request: null, arm: noop, disarm: noop, draftArmed: noop };
+const OFF: EspnSyncValue = { leagueId: null, status: "off", locked: false, myTurn: false, armed: null, request: null, arm: noop, disarm: noop, draftArmed: noop };
 const EspnSyncContext = createContext<EspnSyncValue>(OFF);
 
 export const useEspnSync = () => useContext(EspnSyncContext);
@@ -160,6 +165,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   const value = useMemo<EspnSyncValue>(() => {
     if (!snapshot) return OFF;
     return {
+      leagueId,
       status: snapshot.status,
       locked: snapshot.status === "live" && syncMode(snapshot) === "replace",
       myTurn,
@@ -169,7 +175,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       disarm,
       draftArmed,
     };
-  }, [snapshot, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
+  }, [leagueId, snapshot, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
 
   return <EspnSyncContext.Provider value={value}>{children}</EspnSyncContext.Provider>;
 }
@@ -253,5 +259,45 @@ export function EspnPickBar() {
       </div>
     );
   }
+  return null;
+}
+
+/**
+ * Publishes the war room's turn plan to the ESPN overlay while a bridge is live (8.14), so the user
+ * can see it, and draft from it, without leaving ESPN's draft room. The same computation as the plan
+ * panel; published only when it changes, and again whenever the connection comes back live.
+ */
+export function EspnPlanPublisher({ planOdds }: { planOdds: PlanOdds | null }) {
+  const { status, leagueId } = useEspnSync();
+  const model = useModel();
+  const { state } = useDraft();
+
+  const body = useMemo(() => {
+    if (status !== "live" || !planOdds) return null;
+    const now = computeTurnPlan(planOdds.picks, planOdds.result, model.ctx, 0);
+    if (!now) return null;
+    const plan = buildOverlayPlan({
+      now,
+      next: computeTurnPlan(planOdds.picks, planOdds.result, model.ctx, 1),
+      onClock: model.onClock,
+      taken: new Set(model.taken.keys()),
+      counts: positionCounts(myPlayers(state.picks, model.player)),
+      current: model.current,
+      ctx: model.ctx,
+      valueThreshold: model.league.valueThreshold,
+    });
+    return JSON.stringify(plan);
+  }, [status, planOdds, model, state.picks]);
+
+  const published = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== "live") published.current = null; // publish again once the bridge is back
+    if (!body || !leagueId || body === published.current) return;
+    published.current = body;
+    void fetch(`/api/leagues/${encodeURIComponent(leagueId)}/espn/plan`, { method: "PUT", headers: { "content-type": "application/json" }, body }).catch(() => {
+      published.current = null;
+    });
+  }, [body, status, leagueId]);
+
   return null;
 }

@@ -28,7 +28,8 @@ async function routes(env: Record<string, string> = {}) {
   const frames = await import("@/app/api/espn/bridge/frames/route");
   const stream = await import("@/app/api/leagues/[id]/espn/stream/route");
   const pick = await import("@/app/api/leagues/[id]/espn/pick/route");
-  return { frames, stream, pick };
+  const plan = await import("@/app/api/leagues/[id]/espn/plan/route");
+  return { frames, stream, pick, plan };
 }
 
 const ESPN = "https://fantasy.espn.com";
@@ -191,5 +192,35 @@ describe("ESPN relay routes", () => {
       expect(await notYours.json()).toMatchObject({ reason: "not-your-turn" });
       expect((await draftFromWarRoom(pick, "no-such-player")).status).toBe(422);
     });
+  });
+
+  it("publishes a war room's turn plan to the bridge with ESPN ids attached", async () => {
+    const { frames, plan } = await routes();
+    const gibbs = parseEspnPlayers(espnPool).find((p) => p.fullName === "Jahmyr Gibbs")!.id;
+    const body = {
+      picks: [3],
+      rounds: "1",
+      onClock: false,
+      targets: [{ playerId: "jahmyr-gibbs-rb-det", name: "Jahmyr Gibbs", pos: "RB", team: "DET", bye: 6, badge: "100%", espnPlayerId: 1 }],
+      fallbacks: [],
+      best: [],
+      after: null,
+    };
+    const put = () =>
+      plan.PUT(
+        new Request(`http://localhost/api/leagues/${leagueId}/espn/plan`, {
+          method: "PUT",
+          headers: { "content-type": "application/json", host: "localhost", origin: "http://localhost" },
+          body: JSON.stringify(body),
+        }),
+        { params: Promise.resolve({ id: leagueId }) },
+      );
+    expect((await put()).status).toBe(409); // no bridge yet
+    await frames.POST(post(token, { espnLeagueId: "704343562", session: "abc12345", seq: 0, frames: PRE }));
+    expect((await put()).status).toBe(204);
+    const checkIn = await frames.POST(post(token, { espnLeagueId: "704343562", session: "abc12345", seq: 3, frames: [], planVersion: 0 }));
+    const reply = await checkIn.json();
+    // The client's espnPlayerId is ignored; the server's own lookup is what the overlay drafts with.
+    expect(reply.plan).toMatchObject({ version: 1, plan: { targets: [{ playerId: "jahmyr-gibbs-rb-det", espnPlayerId: gibbs }] } });
   });
 });
