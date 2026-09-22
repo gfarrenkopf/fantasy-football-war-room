@@ -147,8 +147,10 @@ describe("ESPN bridge", () => {
 
     p.postMessage({ type: "warroom-bridge-paired", token: "tok-1" });
     await vi.advanceTimersByTimeAsync(0);
-    expect(p.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = p.fetch.mock.calls[0];
+    // The frame post; pairing also asks ESPN for the league's settings (8.8).
+    const posts = p.fetch.mock.calls.filter(([, init]) => init && init.body);
+    expect(posts).toHaveLength(1);
+    const [url, init] = posts[0];
     expect(url).toBe(`${WAR_ROOM}/api/espn/bridge/frames`);
     expect(init.credentials).toBe("omit");
     expect((init.headers as Record<string, string>).authorization).toBe("Bearer tok-1");
@@ -576,6 +578,78 @@ describe("catching up on picks made before the bridge attached (8.12)", () => {
     ws.emit(`INIT ${initBlob({ drafted: DRAFTED })}\n`);
     await vi.advanceTimersByTimeAsync(300);
     expect(p.bodies().flatMap((b) => b.frames)).toEqual(["SELECTED 3 4362628 2", "INIT"]);
-    expect(p.fetch.mock.calls.filter(([u]) => u.includes("lm-api-reads"))).toHaveLength(0);
+    expect(p.fetch.mock.calls.filter(([u]) => u.includes("mDraftDetail"))).toHaveLength(0);
+  });
+});
+
+describe("telling War Room how ESPN has this league set up (8.8)", () => {
+  const SETTINGS = {
+    settings: {
+      size: 4,
+      name: "App Test",
+      draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2], timePerSelection: 300 },
+      rosterSettings: { lineupSlotCounts: { "0": 1, "2": 2, "20": 3 } },
+      // A real league carries dozens of these; only the reception item should travel.
+      scoringSettings: { scoringItems: [{ statId: 42, points: 0.04 }, { statId: 53, points: 1 }, { statId: 24, points: 0.1 }] },
+    },
+  };
+
+  function onDraftPage(settings: unknown = SETTINGS) {
+    const p = page({ stored: "tok-1" });
+    p.fetch.mockImplementation(async (url, init) => {
+      if (url.includes("mSettings")) return new Response(JSON.stringify(settings), { status: 200 });
+      if (url.includes("lm-api-reads")) return new Response(JSON.stringify({ draftDetail: { picks: [] } }), { status: 200 });
+      const body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length }), { status: 200 });
+    });
+    p.load();
+    return p;
+  }
+
+  it("sends only the settings War Room reads, once", async () => {
+    const p = onDraftPage();
+    await vi.advanceTimersByTimeAsync(300);
+    console.log("BODIES", JSON.stringify(p.bodies().map((b) => Object.keys(b))));
+
+    const sent = p.bodies().find((b) => "settings" in b) as { settings: Record<string, unknown> } | undefined;
+    expect(sent?.settings).toEqual({
+      size: 4,
+      draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2] },
+      rosterSettings: { lineupSlotCounts: { "0": 1, "2": 2, "20": 3 } },
+      scoringSettings: { scoringItems: [{ statId: 53, points: 1 }] },
+    });
+    // Not repeated on every heartbeat.
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(p.bodies().filter((b) => "settings" in b)).toHaveLength(1);
+  });
+
+  it("reads them again when the draft starts, because ESPN redraws the order at lobby time", async () => {
+    const p = onDraftPage();
+    await vi.advanceTimersByTimeAsync(300);
+    const redrawn = { settings: { ...SETTINGS.settings, draftSettings: { type: "SNAKE", pickOrder: [2, 4, 3, 1] } } };
+    p.fetch.mockImplementation(async (url, init) => {
+      if (url.includes("mSettings")) return new Response(JSON.stringify(redrawn), { status: 200 });
+      const body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length }), { status: 200 });
+    });
+    new (p.Socket())(DRAFT_URL).emit("STATE 1");
+    await vi.advanceTimersByTimeAsync(300);
+    const sent = p.bodies().filter((b) => "settings" in b) as { settings: { draftSettings: { pickOrder: number[] } } }[];
+    expect(sent).toHaveLength(2);
+    expect(sent[1].settings.draftSettings.pickOrder).toEqual([2, 4, 3, 1]);
+  });
+
+  it("carries on relaying picks when ESPN won't give up its settings", async () => {
+    const p = page({ stored: "tok-1" });
+    p.fetch.mockImplementation(async (url, init) => {
+      if (url.includes("mSettings")) return new Response("nope", { status: 500 });
+      const body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length }), { status: 200 });
+    });
+    p.load();
+    new (p.Socket())(DRAFT_URL).emit("SELECTED 1 1 1");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.bodies().some((b) => "settings" in b)).toBe(false);
+    expect(p.bodies().flatMap((b) => b.frames)).toEqual(["SELECTED 1 1 1"]);
   });
 });

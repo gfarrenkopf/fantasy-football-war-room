@@ -16,7 +16,7 @@ import { Board, matchesQuery, useBoardColumns } from "./Board";
 import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
-import { EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider } from "./EspnSync";
+import { EspnLeagueBar, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider } from "./EspnSync";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
 import { OpeningNight } from "./OpeningNight";
@@ -270,6 +270,7 @@ function WarRoomView() {
           ))}
         </div>
       </Header>
+      <EspnLeagueBar />
       <EspnPickBar />
       <EspnPlanPublisher planOdds={planStale ? null : planOdds} />
       {prefs.mockOn && <MockBar onReport={() => void openReport()} reportMocks={REPORT_MOCKS} />}

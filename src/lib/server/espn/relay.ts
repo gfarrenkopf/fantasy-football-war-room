@@ -1,7 +1,8 @@
 import type { Crosswalk } from "@/lib/espn/crosswalk";
 import type { OverlayPlan } from "@/lib/espn/overlayPlan";
 import { emptyFeed, foldFrames, type DraftFeed } from "@/lib/espn/feed";
-import { requestActive, resolvePicks, type LiveEvent, type LivePick, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
+import { toLeagueSettings } from "@/lib/espn/league";
+import { requestActive, resolvePicks, type EspnLeague, type LiveEvent, type LivePick, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
 
 /**
  * The relay (8.9): frames in from a bridge, resolved picks out to every war room open on that league.
@@ -87,11 +88,14 @@ interface Channel {
   touched: number;
   request: (PickRequestView & { createdAt: number }) | null;
   plan: VersionedPlan | null;
+  espnLeague: EspnLeague | null;
 }
 
 export interface Relay {
   /** `planVersion` is the overlay plan the bridge already has; a newer one comes back with the result. */
   ingest(scope: RelayScope, session: string, seq: number, frames: readonly string[], result?: CommandResult, planVersion?: number): Promise<IngestResult>;
+  /** ESPN's own settings for this draft, as the bridge read them (8.8). */
+  setLeague(scope: RelayScope, settings: unknown): void;
   /** Publishes the turn plan from a war room for the league's bridge overlay. False when no bridge is connected. */
   publishPlan(userId: string, leagueId: string, plan: OverlayPlan): boolean;
   /** A pick the user made in War Room, for the bridge to make in ESPN. Refused unless ESPN has the user on the clock. */
@@ -159,6 +163,7 @@ export function createRelay({
         touched: now(),
         request: null,
         plan: null,
+        espnLeague: null,
       };
       channels.set(k, ch);
     }
@@ -182,6 +187,7 @@ export function createRelay({
       onClock: clockNow(ch),
       sessions: ch.sessions.size,
       request: viewOf(ch.request),
+      espnLeague: ch.espnLeague,
     };
   }
 
@@ -229,6 +235,7 @@ export function createRelay({
     ch.picks = [];
     ch.request = null;
     ch.plan = null;
+    ch.espnLeague = null;
   }
 
   return {
@@ -289,6 +296,17 @@ export function createRelay({
       const command = r?.state === "pending" && now() - r.createdAt <= deliverWithinMs ? { id: r.id, select: r.espnPlayerId } : undefined;
       const plan = ch.plan && ch.plan.version > planVersion ? ch.plan : undefined;
       return { status: 200, have: log.length, ...(command ? { command } : {}), ...(plan ? { plan } : {}) };
+    },
+
+    setLeague(scope, settings) {
+      const ch = channel(scope.userId, scope.leagueId);
+      const imported = toLeagueSettings(settings, scope.espnTeamId);
+      const espnLeague: EspnLeague = imported.ok ? { ok: true, settings: imported.league } : { ok: false, error: imported.error };
+      // ESPN redraws the draft order when the lobby opens, so this arrives more than once; only a
+      // real change is worth telling the war room about.
+      if (JSON.stringify(espnLeague) === JSON.stringify(ch.espnLeague)) return;
+      ch.espnLeague = espnLeague;
+      emit(ch, { type: "league", espnLeague });
     },
 
     publishPlan(userId, leagueId, plan) {

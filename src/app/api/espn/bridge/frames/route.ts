@@ -38,6 +38,8 @@ interface FramesRequest {
   result?: CommandResult;
   /** The version of the overlay's turn plan the bridge already has. */
   planVersion: number;
+  /** ESPN's own league settings, sent when the bridge first reads them and whenever they change (8.8). */
+  settings?: unknown;
 }
 
 function parse(body: unknown): FramesRequest | null {
@@ -50,7 +52,7 @@ function parse(body: unknown): FramesRequest | null {
       ? { id: r.id.slice(0, 64), sent: r.sent, ...(typeof r.reason === "string" ? { reason: r.reason.slice(0, 64) } : {}) }
       : undefined;
   const planVersion = Number.isInteger(b.planVersion) && b.planVersion! >= 0 ? b.planVersion! : 0;
-  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result, planVersion };
+  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result, planVersion, settings: b.settings };
 }
 
 /**
@@ -76,6 +78,9 @@ export async function POST(request: Request) {
   if (body.espnLeagueId !== bridge.espnLeagueId) return withCors(error(403, "This bridge is paired to a different ESPN league"), request);
 
   const result = await getRelay().ingest(bridge, body.session, body.seq, body.frames, body.result, body.planVersion);
+  // After ingest: re-pairing to a different ESPN league resets the channel, and these settings
+  // describe the league it just moved to.
+  if (body.settings !== undefined) getRelay().setLeague(bridge, body.settings);
   if (result.status === 413) return withCors(error(413, "Too many frames"), request);
   const { status, ...reply } = result;
   return withCors(json(status, reply), request);
