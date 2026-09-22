@@ -87,3 +87,23 @@ export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: 
     };
   });
 }
+
+/** ESPN's pick clock as a local deadline: the time left when it arrived, on this device's own clock, so server skew doesn't matter. */
+export interface ClockDeadline {
+  teamId: number;
+  /** `Date.now()` value at which the pick is due. */
+  deadline: number;
+}
+
+export const clockDeadline = (onClock: LiveSnapshot["onClock"], receivedAt: number): ClockDeadline | null =>
+  onClock && { teamId: onClock.teamId, deadline: receivedAt + onClock.msRemaining };
+
+/** "1:05", "0:09"; never negative. Rounds up, so "0:01" shows until the clock really runs out. */
+export function formatClock(ms: number): string {
+  const secs = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
+export type ClockUrgency = "ok" | "low" | "urgent";
+
+export const clockUrgency = (ms: number): ClockUrgency => (ms <= 10_000 ? "urgent" : ms <= 30_000 ? "low" : "ok");

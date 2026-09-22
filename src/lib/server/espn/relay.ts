@@ -79,6 +79,8 @@ interface Channel {
   frameCount: number;
   feed: DraftFeed;
   picks: LivePick[];
+  /** When the latest clock frame (SELECTING or CLOCK) arrived, so a snapshot can say how much of `feed.onClock` is left. */
+  clockAt: number;
   lastSeen: number | null;
   lastStatus: LiveStatus;
   listeners: Set<Listener>;
@@ -150,6 +152,7 @@ export function createRelay({
         frameCount: 0,
         feed: emptyFeed(),
         picks: [],
+        clockAt: 0,
         lastSeen: null,
         lastStatus: "waiting",
         listeners: new Set(),
@@ -176,10 +179,16 @@ export function createRelay({
       anchored: ch.feed.anchored,
       espnTeamId: ch.scope?.espnTeamId ?? null,
       picks: ch.picks,
-      onClock: ch.feed.onClock,
+      onClock: clockNow(ch),
       sessions: ch.sessions.size,
       request: viewOf(ch.request),
     };
+  }
+
+  /** The clock as of now: the last frame's time left, less what has passed since it arrived. */
+  function clockNow(ch: Channel): LiveSnapshot["onClock"] {
+    const clock = ch.feed.onClock;
+    return clock && { teamId: clock.teamId, msRemaining: Math.max(0, clock.msRemaining - (now() - ch.clockAt)) };
   }
 
   const viewOf = (r: Channel["request"]): PickRequestView | null =>
@@ -256,6 +265,9 @@ export function createRelay({
         // bridging at once) change the order, so the whole draft is refolded.
         ch.feed = latest ? foldFrames(frames, ch.feed) : foldFrames([...ch.sessions.values()].flat());
         const rebuilt = !latest || teamChanged;
+        // Every clock frame restarts the countdown, even one that repeats the last (a paused draft).
+        const clockMoved = frames.some((f) => f.startsWith("CLOCK ") || f.startsWith("SELECTING ")) || ch.feed.onClock?.teamId !== before.onClock?.teamId;
+        if (clockMoved) ch.clockAt = now();
         const fresh = resolvePicks(ch.feed, walk, scope.espnTeamId, rebuilt ? 0 : ch.picks.length);
         ch.picks = rebuilt ? fresh : [...ch.picks, ...fresh];
         if (rebuilt) emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
@@ -266,10 +278,7 @@ export function createRelay({
             settle(ch, pick.espnPlayerId === ch.request.espnPlayerId ? "confirmed" : "superseded");
           }
         }
-        const clock = ch.feed.onClock;
-        if (!rebuilt && (clock?.teamId !== before.onClock?.teamId || clock?.msRemaining !== before.onClock?.msRemaining)) {
-          emit(ch, { type: "clock", onClock: clock });
-        }
+        if (!rebuilt && clockMoved) emit(ch, { type: "clock", onClock: ch.feed.onClock });
       } else if (teamChanged && ch.picks.length) {
         ch.picks = resolvePicks(ch.feed, walk, scope.espnTeamId);
         emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });

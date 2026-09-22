@@ -112,6 +112,7 @@
       const frame = sanitize(e.data);
       if (!frame) return;
       log.push(frame);
+      flushSoon();
       const [head, team, player] = frame.split(" ");
       if (head === "SELECTING") {
         onClockTeam = Number(team);
@@ -176,6 +177,7 @@
     if (sent >= log.length && now - lastPost < HEARTBEAT_MS) return;
     inFlight = true;
     lastPost = now;
+    const from = sent;
     const frames = log.slice(sent, sent + MAX_BATCH);
     try {
       const res = await fetch(`${ORIGIN}/api/espn/bridge/frames`, {
@@ -218,6 +220,9 @@
       inFlight = false;
       render();
     }
+    // Frames that arrived while this post was in flight go straight after it (only on progress, so a
+    // War Room that keeps asking for the same offset can't make this spin).
+    if (sent > from && sent < log.length) flushSoon();
   }
 
   /**
@@ -264,11 +269,28 @@
     render();
   }
 
-  setInterval(() => {
+  function tick() {
     if (!token) return;
     if (failures && Date.now() - lastPost < Math.min(30_000, HEARTBEAT_MS * failures)) return;
     void flush();
-  }, FLUSH_MS);
+  }
+
+  /**
+   * Flushes as soon as a frame arrives, not just on the interval. With the user drafting from War
+   * Room, this tab sits in the background, where Chrome slows repeating timers (to once a minute
+   * after five hidden minutes). A timeout started from a socket event isn't slowed that way.
+   */
+  let flushQueued = false;
+  function flushSoon() {
+    if (flushQueued) return;
+    flushQueued = true;
+    setTimeout(() => {
+      flushQueued = false;
+      tick();
+    }, 0);
+  }
+
+  setInterval(tick, FLUSH_MS);
 
   /* ---------------- pairing ---------------- */
 

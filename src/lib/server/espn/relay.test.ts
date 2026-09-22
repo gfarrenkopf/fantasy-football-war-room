@@ -40,6 +40,21 @@ describe("relay", () => {
     expect(relay.snapshot("u1", "L1")).toMatchObject({ status: "live", anchored: true, espnTeamId: 1, sessions: 1 });
   });
 
+  it("takes the time since the last clock frame off a snapshot's clock", async () => {
+    const { relay, advance, events } = setup();
+    relay.subscribe("u1", "L1", (e) => events.push(e));
+    await relay.ingest(scope, "s1", 0, [...PRE, "CLOCK 6 30000 4"]);
+    advance(3_000);
+    expect(relay.snapshot("u1", "L1").onClock).toEqual({ teamId: 4, msRemaining: 27_000 });
+    advance(60_000);
+    expect(relay.snapshot("u1", "L1").onClock).toEqual({ teamId: 4, msRemaining: 0 });
+
+    // A repeated clock (a paused draft) still restarts the countdown and reaches listeners.
+    await relay.ingest(scope, "s1", 4, ["CLOCK 6 30000 4"]);
+    expect(relay.snapshot("u1", "L1").onClock).toEqual({ teamId: 4, msRemaining: 30_000 });
+    expect(events.filter((e) => e.type === "clock").at(-1)).toEqual({ type: "clock", onClock: { teamId: 4, msRemaining: 30_000 } });
+  });
+
   it("answers a frame offset it doesn't hold with 409 and the count it has", async () => {
     const { relay } = setup();
     await relay.ingest(scope, "s1", 0, PRE);

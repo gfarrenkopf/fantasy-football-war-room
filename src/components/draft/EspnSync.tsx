@@ -5,7 +5,7 @@ import { formatRoundPick } from "@/lib/draft/snake";
 import { samePicks } from "@/lib/draft/state";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { listenForEspnPaired } from "@/lib/espn/channel";
-import { requestActive, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
+import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
 import { myPlayers, positionCounts } from "@/lib/draft/roster";
 import { computeTurnPlan } from "@/lib/draft/sim/turnPlan";
 import { buildOverlayPlan } from "@/lib/espn/overlayPlan";
@@ -30,6 +30,8 @@ export interface EspnSyncValue {
   armed: string | null;
   /** The latest pick made from War Room. */
   request: PickRequestView | null;
+  /** ESPN's pick clock while the draft is live; `mine` when it's the user's team. Changes only when a clock frame arrives, so it's cheap to read. */
+  clock: (ClockDeadline & { mine: boolean }) | null;
   /** Arms a player; arming the one already armed drafts him (double-click, or Enter twice). */
   arm(playerId: string): void;
   disarm(): void;
@@ -38,7 +40,7 @@ export interface EspnSyncValue {
 }
 
 const noop = () => {};
-const OFF: EspnSyncValue = { leagueId: null, status: "off", locked: false, myTurn: false, armed: null, request: null, arm: noop, disarm: noop, draftArmed: noop };
+const OFF: EspnSyncValue = { leagueId: null, status: "off", locked: false, myTurn: false, armed: null, request: null, clock: null, arm: noop, disarm: noop, draftArmed: noop };
 const EspnSyncContext = createContext<EspnSyncValue>(OFF);
 
 export const useEspnSync = () => useContext(EspnSyncContext);
@@ -57,6 +59,8 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   const toast = useToast();
   const { state, hydrated, syncExternal } = useDraft();
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  // Stamped on arrival, so the countdown runs on this device's clock.
+  const [clock, setClock] = useState<ClockDeadline | null>(null);
   const [connection, setConnection] = useState(0);
   const enabled = flags.espnSyncEnabled && !!user && !!leagueId;
 
@@ -68,13 +72,19 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     const source = new EventSource(`/api/leagues/${encodeURIComponent(leagueId!)}/espn/stream`);
     const on = <T extends LiveEvent["type"]>(type: T, apply: (event: Extract<LiveEvent, { type: T }>) => void) =>
       source.addEventListener(type, (e) => apply(JSON.parse((e as MessageEvent<string>).data)));
-    on("snapshot", (e) => setSnapshot(e.snapshot));
+    on("snapshot", (e) => {
+      setSnapshot(e.snapshot);
+      setClock(clockDeadline(e.snapshot.onClock, Date.now()));
+    });
     on("pick", ({ pick }) =>
       setSnapshot((cur) =>
         cur && pick.n === cur.picks.length + 1 ? { ...cur, status: cur.status === "waiting" ? "live" : cur.status, picks: [...cur.picks, pick] } : cur,
       ),
     );
-    on("clock", ({ onClock }) => setSnapshot((cur) => cur && { ...cur, onClock }));
+    on("clock", ({ onClock }) => {
+      setSnapshot((cur) => cur && { ...cur, onClock });
+      setClock(clockDeadline(onClock, Date.now()));
+    });
     on("status", ({ status, draft }) => setSnapshot((cur) => cur && { ...cur, status, draft }));
     on("request", ({ request }) => setSnapshot((cur) => cur && { ...cur, request }));
     source.onerror = () => {
@@ -83,6 +93,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     return () => {
       source.close();
       setSnapshot(null);
+      setClock(null);
     };
   }, [enabled, leagueId, connection]);
 
@@ -171,11 +182,12 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       myTurn,
       armed,
       request: sending ? { id: "sending", playerId: armedId ?? "", espnPlayerId: 0, state: "pending" } : request,
+      clock: snapshot.status === "live" && clock ? { ...clock, mine: clock.teamId === snapshot.espnTeamId } : null,
       arm,
       disarm,
       draftArmed,
     };
-  }, [leagueId, snapshot, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
+  }, [leagueId, snapshot, clock, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
 
   return <EspnSyncContext.Provider value={value}>{children}</EspnSyncContext.Provider>;
 }
@@ -201,6 +213,55 @@ export function EspnSyncChip() {
   return (
     <span className={cx("btn", status === "live" && "on")} title={chip.title} role="status">
       {chip.label}
+    </span>
+  );
+}
+
+/** The countdown's own prefix on the tab title, so it can be swapped each tick without touching the rest. */
+const TITLE_CLOCK = /^\d+:\d\d · /;
+
+/**
+ * ESPN's pick clock, counted down locally between the 5s clock frames (8.17). The only thing that
+ * re-renders each tick. On the user's turn it's big, goes amber at 30s and red at 10s, buzzes a
+ * phone once at 10s, and puts the time at the front of the tab title.
+ */
+export function EspnClock() {
+  const { clock } = useEspnSync();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!clock) return;
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0); // `now` may be from long before this clock arrived
+    const id = setInterval(tick, 250);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, [clock]);
+
+  const left = clock ? clock.deadline - now : 0;
+  const mine = !!clock?.mine;
+  const text = formatClock(left);
+
+  const buzzed = useRef(false);
+  useEffect(() => {
+    if (!mine) buzzed.current = false;
+    else if (left <= 10_000 && left > 0 && !buzzed.current) {
+      buzzed.current = true;
+      navigator.vibrate?.([80, 80, 80]);
+    }
+  }, [mine, left]);
+
+  useEffect(() => {
+    const bare = document.title.replace(TITLE_CLOCK, "");
+    document.title = mine ? `${text} · ${bare}` : bare;
+  }, [mine, text]);
+  useEffect(() => () => void (document.title = document.title.replace(TITLE_CLOCK, "")), []);
+
+  if (!clock) return null;
+  return (
+    <span className={cx("espnClock", mine && "mine", mine && clockUrgency(left))} title={mine ? "Time left on your ESPN pick" : "Time left for the team on the clock in ESPN"} aria-hidden="true">
+      {text}
     </span>
   );
 }

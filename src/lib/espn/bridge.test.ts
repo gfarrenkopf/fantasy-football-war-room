@@ -111,6 +111,7 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
     URLSearchParams,
     Response,
     setInterval,
+    setTimeout,
     Date,
   };
   context.window = context;
@@ -168,7 +169,22 @@ describe("ESPN bridge", () => {
     early.emit("SELECTED 3 2 1\n");
     await vi.advanceTimersByTimeAsync(300);
     expect(early.sent).toEqual(["PING PING%201"]);
-    expect(p.bodies().flatMap((b) => b.frames)).toEqual(["SELECTED 3 2 1"]);
+    expect(p.bodies().find((b) => b.frames.length)!.frames).toEqual(["SELECTED 3 2 1"]);
+  });
+
+  it("posts a frame as soon as it arrives, without waiting for the interval", async () => {
+    const p = page({ stored: "tok-1" });
+    p.fetch.mockImplementation(async (_u, init) => {
+      const body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length }), { status: 200 });
+    });
+    p.load();
+    await vi.advanceTimersByTimeAsync(300); // the first heartbeat
+    const ws = new (p.Socket())(DRAFT_URL);
+    ws.emit("CLOCK 6 30000 4");
+    ws.emit("SELECTING 1 60000");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(p.bodies().filter((b) => b.frames.length).map((b) => b.frames)).toEqual([["CLOCK 6 30000 4", "SELECTING 1 60000"]]);
   });
 
   it("ignores sockets that aren't ESPN's draft socket", async () => {
@@ -219,8 +235,9 @@ describe("ESPN bridge", () => {
     await vi.advanceTimersByTimeAsync(300);
     ws.emit("SELECTED 3 3 1");
     await vi.advanceTimersByTimeAsync(600);
-    const last = p.bodies().at(-1)!;
-    expect(last).toMatchObject({ seq: 0, frames: ["SELECTED 1 1 1", "SELECTED 2 2 1", "SELECTED 3 3 1"] });
+    // Call 3 was refused with 409; the next post starts over from what War Room says it holds.
+    expect(p.bodies()[3]).toMatchObject({ seq: 0, frames: ["SELECTED 1 1 1", "SELECTED 2 2 1"] });
+    expect(p.bodies().at(-1)).toMatchObject({ seq: 2, frames: ["SELECTED 3 3 1"] });
   });
 
   it("names each page load's frame log with its own session id", async () => {
@@ -285,7 +302,7 @@ describe("ESPN bridge", () => {
     const ws = new (p.Socket())(DRAFT_URL);
     ws.emit("SELECTED 1 1 1");
     await vi.advanceTimersByTimeAsync(300);
-    expect(p.bodies().flatMap((b) => b.frames)).toEqual(["SELECTED 1 1 1"]);
+    expect(p.bodies().find((b) => b.frames.length)!.frames).toEqual(["SELECTED 1 1 1"]);
   });
 
   it("does nothing but explain itself off the draft page", async () => {
