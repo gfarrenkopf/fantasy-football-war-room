@@ -248,3 +248,48 @@ describe("relay", () => {
     });
   });
 });
+
+describe("ESPN's own league settings (8.8)", () => {
+  const SETTINGS = {
+    size: 4,
+    draftSettings: { type: "SNAKE", pickOrder: [4, 1, 3, 2] },
+    rosterSettings: { lineupSlotCounts: { "0": 1, "2": 2, "4": 2, "20": 3 } },
+    scoringSettings: { scoringItems: [{ statId: 53, points: 0.5 }] },
+  };
+
+  it("maps them for the war room, and repeats itself only when they change", async () => {
+    const { relay, events } = setup();
+    const { snapshot } = relay.subscribe("u1", "L1", (e) => events.push(e));
+    expect(snapshot.espnLeague).toBeNull();
+
+    relay.setLeague(scope, SETTINGS);
+    // scope's team is 1, second in the pick order.
+    expect(relay.snapshot("u1", "L1").espnLeague).toEqual({ ok: true, settings: { teams: 4, mySlot: 2, scoring: "half", roster: expect.any(Array) } });
+    expect(events.filter((e) => e.type === "league")).toHaveLength(1);
+
+    relay.setLeague(scope, SETTINGS);
+    expect(events.filter((e) => e.type === "league")).toHaveLength(1);
+
+    // The lobby opening redraws the order, which moves the user's slot.
+    relay.setLeague(scope, { ...SETTINGS, draftSettings: { type: "SNAKE", pickOrder: [1, 4, 3, 2] } });
+    expect(events.filter((e) => e.type === "league").at(-1)).toMatchObject({ espnLeague: { ok: true, settings: { mySlot: 1 } } });
+  });
+
+  it("passes on a refusal rather than a half-built league", async () => {
+    const { relay } = setup();
+    relay.setLeague(scope, { ...SETTINGS, draftSettings: { type: "AUCTION", pickOrder: [1] } });
+    expect(relay.snapshot("u1", "L1").espnLeague).toEqual({ ok: false, error: "War Room doesn't do auction drafts yet." });
+  });
+
+  it("forgets them when the bridge pairs to a different ESPN league", async () => {
+    const { relay } = setup();
+    await relay.ingest(scope, "s1", 0, ["STATE 1"]);
+    relay.setLeague(scope, SETTINGS);
+    expect(relay.snapshot("u1", "L1").espnLeague).toMatchObject({ ok: true });
+
+    // A different ESPN draft: the channel resets, and its settings go with it. The route sets the
+    // new league after ingest, which is the order this asserts.
+    await relay.ingest({ ...scope, espnLeagueId: "999" }, "s2", 0, ["STATE 1"]);
+    expect(relay.snapshot("u1", "L1").espnLeague).toBeNull();
+  });
+});

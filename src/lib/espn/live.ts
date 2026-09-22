@@ -1,3 +1,4 @@
+import type { LeagueSettings } from "@/lib/draft/types";
 import type { Crosswalk, OffBoardPlayer } from "./crosswalk";
 import type { DraftFeed, FeedStatus } from "./feed";
 
@@ -50,6 +51,9 @@ export interface PickRequestView {
 
 export const requestActive = (r: Pick<PickRequestView, "state"> | null): boolean => r?.state === "pending" || r?.state === "sent";
 
+/** This league as ESPN has it (8.8), or why it can't be imported. */
+export type EspnLeague = { ok: true; settings: Omit<LeagueSettings, "valueThreshold"> } | { ok: false; error: string };
+
 export interface LiveSnapshot {
   status: LiveStatus;
   /** The draft's own state as the socket showed it, independent of the bridge. */
@@ -63,6 +67,8 @@ export interface LiveSnapshot {
   sessions: number;
   /** The latest pick made from War Room, if any. */
   request: PickRequestView | null;
+  /** ESPN's own league settings, once a bridge has read them. */
+  espnLeague: EspnLeague | null;
 }
 
 export type LiveEvent =
@@ -70,7 +76,8 @@ export type LiveEvent =
   | { type: "pick"; pick: LivePick }
   | { type: "clock"; onClock: LiveSnapshot["onClock"] }
   | { type: "status"; status: LiveStatus; draft: FeedStatus }
-  | { type: "request"; request: PickRequestView };
+  | { type: "request"; request: PickRequestView }
+  | { type: "league"; espnLeague: EspnLeague };
 
 /** Resolves the feed's picks from `from` onward (earlier ones are already resolved). */
 export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: number | null, from = 0): LivePick[] {
