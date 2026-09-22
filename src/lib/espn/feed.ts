@@ -69,6 +69,14 @@ export function applyFrame(feed: DraftFeed, frame: EspnFrame): DraftFeed {
       const others = feed.autodraft.filter((t) => t !== frame.teamId);
       return { ...feed, autodraft: frame.on ? [...others, frame.teamId].sort((a, b) => a - b) : others };
     }
+    case "catchup": {
+      // The draft as it stood when the bridge attached. Only ever seeds an empty feed, and only in
+      // order, so a repeated or gappy log can't invent picks. These count from pick 1, so the feed
+      // is anchored: every later pick lands on its real number.
+      if (frame.overall !== feed.picks.length + 1 || feed.status === "complete") return feed;
+      const pick: FeedPick = { overall: frame.overall, teamId: frame.teamId, espnPlayerId: frame.playerId, auto: false };
+      return { ...feed, status: feed.status === "waiting" ? "live" : feed.status, anchored: true, picks: [...feed.picks, pick] };
+    }
     case "selected": {
       const pick: FeedPick = {
         overall: feed.picks.length + 1,

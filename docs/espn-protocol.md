@@ -107,13 +107,24 @@ Frames are space-delimited text ending in a newline. `INIT` is the exception: a 
 
 ### 4.1 Inside INIT
 
-A binary blob: 6,890 bytes eighteen picks into a 4-team, 16-round draft, and 8,840 bytes near its end. It holds the room's state, not a log of it — over a stretch of picks its length held still while only the bytes for those picks changed, so at least the pick table is pre-sized.
+**The frame is `INIT <base64> ####…`:** a base64 blob whose own `=` padding is stripped, then a space and a run of about 2,048 `#`. Both have to be cleaned off before decoding — `atob` refuses either.
 
-- **Every pick slot holds a big-endian `int32`:** the drafted player's ESPN id, or `-1` for a slot not yet drafted — the same `-1` convention as `mDraftDetail`'s pre-draft picks.
-- In the recorded draft the pick ids sat on a **180-byte stride** (offsets 2182, 2362, 2542, …), with a second run of the same ids later in the blob (rosters, most likely).
-- Comparing two `INIT`s from one draft, the slots that changed are exactly the picks made in between.
+The blob is the room's state, not a log of it: 6,890 bytes eighteen picks into a 4-team, 16-round draft, 8,840 near its end. The **pick table** inside it is pre-sized and holds the whole draft:
 
-**So a client that joins late can recover the picks it missed from `INIT` alone**, without REST (which stays empty until the draft ends) and without the page. That covers a server restart mid-draft, and 8.12's catch-up. The exact record layout still needs pinning down before anything parses it in production: field offsets, how team and round are encoded, and what the second run of ids is.
+| Offset in record | Meaning |
+|---|---|
+| 0 | the drafted player's ESPN id as a big-endian `int32`, or `-1` for a slot nobody has taken yet |
+| 4 | ESPN's roster slot |
+| 33 | this draft's league id |
+
+- **Records are 45 bytes**, one per pick slot, in pick order, running `teams × rounds` long.
+- **The league id in every record is what locates the table**, so nothing has to assume how long the header is. One record *before* the table carries the same id, so an alignment is only accepted when the ids it yields are plausible and the drafted ones form a prefix (every `-1` after every id).
+- Comparing two `INIT`s from one draft, the records that changed are exactly the picks made in between.
+- **Team and round aren't in the record.** Pick ownership comes from `mDraftDetail`, which lists every slot's team from before the draft (§2) and is readable from the draft page (ESPN's API allows that origin with credentials).
+
+**So a client that joins late can recover the picks it missed from `INIT` alone**, without REST picks (empty until the draft ends) and without the page. That covers a server restart mid-draft, and 8.12's catch-up.
+
+**But a bookmarklet rarely sees one.** `INIT` arrives only when a socket opens, and the bridge attaches to a socket the page opened before the script loaded. Reloading doesn't help: it takes the bridge with it. So this decoder mainly serves a client that opens its own socket (Epic 9) and the case where ESPN's page reconnects while the bridge is attached. Catching up after a late bookmarklet click needs another source for the picks already made.
 
 ## 5. Player ids
 

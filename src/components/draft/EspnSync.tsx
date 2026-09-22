@@ -100,6 +100,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   /* ---- apply live picks to the board ---- */
   const toldReplaced = useRef(false);
   const toldMismatch = useRef(false);
+  const toldPartial = useRef(false);
   const apply = useEffectEvent((live: LiveSnapshot) => {
     const mode = syncMode(live);
     if (!mode) return;
@@ -110,6 +111,13 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       toast("Your board now matches your ESPN draft");
     }
     syncExternal(picks, mode);
+
+    // Joined mid-draft with no catch-up: ESPN's picks arrive in order but their pick numbers are
+    // this feed's, not the draft's. Say so rather than showing a board that's quietly short.
+    if (mode === "merge" && !toldPartial.current) {
+      toldPartial.current = true;
+      toast("Picks made before you connected aren't on this board. Log them by hand, or reconnect from the start of a draft.");
+    }
 
     const off = live.anchored ? slotMismatch(live.picks, league) : null;
     if (off && !toldMismatch.current) {
