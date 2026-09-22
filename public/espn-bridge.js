@@ -170,6 +170,56 @@
     return null;
   }
 
+  /**
+   * This league as ESPN has it: team count, draft order, roster and the reception scoring item (8.8).
+   * Trimmed here rather than posted whole, because the settings document is large and most of it is
+   * scoring rules War Room doesn't read.
+   */
+  async function leagueSettings() {
+    const url =
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}` +
+      `/segments/0/leagues/${encodeURIComponent(espnLeagueId)}?view=mSettings`;
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(`mSettings -> HTTP ${res.status}`);
+    const data = await res.json();
+    const s = (data && data.settings) || {};
+    const draft = s.draftSettings || {};
+    const items = ((s.scoringSettings || {}).scoringItems || []).filter((/** @type {{statId: number}} */ i) => i && i.statId === 53);
+    return {
+      name: typeof s.name === "string" ? s.name.slice(0, 80) : undefined,
+      size: s.size,
+      draftSettings: { type: draft.type, pickOrder: draft.pickOrder },
+      rosterSettings: { lineupSlotCounts: (s.rosterSettings || {}).lineupSlotCounts },
+      scoringSettings: { scoringItems: items },
+    };
+  }
+
+  /** ESPN's settings, waiting to ride along with the next check-in. */
+  /** @type {Record<string, unknown> | null} */
+  let settingsToSend = null;
+  /** Serialized settings already sent, so an unchanged league isn't posted twice. */
+  let settingsSent = "";
+  /** The last settings read, for the pairing popup: it can't read ESPN's API from our own origin. */
+  /** @type {Record<string, unknown> | null} */
+  let lastSettings = null;
+
+  async function readLeagueSettings() {
+    try {
+      const next = await leagueSettings();
+      // Read for the popup as well as for War Room, so a first-time user can build their league
+      // Not a league settings document: nothing worth sending, and War Room keeps what it has.
+      if (typeof next.size !== "number") return;
+      lastSettings = next;
+      // The draft order is redrawn when the lobby opens, so this is read again, not just once.
+      if (JSON.stringify(next) === settingsSent) return;
+      settingsToSend = next;
+      lastPost = 0; // go now rather than waiting for the heartbeat
+      flushSoon();
+    } catch {
+      // War Room keeps whatever league settings it already had.
+    }
+  }
+
   /** Who owns each pick, in order. Pre-draft ESPN already lists every slot's team, even mid-draft. */
   async function pickOwnership() {
     const url =
@@ -232,6 +282,7 @@
       else log.push(frame);
       flushSoon();
       const [head, team, player] = frame.split(" ");
+      if (head === "STATE" && team === "1" && token) void readLeagueSettings();
       if (head === "SELECTING") {
         onClockTeam = Number(team);
         render();
@@ -297,13 +348,24 @@
     lastPost = now;
     const from = sent;
     const frames = log.slice(sent, sent + MAX_BATCH);
+    // Held for the whole request: settings that arrive mid-flight belong to the next post, not this
+    // one, or they'd be marked sent without ever being sent.
+    const sendingSettings = settingsToSend;
     try {
       const res = await fetch(`${ORIGIN}/api/espn/bridge/frames`, {
         method: "POST",
         mode: "cors",
         credentials: "omit",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ espnLeagueId, session, seq: sent, frames, planVersion, ...(result ? { result } : {}) }),
+        body: JSON.stringify({
+          espnLeagueId,
+          session,
+          seq: sent,
+          frames,
+          planVersion,
+          ...(result ? { result } : {}),
+          ...(sendingSettings ? { settings: sendingSettings } : {}),
+        }),
       });
       if (res.status === 200 || res.status === 409) {
         // 409: War Room holds a different number of frames (e.g. it restarted); resend from there.
@@ -311,6 +373,10 @@
         sent = typeof body.have === "number" ? Math.min(Math.max(0, body.have), log.length) : sent + frames.length;
         failures = 0;
         status = sockets ? "live" : "listening";
+        if (sendingSettings) {
+          settingsSent = JSON.stringify(sendingSettings);
+          if (settingsToSend === sendingSettings) settingsToSend = null;
+        }
         if (res.status === 409) lastPost = 0;
         result = null;
         if (body.command) pickFromWarRoom(body.command);
@@ -409,6 +475,8 @@
   }
 
   setInterval(tick, FLUSH_MS);
+  // Only once paired: an unpaired bridge has no business calling ESPN's API on the user's behalf.
+  if (onDraftPage && token) void readLeagueSettings();
 
   /* ---------------- pairing ---------------- */
 
@@ -418,11 +486,22 @@
   }
 
   w.addEventListener("message", (/** @type {MessageEvent} */ e) => {
-    if (e.origin !== ORIGIN || !e.data || e.data.type !== "warroom-bridge-paired" || typeof e.data.token !== "string") return;
+    if (e.origin !== ORIGIN || !e.data) return;
+    // The pairing popup asking what ESPN says about this league (8.8): it's on War Room's origin,
+    // so it can't read ESPN's API itself. Only ever settings, and only to War Room's origin.
+    if (e.data.type === "warroom-bridge-settings?") {
+      const reply = (/** @type {Record<string, unknown> | null} */ settings) =>
+        e.source && /** @type {Window} */ (e.source).postMessage({ type: "warroom-bridge-settings", settings }, ORIGIN);
+      if (lastSettings) reply(lastSettings);
+      else void readLeagueSettings().then(() => reply(lastSettings));
+      return;
+    }
+    if (e.data.type !== "warroom-bridge-paired" || typeof e.data.token !== "string") return;
     writeToken(e.data.token);
     status = sockets ? "live" : "listening";
     lastPost = 0;
     render();
+    if (onDraftPage) void readLeagueSettings();
     void flush();
   });
 

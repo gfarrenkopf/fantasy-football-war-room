@@ -5,7 +5,8 @@ import { formatRoundPick } from "@/lib/draft/snake";
 import { samePicks } from "@/lib/draft/state";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { listenForEspnPaired } from "@/lib/espn/channel";
-import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
+import { leagueDifferences } from "@/lib/espn/league";
+import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type EspnLeague, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
 import { myPlayers, positionCounts } from "@/lib/draft/roster";
 import { computeTurnPlan } from "@/lib/draft/sim/turnPlan";
 import { buildOverlayPlan } from "@/lib/espn/overlayPlan";
@@ -14,6 +15,7 @@ import { useAccount } from "./Account";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { useDraft } from "./DraftProvider";
+import { useLeague } from "./LeagueProvider";
 import { useToast } from "./Feedback";
 import { useFlags } from "./Flags";
 import type { PlanOdds } from "./FocusView";
@@ -32,6 +34,8 @@ export interface EspnSyncValue {
   request: PickRequestView | null;
   /** ESPN's pick clock while the draft is live; `mine` when it's the user's team. Changes only when a clock frame arrives, so it's cheap to read. */
   clock: (ClockDeadline & { mine: boolean }) | null;
+  /** This league as ESPN has it (8.8), once a bridge has read its settings. */
+  espnLeague: EspnLeague | null;
   /** Arms a player; arming the one already armed drafts him (double-click, or Enter twice). */
   arm(playerId: string): void;
   disarm(): void;
@@ -40,7 +44,7 @@ export interface EspnSyncValue {
 }
 
 const noop = () => {};
-const OFF: EspnSyncValue = { leagueId: null, status: "off", locked: false, myTurn: false, armed: null, request: null, clock: null, arm: noop, disarm: noop, draftArmed: noop };
+const OFF: EspnSyncValue = { leagueId: null, status: "off", locked: false, myTurn: false, armed: null, request: null, clock: null, espnLeague: null, arm: noop, disarm: noop, draftArmed: noop };
 const EspnSyncContext = createContext<EspnSyncValue>(OFF);
 
 export const useEspnSync = () => useContext(EspnSyncContext);
@@ -87,6 +91,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     });
     on("status", ({ status, draft }) => setSnapshot((cur) => cur && { ...cur, status, draft }));
     on("request", ({ request }) => setSnapshot((cur) => cur && { ...cur, request }));
+    on("league", ({ espnLeague }) => setSnapshot((cur) => cur && { ...cur, espnLeague }));
     source.onerror = () => {
       if (source.readyState === EventSource.CLOSED) setSnapshot(null);
     };
@@ -191,6 +196,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       armed,
       request: sending ? { id: "sending", playerId: armedId ?? "", espnPlayerId: 0, state: "pending" } : request,
       clock: snapshot.status === "live" && clock ? { ...clock, mine: clock.teamId === snapshot.espnTeamId } : null,
+      espnLeague: snapshot.espnLeague,
       arm,
       disarm,
       draftArmed,
@@ -278,6 +284,37 @@ const isTyping = () => {
   const el = document.activeElement;
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || (el as HTMLElement).isContentEditable);
 };
+
+/**
+ * ESPN's league settings against this board's (8.8). Only before the first pick: taking ESPN's
+ * teams or draft slot mid-draft would renumber every pick already made, which is worse than the
+ * mismatch. Once the draft is under way, a wrong slot shows up as the pick-ownership toast instead.
+ */
+export function EspnLeagueBar() {
+  const { espnLeague } = useEspnSync();
+  const { league, updateLeague } = useLeague();
+  const { state } = useDraft();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!espnLeague?.ok || state.picks.length || dismissed) return null;
+  const differences = leagueDifferences(league, espnLeague.settings);
+  if (!differences.length) return null;
+
+  return (
+    <div className={s.espnArm} role="region" aria-label="ESPN league settings">
+      <span className={s.espnArmText}>
+        Your ESPN league is set up differently
+        <small>ESPN says {differences.join(", ")}.</small>
+      </span>
+      <button className={cx("btn", "espnGo")} onClick={() => updateLeague({ settings: { ...espnLeague.settings, valueThreshold: league.valueThreshold } })}>
+        Use ESPN&apos;s settings
+      </button>
+      <button className={s.btn} onClick={() => setDismissed(true)}>
+        Keep mine
+      </button>
+    </div>
+  );
+}
 
 /**
  * The second step of drafting from War Room: names the armed player and sends him to ESPN. Enter
