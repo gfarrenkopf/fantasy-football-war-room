@@ -2,7 +2,17 @@ import type { Crosswalk } from "@/lib/espn/crosswalk";
 import type { OverlayPlan } from "@/lib/espn/overlayPlan";
 import { emptyFeed, foldFrames, type DraftFeed } from "@/lib/espn/feed";
 import { toLeagueSettings } from "@/lib/espn/league";
-import { requestActive, resolvePicks, type EspnLeague, type LiveEvent, type LivePick, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
+import {
+  requestActive,
+  resolvePicks,
+  type DriftReport,
+  type EspnLeague,
+  type LiveEvent,
+  type LivePick,
+  type LiveSnapshot,
+  type LiveStatus,
+  type PickRequestView,
+} from "@/lib/espn/live";
 
 /**
  * The relay (8.9): frames in from a bridge, resolved picks out to every war room open on that league.
@@ -44,6 +54,11 @@ export interface RelayOptions {
   expireAfterMs?: number;
   /** Ids for pick requests. */
   newId?: () => string;
+  /**
+   * Frames we couldn't read before the feed is treated as untrustworthy (8.6). ESPN's protocol is
+   * unofficial: when it changes, the picks we *can* read are suspect too.
+   */
+  driftLimit?: number;
 }
 
 /** A War Room pick for the bridge to make: send `SELECT <select>` on ESPN's socket. */
@@ -89,6 +104,7 @@ interface Channel {
   request: (PickRequestView & { createdAt: number }) | null;
   plan: VersionedPlan | null;
   espnLeague: EspnLeague | null;
+  degraded: DriftReport | null;
 }
 
 export interface Relay {
@@ -121,6 +137,7 @@ export function createRelay({
   deliverWithinMs = 5_000,
   expireAfterMs = 10_000,
   newId = () => crypto.randomUUID(),
+  driftLimit = 20,
 }: RelayOptions): Relay {
   const channels = new Map<string, Channel>();
   const crosswalks = new Map<number, Promise<Crosswalk>>();
@@ -164,6 +181,7 @@ export function createRelay({
         request: null,
         plan: null,
         espnLeague: null,
+        degraded: null,
       };
       channels.set(k, ch);
     }
@@ -188,6 +206,7 @@ export function createRelay({
       sessions: ch.sessions.size,
       request: viewOf(ch.request),
       espnLeague: ch.espnLeague,
+      degraded: ch.degraded,
     };
   }
 
@@ -221,6 +240,29 @@ export function createRelay({
     }
   }
 
+  /**
+   * ESPN's protocol drifting under us, or its socket refusing the connection. Said once per channel:
+   * the log line is what `deploy/warroom-alerts.sh` emails on, and the war room hands the board back
+   * to the user rather than applying picks it may be reading wrong.
+   */
+  function checkDrift(ch: Channel, scope: RelayScope) {
+    if (ch.degraded) return;
+    const { unknownFrames, malformedFrames, error } = ch.feed;
+    const unreadable = unknownFrames + malformedFrames;
+    const reason = error
+      ? `ESPN refused the draft connection: ${error.message}`
+      : unreadable >= driftLimit
+        ? "ESPN's draft feed changed, so War Room stopped trusting it"
+        : null;
+    if (!reason) return;
+    ch.degraded = { reason, unknownFrames, malformedFrames };
+    console.warn(
+      `[espn-sync] protocol-drift league=${scope.espnLeagueId} season=${scope.season} unknown=${unknownFrames} malformed=${malformedFrames}` +
+        (error ? ` error=${error.code} ${error.message}` : ""),
+    );
+    emit(ch, { type: "degraded", degraded: ch.degraded });
+  }
+
   function emitStatus(ch: Channel) {
     const status = statusOf(ch);
     if (status === ch.lastStatus) return;
@@ -236,6 +278,7 @@ export function createRelay({
     ch.request = null;
     ch.plan = null;
     ch.espnLeague = null;
+    ch.degraded = null;
   }
 
   return {
@@ -290,6 +333,7 @@ export function createRelay({
         ch.picks = resolvePicks(ch.feed, walk, scope.espnTeamId);
         emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
       }
+      checkDrift(ch, scope);
       expire(ch);
       emitStatus(ch);
       const r = ch.request;

@@ -293,3 +293,51 @@ describe("ESPN's own league settings (8.8)", () => {
     expect(relay.snapshot("u1", "L1").espnLeague).toBeNull();
   });
 });
+
+describe("when ESPN's protocol drifts (8.6)", () => {
+  const junk = (n: number) => Array.from({ length: n }, (_, i) => `WHAT_IS_THIS ${i}`);
+
+  it("keeps going through a few frames it can't read", async () => {
+    const { relay, events } = setup();
+    relay.subscribe("u1", "L1", (e) => events.push(e));
+    await relay.ingest(scope, "s1", 0, [...PRE, ...junk(5), "SELECTED 4 1 2"]);
+    expect(relay.snapshot("u1", "L1").degraded).toBeNull();
+    expect(relay.snapshot("u1", "L1").picks).toHaveLength(1);
+  });
+
+  it("stops trusting the feed once they pile up, and says so once", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { relay, events } = setup();
+    relay.subscribe("u1", "L1", (e) => events.push(e));
+    await relay.ingest(scope, "s1", 0, [...PRE, ...junk(20)]);
+
+    const degraded = relay.snapshot("u1", "L1").degraded;
+    expect(degraded).toMatchObject({ reason: expect.stringContaining("changed"), unknownFrames: 20 });
+    expect(events.filter((e) => e.type === "degraded")).toHaveLength(1);
+    // The log line is what deploy/warroom-alerts.sh emails on.
+    expect(warn.mock.calls[0][0]).toContain("[espn-sync] protocol-drift");
+    expect(warn.mock.calls[0][0]).toContain("league=704343562");
+
+    await relay.ingest(scope, "s1", 23, junk(20));
+    expect(events.filter((e) => e.type === "degraded")).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it("treats ESPN refusing the socket as drift too, and quotes it", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { relay } = setup();
+    await relay.ingest(scope, "s1", 0, ["ERROR 1 Invalid+security+code%3B+access+is+refused."]);
+    expect(relay.snapshot("u1", "L1").degraded?.reason).toBe("ESPN refused the draft connection: Invalid security code; access is refused.");
+    warn.mockRestore();
+  });
+
+  it("forgets it when the bridge moves to a different ESPN draft", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { relay } = setup();
+    await relay.ingest(scope, "s1", 0, junk(25));
+    expect(relay.snapshot("u1", "L1").degraded).not.toBeNull();
+    await relay.ingest({ ...scope, espnLeagueId: "999" }, "s2", 0, ["STATE 1"]);
+    expect(relay.snapshot("u1", "L1").degraded).toBeNull();
+    warn.mockRestore();
+  });
+});

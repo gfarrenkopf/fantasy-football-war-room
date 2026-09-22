@@ -27,12 +27,19 @@ describe("toDraftPicks", () => {
 });
 
 describe("syncMode", () => {
+  const mode = (s: Partial<Parameters<typeof syncMode>[0]>) => syncMode({ status: "live", anchored: false, picks: [], degraded: null, ...s });
+
   it("replaces for a feed that saw the whole draft, merges for one that joined late, and waits for a bridge", () => {
-    expect(syncMode({ status: "live", anchored: true, picks: [] })).toBe("replace");
-    expect(syncMode({ status: "bridge-offline", anchored: true, picks: [pick(1)] })).toBe("replace");
-    expect(syncMode({ status: "live", anchored: false, picks: [pick(1)] })).toBe("merge");
-    expect(syncMode({ status: "live", anchored: false, picks: [] })).toBeNull();
-    expect(syncMode({ status: "waiting", anchored: false, picks: [] })).toBeNull();
+    expect(mode({ anchored: true })).toBe("replace");
+    expect(mode({ status: "bridge-offline", anchored: true, picks: [pick(1)] })).toBe("replace");
+    expect(mode({ picks: [pick(1)] })).toBe("merge");
+    expect(mode({})).toBeNull();
+    expect(mode({ status: "waiting" })).toBeNull();
+  });
+
+  it("stops applying picks once the feed can't be trusted (8.6)", () => {
+    const degraded = { reason: "ESPN's draft feed changed", unknownFrames: 30, malformedFrames: 0 };
+    expect(mode({ anchored: true, picks: [pick(1)], degraded })).toBeNull();
   });
 });
 

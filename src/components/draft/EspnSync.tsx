@@ -6,7 +6,7 @@ import { samePicks } from "@/lib/draft/state";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { listenForEspnPaired } from "@/lib/espn/channel";
 import { leagueDifferences } from "@/lib/espn/league";
-import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type EspnLeague, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
+import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type DriftReport, type EspnLeague, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
 import { myPlayers, positionCounts } from "@/lib/draft/roster";
 import { computeTurnPlan } from "@/lib/draft/sim/turnPlan";
 import { buildOverlayPlan } from "@/lib/espn/overlayPlan";
@@ -24,6 +24,12 @@ export interface EspnSyncValue {
   leagueId: string | null;
   /** `off`: not signed in, feature off, or this league can't use it. */
   status: LiveStatus | "off";
+  /** War Room's own event stream, as opposed to the ESPN draft: shown when we're the broken part. */
+  link: "idle" | "open" | "retrying" | "lost";
+  /** ESPN's feed stopped making sense (8.6): picks are no longer applied and the board is the user's again. */
+  degraded: DriftReport | null;
+  /** How many times the ESPN tab has reconnected. More than one means picks may have been missed in between. */
+  sessions: number;
   /** The board follows ESPN pick for pick; logging picks by hand is paused. */
   locked: boolean;
   /** ESPN has the user on the clock, so a pick can be made from War Room. */
@@ -44,7 +50,7 @@ export interface EspnSyncValue {
 }
 
 const noop = () => {};
-const OFF: EspnSyncValue = { leagueId: null, status: "off", locked: false, myTurn: false, armed: null, request: null, clock: null, espnLeague: null, arm: noop, disarm: noop, draftArmed: noop };
+const OFF: EspnSyncValue = { leagueId: null, status: "off", link: "idle", degraded: null, sessions: 0, locked: false, myTurn: false, armed: null, request: null, clock: null, espnLeague: null, arm: noop, disarm: noop, draftArmed: noop };
 const EspnSyncContext = createContext<EspnSyncValue>(OFF);
 
 export const useEspnSync = () => useContext(EspnSyncContext);
@@ -66,6 +72,9 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   // Stamped on arrival, so the countdown runs on this device's clock.
   const [clock, setClock] = useState<ClockDeadline | null>(null);
   const [connection, setConnection] = useState(0);
+  /** The stream itself, as opposed to the draft: `lost` means War Room, not ESPN, is unreachable. */
+  const [link, setLink] = useState<"idle" | "open" | "retrying" | "lost">("idle");
+  const attempt = useRef(0);
   const enabled = flags.espnSyncEnabled && !!user && !!leagueId;
 
   // A league connected in the pairing popup: reconnect so its bridge's picks flow right away.
@@ -92,14 +101,34 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     on("status", ({ status, draft }) => setSnapshot((cur) => cur && { ...cur, status, draft }));
     on("request", ({ request }) => setSnapshot((cur) => cur && { ...cur, request }));
     on("league", ({ espnLeague }) => setSnapshot((cur) => cur && { ...cur, espnLeague }));
+    on("degraded", ({ degraded }) => setSnapshot((cur) => cur && { ...cur, degraded }));
+
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    source.onopen = () => {
+      attempt.current = 0;
+      setLink("open");
+    };
     source.onerror = () => {
-      if (source.readyState === EventSource.CLOSED) setSnapshot(null);
+      if (source.readyState !== EventSource.CLOSED) return; // still retrying by itself
+      source.close();
+      setSnapshot(null);
+      setClock(null);
+      // EventSource gives up for good on a non-200 (402/403 here), and never retries a closed
+      // stream. A stream that opened at least once is a blip worth retrying; one that never did is
+      // the server saying no, and retrying would only hammer it.
+      if (!attempt.current && link === "idle") return setLink("lost");
+      const wait = Math.min(30_000, 1000 * 2 ** attempt.current++);
+      setLink("retrying");
+      retry = setTimeout(() => setConnection((n) => n + 1), wait);
     };
     return () => {
+      clearTimeout(retry);
       source.close();
       setSnapshot(null);
       setClock(null);
     };
+    // `link` is read inside onerror but must not re-open the stream; the ref carries the retry count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, leagueId, connection]);
 
   /* ---- apply live picks to the board ---- */
@@ -176,6 +205,13 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     if (armed) void draftPlayer(armed);
   }, [armed, draftPlayer]);
 
+  const toldDrift = useRef(false);
+  useEffect(() => {
+    if (!snapshot?.degraded || toldDrift.current) return;
+    toldDrift.current = true;
+    toast(`${snapshot.degraded.reason}. Log picks by hand from here; everything so far is kept.`);
+  }, [snapshot?.degraded, toast]);
+
   // Say how a War Room pick turned out; a confirmed one simply appears on the board.
   const told = useRef<string | null>(null);
   useEffect(() => {
@@ -197,11 +233,14 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       request: sending ? { id: "sending", playerId: armedId ?? "", espnPlayerId: 0, state: "pending" } : request,
       clock: snapshot.status === "live" && clock ? { ...clock, mine: clock.teamId === snapshot.espnTeamId } : null,
       espnLeague: snapshot.espnLeague,
+      link,
+      degraded: snapshot.degraded,
+      sessions: snapshot.sessions,
       arm,
       disarm,
       draftArmed,
     };
-  }, [leagueId, snapshot, clock, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
+  }, [leagueId, snapshot, clock, link, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
 
   return <EspnSyncContext.Provider value={value}>{children}</EspnSyncContext.Provider>;
 }
@@ -214,8 +253,22 @@ const CHIP: Record<Exclude<LiveStatus, "waiting">, { label: string; title: strin
 
 /** Header control: the sync state, or the way to set it up. */
 export function EspnSyncChip() {
-  const { status } = useEspnSync();
+  const { status, link, degraded, sessions } = useEspnSync();
   if (status === "off") return null;
+  if (degraded) {
+    return (
+      <span className={s.btn} title={`${degraded.reason}. Picks are yours to log again; nothing captured so far is lost.`} role="status">
+        ESPN sync paused
+      </span>
+    );
+  }
+  if (link === "retrying" || link === "lost") {
+    return (
+      <span className={s.btn} title={link === "retrying" ? "Reaching War Room again. Your board still works." : "War Room's live connection dropped. Reload to try again."} role="status">
+        {link === "retrying" ? "Reconnecting…" : "Sync disconnected"}
+      </span>
+    );
+  }
   if (status === "waiting") {
     return (
       <a className={cx("btn")} href="/espn" target="_blank" rel="noreferrer" title="Have picks from your ESPN draft land on this board automatically">
@@ -224,8 +277,11 @@ export function EspnSyncChip() {
     );
   }
   const chip = CHIP[status];
+  // A reload of the ESPN tab starts a new bridge session, and picks made while it was away are
+  // missing from the board, so it's worth saying rather than hiding in a snapshot field.
+  const reconnected = sessions > 1 ? ` Your ESPN tab reconnected ${sessions - 1} time${sessions > 2 ? "s" : ""}; picks made in between may be missing.` : "";
   return (
-    <span className={cx("btn", status === "live" && "on")} title={chip.title} role="status">
+    <span className={cx("btn", status === "live" && "on")} title={chip.title + reconnected} role="status">
       {chip.label}
     </span>
   );

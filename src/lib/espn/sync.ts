@@ -23,7 +23,10 @@ export function toDraftPicks(picks: readonly LivePick[]): DraftPick[] {
  * How the board should take the live picks: replace them when the feed saw the whole draft, merge
  * when it joined mid-draft, or leave the board alone before any bridge has sent a pick.
  */
-export function syncMode(snapshot: Pick<LiveSnapshot, "status" | "anchored" | "picks">): "replace" | "merge" | null {
+export function syncMode(snapshot: Pick<LiveSnapshot, "status" | "anchored" | "picks" | "degraded">): "replace" | "merge" | null {
+  // Frames we can't read mean the picks we can read may be wrong too: stop applying them and leave
+  // the board to the user, with everything captured so far kept.
+  if (snapshot.degraded) return null;
   if (snapshot.status === "waiting") return null;
   if (snapshot.anchored) return "replace";
   return snapshot.picks.length ? "merge" : null;
