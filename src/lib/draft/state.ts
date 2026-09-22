@@ -16,7 +16,13 @@ export type DraftAction =
   /** Append simulated picks. Stops at the first already-taken player or when the draft is full. */
   | { type: "appendPicks"; picks: DraftPick[]; totalPicks: number }
   /** Replace state with a loaded draft. */
-  | { type: "hydrate"; state: DraftState };
+  | { type: "hydrate"; state: DraftState }
+  /**
+   * Picks from an external draft (ESPN live sync). `replace` makes the board match them exactly: the
+   * external draft is authoritative. `merge` appends only the ones whose player isn't taken yet, for a
+   * feed that joined mid-draft and can't say which pick numbers its picks are.
+   */
+  | { type: "syncExternal"; picks: DraftPick[]; mode: "replace" | "merge"; totalPicks: number };
 
 const indexOf = (state: DraftState, playerId: string) => state.picks.findIndex((p) => p.playerId === playerId);
 
@@ -54,8 +60,29 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
     }
     case "hydrate":
       return action.state;
+    case "syncExternal": {
+      if (action.mode === "merge") {
+        const taken = new Set(state.picks.map((p) => p.playerId));
+        const picks = state.picks.slice();
+        for (const p of action.picks) {
+          if (picks.length >= action.totalPicks) break;
+          if (taken.has(p.playerId)) continue;
+          taken.add(p.playerId);
+          picks.push(p);
+        }
+        return picks.length === state.picks.length ? state : { ...state, picks };
+      }
+      const picks = action.picks.slice(0, action.totalPicks);
+      return samePicks(state.picks, picks) ? state : { ...state, picks };
+    }
   }
 }
+
+const samePick = (a: DraftPick, b: DraftPick) =>
+  a.playerId === b.playerId && a.mine === b.mine && a.label?.name === b.label?.name && a.label?.pos === b.label?.pos && a.label?.team === b.label?.team;
+
+/** Same picks in the same order, labels included. */
+export const samePicks = (a: readonly DraftPick[], b: readonly DraftPick[]): boolean => a.length === b.length && a.every((p, i) => samePick(p, b[i]));
 
 /** playerId → { mine, n } where n is the 1-based pick number. The prototype's takenMap(). */
 export function takenMap(state: DraftState): Map<string, { mine: boolean; n: number }> {

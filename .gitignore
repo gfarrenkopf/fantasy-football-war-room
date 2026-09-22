@@ -40,3 +40,7 @@ data/live.json
 
 # database backups (scripts/db-backup.sh)
 backups/
+
+# local research probes (e.g. Epic 8's ESPN protocol probes): run against real accounts,
+# never shipped. Findings that matter are written up in docs/ instead.
+.research/

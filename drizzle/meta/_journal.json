@@ -29,6 +29,20 @@
       "when": 1789597100173,
       "tag": "0003_entitlement_amounts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790032728289,
+      "tag": "0004_espn_bridge_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790034049653,
+      "tag": "0005_espn_disclosure_acks",
+      "breakpoints": true
     }
   ]
 }

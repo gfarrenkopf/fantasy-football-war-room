@@ -39,6 +39,14 @@ const stripeWebhookSecret = readEnv("STRIPE_WEBHOOK_SECRET");
 /** The one-time price of a league's season pass. */
 const stripePriceId = readEnv("STRIPE_PRICE_ID");
 const sportsDataApiKey = readEnv("SPORTSDATA_API_KEY");
+/**
+ * Comma-separated emails. When set, only these accounts get ESPN live draft sync (the beta),
+ * season pass or not. Empty: payments decide (season pass), or everyone when payments are off.
+ */
+const espnSyncAllowlist = (readEnv("ESPN_SYNC_ALLOWLIST") ?? "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 
 /** Accounts + server-backed persistence. Requires a database and auth. */
 const cloudEnabled = Boolean(databaseUrl && nextAuthSecret);
@@ -75,6 +83,7 @@ export const config = Object.freeze({
   stripeWebhookSecret,
   stripePriceId,
   sportsDataApiKey,
+  espnSyncAllowlist,
 
   cloudEnabled,
   googleAuthEnabled,
@@ -85,6 +94,11 @@ export const config = Object.freeze({
   paymentsEnabled: cloudEnabled && stripeMissing.length === 0,
   /** Live ADP/projections ingestion. Without it the app uses the bundled sample data. */
   dataPipelineEnabled: Boolean(sportsDataApiKey),
+  /**
+   * ESPN live draft sync: picks relayed from a bridge in the user's ESPN tab. Needs accounts (picks
+   * are relayed per user and league) and nothing else: no ESPN credentials are ever stored.
+   */
+  espnSyncEnabled: cloudEnabled,
 });
 
 export type Config = typeof config;
@@ -98,6 +112,7 @@ export const publicFlags = Object.freeze({
   aiEnabled: config.aiEnabled,
   paymentsEnabled: config.paymentsEnabled,
   dataPipelineEnabled: config.dataPipelineEnabled,
+  espnSyncEnabled: config.espnSyncEnabled,
 });
 
 export type PublicFlags = typeof publicFlags;
@@ -134,6 +149,9 @@ if (stripeAnySet && !cloudEnabled) {
   warnings.push("Stripe variables are set but cloud features are disabled, so payments are off.");
 } else if (stripeAnySet && stripeMissing.length) {
   warnings.push(`${stripeMissing.join(" and ")} ${stripeMissing.length > 1 ? "are" : "is"} not set, so payments are off.`);
+}
+if (espnSyncAllowlist.length && !cloudEnabled) {
+  warnings.push("ESPN_SYNC_ALLOWLIST is set but cloud features are disabled, so ESPN live sync is off.");
 }
 for (const warning of warnings) {
   console.warn(`[config] ${warning}`);

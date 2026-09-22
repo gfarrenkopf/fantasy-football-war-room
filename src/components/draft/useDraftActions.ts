@@ -7,6 +7,7 @@ import { isMyPick, nextMyPick } from "@/lib/draft/snake";
 import { valueTag } from "@/lib/draft/value";
 import { useDraft } from "./DraftProvider";
 import { useModel } from "./DraftModel";
+import { useEspnSync } from "./EspnSync";
 import { useConfirm, useToast } from "./Feedback";
 import { useCelebrate } from "./PickCelebration";
 import { useSim } from "./Simulator";
@@ -32,12 +33,23 @@ export function useDraftActions() {
   const confirm = useConfirm();
   const celebrate = useCelebrate();
   const sim = useSim();
+  const espn = useEspnSync();
+  const { locked } = espn;
+
+  /** While ESPN live sync drives the board, hand edits would only be overwritten by the next pick. */
+  const pausedForEspn = useCallback(() => {
+    if (locked) toast(espn.myTurn ? "You're on the clock: click an available player to draft him in ESPN." : "Picks are coming from your ESPN draft. You can draft from here when you're on the clock.");
+    return locked;
+  }, [locked, toast, espn.myTurn]);
 
   /** Logs a pick for an available player, or moves a taken player between rosters. */
   const draft = useCallback(
     async (playerId: string, mine: boolean) => {
       const p = model.player(playerId);
       if (!p) return;
+      // Live ESPN draft and the user's turn: a click arms the player to be drafted in ESPN (8.13).
+      if (locked && espn.myTurn && !model.taken.has(playerId)) return espn.arm(playerId);
+      if (pausedForEspn()) return;
       const tk = model.taken.get(playerId);
       /** After adding to my roster: warn (and flash) if it created a bye conflict, else confirm the pick. */
       const afterMine = (picks: typeof draftCtx.state.picks, okMessage: string) => {
@@ -86,16 +98,16 @@ export function useDraftActions() {
         total: model.total,
       });
     },
-    [draftCtx, model, toast, confirm, celebrate],
+    [draftCtx, model, toast, confirm, celebrate, pausedForEspn, locked, espn],
   );
 
   const untake = useCallback(
     (playerId: string) => {
-      if (!model.taken.has(playerId)) return;
+      if (!model.taken.has(playerId) || pausedForEspn()) return;
       draftCtx.untake(playerId);
       toast(`${model.player(playerId)?.name ?? "Player"} put back on the board`);
     },
-    [draftCtx, model, toast],
+    [draftCtx, model, toast, pausedForEspn],
   );
 
   /** Plain click = whoever is on the clock; Cmd/Ctrl = another team; Shift = mine. */
@@ -110,17 +122,19 @@ export function useDraftActions() {
 
   const undo = useCallback(() => {
     sim.stop();
+    if (pausedForEspn()) return;
     const last = draftCtx.state.picks.at(-1);
     if (!last) {
       toast("Nothing to undo");
       return;
     }
     draftCtx.undo();
-    toast(`Undid pick ${draftCtx.state.picks.length}: ${model.player(last.playerId)?.name ?? ""}`);
-  }, [draftCtx, model, toast, sim]);
+    toast(`Undid pick ${draftCtx.state.picks.length}: ${model.player(last.playerId)?.name ?? last.label?.name ?? ""}`);
+  }, [draftCtx, model, toast, sim, pausedForEspn]);
 
   const reset = useCallback(async () => {
     sim.stop();
+    if (pausedForEspn()) return;
     const ok = await confirm({
       message: "Reset the entire draft? This clears every pick and your roster.",
       confirmLabel: "Reset draft",
@@ -129,7 +143,7 @@ export function useDraftActions() {
     if (!ok) return;
     draftCtx.reset();
     toast("Draft reset");
-  }, [draftCtx, confirm, toast, sim]);
+  }, [draftCtx, confirm, toast, sim, pausedForEspn]);
 
   return { draft, untake, draftWithIntent, intentFrom, undo, reset };
 }

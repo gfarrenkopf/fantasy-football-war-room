@@ -8,6 +8,7 @@ import { createSimContext, type SimContext } from "@/lib/draft/sim";
 import { currentPick, takenMap } from "@/lib/draft/state";
 import { computeTiers, type Tier } from "@/lib/draft/tiers";
 import type { Dataset, LeagueSettings, Player } from "@/lib/draft/types";
+import { offBoardPlayer } from "@/lib/espn/sync";
 import { useDraft } from "./DraftProvider";
 
 export interface DraftModel {
@@ -43,7 +44,14 @@ export function DraftModelProvider({ league, children }: { league: LeagueSetting
   const model = useMemo<DraftModel>(() => {
     const taken = takenMap(state);
     const current = currentPick(state);
-    const lookup = (id: string) => ctx.byId.get(id);
+    // Off-board picks (e.g. deep ESPN picks) stand in as players, so rosters and needs count them.
+    const offBoard = new Map<string, Player>();
+    state.picks.forEach((pick, i) => {
+      if (!pick.label || ctx.byId.has(pick.playerId)) return;
+      const stand = offBoardPlayer(pick, dataset.byeWeeks, i);
+      if (stand) offBoard.set(stand.id, stand);
+    });
+    const lookup = (id: string) => ctx.byId.get(id) ?? offBoard.get(id);
     const { slots } = buildRoster(state.picks, lookup, league.roster);
     const clashCache = new Map<string, ByeConflict | null>();
     return {

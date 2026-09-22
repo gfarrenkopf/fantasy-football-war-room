@@ -110,6 +110,38 @@
 .turn.onclock b {
   color: var(--color-mine);
 }
+/* ESPN's pick clock (8.17), floated into the turn box: small for other teams, big on the user's turn. */
+.espnClock {
+  float: right;
+  margin-left: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 2.4;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.espnClock.mine {
+  font-size: 24px;
+  line-height: 1.3;
+  color: var(--color-mine);
+}
+.espnClock.mine.low {
+  color: var(--color-warn);
+}
+.espnClock.mine.urgent {
+  color: var(--color-reach-ink);
+  animation: clockUrgent 1s ease-in-out infinite;
+}
+@keyframes clockUrgent {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .espnClock.mine.urgent {
+    animation: none;
+  }
+}
 .clickmode {
   font-size: 11px;
   color: var(--color-muted);
@@ -3156,4 +3188,30 @@ a.btn {
   .otGo {
     width: 100%;
   }
+}
+
+/* ESPN live sync: the bar that sends a War Room pick into ESPN (EspnSync.tsx). */
+.espnArm {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--color-mine) 12%, var(--color-panel));
+  border-bottom: 1px solid var(--color-mine);
+}
+.espnArmText {
+  font-weight: 600;
+}
+.espnArmText small {
+  display: block;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+.btn.espnGo {
+  border-color: var(--color-mine);
+  background: var(--color-mine);
+  color: var(--color-mine-ink);
+  font-weight: 700;
 }

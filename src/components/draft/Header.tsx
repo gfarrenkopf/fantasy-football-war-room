@@ -4,6 +4,7 @@ import { forwardRef } from "react";
 import { formatRoundPick, isMyPick, nextMyPick, roundOf } from "@/lib/draft/snake";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
+import { EspnClock } from "./EspnSync";
 import { useLeague } from "./LeagueProvider";
 import { useDraftActions } from "./useDraftActions";
 
@@ -156,6 +157,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
       </div>
       <div className={cx("turn", turnClass)} aria-live="polite">
         {arrival > 0 && onClock && <span key={arrival} className={s.sweep} aria-hidden="true" />}
+        {!done && <EspnClock />}
         {turn}
       </div>
       <div className={cx("clickmode", onClock && "me")}>{mode}</div>
