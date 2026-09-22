@@ -16,8 +16,8 @@ export type EspnFrame =
   | { kind: "token" }
   | { kind: "joined"; teamId: number; memberId: string }
   | { kind: "left"; teamId: number; memberId: string }
-  /** Sent every 5s. Team 0 before the draft starts. */
-  | { kind: "clock"; teamId: number; msRemaining: number }
+  /** Sent every 5s. `state` 0 is the pre-draft countdown, with team 0; during the draft it names the team on the clock. */
+  | { kind: "clock"; state: number; teamId: number; msRemaining: number }
   /** 1 = draft started, 2 = draft complete. */
   | { kind: "state"; state: number }
   | { kind: "selecting"; teamId: number; msAllowed: number }
@@ -59,9 +59,11 @@ export function parseFrame(raw: string): EspnFrame {
       return { kind: head === "JOINED" ? "joined" : "left", teamId, memberId };
     }
     case "CLOCK": {
-      const teamId = int(rest[0]);
+      // CLOCK <state> <msRemaining> [teamId]: state 0 is the pre-draft countdown (no team), 6 a live pick.
+      const state = int(rest[0]);
       const msRemaining = int(rest[1]);
-      return teamId === null || msRemaining === null ? bad : { kind: "clock", teamId, msRemaining };
+      const teamId = rest[2] === undefined ? 0 : int(rest[2]);
+      return state === null || msRemaining === null || teamId === null ? bad : { kind: "clock", state, teamId, msRemaining };
     }
     case "STATE": {
       const state = int(rest[0]);

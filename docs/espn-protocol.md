@@ -1,6 +1,6 @@
 # ESPN live draft protocol
 
-What we know about ESPN's live draft, from two test drafts on 2026-09-21: the original HAR spike (league 810213965) and the 8.2 verification draft (league 704343562). None of it is documented or supported by ESPN, and it can change without notice.
+What we know about ESPN's live draft, from test drafts on 2026-09-21: the original HAR spike (league 810213965), the 8.2 verification draft (league 704343562), and bridge test drafts including one recorded from inside the page (league 351531362). None of it is documented or supported by ESPN, and it can change without notice.
 
 ## Contents
 
@@ -68,7 +68,7 @@ Frames are space-delimited text ending in a newline. `INIT` is the exception: a 
 | `INIT <base64>` | in | full room state on join |
 | `TOKEN 1:{L}:{team}:{SWID}:{code}` | in | join accepted |
 | `JOINED <team> <memberGuid>` / `LEFT <team> <memberGuid> <n>` | in | presence |
-| `CLOCK <team> <msRemaining>` | in | every 5s |
+| `CLOCK <state> <msRemaining> [team]` | in | every 5s. State 0 is the pre-draft countdown, with no team; state 6 is a live pick, and the third field is the team on the clock. |
 | `STATE 1` / `STATE 2` | in | draft started / complete |
 | `SELECTING <team> <msAllowed>` | in | team on the clock |
 | `AUTOSUGGEST <playerId>` | in | ESPN's suggestion for the team on the clock |
@@ -79,9 +79,13 @@ Frames are space-delimited text ending in a newline. `INIT` is the exception: a 
 | `PING PING%20<ms>` → `PONG PING%20<ms>` | out → in | heartbeat, every 15s |
 | `ERROR <n> <urlencoded message>` | in | refusal, followed by a close |
 
+- **Outbound frames end in a newline.** For example `"PING PING%20…\n"`, `"SELECT 4429160\n"` and `"AUTODRAFT false\n"`, as recorded from the page's own sends.
+- **ESPN accepts a `SELECT` sent on the page's socket by other code**, on the user's turn. The bridge's picks come back as `SELECTED` with the user's member GUID, exactly like a click on ESPN's Draft button. No refusal was seen, so the refusal frame is still unknown.
 - **A human pick carries the drafter's member GUID; an autopick never does.** An autopick after a timeout is preceded by `AUTODRAFT <team> true`.
 - **Pick numbers aren't in the frame.** The overall pick number is the running count of `SELECTED` frames, reconciled against `draftDetail.picks`.
 - In the spike, pick-to-broadcast latency averaged 255ms (167–356ms across 14 picks).
+
+**After the draft,** the socket closes and the page falls back to HTTP long-polling at `GET fantasydraft.espn.com/game-1/league-{L}/PING?1=…&token=…`, about every 7s. That's a possible second transport if the socket ever becomes unusable.
 
 ## 5. Player ids
 
@@ -100,4 +104,5 @@ The probes behind these findings aren't committed. They run against real ESPN ac
 ## 7. Open questions
 
 - **Where does the security code come from?** A full HAR of every request type, recorded from before the draft page loads, should show it. If a server can fetch it with cookies, a server-side client becomes possible, but only as the user's sole drafting client (§1).
+- **How is ESPN's pick queue sent (8.15)?** It wasn't exercised in the recorded draft: no queue frames or calls appeared.
 - **How do we catch up on picks made before the bridge attached?** The picks are in `INIT` (binary) and presumably in the draft page's own store.

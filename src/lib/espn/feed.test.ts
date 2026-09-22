@@ -49,7 +49,9 @@ describe("foldFrames", () => {
   });
 
   it("tracks who is on the clock", () => {
-    expect(foldFrames([...OPENING, "SELECTING 3 60000", "CLOCK 3 55000"]).onClock).toEqual({ teamId: 3, msRemaining: 55000 });
+    expect(foldFrames([...OPENING, "SELECTING 3 60000", "CLOCK 6 55000 3"]).onClock).toEqual({ teamId: 3, msRemaining: 55000 });
+    // The clock ticking never moves the turn to the wrong team.
+    expect(foldFrames([...OPENING, "SELECTING 1 90000", "CLOCK 6 85495 1", "CLOCK 6 80489 1"]).onClock).toEqual({ teamId: 1, msRemaining: 80489 });
   });
 
   it("tracks autopick being switched off", () => {

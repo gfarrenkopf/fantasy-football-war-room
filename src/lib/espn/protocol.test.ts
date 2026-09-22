@@ -23,7 +23,9 @@ describe("parseFrame", () => {
   });
 
   it("reads the clock, state, selecting, autosuggest and autodraft frames", () => {
-    expect(parseFrame("CLOCK 0 759977")).toEqual({ kind: "clock", teamId: 0, msRemaining: 759977 });
+    expect(parseFrame("CLOCK 0 759977")).toEqual({ kind: "clock", state: 0, teamId: 0, msRemaining: 759977 });
+    // During the draft the team on the clock is the third field (seen live: "CLOCK 6 85495 1" after "SELECTING 1 90000").
+    expect(parseFrame("CLOCK 6 85495 1")).toEqual({ kind: "clock", state: 6, teamId: 1, msRemaining: 85495 });
     expect(parseFrame("STATE 1")).toEqual({ kind: "state", state: 1 });
     expect(parseFrame("SELECTING 4 60000")).toEqual({ kind: "selecting", teamId: 4, msAllowed: 60000 });
     expect(parseFrame("AUTOSUGGEST 4429795")).toEqual({ kind: "autosuggest", playerId: 4429795 });
@@ -55,6 +57,7 @@ describe("parseFrame", () => {
     expect(parseFrame("SELECTED 1 4362628 4 not-a-guid").kind).toBe("malformed");
     expect(parseFrame("AUTODRAFT 1 maybe").kind).toBe("malformed");
     expect(parseFrame("CLOCK").kind).toBe("malformed");
+    expect(parseFrame("CLOCK 6 85495 x").kind).toBe("malformed");
   });
 
   it("marks frames it doesn't know as unknown, and never throws", () => {
