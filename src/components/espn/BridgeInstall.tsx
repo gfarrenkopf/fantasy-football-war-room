@@ -7,7 +7,7 @@ const STEPS = [
   "Drag the War Room button to your bookmarks bar. You only do this once.",
   "Open your draft room on fantasy.espn.com. ESPN opens it an hour before the draft.",
   "Click the War Room bookmark there, then Connect.",
-  "Draft as usual. Picks land on your War Room board within a second. Keep the ESPN tab open; it can sit in the background.",
+  "Draft as usual. Picks land on your War Room board within a second, and when you're on the clock you can draft straight from War Room. Keep the ESPN tab open; it can sit in the background.",
 ];
 
 /** Setup instructions with the draggable bookmark. See src/app/espn/page.tsx. */
@@ -44,7 +44,8 @@ export function BridgeInstall() {
         </ol>
 
         <p className="text-sm text-dim">
-          Works in desktop browsers. The bookmark only reads draft data from your ESPN tab (picks and the clock); War Room never sees your ESPN password or cookies. ESPN
+          Works in desktop browsers. The bookmark reads draft data from your ESPN tab (picks and the clock), and makes a pick there only when you draft from War Room;
+          War Room never sees your ESPN password or cookies. ESPN
           live sync is unofficial and not endorsed by ESPN, so it can stop working if ESPN changes their draft room. Your board always works by hand.
         </p>
       </div>

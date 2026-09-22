@@ -10,8 +10,9 @@ const fallback: Crosswalk = (id) => ({ kind: "offBoard", player: { name: `ESPN p
 
 function setup(opts: { crosswalkFor?: (season: number) => Promise<Crosswalk> } = {}) {
   let t = 1_000_000;
+  let ids = 0;
   const crosswalkFor = vi.fn(opts.crosswalkFor ?? (async () => crosswalk));
-  const relay = createRelay({ now: () => t, crosswalkFor, fallbackCrosswalk: fallback });
+  const relay = createRelay({ now: () => t, crosswalkFor, fallbackCrosswalk: fallback, newId: () => `r${++ids}` });
   const events: LiveEvent[] = [];
   const advance = (ms: number) => (t += ms);
   return { relay, events, advance, crosswalkFor };
@@ -138,5 +139,82 @@ describe("relay", () => {
   it("refuses a runaway bridge", async () => {
     const relay = createRelay({ crosswalkFor: async () => crosswalk, fallbackCrosswalk: fallback, maxFrames: 3 });
     expect(await relay.ingest(scope, "s1", 0, ["CLOCK 0 1", "CLOCK 0 2", "CLOCK 0 3", "CLOCK 0 4"])).toEqual({ status: 413 });
+  });
+
+  describe("picks made from War Room", () => {
+    const ME = "{00000000-0000-0000-0000-000000000000}";
+    /** The draft with the user's team (1) on the clock. */
+    async function onTheClock() {
+      const ctx = setup();
+      ctx.relay.subscribe("u1", "L1", (e) => ctx.events.push(e));
+      await ctx.relay.ingest(scope, "s1", 0, [...PRE, "SELECTED 4 1 2", "SELECTING 1 60000"]);
+      return ctx;
+    }
+    const requests = (events: LiveEvent[]) => events.flatMap((e) => (e.type === "request" ? [e.request] : []));
+
+    it("hands the pick to the bridge on its next check-in, and confirms it when ESPN announces it", async () => {
+      const { relay, events } = await onTheClock();
+      expect(relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 })).toEqual({
+        ok: true,
+        request: { id: "r1", playerId: "p2", espnPlayerId: 2, state: "pending" },
+      });
+      expect(await relay.ingest(scope, "s1", 5, [])).toEqual({ status: 200, have: 5, command: { id: "r1", select: 2 } });
+      await relay.ingest(scope, "s1", 5, [], { id: "r1", sent: true });
+      expect(await relay.ingest(scope, "s1", 5, [`SELECTED 1 2 4 ${ME}`])).toEqual({ status: 200, have: 6 });
+      expect(requests(events).map((r) => r.state)).toEqual(["pending", "sent", "confirmed"]);
+      expect(relay.snapshot("u1", "L1").request).toMatchObject({ id: "r1", state: "confirmed" });
+    });
+
+    it("refuses unless ESPN has the user on the clock, the player is available, and the bridge is live", async () => {
+      const fresh = setup();
+      expect(fresh.relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 })).toEqual({ ok: false, reason: "no-bridge" });
+      await fresh.relay.ingest(scope, "s1", 0, [...PRE]); // team 4 on the clock
+      expect(fresh.relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 })).toEqual({ ok: false, reason: "not-your-turn" });
+
+      const { relay, advance } = await onTheClock();
+      expect(relay.requestPick("u1", "L1", { playerId: "p1", espnPlayerId: 1 })).toEqual({ ok: false, reason: "taken" });
+      expect(relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 }).ok).toBe(true);
+      expect(relay.requestPick("u1", "L1", { playerId: "x", espnPlayerId: 3 })).toEqual({ ok: false, reason: "busy" });
+      advance(25_000);
+      expect(relay.requestPick("u1", "L1", { playerId: "x", espnPlayerId: 3 })).toEqual({ ok: false, reason: "bridge-offline" });
+    });
+
+    it("never hands the bridge a pick that has waited too long to be delivered", async () => {
+      const { relay, advance } = await onTheClock();
+      relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
+      advance(6_000);
+      expect(await relay.ingest(scope, "s1", 5, [])).toEqual({ status: 200, have: 5 });
+    });
+
+    it("expires a pick ESPN never confirmed", async () => {
+      const { relay, events, advance } = await onTheClock();
+      relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
+      await relay.ingest(scope, "s1", 5, [], { id: "r1", sent: true });
+      advance(11_000);
+      await relay.ingest(scope, "s1", 5, []);
+      expect(requests(events).at(-1)).toMatchObject({ id: "r1", state: "expired" });
+    });
+
+    it("reports a pick the bridge refused to send, with its reason", async () => {
+      const { relay, events } = await onTheClock();
+      relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
+      await relay.ingest(scope, "s1", 5, [], { id: "r1", sent: false, reason: "not-on-the-clock" });
+      expect(requests(events).at(-1)).toEqual({ id: "r1", playerId: "p2", espnPlayerId: 2, state: "refused", reason: "not-on-the-clock" });
+      expect(await relay.ingest(scope, "s1", 5, [])).toEqual({ status: 200, have: 5 });
+    });
+
+    it("is superseded when the user's team picks someone else first", async () => {
+      const { relay, events } = await onTheClock();
+      relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
+      await relay.ingest(scope, "s1", 5, ["AUTODRAFT 1 true", "SELECTED 1 999 4"]);
+      expect(requests(events).at(-1)).toMatchObject({ state: "superseded" });
+    });
+
+    it("ignores a result for a request that isn't current", async () => {
+      const { relay } = await onTheClock();
+      relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
+      await relay.ingest(scope, "s1", 5, [], { id: "old", sent: false });
+      expect(relay.snapshot("u1", "L1").request?.state).toBe("pending");
+    });
   });
 });

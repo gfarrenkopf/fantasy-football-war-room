@@ -3157,3 +3157,29 @@ a.btn {
     width: 100%;
   }
 }
+
+/* ESPN live sync: the bar that sends a War Room pick into ESPN (EspnSync.tsx). */
+.espnArm {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--color-mine) 12%, var(--color-panel));
+  border-bottom: 1px solid var(--color-mine);
+}
+.espnArmText {
+  font-weight: 600;
+}
+.espnArmText small {
+  display: block;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+.btn.espnGo {
+  border-color: var(--color-mine);
+  background: var(--color-mine);
+  color: var(--color-mine-ink);
+  font-weight: 700;
+}

@@ -1,6 +1,6 @@
 import type { Crosswalk } from "@/lib/espn/crosswalk";
 import { emptyFeed, foldFrames, type DraftFeed } from "@/lib/espn/feed";
-import { resolvePicks, type LiveEvent, type LivePick, type LiveSnapshot, type LiveStatus } from "@/lib/espn/live";
+import { requestActive, resolvePicks, type LiveEvent, type LivePick, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
 
 /**
  * The relay (8.9): frames in from a bridge, resolved picks out to every war room open on that league.
@@ -36,9 +36,31 @@ export interface RelayOptions {
   idleMs?: number;
   /** Frames kept per channel; a runaway bridge is refused past this. */
   maxFrames?: number;
+  /** A War Room pick is only handed to the bridge this soon after it was made, so a late delivery can't fire on a later turn. */
+  deliverWithinMs?: number;
+  /** A War Room pick ESPN hasn't confirmed by now has failed; the user picks in ESPN. */
+  expireAfterMs?: number;
+  /** Ids for pick requests. */
+  newId?: () => string;
 }
 
-export type IngestResult = { status: 200; have: number } | { status: 409; have: number } | { status: 413 };
+/** A War Room pick for the bridge to make: send `SELECT <select>` on ESPN's socket. */
+export interface BridgeCommand {
+  id: string;
+  select: number;
+}
+
+/** What the bridge reports about the last command it was handed. */
+export interface CommandResult {
+  id: string;
+  sent: boolean;
+  reason?: string;
+}
+
+export type IngestResult = { status: 200; have: number; command?: BridgeCommand } | { status: 409; have: number } | { status: 413 };
+
+export type PickRequestRefusal = "no-bridge" | "bridge-offline" | "not-your-turn" | "taken" | "busy";
+export type PickRequestResult = { ok: true; request: PickRequestView } | { ok: false; reason: PickRequestRefusal };
 
 interface Channel {
   scope: RelayScope | null;
@@ -51,15 +73,20 @@ interface Channel {
   lastStatus: LiveStatus;
   listeners: Set<Listener>;
   touched: number;
+  request: (PickRequestView & { createdAt: number }) | null;
 }
 
 export interface Relay {
-  ingest(scope: RelayScope, session: string, seq: number, frames: readonly string[]): Promise<IngestResult>;
+  ingest(scope: RelayScope, session: string, seq: number, frames: readonly string[], result?: CommandResult): Promise<IngestResult>;
+  /** A pick the user made in War Room, for the bridge to make in ESPN. Refused unless ESPN has the user on the clock. */
+  requestPick(userId: string, leagueId: string, pick: { playerId: string; espnPlayerId: number }): PickRequestResult;
   /** Starts watching a league. The snapshot is the draft so far; `listener` gets everything after it. */
   subscribe(userId: string, leagueId: string, listener: Listener): { snapshot: LiveSnapshot; unsubscribe(): void };
   /** Re-checks bridge liveness and tells listeners if it changed. Called periodically by open streams. */
   checkStatus(userId: string, leagueId: string): void;
   snapshot(userId: string, leagueId: string): LiveSnapshot;
+  /** The ESPN draft a league's bridge last reported, or null before any bridge has. */
+  scope(userId: string, leagueId: string): RelayScope | null;
 }
 
 const key = (userId: string, leagueId: string) => `${userId}\u0000${leagueId}`;
@@ -71,6 +98,9 @@ export function createRelay({
   offlineAfterMs = 20_000,
   idleMs = 60 * 60 * 1000,
   maxFrames = 50_000,
+  deliverWithinMs = 5_000,
+  expireAfterMs = 10_000,
+  newId = () => crypto.randomUUID(),
 }: RelayOptions): Relay {
   const channels = new Map<string, Channel>();
   const crosswalks = new Map<number, Promise<Crosswalk>>();
@@ -100,7 +130,18 @@ export function createRelay({
     let ch = channels.get(k);
     if (!ch) {
       sweep();
-      ch = { scope: null, sessions: new Map(), frameCount: 0, feed: emptyFeed(), picks: [], lastSeen: null, lastStatus: "waiting", listeners: new Set(), touched: now() };
+      ch = {
+        scope: null,
+        sessions: new Map(),
+        frameCount: 0,
+        feed: emptyFeed(),
+        picks: [],
+        lastSeen: null,
+        lastStatus: "waiting",
+        listeners: new Set(),
+        touched: now(),
+        request: null,
+      };
       channels.set(k, ch);
     }
     ch.touched = now();
@@ -122,7 +163,22 @@ export function createRelay({
       picks: ch.picks,
       onClock: ch.feed.onClock,
       sessions: ch.sessions.size,
+      request: viewOf(ch.request),
     };
+  }
+
+  const viewOf = (r: Channel["request"]): PickRequestView | null =>
+    r && { id: r.id, playerId: r.playerId, espnPlayerId: r.espnPlayerId, state: r.state, ...(r.reason ? { reason: r.reason } : {}) };
+
+  function settle(ch: Channel, state: PickRequestView["state"], reason?: string) {
+    if (!ch.request || !requestActive(ch.request)) return;
+    ch.request = { ...ch.request, state, ...(reason ? { reason } : {}) };
+    emit(ch, { type: "request", request: viewOf(ch.request)! });
+  }
+
+  /** A War Room pick nobody confirmed in time has failed. */
+  function expire(ch: Channel) {
+    if (ch.request && requestActive(ch.request) && now() - ch.request.createdAt > expireAfterMs) settle(ch, "expired");
   }
 
   function emit(ch: Channel, event: LiveEvent) {
@@ -147,10 +203,11 @@ export function createRelay({
     ch.frameCount = 0;
     ch.feed = emptyFeed();
     ch.picks = [];
+    ch.request = null;
   }
 
   return {
-    async ingest(scope, session, seq, frames) {
+    async ingest(scope, session, seq, frames, result) {
       const walk = await crosswalk(scope.season);
       const ch = channel(scope.userId, scope.leagueId);
       // Re-paired to a different ESPN league (or season): that's a different draft.
@@ -158,6 +215,13 @@ export function createRelay({
       const teamChanged = ch.scope !== null && ch.scope.espnTeamId !== scope.espnTeamId;
       ch.scope = scope;
       ch.lastSeen = now();
+
+      if (result && ch.request?.id === result.id && ch.request.state === "pending") {
+        if (result.sent) {
+          ch.request = { ...ch.request, state: "sent" };
+          emit(ch, { type: "request", request: viewOf(ch.request)! });
+        } else settle(ch, "refused", result.reason);
+      }
 
       let log = ch.sessions.get(session);
       if (!log) ch.sessions.set(session, (log = []));
@@ -180,6 +244,12 @@ export function createRelay({
         ch.picks = rebuilt ? fresh : [...ch.picks, ...fresh];
         if (rebuilt) emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
         else for (const pick of fresh) emit(ch, { type: "pick", pick });
+        // The user's team just picked: that settles a War Room pick one way or the other.
+        for (const pick of fresh) {
+          if (pick.teamId === scope.espnTeamId && ch.request && requestActive(ch.request)) {
+            settle(ch, pick.espnPlayerId === ch.request.espnPlayerId ? "confirmed" : "superseded");
+          }
+        }
         const clock = ch.feed.onClock;
         if (!rebuilt && (clock?.teamId !== before.onClock?.teamId || clock?.msRemaining !== before.onClock?.msRemaining)) {
           emit(ch, { type: "clock", onClock: clock });
@@ -188,8 +258,25 @@ export function createRelay({
         ch.picks = resolvePicks(ch.feed, walk, scope.espnTeamId);
         emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
       }
+      expire(ch);
       emitStatus(ch);
-      return { status: 200, have: log.length };
+      const r = ch.request;
+      const command = r?.state === "pending" && now() - r.createdAt <= deliverWithinMs ? { id: r.id, select: r.espnPlayerId } : undefined;
+      return command ? { status: 200, have: log.length, command } : { status: 200, have: log.length };
+    },
+
+    requestPick(userId, leagueId, pick) {
+      const ch = channels.get(key(userId, leagueId));
+      if (!ch?.scope) return { ok: false, reason: "no-bridge" };
+      expire(ch);
+      if (statusOf(ch) !== "live") return { ok: false, reason: "bridge-offline" };
+      if (ch.feed.onClock?.teamId !== ch.scope.espnTeamId) return { ok: false, reason: "not-your-turn" };
+      if (ch.feed.picks.some((p) => p.espnPlayerId === pick.espnPlayerId)) return { ok: false, reason: "taken" };
+      if (requestActive(ch.request)) return { ok: false, reason: "busy" };
+      ch.request = { id: newId(), playerId: pick.playerId, espnPlayerId: pick.espnPlayerId, state: "pending", createdAt: now() };
+      const request = viewOf(ch.request)!;
+      emit(ch, { type: "request", request });
+      return { ok: true, request };
     },
 
     subscribe(userId, leagueId, listener) {
@@ -207,11 +294,17 @@ export function createRelay({
 
     checkStatus(userId, leagueId) {
       const ch = channels.get(key(userId, leagueId));
-      if (ch) emitStatus(ch);
+      if (!ch) return;
+      expire(ch);
+      emitStatus(ch);
     },
 
     snapshot(userId, leagueId) {
       return snapshotOf(channel(userId, leagueId));
+    },
+
+    scope(userId, leagueId) {
+      return channels.get(key(userId, leagueId))?.scope ?? null;
     },
   };
 }

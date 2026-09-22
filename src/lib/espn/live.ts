@@ -29,6 +29,27 @@ export interface LivePick {
  */
 export type LiveStatus = "waiting" | "live" | "bridge-offline" | "complete";
 
+/**
+ * A pick the user made from War Room, on its way into ESPN (8.13):
+ * - `pending`: waiting for the bridge's next check-in to carry it.
+ * - `sent`: the bridge sent it on ESPN's socket; waiting for ESPN to announce it.
+ * - `confirmed`: ESPN announced the pick.
+ * - `superseded`: the user's team picked someone else first (in ESPN, or autopick).
+ * - `refused`: the bridge wouldn't send it, e.g. ESPN no longer had the user on the clock.
+ * - `expired`: nothing confirmed it in time; the user should pick in ESPN.
+ */
+export type PickRequestState = "pending" | "sent" | "confirmed" | "superseded" | "refused" | "expired";
+
+export interface PickRequestView {
+  id: string;
+  playerId: string;
+  espnPlayerId: number;
+  state: PickRequestState;
+  reason?: string;
+}
+
+export const requestActive = (r: Pick<PickRequestView, "state"> | null): boolean => r?.state === "pending" || r?.state === "sent";
+
 export interface LiveSnapshot {
   status: LiveStatus;
   /** The draft's own state as the socket showed it, independent of the bridge. */
@@ -40,13 +61,16 @@ export interface LiveSnapshot {
   onClock: { teamId: number; msRemaining: number } | null;
   /** How many separate page loads of the ESPN tab contributed frames. More than one may mean a gap. */
   sessions: number;
+  /** The latest pick made from War Room, if any. */
+  request: PickRequestView | null;
 }
 
 export type LiveEvent =
   | { type: "snapshot"; snapshot: LiveSnapshot }
   | { type: "pick"; pick: LivePick }
   | { type: "clock"; onClock: LiveSnapshot["onClock"] }
-  | { type: "status"; status: LiveStatus; draft: FeedStatus };
+  | { type: "status"; status: LiveStatus; draft: FeedStatus }
+  | { type: "request"; request: PickRequestView };
 
 /** Resolves the feed's picks from `from` onward (earlier ones are already resolved). */
 export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: number | null, from = 0): LivePick[] {

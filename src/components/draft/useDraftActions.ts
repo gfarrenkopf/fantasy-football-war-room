@@ -33,19 +33,23 @@ export function useDraftActions() {
   const confirm = useConfirm();
   const celebrate = useCelebrate();
   const sim = useSim();
-  const { locked } = useEspnSync();
+  const espn = useEspnSync();
+  const { locked } = espn;
 
   /** While ESPN live sync drives the board, hand edits would only be overwritten by the next pick. */
   const pausedForEspn = useCallback(() => {
-    if (locked) toast("Picks are coming from your ESPN draft. Make them in ESPN.");
+    if (locked) toast(espn.myTurn ? "You're on the clock: click an available player to draft him in ESPN." : "Picks are coming from your ESPN draft. You can draft from here when you're on the clock.");
     return locked;
-  }, [locked, toast]);
+  }, [locked, toast, espn.myTurn]);
 
   /** Logs a pick for an available player, or moves a taken player between rosters. */
   const draft = useCallback(
     async (playerId: string, mine: boolean) => {
       const p = model.player(playerId);
-      if (!p || pausedForEspn()) return;
+      if (!p) return;
+      // Live ESPN draft and the user's turn: a click arms the player to be drafted in ESPN (8.13).
+      if (locked && espn.myTurn && !model.taken.has(playerId)) return espn.arm(playerId);
+      if (pausedForEspn()) return;
       const tk = model.taken.get(playerId);
       /** After adding to my roster: warn (and flash) if it created a bye conflict, else confirm the pick. */
       const afterMine = (picks: typeof draftCtx.state.picks, okMessage: string) => {
@@ -94,7 +98,7 @@ export function useDraftActions() {
         total: model.total,
       });
     },
-    [draftCtx, model, toast, confirm, celebrate, pausedForEspn],
+    [draftCtx, model, toast, confirm, celebrate, pausedForEspn, locked, espn],
   );
 
   const untake = useCallback(

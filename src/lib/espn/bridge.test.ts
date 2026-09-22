@@ -267,4 +267,65 @@ describe("ESPN bridge", () => {
     expect(p.bridge()).toMatchObject({ onDraftPage: false, paired: false });
     expect(p.shadow.querySelector(".s").textContent).toContain("Open your ESPN draft room");
   });
+
+  describe("picks made from War Room", () => {
+    /** A paired bridge on team 1's draft page, with War Room handing it `command` once. */
+    function withCommand(command: { id: string; select: number }) {
+      const p = page({ stored: "tok-1" });
+      let handedOut = false;
+      p.fetch.mockImplementation(async (_u, init) => {
+        const body = JSON.parse(String(init.body));
+        const reply: Record<string, unknown> = { have: body.seq + body.frames.length };
+        if (!handedOut) {
+          handedOut = true;
+          reply.command = command;
+        }
+        return new Response(JSON.stringify(reply), { status: 200 });
+      });
+      p.load();
+      const ws = new (p.Socket())(DRAFT_URL);
+      return { ...p, ws };
+    }
+
+    it("sends the pick on ESPN's own socket when ESPN has the user on the clock, and reports it", async () => {
+      const p = withCommand({ id: "r1", select: 4362628 });
+      p.ws.send("PING PING%201\n"); // the page's own send: frames end in a newline
+      p.ws.emit("SELECTING 1 60000\n");
+      await vi.advanceTimersByTimeAsync(300);
+      expect(p.ws.sent).toEqual(["PING PING%201\n", "SELECT 4362628\n"]);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(p.bodies().some((b) => (b as { result?: unknown }).result && JSON.stringify(b).includes('"sent":true'))).toBe(true);
+    });
+
+    it("refuses when the page doesn't have the user on the clock, and says why", async () => {
+      const p = withCommand({ id: "r1", select: 4362628 });
+      p.ws.emit("SELECTING 3 60000\n");
+      await vi.advanceTimersByTimeAsync(600);
+      expect(p.ws.sent).toEqual([]);
+      expect(p.bodies().map((b) => (b as { result?: unknown }).result).find(Boolean)).toEqual({ id: "r1", sent: false, reason: "not-on-the-clock" });
+    });
+
+    it("never sends the same pick twice, even if War Room hands it out again", async () => {
+      const p = page({ stored: "tok-1" });
+      p.fetch.mockImplementation(async (_u, init) => {
+        const body = JSON.parse(String(init.body));
+        return new Response(JSON.stringify({ have: body.seq + body.frames.length, command: { id: "r1", select: 7 } }), { status: 200 });
+      });
+      p.load();
+      const ws = new (p.Socket())(DRAFT_URL);
+      ws.emit("SELECTING 1 60000");
+      await vi.advanceTimersByTimeAsync(2000);
+      ws.emit("SELECTING 1 60000");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(ws.sent.filter((f) => String(f).startsWith("SELECT"))).toHaveLength(1);
+    });
+
+    it("mirrors the page's frame format when its sends have no trailing newline", async () => {
+      const p = withCommand({ id: "r1", select: 5 });
+      p.ws.send("PING PING%201");
+      p.ws.emit("SELECTING 1 60000");
+      await vi.advanceTimersByTimeAsync(300);
+      expect(p.ws.sent.at(-1)).toBe("SELECT 5");
+    });
+  });
 });

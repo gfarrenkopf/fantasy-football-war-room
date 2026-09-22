@@ -1,14 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { formatRoundPick } from "@/lib/draft/snake";
 import { samePicks } from "@/lib/draft/state";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { listenForEspnPaired } from "@/lib/espn/channel";
-import type { LiveEvent, LiveSnapshot, LiveStatus } from "@/lib/espn/live";
+import { requestActive, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
 import { slotMismatch, syncMode, toDraftPicks } from "@/lib/espn/sync";
 import { useAccount } from "./Account";
-import { cx } from "./cx";
+import { cx, s } from "./cx";
+import { useModel } from "./DraftModel";
 import { useDraft } from "./DraftProvider";
 import { useToast } from "./Feedback";
 import { useFlags } from "./Flags";
@@ -18,9 +19,21 @@ export interface EspnSyncValue {
   status: LiveStatus | "off";
   /** The board follows ESPN pick for pick; logging picks by hand is paused. */
   locked: boolean;
+  /** ESPN has the user on the clock, so a pick can be made from War Room. */
+  myTurn: boolean;
+  /** The player armed to be drafted in ESPN (the first of two steps), if any. */
+  armed: string | null;
+  /** The latest pick made from War Room. */
+  request: PickRequestView | null;
+  /** Arms a player; arming the one already armed drafts him (double-click, or Enter twice). */
+  arm(playerId: string): void;
+  disarm(): void;
+  /** Drafts the armed player in ESPN. */
+  draftArmed(): void;
 }
 
-const OFF: EspnSyncValue = { status: "off", locked: false };
+const noop = () => {};
+const OFF: EspnSyncValue = { status: "off", locked: false, myTurn: false, armed: null, request: null, arm: noop, disarm: noop, draftArmed: noop };
 const EspnSyncContext = createContext<EspnSyncValue>(OFF);
 
 export const useEspnSync = () => useContext(EspnSyncContext);
@@ -52,10 +65,13 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       source.addEventListener(type, (e) => apply(JSON.parse((e as MessageEvent<string>).data)));
     on("snapshot", (e) => setSnapshot(e.snapshot));
     on("pick", ({ pick }) =>
-      setSnapshot((s) => (s && pick.n === s.picks.length + 1 ? { ...s, status: s.status === "waiting" ? "live" : s.status, picks: [...s.picks, pick] } : s)),
+      setSnapshot((cur) =>
+        cur && pick.n === cur.picks.length + 1 ? { ...cur, status: cur.status === "waiting" ? "live" : cur.status, picks: [...cur.picks, pick] } : cur,
+      ),
     );
-    on("clock", ({ onClock }) => setSnapshot((s) => s && { ...s, onClock }));
-    on("status", ({ status, draft }) => setSnapshot((s) => s && { ...s, status, draft }));
+    on("clock", ({ onClock }) => setSnapshot((cur) => cur && { ...cur, onClock }));
+    on("status", ({ status, draft }) => setSnapshot((cur) => cur && { ...cur, status, draft }));
+    on("request", ({ request }) => setSnapshot((cur) => cur && { ...cur, request }));
     source.onerror = () => {
       if (source.readyState === EventSource.CLOSED) setSnapshot(null);
     };
@@ -89,10 +105,71 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     if (hydrated && snapshot) apply(snapshot);
   }, [snapshot, hydrated]);
 
+  /* ---- picking from War Room (8.13) ---- */
+  const [armedId, setArmed] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const myTurn = !!snapshot && snapshot.status === "live" && snapshot.espnTeamId !== null && snapshot.onClock?.teamId === snapshot.espnTeamId;
+  const request = snapshot?.request ?? null;
+  // Derived, so the arm lapses by itself the moment the clock moves on or a pick is on its way.
+  const armed = myTurn && !sending && !requestActive(request) ? armedId : null;
+
+  const draftPlayer = useCallback(
+    async (playerId: string) => {
+      setArmed(null);
+      setSending(true);
+      const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId!)}/espn/pick`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ playerId }),
+      }).catch(() => null);
+      setSending(false);
+      if (!res) return toast("Couldn't reach War Room. Make this pick in ESPN.");
+      if (res.status === 202) {
+        const { request: sent } = (await res.json()) as { request: PickRequestView };
+        return setSnapshot((cur) => cur && { ...cur, request: sent });
+      }
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      toast(body.error ?? "Couldn't send that pick. Make it in ESPN.");
+    },
+    [leagueId, toast],
+  );
+
+  const arm = useCallback(
+    (playerId: string) => {
+      if (!myTurn) return;
+      if (armed === playerId) void draftPlayer(playerId);
+      else setArmed(playerId);
+    },
+    [myTurn, armed, draftPlayer],
+  );
+  const disarm = useCallback(() => setArmed(null), []);
+  const draftArmed = useCallback(() => {
+    if (armed) void draftPlayer(armed);
+  }, [armed, draftPlayer]);
+
+  // Say how a War Room pick turned out; a confirmed one simply appears on the board.
+  const told = useRef<string | null>(null);
+  useEffect(() => {
+    if (!request || told.current === `${request.id}:${request.state}`) return;
+    told.current = `${request.id}:${request.state}`;
+    if (request.state === "superseded") toast("ESPN had already made a pick for you");
+    else if (request.state === "refused") toast("ESPN didn't have you on the clock. Check your ESPN tab.");
+    else if (request.state === "expired") toast("ESPN didn't confirm that pick. Check your ESPN tab and pick there.");
+  }, [request, toast]);
+
   const value = useMemo<EspnSyncValue>(() => {
     if (!snapshot) return OFF;
-    return { status: snapshot.status, locked: snapshot.status === "live" && syncMode(snapshot) === "replace" };
-  }, [snapshot]);
+    return {
+      status: snapshot.status,
+      locked: snapshot.status === "live" && syncMode(snapshot) === "replace",
+      myTurn,
+      armed,
+      request: sending ? { id: "sending", playerId: armedId ?? "", espnPlayerId: 0, state: "pending" } : request,
+      arm,
+      disarm,
+      draftArmed,
+    };
+  }, [snapshot, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
 
   return <EspnSyncContext.Provider value={value}>{children}</EspnSyncContext.Provider>;
 }
@@ -120,4 +197,61 @@ export function EspnSyncChip() {
       {chip.label}
     </span>
   );
+}
+
+const isTyping = () => {
+  const el = document.activeElement;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || (el as HTMLElement).isContentEditable);
+};
+
+/**
+ * The second step of drafting from War Room: names the armed player and sends him to ESPN. Enter
+ * drafts and Escape cancels, unless the user is typing (the search box has its own Enter). Also
+ * shows a pick on its way.
+ */
+export function EspnPickBar() {
+  const { armed, request, draftArmed, disarm } = useEspnSync();
+  const model = useModel();
+
+  useEffect(() => {
+    if (!armed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping()) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        draftArmed();
+      } else if (e.key === "Escape") disarm();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [armed, draftArmed, disarm]);
+
+  if (armed) {
+    const player = model.player(armed);
+    return (
+      <div className={s.espnArm} role="region" aria-label="Draft in ESPN">
+        <span className={s.espnArmText}>
+          {player?.name ?? "This player"} {player && <>({player.pos}, {player.team})</>}
+          <small>Click him again or press Enter to draft him in ESPN.</small>
+        </span>
+        <button className={cx("btn", "espnGo")} onClick={draftArmed} autoFocus>
+          Draft in ESPN
+        </button>
+        <button className={s.btn} onClick={disarm}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+  if (request && requestActive(request)) {
+    const player = model.player(request.playerId);
+    return (
+      <div className={s.espnArm} role="status">
+        <span className={s.espnArmText}>
+          Drafting {player?.name ?? "your pick"} in ESPN…<small>It lands on your board as soon as ESPN confirms it.</small>
+        </span>
+      </div>
+    );
+  }
+  return null;
 }

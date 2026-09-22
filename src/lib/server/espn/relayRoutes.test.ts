@@ -27,7 +27,8 @@ async function routes(env: Record<string, string> = {}) {
   vi.spyOn(console, "warn").mockImplementation(() => {});
   const frames = await import("@/app/api/espn/bridge/frames/route");
   const stream = await import("@/app/api/leagues/[id]/espn/stream/route");
-  return { frames, stream };
+  const pick = await import("@/app/api/leagues/[id]/espn/pick/route");
+  return { frames, stream, pick };
 }
 
 const ESPN = "https://fantasy.espn.com";
@@ -68,9 +69,10 @@ describe("ESPN relay routes", () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    const g = globalThis as { __espnRelay?: unknown; __espnTokenCache?: unknown };
+    const g = globalThis as { __espnRelay?: unknown; __espnTokenCache?: unknown; __espnReverse?: unknown };
     delete g.__espnRelay;
     delete g.__espnTokenCache;
+    delete g.__espnReverse;
     userId = await createTestUser(db, `${crypto.randomUUID()}@example.test`);
     leagueId = await createTestLeague(db, userId);
     state.user = { userId, email: "fan@example.test" };
@@ -151,5 +153,43 @@ describe("ESPN relay routes", () => {
   it("is off entirely without cloud features", async () => {
     const { frames } = await routes({ DATABASE_URL: "" });
     expect((await frames.POST(post(token, { espnLeagueId: "704343562", session: "abc12345", seq: 0, frames: [] }))).status).toBe(404);
+  });
+
+  describe("drafting from War Room", () => {
+    const gibbs = parseEspnPlayers(espnPool).find((p) => p.fullName === "Jahmyr Gibbs")!.id;
+    const draftFromWarRoom = (pickRoute: Awaited<ReturnType<typeof routes>>["pick"], playerId: string) =>
+      pickRoute.POST(
+        new Request(`http://localhost/api/leagues/${leagueId}/espn/pick`, {
+          method: "POST",
+          headers: { "content-type": "application/json", host: "localhost", origin: "http://localhost" },
+          body: JSON.stringify({ playerId }),
+        }),
+        { params: Promise.resolve({ id: leagueId }) },
+      );
+    const frame = (seq: number, frames: string[], result?: unknown) => ({ espnLeagueId: "704343562", session: "abc12345", seq, frames, ...(result ? { result } : {}) });
+
+    it("hands the bridge the pick as a command when the user is on the clock, and takes its result", async () => {
+      const { frames, pick } = await routes();
+      await frames.POST(post(token, frame(0, [...PRE, "SELECTED 4 -16034 8", "SELECTING 1 60000"])));
+      const res = await draftFromWarRoom(pick, "jahmyr-gibbs-rb-det");
+      expect(res.status).toBe(202);
+      const { request } = await res.json();
+      expect(request).toMatchObject({ playerId: "jahmyr-gibbs-rb-det", espnPlayerId: gibbs, state: "pending" });
+
+      const checkIn = await frames.POST(post(token, frame(5, [])));
+      expect(await checkIn.json()).toEqual({ have: 5, command: { id: request.id, select: gibbs } });
+      const reported = await frames.POST(post(token, frame(5, [], { id: request.id, sent: true })));
+      expect(await reported.json()).toEqual({ have: 5 });
+    });
+
+    it("refuses when ESPN doesn't have the user on the clock, before any bridge, and for players ESPN can't match", async () => {
+      const { frames, pick } = await routes();
+      expect((await draftFromWarRoom(pick, "jahmyr-gibbs-rb-det")).status).toBe(409); // no bridge yet
+      await frames.POST(post(token, frame(0, PRE))); // team 4 on the clock
+      const notYours = await draftFromWarRoom(pick, "jahmyr-gibbs-rb-det");
+      expect(notYours.status).toBe(409);
+      expect(await notYours.json()).toMatchObject({ reason: "not-your-turn" });
+      expect((await draftFromWarRoom(pick, "no-such-player")).status).toBe(422);
+    });
   });
 });

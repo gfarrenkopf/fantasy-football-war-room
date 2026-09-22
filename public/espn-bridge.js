@@ -5,7 +5,8 @@
  * A bookmarklet loads this into the user's own ESPN draft tab. It listens to the page's own draft
  * socket and relays the frames to War Room, which turns them into picks on the user's board.
  *
- * - Read-only: it never sends anything on ESPN's socket. The page's own sends pass through untouched.
+ * - It sends on ESPN's socket only to make a pick the user chose in War Room, and only while the
+ *   page's own frames say the user's team is on the clock. Otherwise the page's sends pass through untouched.
  * - It forwards draft frames only, and strips what isn't draft data before anything leaves the tab:
  *   INIT (room state) and TOKEN (the user's ESPN id and join code) go as bare frame names, and every
  *   member GUID is zeroed. War Room never sees ESPN cookies or passwords.
@@ -53,6 +54,19 @@
   let lastPost = 0;
   let failures = 0;
   let sockets = 0;
+  /** The newest attached ESPN socket still open: where a War Room pick is sent. */
+  /** @type {WebSocket | null} */
+  let current = null;
+  /** The team on the clock, from the latest SELECTING (null right after a pick). */
+  /** @type {number | null} */
+  let onClockTeam = null;
+  /** ESPN's outbound frames end in a newline; mirrored from the page's own sends to be safe. */
+  let newline = true;
+  /** Pick commands already handled, so a repeated delivery can never pick twice. */
+  const handled = new Set();
+  /** What happened to the last command, reported on the next request. */
+  /** @type {{ id: string, sent: boolean, reason?: string } | null} */
+  let result = null;
   /** @type {"unpaired" | "listening" | "live" | "offline" | "expired" | "purchase" | "denied"} */
   let status = "unpaired";
   let token = readToken();
@@ -74,13 +88,19 @@
     if (attached.has(ws) || !ESPN_SOCKET.test(String(ws.url))) return;
     attached.add(ws);
     sockets++;
+    current = ws;
     ws.addEventListener("message", (e) => {
       if (typeof e.data !== "string") return;
       const frame = sanitize(e.data);
-      if (frame) log.push(frame);
+      if (!frame) return;
+      log.push(frame);
+      const [head, team] = frame.split(" ");
+      if (head === "SELECTING") onClockTeam = Number(team);
+      else if (head === "SELECTED") onClockTeam = null;
     });
     ws.addEventListener("close", () => {
       sockets = Math.max(0, sockets - 1);
+      if (current === ws) current = null;
       render();
     });
     render();
@@ -91,6 +111,7 @@
   const send = proto.send;
   proto.send = function (/** @type {any} */ data) {
     attach(this);
+    if (typeof data === "string" && attached.has(this)) newline = data.endsWith("\n");
     return send.call(this, data);
   };
   // ...and sockets opened after it, e.g. when ESPN reconnects, from their first frame.
@@ -136,7 +157,7 @@
         mode: "cors",
         credentials: "omit",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ espnLeagueId, session, seq: sent, frames }),
+        body: JSON.stringify(result ? { espnLeagueId, session, seq: sent, frames, result } : { espnLeagueId, session, seq: sent, frames }),
       });
       if (res.status === 200 || res.status === 409) {
         // 409: War Room holds a different number of frames (e.g. it restarted); resend from there.
@@ -145,6 +166,8 @@
         failures = 0;
         status = sockets ? "live" : "listening";
         if (res.status === 409) lastPost = 0;
+        result = null;
+        if (body.command) pickFromWarRoom(body.command);
       } else if (res.status === 401) {
         writeToken(null);
         status = "expired";
@@ -165,6 +188,25 @@
       inFlight = false;
       render();
     }
+  }
+
+  /**
+   * Makes a pick the user chose in War Room, on ESPN's own socket, exactly as ESPN's Draft button
+   * would. Only when the page's latest frames have the user's team on the clock; never twice.
+   * @param {{ id?: unknown, select?: unknown }} command
+   */
+  function pickFromWarRoom(command) {
+    const id = String(command.id);
+    if (handled.has(id) || typeof command.select !== "number") return;
+    handled.add(id);
+    if (!espnTeamId || onClockTeam !== espnTeamId) result = { id, sent: false, reason: "not-on-the-clock" };
+    else if (!current) result = { id, sent: false, reason: "no-socket" };
+    else {
+      send.call(current, `SELECT ${command.select}${newline ? "\n" : ""}`);
+      onClockTeam = null;
+      result = { id, sent: true };
+    }
+    lastPost = 0; // report straight away
   }
 
   setInterval(() => {
