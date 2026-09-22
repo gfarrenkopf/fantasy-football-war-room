@@ -3,12 +3,22 @@
 import { useEffect, useState } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import { listenForSignIn } from "@/lib/auth/channel";
+import { DEFAULT_LEAGUE } from "@/lib/data";
 import { announceEspnPaired } from "@/lib/espn/channel";
 import { ESPN_DISCLOSURE, ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
+import { toLeagueSettings, type EspnImport } from "@/lib/espn/league";
+import { newLeagueRecord } from "@/lib/storage/newLeague";
 import type { PublicFlags } from "@/lib/config";
 
 /** Where the bridge runs. The token is only ever posted to this origin. */
 const ESPN_ORIGIN = "https://fantasy.espn.com";
+
+/** Picked in the league list to build a new league out of ESPN's own settings (8.8). */
+const FROM_ESPN = "__espn__";
+
+const SCORING = { ppr: "full PPR", half: "half PPR", std: "standard scoring" } as const;
+
+const espnName = (name: string | undefined, espnLeagueId: string) => name?.trim() || `ESPN league ${espnLeagueId}`;
 
 type Phase =
   | { kind: "idle" }
@@ -42,14 +52,55 @@ export function EspnPair({
   const [leagueId, setLeagueId] = useState(defaultLeagueId ?? "");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [agreed, setAgreed] = useState(acknowledged);
+  /** What ESPN says this league is. Only the bridge can read it: ESPN's API won't answer this origin. */
+  const [imported, setImported] = useState<(EspnImport & { name?: string }) | null>(null);
+
+  useEffect(() => {
+    const opener = window.opener as Window | null;
+    if (!opener || !espn.teamId) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== ESPN_ORIGIN || e.data?.type !== "warroom-bridge-settings") return;
+      const settings = e.data.settings as { name?: string } | null;
+      if (!settings) return setImported({ ok: false, error: "ESPN didn't share this league's settings." });
+      setImported({ ...toLeagueSettings(settings, espn.teamId), name: settings.name });
+    };
+    window.addEventListener("message", onMessage);
+    opener.postMessage({ type: "warroom-bridge-settings?" }, ESPN_ORIGIN);
+    return () => window.removeEventListener("message", onMessage);
+  }, [espn.teamId]);
+
+  /** The leagues to choose from, plus building one from ESPN when the bridge told us how. */
+  const options = [
+    ...leagues,
+    ...(imported?.ok ? [{ id: FROM_ESPN, name: `${espnName(imported.name, espn.leagueId)} — new, from ESPN`, teams: imported.league.teams }] : []),
+  ];
 
   // Signing in finishes in another tab (the magic link); pick it up here.
   useEffect(() => (signedIn ? undefined : listenForSignIn(() => location.reload())), [signedIn]);
 
   const validEspn = /^\d+$/.test(espn.leagueId) && espn.teamId > 0 && espn.season > 0;
+  const chosen = options.some((o) => o.id === leagueId) ? leagueId : (options[0]?.id ?? "");
+
+  /** Builds the war room league out of ESPN's settings, so the board can't disagree with the draft. */
+  async function createFromEspn(): Promise<string | null> {
+    if (!imported?.ok) return null;
+    const record = newLeagueRecord(imported.name ?? `ESPN league ${espn.leagueId}`, { ...imported.league, valueThreshold: DEFAULT_LEAGUE.valueThreshold });
+    const res = await fetch(`/api/leagues/${record.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(record),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setPhase({ kind: "error", message: "Couldn't create that league. Try again, or set one up in War Room first." });
+      return null;
+    }
+    return record.id;
+  }
 
   async function connect() {
     setPhase({ kind: "pairing" });
+    const leagueId = chosen === FROM_ESPN ? await createFromEspn() : chosen;
+    if (!leagueId) return;
     const res = await fetch("/api/espn/pair", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -74,7 +125,9 @@ export function EspnPair({
     if (opener) setTimeout(() => window.close(), 1500);
   }
 
-  const league = leagues.find((l) => l.id === leagueId);
+  const league = options.find((l) => l.id === chosen);
+  // A league built here isn't in `leagues` yet, so name it from ESPN rather than from the option label.
+  const connectedName = chosen === FROM_ESPN ? espnName(imported?.ok ? imported.name : undefined, espn.leagueId) : league?.name;
 
   return (
     <main className="min-h-dvh bg-bg text-text px-5 py-6 font-sans">
@@ -95,16 +148,29 @@ export function EspnPair({
           </section>
         ) : phase.kind === "done" ? (
           <section className="rounded-card border border-line bg-panel p-4 space-y-2" role="status">
-            <p className="font-semibold text-mine">Connected to {league?.name ?? "your league"}.</p>
+            <p className="font-semibold text-mine">Connected to {connectedName ?? "your league"}.</p>
             <p className="text-sm text-muted">
               {phase.delivered
                 ? "Keep your ESPN draft tab open; picks will show up on your board. This window will close."
                 : "Go back to your ESPN draft tab and click Connect there again to finish."}
             </p>
           </section>
-        ) : leagues.length === 0 ? (
+        ) : options.length === 0 ? (
           <p className="rounded-card border border-line bg-panel p-4 text-sm">
-            You don&apos;t have a War Room league yet. <a className="text-focus underline" href="/draft" target="_blank" rel="noreferrer">Set one up</a>, then click Connect in ESPN again.
+            {imported && !imported.ok ? (
+              <>
+                {imported.error} <a className="text-focus underline" href="/draft" target="_blank" rel="noreferrer">Set your league up in War Room</a>, then click Connect
+                in ESPN again.
+              </>
+            ) : (
+              <>
+                You don&apos;t have a War Room league yet.{" "}
+                <a className="text-focus underline" href="/draft" target="_blank" rel="noreferrer">
+                  Set one up
+                </a>
+                , then click Connect in ESPN again.
+              </>
+            )}
           </p>
         ) : (
           <section className="rounded-card border border-line bg-panel p-4 space-y-3">
@@ -112,16 +178,22 @@ export function EspnPair({
               <span className="text-muted">Sync ESPN league {espn.leagueId} into</span>
               <select
                 className="mt-1 block w-full rounded-card border border-line2 bg-panel2 px-2 py-2 text-base"
-                value={leagueId}
+                value={chosen}
                 onChange={(e) => setLeagueId(e.target.value)}
               >
-                {leagues.map((l) => (
+                {options.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name} ({l.teams} teams)
                   </option>
                 ))}
               </select>
             </label>
+            {chosen === FROM_ESPN && imported?.ok && (
+              <p className="text-sm text-muted">
+                Built from ESPN: {imported.league.teams} teams, {SCORING[imported.league.scoring]}, {imported.league.roster.length} rounds, you pick at{" "}
+                {imported.league.mySlot}.
+              </p>
+            )}
             {!acknowledged && (
               <div className="space-y-2 rounded-card border border-line2 bg-panel2 p-3 text-sm">
                 <p className="font-semibold">Before you connect</p>

@@ -186,6 +186,7 @@
     const draft = s.draftSettings || {};
     const items = ((s.scoringSettings || {}).scoringItems || []).filter((/** @type {{statId: number}} */ i) => i && i.statId === 53);
     return {
+      name: typeof s.name === "string" ? s.name.slice(0, 80) : undefined,
       size: s.size,
       draftSettings: { type: draft.type, pickOrder: draft.pickOrder },
       rosterSettings: { lineupSlotCounts: (s.rosterSettings || {}).lineupSlotCounts },
@@ -198,12 +199,17 @@
   let settingsToSend = null;
   /** Serialized settings already sent, so an unchanged league isn't posted twice. */
   let settingsSent = "";
+  /** The last settings read, for the pairing popup: it can't read ESPN's API from our own origin. */
+  /** @type {Record<string, unknown> | null} */
+  let lastSettings = null;
 
   async function readLeagueSettings() {
     try {
       const next = await leagueSettings();
+      // Read for the popup as well as for War Room, so a first-time user can build their league
       // Not a league settings document: nothing worth sending, and War Room keeps what it has.
       if (typeof next.size !== "number") return;
+      lastSettings = next;
       // The draft order is redrawn when the lobby opens, so this is read again, not just once.
       if (JSON.stringify(next) === settingsSent) return;
       settingsToSend = next;
@@ -480,7 +486,17 @@
   }
 
   w.addEventListener("message", (/** @type {MessageEvent} */ e) => {
-    if (e.origin !== ORIGIN || !e.data || e.data.type !== "warroom-bridge-paired" || typeof e.data.token !== "string") return;
+    if (e.origin !== ORIGIN || !e.data) return;
+    // The pairing popup asking what ESPN says about this league (8.8): it's on War Room's origin,
+    // so it can't read ESPN's API itself. Only ever settings, and only to War Room's origin.
+    if (e.data.type === "warroom-bridge-settings?") {
+      const reply = (/** @type {Record<string, unknown> | null} */ settings) =>
+        e.source && /** @type {Window} */ (e.source).postMessage({ type: "warroom-bridge-settings", settings }, ORIGIN);
+      if (lastSettings) reply(lastSettings);
+      else void readLeagueSettings().then(() => reply(lastSettings));
+      return;
+    }
+    if (e.data.type !== "warroom-bridge-paired" || typeof e.data.token !== "string") return;
     writeToken(e.data.token);
     status = sockets ? "live" : "listening";
     lastPost = 0;
