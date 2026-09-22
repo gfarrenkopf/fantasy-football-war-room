@@ -22,6 +22,14 @@ describe("parseFrame", () => {
     expect(parseFrame("SELECTED 4 -16034 8")).toMatchObject({ kind: "selected", playerId: -16034 });
   });
 
+  it("reads the bridge's own catch-up frames", () => {
+    expect(parseFrame("WR_CATCHUP 1 4 4429795")).toEqual({ kind: "catchup", overall: 1, teamId: 4, playerId: 4429795 });
+    // D/ST ids are negative.
+    expect(parseFrame("WR_CATCHUP 12 2 -16034")).toEqual({ kind: "catchup", overall: 12, teamId: 2, playerId: -16034 });
+    expect(parseFrame("WR_CATCHUP 0 2 5")).toMatchObject({ kind: "malformed" });
+    expect(parseFrame("WR_CATCHUP 1 2")).toMatchObject({ kind: "malformed" });
+  });
+
   it("reads the clock, state, selecting, autosuggest and autodraft frames", () => {
     expect(parseFrame("CLOCK 0 759977")).toEqual({ kind: "clock", state: 0, teamId: 0, msRemaining: 759977 });
     // During the draft the team on the clock is the third field (seen live: "CLOCK 6 85495 1" after "SELECTING 1 90000").

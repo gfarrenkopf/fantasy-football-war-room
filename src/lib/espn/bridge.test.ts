@@ -113,6 +113,7 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
     setInterval,
     setTimeout,
     Date,
+    atob,
   };
   context.window = context;
   vm.createContext(context);
@@ -120,8 +121,11 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
   const bridge = () => (context.__warRoomBridge as { state(): Record<string, unknown> }).state();
   const Socket = () => context.WebSocket as typeof FakeSocket;
   const postMessage = (data: unknown, origin = WAR_ROOM) => windowListeners.forEach((fn) => fn({ data, origin }));
+  /** The frame posts only: the bridge also calls ESPN's own API when it catches up. */
   const bodies = () =>
-    fetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number });
+    fetch.mock.calls
+      .filter(([, init]) => init && init.body)
+      .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number });
   return { load, bridge, Socket, postMessage, fetch, open, storage, shadow, bodies, press };
 }
 
@@ -472,5 +476,106 @@ describe("ESPN bridge", () => {
       await vi.advanceTimersByTimeAsync(300);
       expect(p.shadow.querySelector(".note").textContent).toContain("Open your War Room board");
     });
+  });
+});
+
+/**
+ * An INIT blob in ESPN's layout (docs/espn-protocol.md §4.1): a header, then one 45-byte record per
+ * pick slot, each holding the drafted player id (or -1) and this league's id. Built rather than
+ * captured, so no real member GUIDs live in the repo.
+ */
+function initBlob({ league = 704343562, total = 8, drafted = [] as number[], header = 96, leagueAt = 33, stride = 45 } = {}) {
+  const bytes = new Uint8Array(header + stride * total);
+  const view = new DataView(bytes.buffer);
+  // A header field carrying the league id too: the real blob has one, and it's why the decoder
+  // can't just trust the first match.
+  view.setInt32(header - stride + leagueAt, league);
+  for (let k = 0; k < total; k++) {
+    const at = header + stride * k;
+    view.setInt32(at, drafted[k] ?? -1);
+    view.setInt32(at + leagueAt, league);
+  }
+  // ESPN sends "INIT <base64> ####…": the base64 loses its = padding and a run of # follows it.
+  return Buffer.from(bytes).toString("base64").replace(/=+$/, "") + ` ${"#".repeat(32)}`;
+}
+
+describe("catching up on picks made before the bridge attached (8.12)", () => {
+  const DRAFTED = [4429795, 4430807, -16034];
+  /** ESPN's pre-listed pick ownership: every slot's team, known even mid-draft. */
+  const OWNERSHIP = {
+    draftDetail: { picks: [4, 1, 2, 3, 3, 2, 1, 4].map((teamId, i) => ({ overallPickNumber: i + 1, teamId })) },
+  };
+
+  function paired(blob: string, ownership: unknown = OWNERSHIP) {
+    const p = page({ stored: "tok-1" });
+    p.fetch.mockImplementation(async (url, init) => {
+      if (url.includes("lm-api-reads")) return new Response(JSON.stringify(ownership), { status: 200 });
+      const body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length }), { status: 200 });
+    });
+    p.load();
+    const ws = new (p.Socket())(DRAFT_URL);
+    ws.emit(`INIT ${blob}\n`);
+    return { p, ws };
+  }
+
+  it("decodes the draft so far from INIT and sends it as its own frames, never the blob", async () => {
+    const { p, ws } = paired(initBlob({ league: 704343562, drafted: DRAFTED }));
+    await vi.advanceTimersByTimeAsync(300);
+    ws.emit("SELECTED 3 4362628 2");
+    await vi.advanceTimersByTimeAsync(300);
+
+    const frames = p.bodies().flatMap((b) => b.frames);
+    expect(frames).toEqual([
+      "WR_CATCHUP 1 4 4429795",
+      "WR_CATCHUP 2 1 4430807",
+      "WR_CATCHUP 3 2 -16034",
+      "INIT",
+      "SELECTED 3 4362628 2",
+    ]);
+    // The blob stays in the ESPN tab.
+    expect(JSON.stringify(p.bodies())).not.toContain(initBlob({ league: 704343562, drafted: DRAFTED }).slice(0, 24));
+  });
+
+  it("holds live frames until catch-up lands, so the recovered picks stay in front", async () => {
+    const { p, ws } = paired(initBlob({ drafted: DRAFTED }));
+    ws.emit("SELECTED 3 4362628 2"); // arrives while mDraftDetail is still in flight
+    await vi.advanceTimersByTimeAsync(300);
+    const frames = p.bodies().flatMap((b) => b.frames);
+    expect(frames.indexOf("SELECTED 3 4362628 2")).toBeGreaterThan(frames.indexOf("WR_CATCHUP 3 2 -16034"));
+  });
+
+  it("sends no catch-up when nothing is drafted yet, or when the layout isn't the one we know", async () => {
+    const empty = paired(initBlob({ drafted: [] }));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(empty.p.bodies().flatMap((b) => b.frames)).toEqual(["INIT"]);
+
+    const foreign = paired(initBlob({ league: 999, drafted: DRAFTED }));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(foreign.p.bodies().flatMap((b) => b.frames)).toEqual(["INIT"]);
+  });
+
+  it("carries on when ESPN won't say who owns the picks", async () => {
+    const { p, ws } = paired(initBlob({ drafted: DRAFTED }), null);
+    await vi.advanceTimersByTimeAsync(300);
+    ws.emit("SELECTED 3 4362628 2");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.bodies().flatMap((b) => b.frames)).toEqual(["INIT", "SELECTED 3 4362628 2"]);
+  });
+
+  it("only tries once, and not when it has already seen picks of its own", async () => {
+    const p = page({ stored: "tok-1" });
+    p.fetch.mockImplementation(async (url, init) => {
+      if (url.includes("lm-api-reads")) return new Response(JSON.stringify(OWNERSHIP), { status: 200 });
+      const body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length }), { status: 200 });
+    });
+    p.load();
+    const ws = new (p.Socket())(DRAFT_URL);
+    ws.emit("SELECTED 3 4362628 2");
+    ws.emit(`INIT ${initBlob({ drafted: DRAFTED })}\n`);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.bodies().flatMap((b) => b.frames)).toEqual(["SELECTED 3 4362628 2", "INIT"]);
+    expect(p.fetch.mock.calls.filter(([u]) => u.includes("lm-api-reads"))).toHaveLength(0);
   });
 });

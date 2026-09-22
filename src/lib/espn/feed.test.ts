@@ -99,3 +99,30 @@ describe("foldFrames", () => {
     expect(foldFrames([])).toEqual(emptyFeed());
   });
 });
+
+describe("catch-up frames (8.12)", () => {
+  const CATCHUP = ["WR_CATCHUP 1 4 101", "WR_CATCHUP 2 1 102", "WR_CATCHUP 3 2 103"];
+
+  it("seeds the draft a late bridge missed, and anchors it so later picks get real numbers", () => {
+    const feed = foldFrames([...CATCHUP, "SELECTING 3 60000", "SELECTED 3 104 2"]);
+    expect(feed.anchored).toBe(true);
+    expect(feed.picks.map((p) => [p.overall, p.teamId, p.espnPlayerId])).toEqual([
+      [1, 4, 101],
+      [2, 1, 102],
+      [3, 2, 103],
+      [4, 3, 104],
+    ]);
+  });
+
+  it("ignores catch-up that repeats or skips, so a re-sent log can't invent picks", () => {
+    expect(foldFrames([...CATCHUP, ...CATCHUP]).picks).toHaveLength(3);
+    expect(foldFrames(["WR_CATCHUP 2 1 102"]).picks).toHaveLength(0);
+    // Re-folding the whole log is what the relay does after a restart: same feed, every time.
+    const once = foldFrames([...CATCHUP, "SELECTED 3 104 2"]);
+    expect(foldFrames([...CATCHUP, "SELECTED 3 104 2"])).toEqual(once);
+  });
+
+  it("leaves a finished draft alone", () => {
+    expect(foldFrames(["STATE 2", ...CATCHUP]).picks).toHaveLength(0);
+  });
+});

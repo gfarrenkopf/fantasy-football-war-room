@@ -25,6 +25,11 @@ export type EspnFrame =
   | { kind: "autodraft"; teamId: number; on: boolean }
   /** A pick. memberId is the drafter's GUID for a human pick and null for an autopick. */
   | { kind: "selected"; teamId: number; playerId: number; rosterSlot: number; memberId: string | null }
+  /**
+   * Not ESPN's: the bridge's own frame, one per pick it recovered from INIT when it attached late
+   * (8.12). ESPN's blob stays in the tab; only these ids come out.
+   */
+  | { kind: "catchup"; overall: number; teamId: number; playerId: number }
   | { kind: "pong" }
   | { kind: "error"; code: number; message: string }
   | { kind: "malformed"; raw: string }
@@ -93,6 +98,13 @@ export function parseFrame(raw: string): EspnFrame {
       if (teamId === null || playerId === null || rosterSlot === null) return bad;
       if (memberId !== null && !GUID.test(memberId)) return bad;
       return { kind: "selected", teamId, playerId, rosterSlot, memberId };
+    }
+    case "WR_CATCHUP": {
+      const overall = int(rest[0]);
+      const teamId = int(rest[1]);
+      const playerId = int(rest[2]);
+      if (overall === null || teamId === null || playerId === null || overall < 1) return bad;
+      return { kind: "catchup", overall, teamId, playerId };
     }
     case "PONG":
       return { kind: "pong" };

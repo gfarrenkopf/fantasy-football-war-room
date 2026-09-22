@@ -100,6 +100,119 @@
     return text.replace(/\{[0-9A-Fa-f-]{36}\}/g, ZERO_GUID);
   }
 
+  /* ---------------- catch-up from INIT (8.12) ---------------- */
+
+  /**
+   * ESPN's INIT frame carries the whole draft: one 45-byte record per pick slot, the drafted
+   * player's id as a big-endian int32 at the top of the record and -1 where nothing is drafted
+   * yet. Each record also holds the league id, which is what lets us find the table without
+   * assuming how long the header is.
+   *
+   * The blob itself never leaves this tab: we decode it here and send only the pick ids, the way
+   * every other frame is stripped of anything identifying. Layout from docs/espn-protocol.md §4.1.
+   *
+   * The run of records is its own length: the draft has as many slots as the table has records, so
+   * nothing has to be known about the league before decoding.
+   *
+   * @param {string} b64 the INIT payload
+   * @param {number} league this draft's ESPN league id
+   * @returns {number[] | null} drafted player ids in pick order, or null if this isn't the layout we know
+   */
+  function decodeInitPicks(b64, league) {
+    const STRIDE = 45;
+    const LEAGUE_AT = 33;
+    let bytes;
+    try {
+      // The frame is "INIT <base64> ####…": a base64 blob, then a long run of # padding, and the
+      // base64 itself arrives without its own = padding. atob refuses both, so clean it up first.
+      const clean = String(b64).split(/\s+/)[0].replace(/[^A-Za-z0-9+/]/g, "");
+      const raw = atob(clean + "=".repeat((4 - (clean.length % 4)) % 4));
+      bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    } catch {
+      return null;
+    }
+    const view = new DataView(bytes.buffer);
+    const int = (/** @type {number} */ at) => view.getInt32(at);
+    // Player ids are positive; D/ST are -16000 - proTeamId; -1 means the slot isn't drafted yet.
+    const plausible = (/** @type {number} */ v) => v === -1 || (v >= 1000 && v <= 9_999_999) || (v <= -16_000 && v >= -16_100);
+
+    /** Offsets where the league id appears, grouped into runs spaced exactly one record apart. */
+    const runs = [];
+    let run = [];
+    for (let k = 0; k + 4 <= bytes.length; k++) {
+      if (int(k) !== league) continue;
+      if (run.length && k - run[run.length - 1] !== STRIDE) {
+        runs.push(run);
+        run = [];
+      }
+      run.push(k);
+    }
+    if (run.length) runs.push(run);
+    runs.sort((a, b) => b.length - a.length);
+
+    for (const candidate of runs) {
+      // A record before the table shares the tag, so try both alignments and let the shape decide.
+      for (const [first, total] of [
+        [candidate[0] - LEAGUE_AT, candidate.length],
+        [candidate[0] - LEAGUE_AT + STRIDE, candidate.length - 1],
+      ]) {
+        if (first < 0 || total < 1 || first + STRIDE * total > bytes.length) continue;
+        const ids = /** @type {number[]} */ ([]);
+        for (let k = 0; k < total; k++) ids.push(int(first + STRIDE * k));
+        if (!ids.every(plausible)) continue;
+        const made = ids.filter((v) => v !== -1);
+        // Drafted picks are a prefix of the table: every -1 comes after every id.
+        if (made.some((v, i) => ids[i] !== v)) continue;
+        if (made.length) return made;
+      }
+    }
+    return null;
+  }
+
+  /** Who owns each pick, in order. Pre-draft ESPN already lists every slot's team, even mid-draft. */
+  async function pickOwnership() {
+    const url =
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}` +
+      `/segments/0/leagues/${encodeURIComponent(espnLeagueId)}?view=mDraftDetail`;
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(`mDraftDetail -> HTTP ${res.status}`);
+    const data = await res.json();
+    /** @type {{ overallPickNumber: number, teamId: number }[]} */
+    const picks = (data && data.draftDetail && data.draftDetail.picks) || [];
+    return picks
+      .slice()
+      .sort((a, b) => a.overallPickNumber - b.overallPickNumber)
+      .map((p) => p.teamId);
+  }
+
+  let caughtUp = false;
+  /** Frames that arrive while catch-up is in flight, so the picks it recovers stay in front of them. */
+  /** @type {string[] | null} */
+  let held = null;
+
+  /** @param {string} b64 */
+  async function catchUp(b64) {
+    if (caughtUp) return;
+    caughtUp = true;
+    const ids = decodeInitPicks(b64, Number(espnLeagueId));
+    if (!ids) return; // not the layout we know, or nothing drafted yet: nothing to catch up on
+    held = [];
+    try {
+      // Who owns each pick. ESPN lists every slot's team from before the draft, so this works mid-draft.
+      const teams = await pickOwnership();
+      // Without ownership a recovered pick could be attributed to the wrong team, and the user's own
+      // roster would be wrong. Better to have no catch-up than a board that lies.
+      if (teams.length >= ids.length) for (let i = 0; i < ids.length; i++) log.push(`WR_CATCHUP ${i + 1} ${teams[i]} ${ids[i]}`);
+    } catch {
+      // No catch-up: War Room says so rather than showing a board that's quietly missing picks.
+    }
+    const queued = held;
+    held = null;
+    if (queued && queued.length) log.push(...queued);
+    flushSoon();
+  }
+
   const attached = new WeakSet();
   /** @param {WebSocket} ws */
   function attach(ws) {
@@ -109,9 +222,14 @@
     current = ws;
     ws.addEventListener("message", (e) => {
       if (typeof e.data !== "string") return;
+      // INIT is the draft so far. Only useful before we've seen picks of our own, i.e. we joined late.
+      if (String(e.data).startsWith("INIT ") && !caughtUp && !log.some((f) => f.startsWith("SELECTED "))) {
+        void catchUp(String(e.data).slice(5).trim());
+      }
       const frame = sanitize(e.data);
       if (!frame) return;
-      log.push(frame);
+      if (held) held.push(frame);
+      else log.push(frame);
       flushSoon();
       const [head, team, player] = frame.split(" ");
       if (head === "SELECTING") {
@@ -475,5 +593,7 @@
     },
     /** For tests and support: what the bridge is doing. */
     state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, planVersion, armed, drafting: draftingName }),
+    /** Exposed so the INIT decoder can be run against blobs recorded from real drafts (8.12). */
+    decodeInitPicks,
   };
 })();
