@@ -89,12 +89,14 @@ Frames are space-delimited text ending in a newline. `INIT` is the exception: a 
 | `AUTODRAFT <team> true\|false` | in | a team's autopick toggled |
 | `SELECTED <team> <playerId> <rosterSlot> [memberGuid]` | in | **the pick** |
 | `SELECT <playerId>` | out | the user makes a pick |
+| `DRAFT_LIST <playerId> [<playerId> …]` | out | the pick queue, whole and in order |
 | `AUTODRAFT true\|false` | out | the user toggles autopick |
 | `PING PING%20<ms>` → `PONG PING%20<ms>` | out → in | heartbeat, every 15s |
 | `ERROR <n> <urlencoded message>` | in | refusal, followed by a close |
 
 - **Outbound frames end in a newline.** For example `"PING PING%20…\n"`, `"SELECT 4429160\n"` and `"AUTODRAFT false\n"`, as recorded from the page's own sends.
 - **ESPN accepts a `SELECT` sent on the page's socket by other code**, on the user's turn. The bridge's picks come back as `SELECTED` with the user's member GUID, exactly like a click on ESPN's Draft button. A pick sent out of turn is refused with `ERROR 1 Invalid selection team …` and the socket stays open (§3).
+- **The pick queue is a socket frame, not a REST call (8.15).** Queueing a player sends `DRAFT_LIST` with the *entire* queue in order, so it's a set, not an append: `DRAFT_LIST 4241478`, then `DRAFT_LIST 4241478 4239996`, then `DRAFT_LIST 4241478 4239996 4685472`. Nothing comes back, and no REST call fires. So War Room can set the queue with one frame — worth doing, because ESPN autopicks from the queue before its own rankings, which makes it the fallback when a connection dies on the clock. It overwrites whatever the user queued in ESPN, so it needs their say-so.
 - **A human pick carries the drafter's member GUID; an autopick never does.** An autopick after a timeout is preceded by `AUTODRAFT <team> true`.
 - **Pick numbers aren't in the frame.** The overall pick number is the running count of `SELECTED` frames, reconciled against `draftDetail.picks`.
 - In the spike, pick-to-broadcast latency averaged 255ms (167–356ms across 14 picks).
@@ -129,5 +131,4 @@ The probes behind these findings aren't committed. They run against real ESPN ac
 
 - **Where does the security code come from?** Still unanswered by any server-reachable endpoint. It matters less now: the bridge can read it from the page's own socket URL, and that's enough for a server client (§3).
 - **How long does a code stay valid?** The one thing the server-side design rests on. The draft room only opens about an hour before the draft, so a capture days ahead isn't possible; 2026-09-22 showed a code lasting about an hour, through a page exit and into a live draft.
-- **How is ESPN's pick queue sent (8.15)?** It wasn't exercised in the recorded draft: no queue frames or calls appeared.
 - **How do we catch up on picks made before the bridge attached?** `INIT` holds them (§4.1). What's left is decoding its records properly rather than fishing ids out by stride.
