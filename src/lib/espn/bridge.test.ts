@@ -613,6 +613,8 @@ describe("telling War Room how ESPN has this league set up (8.8)", () => {
 
     const sent = p.bodies().find((b) => "settings" in b) as { settings: Record<string, unknown> } | undefined;
     expect(sent?.settings).toEqual({
+      // The name travels too: the pairing popup labels a league built from ESPN with it.
+      name: "App Test",
       size: 4,
       draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2] },
       rosterSettings: { lineupSlotCounts: { "0": 1, "2": 2, "20": 3 } },
