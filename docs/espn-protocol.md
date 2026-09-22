@@ -68,10 +68,12 @@ Everything below ran from node with **no cookies at all** — only league, team,
 - **A server client can draft.** `SELECT <playerId>` came back as `SELECTED <team> <playerId> <slot> {member}` carrying the user's own GUID, exactly like ESPN's Draft button.
 - **A random code is still refused** under the same conditions, so the code, not the cookie, is the entire gate.
 - **The code outlives the page that made it.** It kept working after the draft room was exited and its tab closed, across several fresh connections into a draft already in progress.
-- **ESPN's page doesn't fight back.** The duplicate connection puts a "Duplicate Connection — you signed into this draft from another location" dialog on the page, offering Exit Draft or Reconnect, and the page stays disconnected until a human chooses. No auto-reconnect, so a server client keeps the connection.
+- **ESPN's page doesn't fight back.** The duplicate connection puts a "Duplicate Connection — you signed into this draft from another location" dialog on the page, offering Exit Draft or Reconnect, and the page stays disconnected until a human chooses. No auto-reconnect, so a server client keeps the connection: with the draft exited, it held the socket for 7+ minutes and several picks.
+- **The heartbeat must end in a newline, or ESPN drops the client after about a minute.** `PING PING%20<ms>` without the trailing `\n` cost three separate connections at +65s, +66s and +68s, whether or not a draft page was open; the same client sending `"PING PING%20<ms>\n"` stayed up. A silent disconnect at roughly a minute means the heartbeat, not the page.
 - **An out-of-turn pick is refused without closing the socket:** `ERROR 1 Invalid+selection+team+%28N%29%3B+team+M+is+currently+on+the+clock.`, and frames keep flowing afterwards. So "ESPN closes after an `ERROR`" holds for the join refusal, not for this one.
 
-**Still unknown, and it decides the design:** how long a code stays valid. The draft room only opens about an hour before the draft, so capturing one days ahead isn't possible; what matters is that a capture at lobby time survives into and through the draft. 2026-09-22 confirms roughly an hour.
+- **The code lasts the draft, at least.** The same code, captured from the page when the lobby opened, still joined about two hours later and after `STATE 2`, across a dozen connections and a page reconnect in between (which minted no new code — the page's socket carried the same one). The draft room only opens about an hour before the draft, so capturing one days ahead was never on; lasting the draft is what the design needs.
+- **After the draft the socket stays open**, sending `CLOCK 4` every 20s.
 
 ## 4. Message grammar
 
@@ -82,7 +84,7 @@ Frames are space-delimited text ending in a newline. `INIT` is the exception: a 
 | `INIT <base64>` | in | full room state on join, picks included (§4.1) |
 | `TOKEN 1:{L}:{team}:{SWID}:{code}` | in | join accepted |
 | `JOINED <team> <memberGuid>` / `LEFT <team> <memberGuid> <n>` | in | presence |
-| `CLOCK <state> <msRemaining> [team]` | in | every 5s. State 0 is the pre-draft countdown, with no team; state 6 is a live pick, and the third field is the team on the clock. |
+| `CLOCK <state> [<msRemaining>] [team]` | in | every 5s. State 0 is the pre-draft countdown, with no team; state 6 is a live pick, and the third field is the team on the clock. After the draft it's a bare `CLOCK 4` every 20s, with no time and no team. |
 | `STATE 1` / `STATE 2` | in | draft started / complete |
 | `SELECTING <team> <msAllowed>` | in | team on the clock |
 | `AUTOSUGGEST <playerId>` | in | ESPN's suggestion for the team on the clock |
@@ -101,11 +103,11 @@ Frames are space-delimited text ending in a newline. `INIT` is the exception: a 
 - **Pick numbers aren't in the frame.** The overall pick number is the running count of `SELECTED` frames, reconciled against `draftDetail.picks`.
 - In the spike, pick-to-broadcast latency averaged 255ms (167–356ms across 14 picks).
 
-**After the draft,** the socket closes and the page falls back to HTTP long-polling at `GET fantasydraft.espn.com/game-1/league-{L}/PING?1=…&token=…`, about every 7s. That's a possible second transport if the socket ever becomes unusable.
+**After the draft,** the page falls back to HTTP long-polling at `GET fantasydraft.espn.com/game-1/league-{L}/PING?1=…&token=…`, about every 7s. That's a possible second transport if the socket ever becomes unusable.
 
 ### 4.1 Inside INIT
 
-A fixed-size binary blob: 6,890 bytes in a 2026 16-round draft, the same size at the first pick as at the eighteenth. Only the bytes for new picks change, so it's a slot table, not a log.
+A binary blob: 6,890 bytes eighteen picks into a 4-team, 16-round draft, and 8,840 bytes near its end. It holds the room's state, not a log of it — over a stretch of picks its length held still while only the bytes for those picks changed, so at least the pick table is pre-sized.
 
 - **Every pick slot holds a big-endian `int32`:** the drafted player's ESPN id, or `-1` for a slot not yet drafted — the same `-1` convention as `mDraftDetail`'s pre-draft picks.
 - In the recorded draft the pick ids sat on a **180-byte stride** (offsets 2182, 2362, 2542, …), with a second run of the same ids later in the blob (rosters, most likely).
