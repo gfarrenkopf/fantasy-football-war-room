@@ -1,3 +1,4 @@
+import { draftCountdown, isDraftAt, parseDraftAt, type DraftCountdown } from "@/lib/draft/draftDay";
 import { roundsOf, totalPicks } from "@/lib/draft/snake";
 import type { DraftState } from "@/lib/draft/types";
 import type { LeagueRecord, Stores } from "./types";
@@ -20,6 +21,8 @@ export interface FarewellLeague {
   logged: number;
   /** The user's first few picks, as player ids, in draft order. */
   mine: string[];
+  /** When the league drafts, if the user said (LeagueRecord.draftAt). */
+  draftAt?: string | null;
 }
 
 export interface Farewell {
@@ -47,7 +50,33 @@ const STAGE_ORDER: Record<LeagueStage, number> = { paused: 0, done: 1, waiting: 
  * finished ones (the celebration), then the ones still waiting for draft day.
  */
 export function farewellOrder(leagues: FarewellLeague[]): FarewellLeague[] {
-  return [...leagues].sort((a, b) => STAGE_ORDER[stageOf(a)] - STAGE_ORDER[stageOf(b)] || b.logged / (b.total || 1) - a.logged / (a.total || 1));
+  return [...leagues].sort(
+    (a, b) =>
+      STAGE_ORDER[stageOf(a)] - STAGE_ORDER[stageOf(b)] ||
+      b.logged / (b.total || 1) - a.logged / (a.total || 1) ||
+      // Waiting for draft day: the soonest first, and leagues without a date after every dated one.
+      draftTime(a) - draftTime(b),
+  );
+}
+
+const draftTime = (l: FarewellLeague) => {
+  const d = parseDraftAt(l.draftAt);
+  return !d ? Infinity : d.kind === "time" ? d.at.getTime() : new Date(d.year, d.month - 1, d.day).getTime();
+};
+
+/**
+ * The next draft among the leagues still waiting for one, and how close it is: what the goodbye
+ * leads with when a draft is near. Null when no waiting league has a date still ahead.
+ */
+export function soonestDraft(f: Farewell | null, now: Date): { league: FarewellLeague; countdown: DraftCountdown } | null {
+  let best: { league: FarewellLeague; countdown: DraftCountdown } | null = null;
+  for (const league of f?.leagues ?? []) {
+    if (stageOf(league) !== "waiting") continue;
+    const countdown = draftCountdown(league.draftAt, now);
+    if (!countdown || countdown.phase === "started") continue;
+    if (!best || countdown.at < best.countdown.at) best = { league, countdown };
+  }
+  return best;
 }
 
 export function farewellMood(f: Farewell | null): FarewellMood {
@@ -72,6 +101,7 @@ export function summarizeLeague(league: LeagueRecord, draft: DraftState | null):
       .filter((p) => p.mine)
       .slice(0, CORE)
       .map((p) => p.playerId),
+    draftAt: league.draftAt ?? null,
   };
 }
 
@@ -129,5 +159,5 @@ function parseFarewell(v: unknown): Farewell | null {
       Array.isArray(l.mine) &&
       l.mine.every((id: unknown) => typeof id === "string"),
   );
-  return { email, leagues: valid };
+  return { email, leagues: valid.map((l) => ({ ...l, draftAt: isDraftAt(l.draftAt) ? l.draftAt : null })) };
 }

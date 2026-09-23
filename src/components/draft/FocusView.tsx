@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { myPlayers, positionCounts } from "@/lib/draft/roster";
 import { bestOnBoard, computeTurnPlan, type AvailabilityResult, type PlanEntry } from "@/lib/draft/sim";
+import { formatSpan } from "@/lib/draft/draftDay";
 import { formatRoundPick, isMyPick, nextMyPick, roundOf } from "@/lib/draft/snake";
 import { LATE_POSITIONS, type DraftPick, type Position } from "@/lib/draft/types";
 import { POS_COLOR } from "./Board";
@@ -12,6 +13,7 @@ import { useDraft } from "./DraftProvider";
 import { PlayerCard, posLabel } from "./PlayerCard";
 import { usePrefs } from "./PrefsProvider";
 import { ByePanel, Fold, RosterPanel } from "./RosterPanels";
+import { useDraftClock } from "./useDraftClock";
 import { PHONE, useMediaQuery } from "./useMediaQuery";
 import { useFlags } from "./Flags";
 import { AiPlanTab, AiTurnNote, useAiPlan } from "./AiPlan";
@@ -50,6 +52,7 @@ export function FocusView({ arrival, planOdds, planStale, onOpenAiPlan }: { arri
 function HeroCard({ arrival }: { arrival: number }) {
   const { current: cur, total, done, onClock, next: nxt, league } = useModel();
   const { teams } = league;
+  const clock = useDraftClock();
 
   let state: string;
   let sub: string;
@@ -92,6 +95,15 @@ function HeroCard({ arrival }: { arrival: number }) {
           <span>{done ? "" : `${cur} of ${total} overall`}</span>
         </div>
       </div>
+      {clock && (
+        // Before the first pick, when the league has a date: how long until the room fills.
+        <div className={cx("heroClock", clock.phase === "soon" && "soon")}>
+          <span>
+            Draft starts <b>{clock.phase === "soon" ? `at ${clock.when}` : clock.phase === "later" ? clock.when : clock.timed ? `${clock.label} · ${clock.when}` : clock.label}</b>
+          </span>
+          <span className={s.heroClockLeft}>{clock.phase === "soon" ? formatSpan(clock.ms) : clock.timed ? `in ${formatSpan(clock.ms)}` : clock.label === "today" ? "" : clock.label}</span>
+        </div>
+      )}
       <div className={s.heroState} aria-live="polite">
         {arrival > 0 && onClock && <span key={arrival} className={s.sweep} aria-hidden="true" />}
         <b>{state}</b>

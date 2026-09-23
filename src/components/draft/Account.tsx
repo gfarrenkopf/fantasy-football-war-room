@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { SessionUser } from "@/lib/auth/types";
 import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
-import { farewellMood, gatherFarewell, getStores, saveFarewell, type FarewellMood, type Purchase } from "@/lib/storage";
+import { farewellMood, gatherFarewell, getStores, saveFarewell, soonestDraft, type Farewell, type FarewellMood, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
@@ -31,6 +31,22 @@ const LEAVING_LINE: Record<FarewellMood, string> = {
   done: "That's a wrap.",
   fresh: "See you on draft day.",
 };
+
+/**
+ * The follow-spot's line on the way out. With nothing paused or finished, it names the next draft
+ * when there is one this week ("See you tonight.", "See you Sunday.").
+ */
+function leavingLine(farewell: Farewell): string {
+  const mood = farewellMood(farewell);
+  const next = mood === "fresh" ? soonestDraft(farewell, new Date()) : null;
+  if (!next) return LEAVING_LINE[mood];
+  const c = next.countdown;
+  if (c.phase === "soon") return "See you in a few minutes.";
+  if (c.phase === "today") return `See you ${c.label}.`;
+  if (c.phase === "tomorrow") return "See you tomorrow.";
+  const days = Math.round(c.ms / 86_400_000);
+  return days < 7 ? `See you ${c.at.toLocaleDateString(undefined, { weekday: "long" })}.` : LEAVING_LINE.fresh;
+}
 
 /** The signed-in user (from the server session), or null. */
 export function AccountProvider({ user, children }: { user: SessionUser | null; children: React.ReactNode }) {
@@ -112,7 +128,7 @@ export function AccountMenu() {
     // follow-spot's line says the same thing the goodbye will, a beat early.
     const farewell = await gatherFarewell(getStores(), user.email).catch(() => ({ email: user.email, leagues: [] }));
     saveFarewell(farewell);
-    document.body.dataset.line = LEAVING_LINE[farewellMood(farewell)];
+    document.body.dataset.line = leavingLine(farewell);
     try {
       await signOutAction();
     } catch (error) {

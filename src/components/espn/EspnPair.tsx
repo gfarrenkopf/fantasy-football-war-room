@@ -84,7 +84,10 @@ export function EspnPair({
   /** Builds the war room league out of ESPN's settings, so the board can't disagree with the draft. */
   async function createFromEspn(): Promise<string | null> {
     if (!imported?.ok) return null;
-    const record = newLeagueRecord(imported.name ?? `ESPN league ${espn.leagueId}`, { ...imported.league, valueThreshold: DEFAULT_LEAGUE.valueThreshold });
+    const record = {
+      ...newLeagueRecord(imported.name ?? `ESPN league ${espn.leagueId}`, { ...imported.league, valueThreshold: DEFAULT_LEAGUE.valueThreshold }),
+      ...(imported.draftAt ? { draftAt: imported.draftAt } : {}),
+    };
     const res = await fetch(`/api/leagues/${record.id}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },

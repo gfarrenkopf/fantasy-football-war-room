@@ -2,9 +2,10 @@
 
 import { forwardRef } from "react";
 import { dataset } from "@/lib/data";
+import { draftCountdown, type DraftCountdown } from "@/lib/draft/draftDay";
 import { formatRoundPick, roundOf } from "@/lib/draft/snake";
 import type { Player } from "@/lib/draft/types";
-import { farewellMood, farewellOrder, stageOf, type Farewell, type FarewellLeague, type LeagueStage } from "@/lib/storage";
+import { farewellMood, farewellOrder, soonestDraft, stageOf, type Farewell, type FarewellLeague, type LeagueStage } from "@/lib/storage";
 import { cx, s } from "./cx";
 import { Ribbon, type RibbonSegment } from "./Ribbon";
 
@@ -37,6 +38,14 @@ const ordinal = (n: number) => {
 };
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** One plain sentence on the next draft: "Home league drafts tonight at 8:00 PM." */
+const draftSentence = (name: string, c: DraftCountdown) =>
+  c.phase === "soon" ? `${name} starts ${c.label}.` : c.timed ? `${name} drafts ${c.label} at ${c.when}.` : `${name} drafts ${c.label}.`;
+
+/** The goodbye's headline when a draft is under a day away: the reason to come back is a clock. */
+const soonHeadline = (c: DraftCountdown): string | null =>
+  c.phase === "soon" ? `Your draft starts ${c.label}.` : c.phase === "today" ? `Your draft is ${c.label}.` : c.phase === "tomorrow" ? "Your draft is tomorrow." : null;
+
 /**
  * The entry panel's goodbye, after signing out (see AccountMenu): walking out of the draft room
  * with your card in hand. Every league gets a line and a track of one square per round, in the
@@ -53,6 +62,11 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
 
     const mood = farewellMood(farewell);
     const leagues = farewellOrder(farewell?.leagues ?? []);
+    // Read on the client only: the face renders after the hand-off is read, never on the server.
+    const now = new Date();
+    const next = soonestDraft(farewell, now);
+    // A draft under a day away leads, unless a paused one is waiting to be finished.
+    const urgent = mood !== "unfinished" && next ? soonHeadline(next.countdown) : null;
     const tally = { paused: 0, done: 0, waiting: 0 };
     for (const l of leagues) tally[stageOf(l)]++;
     const said = [
@@ -76,6 +90,8 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
         <h1 className={s.thesis} ref={heading} tabIndex={-1}>
           {mood === "unfinished" ? (
             "Your seat is saved."
+          ) : urgent ? (
+            urgent
           ) : mood === "done" ? (
             <>
               That&apos;s a wrap.
@@ -90,6 +106,7 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
         </h1>
         <p className={s.sub}>
           {who} {summary}{" "}
+          {urgent && next ? `${draftSentence(next.league.name, next.countdown)} ` : ""}
           {mood === "unfinished"
             ? "Sign back in and pick up right where you left off."
             : mood === "done"
@@ -102,7 +119,7 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
         {leagues.length > 0 && (
           <ul className={s.fwLeagues}>
             {leagues.slice(0, SHOWN).map((l, i) => (
-              <LeagueLine key={i} league={l} delay={i * ROW} />
+              <LeagueLine key={i} league={l} delay={i * ROW} now={now} />
             ))}
           </ul>
         )}
@@ -130,15 +147,19 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
  * - waiting: amber "Not drafted yet", round one outlined amber, and what's at stake at the first
  *   pick, from the room's average draft positions.
  */
-function LeagueLine({ league: l, delay }: { league: FarewellLeague; delay: number }) {
+function LeagueLine({ league: l, delay, now }: { league: FarewellLeague; delay: number; now: Date }) {
   const stage = stageOf(l);
+  const dated = draftCountdown(l.draftAt, now);
+  const upcoming = dated && dated.phase !== "started" ? dated : null;
   const played = Math.floor(l.logged / l.teams);
   const round = roundOf(l.logged + 1, l.teams);
   const left = l.total - l.logged;
   const status: Record<LeagueStage, string> = {
     paused: `Round ${round} · ${l.logged} of ${l.total} picks in`,
     done: `Drafted · ${l.rounds} rounds`,
-    waiting: `Not drafted yet · you pick ${ordinal(l.slot)}`,
+    waiting: upcoming
+      ? `Drafts ${upcoming.phase === "soon" ? upcoming.label : `${upcoming.label} · ${upcoming.when}`} · you pick ${ordinal(l.slot)}`
+      : `Not drafted yet · you pick ${ordinal(l.slot)}`,
   };
   const core = stage === "done" ? l.mine.map((id) => players.get(id)).filter((p) => p !== undefined) : [];
   const finish = delay + l.rounds * STEP;
