@@ -76,7 +76,7 @@ const legacy = { season: 2026, datasetId: "2026-abc" };
 describe("prefs store", () => {
   it("round-trips", async () => {
     const stores = createLocalStores(memoryStorage());
-    const prefs: UiPrefs = { view: "board", center: "plan", baMode: "all", mockOn: true, room: ["casual", "sharp"], activeLeagueId: "a" };
+    const prefs: UiPrefs = { view: "board", center: "plan", baMode: "all", mockOn: true, room: ["casual", "sharp"], activeLeagueId: "a", premiered: ["a"] };
     await stores.prefs.savePrefs(prefs);
     expect(await stores.prefs.getPrefs()).toEqual(prefs);
   });
@@ -127,7 +127,7 @@ describe("league store", () => {
     await account.draft.saveDraftState("a", draft);
     expect(await account.league.listLeagues()).toEqual([]);
     expect(await anon.draft.getDraftState("a")).toBeNull();
-    await anon.prefs.savePrefs({ view: "board", center: "ba", baMode: "pos", mockOn: false, room: null, activeLeagueId: null });
+    await anon.prefs.savePrefs({ view: "board", center: "ba", baMode: "pos", mockOn: false, room: null, activeLeagueId: null, premiered: null });
     expect((await account.prefs.getPrefs())?.view).toBe("board");
   });
 });

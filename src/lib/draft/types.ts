@@ -112,6 +112,11 @@ export interface UiPrefs {
   room: CpuStyle[] | null;
   /** The league open on this device. Null, or an id that no longer exists, means the first saved league. */
   activeLeagueId: string | null;
+  /**
+   * Leagues whose Opening Night has already run on this device. Null until first seeded: a device
+   * from before this field existed, whose leagues must not all premiere at once (see premiere.ts).
+   */
+  premiered: string[] | null;
 }
 
 export interface Dataset {
