@@ -15,6 +15,12 @@ export interface LeagueRecord {
   /** Fingerprint of the player data the league's picks were logged against (see datasetId()). */
   datasetId: string;
   settings: LeagueSettings;
+  /**
+   * When the league drafts, if the user said: a date ("2026-09-27") or a date and time (an ISO
+   * instant). See src/lib/draft/draftDay.ts. Absent and null both mean "not set"; the difference
+   * matters only on the wire, where a record without the key leaves the stored date alone.
+   */
+  draftAt?: string | null;
   /** ISO timestamps. */
   createdAt: string;
   updatedAt: string;

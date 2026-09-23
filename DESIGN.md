@@ -405,7 +405,7 @@ Identity is not a draft action, so it takes one slot in the action row: a `.btn`
 
 ### Inputs
 
-`#282e37` fill, 1px `line` border, 6px radius, `6px 8px` padding (`8px 10px 8px 30px` for the search field, whose 14px stroked magnifier sits absolutely at 9px/9px). Placeholder in `dim` (`#5f6a78`). Setup fields use a `150px / 1fr` label-value grid. No dedicated error styling on the field itself — validation surfaces as a list above the footer.
+`#282e37` fill, 1px `line` border, 6px radius, `6px 8px` padding (`8px 10px 8px 30px` for the search field, whose 14px stroked magnifier sits absolutely at 9px/9px). Placeholder in `dim` (`#5f6a78`). Setup fields use a `150px / 1fr` label-value grid. No dedicated error styling on the field itself — validation surfaces as a list above the footer. The optional **Draft day** row pairs a native date and time input (dark `color-scheme` so the pickers match; the time stays disabled until there's a date), an underlined text "Clear", and one 11px line under both: what the date is for, or, in amber, that it has already passed — a note, never a block, since an old draft can still be logged.
 
 ### Chips
 

@@ -88,6 +88,8 @@ export const leagues = pgTable(
     season: integer("season").notNull(),
     datasetId: text("dataset_id").notNull(),
     settings: jsonb("settings").$type<LeagueSettings>().notNull(),
+    /** When the league drafts: "YYYY-MM-DD" or an ISO instant (src/lib/draft/draftDay.ts). Null when not set. */
+    draftAt: text("draft_at"),
     ...timestamps,
     /** Soft delete: keeps the row (and any entitlement on it) recoverable. */
     deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),

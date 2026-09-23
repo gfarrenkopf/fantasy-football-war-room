@@ -2205,6 +2205,43 @@
   padding: 6px 8px;
   max-width: 220px;
 }
+/* Draft day: a date, an optional time beside it, and one line on what it's for. */
+.draftDay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+.draftDay .input {
+  color-scheme: dark;
+  min-width: 0;
+}
+.draftDay .input:disabled {
+  opacity: 0.45;
+}
+.textBtn {
+  padding: 4px 2px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-muted);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.textBtn:hover {
+  color: var(--color-text);
+}
+.draftDayNote {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.draftDayNote.warn {
+  color: var(--color-warn);
+}
 .slotGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
