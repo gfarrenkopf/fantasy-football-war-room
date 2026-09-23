@@ -2,6 +2,7 @@ import { config } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { ESPN_HANDOVER_VERSION } from "@/lib/espn/disclosure";
 import { preflight, withCors } from "@/lib/server/espn/bridgeCors";
+import { noteCredential } from "@/lib/server/espn/clients";
 import { verifyBridge } from "@/lib/server/espn/live";
 import { purgeExpiredCredentials, storeCredential } from "@/lib/server/espn/serverClients";
 import { error, json, readJson } from "@/lib/server/http";
@@ -61,5 +62,7 @@ export async function POST(request: Request) {
     { code: body.code, swid: body.swid },
     { leagueSettings: body.settings, pickTeams: body.pickTeams, consentVersion: body.consentVersion },
   );
+  // Every war room open on this league can now offer to take over.
+  await noteCredential(db, userId, leagueId, { fresh: true });
   return withCors(json(200, { stored: true }), request);
 }

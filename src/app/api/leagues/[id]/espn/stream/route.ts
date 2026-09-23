@@ -2,6 +2,7 @@ import type { LiveEvent } from "@/lib/espn/live";
 import { withUser } from "@/lib/server/api";
 import { config } from "@/lib/config";
 import { espnAccess } from "@/lib/server/espn/access";
+import { noteCredential } from "@/lib/server/espn/clients";
 import { getRelay } from "@/lib/server/espn/live";
 import { error, json } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
@@ -31,6 +32,8 @@ export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => 
   if (access.kind === "needs-purchase") return json(402, { needsPurchase: true });
 
   const relay = getRelay();
+  // A join code handed over before a restart is still in the database; the relay only knows it once asked.
+  await noteCredential(db, userId, id);
   let cleanup = () => {};
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { decodeInitPicks, sanitizeFrame } from "./join";
 
 /**
  * Runs the shipped bridge (public/espn-bridge.js) in a sandbox standing in for an ESPN draft tab:
@@ -119,6 +120,8 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
   vm.createContext(context);
   const load = () => vm.runInContext(SOURCE, context);
   const bridge = () => (context.__warRoomBridge as { state(): Record<string, unknown> }).state();
+  const decode = (b64: string, league: number) =>
+    (context.__warRoomBridge as { decodeInitPicks(b64: string, league: number): number[] | null }).decodeInitPicks(b64, league);
   const Socket = () => context.WebSocket as typeof FakeSocket;
   const postMessage = (data: unknown, origin = WAR_ROOM) => windowListeners.forEach((fn) => fn({ data, origin }));
   /** The frame posts only: the bridge also calls ESPN's own API when it catches up. */
@@ -126,7 +129,7 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
     fetch.mock.calls
       .filter(([url, init]) => init && init.body && String(url).endsWith("/frames"))
       .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number; handoverVersion?: number });
-  return { load, bridge, Socket, postMessage, fetch, open, storage, shadow, bodies, press };
+  return { load, bridge, decode, Socket, postMessage, fetch, open, storage, shadow, bodies, press };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -501,6 +504,32 @@ function initBlob({ league = 704343562, total = 8, drafted = [] as number[], hea
   // ESPN sends "INIT <base64> ####…": the base64 loses its = padding and a run of # follows it.
   return Buffer.from(bytes).toString("base64").replace(/=+$/, "") + ` ${"#".repeat(32)}`;
 }
+
+describe("the server-side client's ports of the bridge (Epic 9)", () => {
+  it("decodes INIT exactly as the shipped bridge does", () => {
+    const p = page();
+    p.load();
+    const blobs = [
+      initBlob({ drafted: [4429795, 4430807, -16034] }),
+      initBlob({ total: 160, drafted: Array.from({ length: 37 }, (_, i) => 3_000_000 + i) }),
+      initBlob({ header: 51, drafted: [4429795] }),
+      initBlob({ drafted: [] }),
+      initBlob({ league: 1, drafted: [4429795] }),
+      "not base64 at all!",
+    ];
+    for (const blob of blobs) expect(decodeInitPicks(blob, 704343562)).toEqual(p.decode(blob, 704343562));
+  });
+
+  it("sanitizes frames exactly as the shipped bridge does", async () => {
+    const p = page({ stored: "tok-1" });
+    p.load();
+    const raw = ["INIT AAAA\n", `TOKEN 1:704343562:1:${SWID}:342755166\n`, "PONG PING%201\n", `SELECTED 1 4362628 4 ${SWID}\n`, "CLOCK 6 30000 4", "  "];
+    const ws = new (p.Socket())(DRAFT_URL);
+    raw.forEach((f) => ws.emit(f));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.bodies().find((b) => b.frames.length)!.frames).toEqual(raw.map(sanitizeFrame).filter((f) => f !== null));
+  });
+});
 
 describe("catching up on picks made before the bridge attached (8.12)", () => {
   const DRAFTED = [4429795, 4430807, -16034];

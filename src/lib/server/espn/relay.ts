@@ -12,6 +12,7 @@ import {
   type LiveSnapshot,
   type LiveStatus,
   type PickRequestView,
+  type ServerClientView,
 } from "@/lib/espn/live";
 
 /**
@@ -105,6 +106,7 @@ interface Channel {
   plan: VersionedPlan | null;
   espnLeague: EspnLeague | null;
   degraded: DriftReport | null;
+  serverClient: ServerClientView | null;
 }
 
 export interface Relay {
@@ -123,6 +125,9 @@ export interface Relay {
   snapshot(userId: string, leagueId: string): LiveSnapshot;
   /** The ESPN draft a league's bridge last reported, or null before any bridge has. */
   scope(userId: string, leagueId: string): RelayScope | null;
+  /** Where War Room's own ESPN connection for this league stands (Epic 9), for every war room watching. */
+  setServerClient(userId: string, leagueId: string, view: ServerClientView | null): void;
+  serverClient(userId: string, leagueId: string): ServerClientView | null;
 }
 
 const key = (userId: string, leagueId: string) => `${userId}\u0000${leagueId}`;
@@ -182,6 +187,7 @@ export function createRelay({
         plan: null,
         espnLeague: null,
         degraded: null,
+        serverClient: null,
       };
       channels.set(k, ch);
     }
@@ -207,6 +213,7 @@ export function createRelay({
       request: viewOf(ch.request),
       espnLeague: ch.espnLeague,
       degraded: ch.degraded,
+      serverClient: ch.serverClient,
     };
   }
 
@@ -400,6 +407,17 @@ export function createRelay({
 
     scope(userId, leagueId) {
       return channels.get(key(userId, leagueId))?.scope ?? null;
+    },
+
+    setServerClient(userId, leagueId, view) {
+      const ch = channel(userId, leagueId);
+      if (JSON.stringify(view) === JSON.stringify(ch.serverClient)) return;
+      ch.serverClient = view;
+      emit(ch, { type: "serverClient", serverClient: view });
+    },
+
+    serverClient(userId, leagueId) {
+      return channels.get(key(userId, leagueId))?.serverClient ?? null;
     },
   };
 }
