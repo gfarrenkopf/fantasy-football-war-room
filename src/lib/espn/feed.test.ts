@@ -85,6 +85,13 @@ describe("foldFrames", () => {
     expect(foldFrames(["CLOCK 0 1000", "STATE 1"], feed).anchored).toBe(false);
   });
 
+  it("stops the clock while the draft is paused, and doesn't count the pause as drift", () => {
+    const paused = foldFrames(["CLOCK 0 5000", "STATE 1", "SELECTING 2 60000", ...Array.from({ length: 30 }, () => "CLOCK")]);
+    expect(paused.onClock).toBeNull();
+    expect(paused.malformedFrames).toBe(0);
+    expect(foldFrames(["CLOCK 6 41000 2"], paused).onClock).toEqual({ teamId: 2, msRemaining: 41000 });
+  });
+
   it("records an ERROR frame", () => {
     expect(foldFrames(["ERROR 1 Invalid+security+code"]).error).toEqual({ code: 1, message: "Invalid security code" });
   });
