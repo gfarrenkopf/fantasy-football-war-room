@@ -21,7 +21,8 @@ import type { CommandResult, IngestResult, RelayScope } from "./relay";
 export interface EspnSocketEvents {
   open: [];
   message: [data: string];
-  close: [];
+  /** ESPN's close code and reason, when it gave them. */
+  close: [code?: number, reason?: string];
   error: [err: Error];
   /** The join was answered with an HTTP status instead of a socket, e.g. 403 without a browser User-Agent. */
   "unexpected-response": [status: number];
@@ -45,6 +46,14 @@ export type Connect = (url: string, headers: Record<string, string>) => EspnSock
  */
 export type EndReason = "complete" | "refused" | "lost" | "stopped";
 
+/** For the log: how long the client held the draft and how the socket closed. */
+export interface EndInfo {
+  /** Null if it never joined. */
+  joinedForMs: number | null;
+  closeCode?: number;
+  closeReason?: string;
+}
+
 export interface EspnClientOptions {
   connect: Connect;
   relay: { ingest(scope: RelayScope, session: string, seq: number, frames: readonly string[], result?: CommandResult): Promise<IngestResult> };
@@ -57,7 +66,7 @@ export interface EspnClientOptions {
   /** Joined: ESPN accepted the code and the draft is arriving. */
   onJoin?: () => void;
   /** Called once. `detail` is words for the user; it never contains the join code. */
-  onEnd?: (reason: EndReason, detail: string) => void;
+  onEnd?: (reason: EndReason, detail: string, info: EndInfo) => void;
   /** A pick command the relay handed back; the client sends it and reports on the next check-in (9.3). */
   onCommand?: (command: { id: string; select: number }) => CommandResult;
 }
@@ -103,6 +112,8 @@ export function createEspnClient({
   let caughtUp = false;
   let ended = false;
   let result: CommandResult | undefined;
+  let joinedAt: number | null = null;
+  let closeInfo: { closeCode?: number; closeReason?: string } = {};
   const timers: ReturnType<typeof setInterval>[] = [];
 
   const socket = connect(
@@ -123,7 +134,8 @@ export function createEspnClient({
     // Whatever arrived last still goes to the relay, STATE 2 above all. Nothing to send means no
     // check-in either: a client that never joined mustn't make the draft look live.
     const last = sent < log.length || inFlight ? flush() : Promise.resolve();
-    void last.finally(() => onEnd?.(reason, detail));
+    const info: EndInfo = { joinedForMs: joinedAt === null ? null : now() - joinedAt, ...closeInfo };
+    void last.finally(() => onEnd?.(reason, detail, info));
   }
 
   async function post(): Promise<void> {
@@ -179,6 +191,7 @@ export function createEspnClient({
     if (head === "INIT" || head === "TOKEN") {
       if (!joined) {
         joined = true;
+        joinedAt = now();
         onJoin?.();
       }
     }
@@ -202,14 +215,15 @@ export function createEspnClient({
   socket.on("error", () => {
     // Always followed by `close`, which says what it means for the user.
   });
-  socket.on("close", () =>
+  socket.on("close", (code, reason) => {
+    closeInfo = { closeCode: code, closeReason: reason || undefined };
     end(
       joined ? "lost" : "refused",
       joined
         ? "ESPN closed War Room's connection. If you reconnected in ESPN, you're drafting there now."
         : "Couldn't join your ESPN draft room. It opens about an hour before the draft.",
-    ),
-  );
+    );
+  });
 
   timers.push(
     setInterval(() => {

@@ -1,6 +1,7 @@
 import type { Crosswalk } from "@/lib/espn/crosswalk";
 import type { OverlayPlan } from "@/lib/espn/overlayPlan";
 import { emptyFeed, foldFrames, type DraftFeed } from "@/lib/espn/feed";
+import { parseFrame } from "@/lib/espn/protocol";
 import { toLeagueSettings } from "@/lib/espn/league";
 import {
   requestActive,
@@ -21,7 +22,12 @@ import {
  * One channel per user and war room league, held in memory. Frames arrive per bridge session (one
  * page load of the ESPN tab), each an append-only log addressed by offset, so a bridge can always
  * tell what the relay holds and resend from exactly there, e.g. after a deploy restarts the process.
- * The draft is the fold of every session's log in the order the sessions appeared.
+ * The draft is the fold of every bridge session's log in the order the sessions appeared.
+ *
+ * While War Room's own ESPN client holds the connection (Epic 9), its session is the draft's only
+ * source: an open ESPN tab's bridge would be relaying the same draft a second time, and folding two
+ * live copies of one draft end to end double-counts every pick. Bridge frames are still kept, so
+ * the draft falls back to them when War Room hands the connection back.
  *
  * Nothing here touches the database, the network or `config`; dependencies are injected so tests
  * can drive it with a fake clock and crosswalk.
@@ -91,9 +97,13 @@ export interface VersionedPlan {
   plan: OverlayPlan;
 }
 
+/**
+ * `held`: War Room holds (or is about to take) the user's ESPN connection, so the bridge must keep
+ * ESPN's page from reconnecting, or the page and War Room trade the socket all draft long.
+ */
 export type IngestResult =
-  | { status: 200; have: number; command?: BridgeCommand; plan?: VersionedPlan }
-  | { status: 409; have: number }
+  | { status: 200; have: number; command?: BridgeCommand; plan?: VersionedPlan; held?: true }
+  | { status: 409; have: number; held?: true }
   | { status: 413 };
 
 export type PickRequestRefusal = "no-bridge" | "bridge-offline" | "not-your-turn" | "taken" | "busy";
@@ -118,6 +128,19 @@ interface Channel {
   degraded: DriftReport | null;
   serverClient: ServerClientView | null;
   sender: RelaySender | null;
+  /** Sessions that are War Room's own ESPN client rather than a bridge. */
+  serverSessions: Set<string>;
+  /** The server session the draft is folded from while War Room holds the connection, else null (bridges). */
+  source: string | null;
+  /** When War Room asked bridges to stand down (it's taking over), and when a bridge was last told so. */
+  holdAt: number | null;
+  bridgeToldAt: number | null;
+  /** When a bridge last checked in, whether or not it's the draft's source. */
+  bridgeSeen: number | null;
+  /** The season's crosswalk, once known, for rebuilding picks outside an ingest. */
+  walk: Crosswalk | null;
+  /** Unreadable frames already logged, so a drifting feed can't flood the log. */
+  unreadableLogged: number;
   /** Keep ESPN's queue set to the turn plan (9.3). Only while War Room holds the connection. */
   queueSync: boolean;
   /** ESPN's pick queue as last set from the turn plan, so an unchanged plan isn't sent again. */
@@ -143,8 +166,21 @@ export interface Relay {
   /** Where War Room's own ESPN connection for this league stands (Epic 9), for every war room watching. */
   setServerClient(userId: string, leagueId: string, view: ServerClientView | null): void;
   serverClient(userId: string, leagueId: string): ServerClientView | null;
-  /** Picks and queue updates go out through `sender` while it's attached (9.3). Returns a detach. */
-  attachSender(userId: string, leagueId: string, sender: RelaySender): () => void;
+  /**
+   * War Room's own client has joined ESPN as `session`: from now on the draft is folded from that
+   * session alone, and picks and queue updates go out through `sender` (9.3). The detach it returns
+   * hands the draft back to the bridges.
+   */
+  attachSender(userId: string, leagueId: string, sender: RelaySender, session: string): () => void;
+  /**
+   * War Room is about to join ESPN for this league: bridges are told to keep ESPN's page from
+   * reconnecting. Whether a bridge is live to be told; see `bridgeStoodDown`.
+   */
+  requestHold(userId: string, leagueId: string): { bridgeLive: boolean };
+  /** A bridge has been told to stand down since `requestHold`. */
+  bridgeStoodDown(userId: string, leagueId: string): boolean;
+  /** War Room no longer holds the connection (or never got it): bridges may reconnect. */
+  releaseHold(userId: string, leagueId: string): void;
   /** Sets ESPN's pick queue from the latest turn plan, now. The ESPN ids queued, or null with no sender or no plan. */
   pushQueue(userId: string, leagueId: string): number[] | null;
   /** Keeps ESPN's queue set to every new turn plan, or stops. Sets it now when turned on. */
@@ -219,6 +255,13 @@ export function createRelay({
         degraded: null,
         serverClient: null,
         sender: null,
+        serverSessions: new Set(),
+        source: null,
+        holdAt: null,
+        bridgeToldAt: null,
+        bridgeSeen: null,
+        walk: null,
+        unreadableLogged: 0,
         queueSync: false,
         queueSent: "",
       };
@@ -324,6 +367,36 @@ export function createRelay({
     emit(ch, { type: "status", status, draft: ch.feed.status });
   }
 
+  /** Whether this session's frames are the draft right now. */
+  const isSource = (ch: Channel, session: string) => (ch.source ? session === ch.source : !ch.serverSessions.has(session));
+
+  /** Every frame the draft is folded from, in order. */
+  function sourceFrames(ch: Channel): string[] {
+    if (ch.source) return ch.sessions.get(ch.source) ?? [];
+    return [...ch.sessions].flatMap(([id, log]) => (ch.serverSessions.has(id) ? [] : log));
+  }
+
+  /** Refolds the draft from its source after the source changed, and tells every war room. */
+  function rebuild(ch: Channel) {
+    ch.feed = foldFrames(sourceFrames(ch));
+    ch.picks = ch.walk ? resolvePicks(ch.feed, ch.walk, ch.scope?.espnTeamId ?? null) : [];
+    ch.clockAt = now();
+    // Drift measured over the old source (say, two live copies of the draft) says nothing about this one.
+    ch.degraded = null;
+    emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
+  }
+
+  /** The first few frames the feed couldn't read, logged so a drift alert says what changed. Already sanitized. */
+  function logUnreadable(ch: Channel, scope: RelayScope, session: string, frames: readonly string[]) {
+    for (const frame of frames) {
+      if (ch.unreadableLogged >= 5) return;
+      const kind = parseFrame(frame).kind;
+      if (kind !== "malformed" && kind !== "unknown") continue;
+      ch.unreadableLogged++;
+      console.warn(`[espn-sync] unreadable league=${scope.espnLeagueId} session=${ch.serverSessions.has(session) ? "server" : "bridge"} kind=${kind} frame=${JSON.stringify(frame.slice(0, 200))}`);
+    }
+  }
+
   function reset(ch: Channel) {
     ch.sessions.clear();
     ch.frameCount = 0;
@@ -343,7 +416,15 @@ export function createRelay({
       if (ch.scope && (ch.scope.espnLeagueId !== scope.espnLeagueId || ch.scope.season !== scope.season)) reset(ch);
       const teamChanged = ch.scope !== null && ch.scope.espnTeamId !== scope.espnTeamId;
       ch.scope = scope;
-      ch.lastSeen = now();
+      ch.walk = walk;
+      const source = isSource(ch, session);
+      const bridge = !ch.serverSessions.has(session);
+      // Liveness is the source's: a bridge in a tab War Room has taken over doesn't make the draft live.
+      if (source) ch.lastSeen = now();
+      if (bridge) ch.bridgeSeen = now();
+      const held = bridge && ch.holdAt !== null;
+      if (held) ch.bridgeToldAt = now();
+      const heldReply = held ? { held: true as const } : {};
 
       if (result && ch.request?.id === result.id && ch.request.state === "pending") {
         if (result.sent) {
@@ -356,18 +437,24 @@ export function createRelay({
       if (!log) ch.sessions.set(session, (log = []));
       if (seq !== log.length) {
         emitStatus(ch);
-        return { status: 409, have: log.length };
+        return { status: 409, have: log.length, ...heldReply };
       }
       if (ch.frameCount + frames.length > maxFrames) return { status: 413 };
 
-      if (frames.length) {
-        const latest = [...ch.sessions.keys()].at(-1) === session;
+      if (frames.length && !source) {
+        // Kept for when the draft falls back to this session, but not the draft right now.
         log.push(...frames);
         ch.frameCount += frames.length;
+      } else if (frames.length) {
+        const sources = ch.source ? [ch.source] : [...ch.sessions.keys()].filter((id) => !ch.serverSessions.has(id));
+        const latest = sources.at(-1) === session;
+        log.push(...frames);
+        ch.frameCount += frames.length;
+        logUnreadable(ch, scope, session, frames);
         const before = ch.feed;
         // Appending to the newest session folds incrementally; frames for an older one (two tabs
         // bridging at once) change the order, so the whole draft is refolded.
-        ch.feed = latest ? foldFrames(frames, ch.feed) : foldFrames([...ch.sessions.values()].flat());
+        ch.feed = latest ? foldFrames(frames, ch.feed) : foldFrames(sourceFrames(ch));
         const rebuilt = !latest || teamChanged;
         // Every clock frame restarts the countdown, even one that repeats the last (a paused draft).
         const clockMoved = frames.some((f) => f.startsWith("CLOCK ") || f.startsWith("SELECTING ")) || ch.feed.onClock?.teamId !== before.onClock?.teamId;
@@ -395,7 +482,7 @@ export function createRelay({
       const r = ch.request;
       const command = r?.state === "pending" && now() - r.createdAt <= deliverWithinMs ? { id: r.id, select: r.espnPlayerId } : undefined;
       const plan = ch.plan && ch.plan.version > planVersion ? ch.plan : undefined;
-      return { status: 200, have: log.length, ...(command ? { command } : {}), ...(plan ? { plan } : {}) };
+      return { status: 200, have: log.length, ...(command ? { command } : {}), ...(plan ? { plan } : {}), ...heldReply };
     },
 
     setLeague(scope, settings) {
@@ -479,13 +566,38 @@ export function createRelay({
       return ch ? serverClientOf(ch) : null;
     },
 
-    attachSender(userId, leagueId, sender) {
+    attachSender(userId, leagueId, sender, session) {
       const ch = channel(userId, leagueId);
       ch.sender = sender;
       ch.queueSent = "";
+      ch.serverSessions.add(session);
+      if (!ch.sessions.has(session)) ch.sessions.set(session, []);
+      ch.source = session;
+      rebuild(ch);
       return () => {
         if (ch.sender === sender) ch.sender = null;
+        if (ch.source !== session) return;
+        ch.source = null;
+        ch.holdAt = null;
+        rebuild(ch);
+        emitStatus(ch);
       };
+    },
+
+    requestHold(userId, leagueId) {
+      const ch = channel(userId, leagueId);
+      ch.holdAt = now();
+      return { bridgeLive: ch.bridgeSeen !== null && now() - ch.bridgeSeen <= offlineAfterMs };
+    },
+
+    bridgeStoodDown(userId, leagueId) {
+      const ch = channels.get(key(userId, leagueId));
+      return !!ch && ch.holdAt !== null && ch.bridgeToldAt !== null && ch.bridgeToldAt >= ch.holdAt;
+    },
+
+    releaseHold(userId, leagueId) {
+      const ch = channels.get(key(userId, leagueId));
+      if (ch && !ch.source) ch.holdAt = null;
     },
 
     pushQueue(userId, leagueId) {

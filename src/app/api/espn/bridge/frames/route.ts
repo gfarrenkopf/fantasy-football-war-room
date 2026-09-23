@@ -4,6 +4,7 @@ import { ESPN_HANDOVER_DISCLOSURE, ESPN_HANDOVER_VERSION } from "@/lib/espn/disc
 import { preflight, withCors } from "@/lib/server/espn/bridgeCors";
 import { getRelay, verifyBridge } from "@/lib/server/espn/live";
 import type { CommandResult } from "@/lib/server/espn/relay";
+import { handBack } from "@/lib/server/espn/clients";
 import { deleteCredential } from "@/lib/server/espn/serverClients";
 import { error, json, readJson } from "@/lib/server/http";
 
@@ -25,6 +26,8 @@ interface FramesRequest {
   settings?: unknown;
   /** The version of the hand-over opt-in (9.1) the bridge already shows. */
   handoverVersion: number;
+  /** The user clicked "Draft here instead" in the overlay: War Room hands its ESPN connection back. */
+  release: boolean;
 }
 
 function parse(body: unknown): FramesRequest | null {
@@ -38,7 +41,7 @@ function parse(body: unknown): FramesRequest | null {
       : undefined;
   const planVersion = Number.isInteger(b.planVersion) && b.planVersion! >= 0 ? b.planVersion! : 0;
   const handoverVersion = Number.isInteger(b.handoverVersion) ? b.handoverVersion! : 0;
-  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result, planVersion, settings: b.settings, handoverVersion };
+  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result, planVersion, settings: b.settings, handoverVersion, release: b.release === true };
 }
 
 /**
@@ -50,7 +53,8 @@ function parse(body: unknown): FramesRequest | null {
  * relay's count when it doesn't (the bridge resends from there). An empty `frames` is a heartbeat.
  * `command` is a pick the user made in War Room, for the bridge to make in ESPN; the bridge reports
  * what it did with it as `result` on its next request. `plan` is the overlay's turn plan, sent only
- * when it's newer than the bridge's `planVersion`. `handover` is the opt-in for drafting without this
+ * when it's newer than the bridge's `planVersion`. `held` means War Room holds (or is taking) the
+ * user's ESPN connection, so the bridge keeps ESPN's page from reconnecting; `release` hands it back. `handover` is the opt-in for drafting without this
  * tab (9.1), sent when that's available and newer than the bridge's `handoverVersion`.
  */
 export async function POST(request: Request) {
@@ -64,6 +68,8 @@ export async function POST(request: Request) {
   if (!body) return withCors(error(400, "Invalid frames"), request);
   if (body.espnLeagueId !== bridge.espnLeagueId) return withCors(error(403, "This bridge is paired to a different ESPN league"), request);
 
+  // Before ingest, so this reply already tells the bridge it may let ESPN's page reconnect.
+  if (body.release) await handBack(getDb(), bridge.userId, bridge.leagueId);
   const result = await getRelay().ingest(bridge, body.session, body.seq, body.frames, body.result, body.planVersion);
   // After ingest: re-pairing to a different ESPN league resets the channel, and these settings
   // describe the league it just moved to.

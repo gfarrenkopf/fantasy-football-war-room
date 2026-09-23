@@ -15,6 +15,9 @@
  * - Only if the user opts in from the overlay (9.1), it hands War Room this draft room's join code
  *   and the user's ESPN id, once, to their own endpoint, so War Room can join the draft itself and the
  *   user can draft from a phone with no ESPN tab open. Never in a frame, and never without that click.
+ * - While War Room holds that connection, ESPN allows no second one for the team, so this tab stands
+ *   down: it keeps ESPN's page from reconnecting (the page would take the connection straight back)
+ *   until the user hands back, from War Room or with "Draft here instead" in the overlay.
  *
  * Plain script, no build step, so what's tested (src/lib/espn/bridge.test.ts) is exactly what ships.
  * The frame grammar is documented in docs/espn-protocol.md.
@@ -103,6 +106,12 @@
   let handoverOffer = null;
   /** @type {"none" | "sending" | "done" | "failed" | "declined"} */
   let handover = readSession(HANDOVER_KEY) ? "done" : "none";
+  /** War Room holds this team's ESPN connection: ESPN's page mustn't reconnect until it's handed back. */
+  let heldByWarRoom = false;
+  /** The user asked, from the overlay, to take the connection back; sent on the next check-in. */
+  let releaseRequested = false;
+  /** Stand-ins for the sockets ESPN's page tried to open while War Room held the connection. */
+  const standIns = /** @type {Set<any>} */ (new Set());
 
   /* ---------------- frames ---------------- */
 
@@ -251,15 +260,18 @@
       .map((p) => p.teamId);
   }
 
-  let caughtUp = false;
   /** Frames that arrive while catch-up is in flight, so the picks it recovers stay in front of them. */
   /** @type {string[] | null} */
   let held = null;
 
-  /** @param {string} b64 */
+  /**
+   * Every socket's INIT is caught up on, not just the first: a page that reconnects after a gap (War
+   * Room held the connection, or the network dropped) missed the picks made meanwhile. War Room only
+   * applies a recovered pick it doesn't already have, in order, so repeating the ones it has is harmless.
+   * @param {string} b64
+   */
   async function catchUp(b64) {
-    if (caughtUp) return;
-    caughtUp = true;
+    if (held) return; // one at a time; the next socket's INIT gets its turn
     const ids = decodeInitPicks(b64, Number(espnLeagueId));
     if (!ids) return; // not the layout we know, or nothing drafted yet: nothing to catch up on
     held = [];
@@ -279,6 +291,7 @@
   }
 
   const attached = new WeakSet();
+  const caughtUpOn = new WeakSet();
   /** @param {WebSocket} ws */
   function attach(ws) {
     if (attached.has(ws) || !ESPN_SOCKET.test(String(ws.url))) return;
@@ -292,8 +305,9 @@
     }
     ws.addEventListener("message", (e) => {
       if (typeof e.data !== "string") return;
-      // INIT is the draft so far. Only useful before we've seen picks of our own, i.e. we joined late.
-      if (String(e.data).startsWith("INIT ") && !caughtUp && !log.some((f) => f.startsWith("SELECTED "))) {
+      // INIT is the draft so far: what this socket missed before it opened.
+      if (String(e.data).startsWith("INIT ") && !caughtUpOn.has(ws)) {
+        caughtUpOn.add(ws);
         void catchUp(String(e.data).slice(5).trim());
       }
       const frame = sanitize(e.data);
@@ -335,10 +349,58 @@
   w.WebSocket = class extends Native {
     /** @param {string | URL} url @param {string | string[]} [protocols] */
     constructor(url, protocols) {
+      // War Room holds the connection: ESPN's page gets a socket that never connects, so it can't
+      // take the connection back. It closes when War Room hands back, and the page reconnects for real.
+      if (heldByWarRoom && ESPN_SOCKET.test(String(url))) return standIn(String(url));
       super(url, protocols);
       attach(/** @type {WebSocket} */ (/** @type {unknown} */ (this)));
     }
   };
+
+  /** A socket for ESPN's page that stays connecting until War Room hands the connection back. @param {string} url */
+  function standIn(url) {
+    const target = new EventTarget();
+    /** @type {any} */
+    const sock = Object.assign(target, {
+      url,
+      readyState: 0,
+      protocol: "",
+      extensions: "",
+      bufferedAmount: 0,
+      binaryType: "blob",
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+      send() {},
+      close() {
+        if (sock.readyState === 3) return;
+        sock.readyState = 3;
+        standIns.delete(sock);
+        const ev = Object.assign(new Event("close"), { code: 1006, reason: "", wasClean: false });
+        target.dispatchEvent(ev);
+        if (typeof sock.onclose === "function") sock.onclose(ev);
+      },
+    });
+    standIns.add(sock);
+    render();
+    return sock;
+  }
+
+  /** War Room took, or gave back, this team's ESPN connection. @param {boolean} next */
+  function setHeld(next) {
+    if (next === heldByWarRoom) return;
+    heldByWarRoom = next;
+    if (next) {
+      // Close the page's own socket now, before War Room joins, rather than let ESPN's page find out
+      // by losing it and reconnecting; the reconnect gets a stand-in.
+      if (current) Native.prototype.close.call(current);
+    } else {
+      releaseRequested = false;
+      for (const sock of [...standIns]) sock.close();
+    }
+    render();
+  }
 
   /* ---------------- relay ---------------- */
 
@@ -388,6 +450,7 @@
           frames,
           planVersion,
           handoverVersion: handoverOffer ? handoverOffer.version : 0,
+          ...(releaseRequested ? { release: true } : {}),
           ...(result ? { result } : {}),
           ...(sendingSettings ? { settings: sendingSettings } : {}),
         }),
@@ -409,6 +472,7 @@
           planVersion = body.plan.version;
           plan = body.plan.plan;
         }
+        setHeld(body.held === true);
         const offer = body.handover;
         if (offer && typeof offer.version === "number" && Array.isArray(offer.lines)) {
           handoverOffer = { version: offer.version, lines: offer.lines.map(String) };
@@ -617,11 +681,18 @@
   <div class="rows"></div><div class="note"></div></div>
   <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="hn"></div>
   <div class="row"><button class="ha" type="button">Let War Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
-  <div class="row"><button class="go" type="button">Connect to War Room</button><button class="x" type="button">Hide</button></div></div>`;
+  <div class="row"><button class="go" type="button">Connect to War Room</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
   const goEl = /** @type {HTMLButtonElement} */ (root.querySelector(".go"));
   const hideEl = /** @type {HTMLButtonElement} */ (root.querySelector(".x"));
+  const releaseEl = /** @type {HTMLButtonElement} */ (root.querySelector(".rel"));
+  releaseEl.onclick = () => {
+    releaseRequested = true;
+    lastPost = 0;
+    render();
+    flushSoon();
+  };
   const planEl = /** @type {HTMLElement} */ (root.querySelector(".plan"));
   const planTitleEl = /** @type {HTMLElement} */ (root.querySelector(".pt"));
   const planRoundEl = /** @type {HTMLElement} */ (root.querySelector(".pr"));
@@ -687,7 +758,7 @@
   }
 
   function renderPlan() {
-    const live = !!token && sockets > 0 && onDraftPage;
+    const live = !!token && sockets > 0 && onDraftPage && !heldByWarRoom;
     planEl.hidden = !live;
     if (!live) return;
     if (!plan) {
@@ -735,7 +806,7 @@
   }
 
   function renderHandover() {
-    const live = !!token && sockets > 0 && onDraftPage && !!joinParam;
+    const live = !!token && sockets > 0 && onDraftPage && !!joinParam && !heldByWarRoom;
     handoverEl.hidden = !live || !handoverOffer || handover === "declined";
     if (handoverEl.hidden || !handoverOffer) return;
     handoverListEl.replaceChildren(...handoverOffer.lines.map((line) => el("li", undefined, line)));
@@ -767,10 +838,13 @@
     else if (status === "purchase") text = "This league needs a War Room season pass for live sync.";
     else if (!token) text = "Connect this draft to your War Room board.";
     else if (status === "offline") text = "Can't reach War Room. Retrying…";
+    else if (heldByWarRoom)
+      text = releaseRequested ? "Handing the connection back to this tab…" : "War Room is drafting for you, so this tab stays disconnected. You can close it.";
     else if (!sockets) text = "Connected. Waiting for ESPN's draft room…";
     else text = `Live · ${picks()} picks synced. Keep this tab open.`;
     statusEl.textContent = text;
-    dotEl.style.color = token && sockets && status !== "offline" ? "#5fd38d" : "#e0a100";
+    releaseEl.hidden = !heldByWarRoom || releaseRequested;
+    dotEl.style.color = heldByWarRoom ? "#7cb7ff" : token && sockets && status !== "offline" ? "#5fd38d" : "#e0a100";
     renderPlan();
     renderHandover();
   }
@@ -785,7 +859,7 @@
       render();
     },
     /** For tests and support: what the bridge is doing. */
-    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, planVersion, armed, drafting: draftingName, handover }),
+    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, planVersion, armed, drafting: draftingName, handover, held: heldByWarRoom, standIns: standIns.size }),
     /** Exposed so the INIT decoder can be run against blobs recorded from real drafts (8.12). */
     decodeInitPicks,
   };
