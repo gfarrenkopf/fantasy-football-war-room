@@ -597,7 +597,7 @@
     .t{font-weight:700;letter-spacing:.02em;margin-bottom:2px}.t i{font-style:normal;color:#5fd38d}
     .s{color:#aab7c4}.row{display:flex;gap:8px;margin-top:8px}
     button{font:inherit;border-radius:6px;border:1px solid #2b3a48;background:#1b2530;color:inherit;padding:4px 10px;cursor:pointer}
-    button.go{background:#2e7d4f;border-color:#2e7d4f}[hidden]{display:none}
+    button.go,button.ha{background:#2e7d4f;border-color:#2e7d4f}[hidden]{display:none}
     .plan{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px}
     .ph{display:flex;align-items:baseline;gap:8px}.ph b{flex:1}.ph span{color:#8f9aa8;font-size:12px}
     .ph button{padding:1px 8px;font-size:12px}
@@ -609,14 +609,14 @@
     .n{flex:1;min-width:0}.n div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.n small{color:#8f9aa8}
     .g{font-size:11px;padding:1px 5px;border-radius:4px}.g.value{color:#5ee39a;border:1px solid #2e7d4f}.g.reach{color:#ff8a8a;border:1px solid #8a3434}
     .d{padding:2px 8px;font-size:12px}.d.on{background:#3ddc91;border-color:#3ddc91;color:#0d1a14;font-weight:700}
-    .note{color:#8f9aa8;font-size:12px;margin-top:6px}
+    .note,.hn{color:#8f9aa8;font-size:12px;margin-top:6px}
     .ho{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px}.ho b{display:block;margin-bottom:4px}
     .ho ul{margin:0;padding-left:18px;color:#aab7c4;font-size:12px}.ho li{margin-top:3px}
   </style><div class="box"><div class="t">War Room <i>●</i></div><div class="s"></div>
   <div class="plan" hidden><div class="ph"><b class="pt"></b><span class="pr"></span><button class="more" type="button">More</button></div>
   <div class="rows"></div><div class="note"></div></div>
-  <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="note hn"></div>
-  <div class="row"><button class="go ha" type="button">Let War Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
+  <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="hn"></div>
+  <div class="row"><button class="ha" type="button">Let War Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
   <div class="row"><button class="go" type="button">Connect to War Room</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
