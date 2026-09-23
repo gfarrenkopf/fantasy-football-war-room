@@ -113,12 +113,13 @@ The blob is the room's state, not a log of it: 6,890 bytes eighteen picks into a
 
 | Offset in record | Meaning |
 |---|---|
+| -4 | the slot's 1-based overall pick number (the last 4 bytes of the record before) |
 | 0 | the drafted player's ESPN id as a big-endian `int32`, or `-1` for a slot nobody has taken yet |
 | 4 | ESPN's roster slot |
 | 33 | this draft's league id |
 
 - **Records are 45 bytes**, one per pick slot, in pick order, running `teams × rounds` long.
-- **The league id in every record is what locates the table**, so nothing has to assume how long the header is. One record *before* the table carries the same id, so an alignment is only accepted when the ids it yields are plausible and the drafted ones form a prefix (every `-1` after every id).
+- **The league id in every record is what locates the table**, so nothing has to assume how long the header is. One record *before* the table carries the same id, so an alignment is accepted when each record is preceded by its pick number (1, 2, 3, …). The header record isn't, and its first field can pass for a player id: `16777216` on 2026-09-22 (too big to be one), but `65536` in a pre-draft room on 2026-09-23, which an older decoder took as pick 1. Only a blob without the numbering falls back to the shape alone (plausible ids, drafted ones a prefix, at least one pick).
 - Comparing two `INIT`s from one draft, the records that changed are exactly the picks made in between.
 - **Team and round aren't in the record.** Pick ownership comes from `mDraftDetail`, which lists every slot's team from before the draft (§2) and is readable from the draft page (ESPN's API allows that origin with credentials).
 

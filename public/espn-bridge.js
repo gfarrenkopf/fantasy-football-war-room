@@ -140,7 +140,10 @@
    *
    * @param {string} b64 the INIT payload
    * @param {number} league this draft's ESPN league id
-   * @returns {number[] | null} drafted player ids in pick order, or null if this isn't the layout we know
+   * Each record is also preceded by its 1-based pick number, which is how the table proves itself:
+   * the record before it shares the league id but not the numbering.
+   *
+   * @returns {number[] | null} drafted player ids in pick order (empty before the first pick), or null if this isn't the layout we know
    */
   function decodeInitPicks(b64, league) {
     const STRIDE = 45;
@@ -175,6 +178,25 @@
     if (run.length) runs.push(run);
     runs.sort((a, b) => b.length - a.length);
 
+    // A numbered table is taken as it stands, even empty: the record before it can pass for a pick
+    // (its first field was 65536 before a draft), and falling through to it would invent one.
+    for (const candidate of runs) {
+      for (const first of [candidate[0] - LEAGUE_AT, candidate[0] - LEAGUE_AT + STRIDE]) {
+        const total = candidate.length - (first - (candidate[0] - LEAGUE_AT)) / STRIDE;
+        if (first < 4 || total < 1 || first + STRIDE * total > bytes.length) continue;
+        let numbered = true;
+        for (let k = 0; k < total && numbered; k++) numbered = int(first + STRIDE * k - 4) === k + 1;
+        if (!numbered) continue;
+        const ids = /** @type {number[]} */ ([]);
+        for (let k = 0; k < total; k++) ids.push(int(first + STRIDE * k));
+        if (!ids.every(plausible)) continue;
+        const made = ids.filter((v) => v !== -1);
+        if (made.some((v, i) => ids[i] !== v)) continue;
+        return made;
+      }
+    }
+
+    // No numbered table: fall back to the shape alone, which needs at least one pick to go on.
     for (const candidate of runs) {
       // A record before the table shares the tag, so try both alignments and let the shape decide.
       for (const [first, total] of [
@@ -212,7 +234,8 @@
     return {
       name: typeof s.name === "string" ? s.name.slice(0, 80) : undefined,
       size: s.size,
-      draftSettings: { type: draft.type, pickOrder: draft.pickOrder },
+      // `date` is when the draft is scheduled (epoch ms): War Room's draft-day countdown follows it.
+      draftSettings: { type: draft.type, pickOrder: draft.pickOrder, date: draft.date },
       rosterSettings: { lineupSlotCounts: (s.rosterSettings || {}).lineupSlotCounts },
       scoringSettings: { scoringItems: items },
     };
@@ -273,7 +296,7 @@
   async function catchUp(b64) {
     if (held) return; // one at a time; the next socket's INIT gets its turn
     const ids = decodeInitPicks(b64, Number(espnLeagueId));
-    if (!ids) return; // not the layout we know, or nothing drafted yet: nothing to catch up on
+    if (!ids || !ids.length) return; // not the layout we know, or nothing drafted yet: nothing to catch up on
     held = [];
     try {
       // Who owns each pick. ESPN lists every slot's team from before the draft, so this works mid-draft.

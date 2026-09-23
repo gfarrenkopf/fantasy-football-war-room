@@ -59,9 +59,10 @@ export function sanitizeFrame(raw: string): string | null {
 }
 
 /**
- * The drafted player ids in INIT, in pick order, or null if this isn't the layout we know: the
- * bridge's `decodeInitPicks()` (8.12). One 45-byte record per pick slot, the player id as a
- * big-endian int32 at the top and the league id 33 bytes in.
+ * The drafted player ids in INIT, in pick order — empty when the table says nothing is drafted yet —
+ * or null if this isn't the layout we know: the bridge's `decodeInitPicks()` (8.12). One 45-byte
+ * record per pick slot, the player id as a big-endian int32 at the top, the league id 33 bytes in,
+ * and the slot's 1-based pick number in the 4 bytes just before the record.
  */
 export function decodeInitPicks(b64: string, league: number): number[] | null {
   const STRIDE = 45;
@@ -94,6 +95,24 @@ export function decodeInitPicks(b64: string, league: number): number[] | null {
   if (run.length) runs.push(run);
   runs.sort((a, b) => b.length - a.length);
 
+  // The table proves itself: each record is preceded by its pick number (1, 2, 3, …). The record
+  // before the table shares the tag but not the numbering, and its first field can pass for a
+  // player id (65536 did, before a draft) — so a numbered table is taken as it stands, even empty.
+  for (const candidate of runs) {
+    for (const first of [candidate[0] - LEAGUE_AT, candidate[0] - LEAGUE_AT + STRIDE]) {
+      const total = candidate.length - (first - (candidate[0] - LEAGUE_AT)) / STRIDE;
+      if (first < 4 || total < 1 || first + STRIDE * total > bytes.length) continue;
+      if (!Array.from({ length: total }, (_, k) => int(first + STRIDE * k - 4) === k + 1).every(Boolean)) continue;
+      const ids: number[] = [];
+      for (let k = 0; k < total; k++) ids.push(int(first + STRIDE * k));
+      if (!ids.every(plausible)) continue;
+      const made = ids.filter((v) => v !== -1);
+      if (made.some((v, i) => ids[i] !== v)) continue;
+      return made;
+    }
+  }
+
+  // No numbered table: fall back to the shape alone, which needs at least one pick to go on.
   for (const candidate of runs) {
     // A record before the table shares the tag, so try both alignments and let the shape decide.
     for (const [first, total] of [
