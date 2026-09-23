@@ -401,7 +401,9 @@ export function createRelay({
     setLeague(scope, settings) {
       const ch = channel(scope.userId, scope.leagueId);
       const imported = toLeagueSettings(settings, scope.espnTeamId);
-      const espnLeague: EspnLeague = imported.ok ? { ok: true, settings: imported.league } : { ok: false, error: imported.error };
+      const base: EspnLeague = imported.ok ? { ok: true, settings: imported.league } : { ok: false, error: imported.error };
+      // A moved draft is a change worth telling the war room about too.
+      const espnLeague: EspnLeague = imported.draftAt ? { ...base, draftAt: imported.draftAt } : base;
       // ESPN redraws the draft order when the lobby opens, so this arrives more than once; only a
       // real change is worth telling the war room about.
       if (JSON.stringify(espnLeague) === JSON.stringify(ch.espnLeague)) return;

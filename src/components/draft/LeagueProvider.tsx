@@ -18,9 +18,10 @@ interface LeagueContextValue {
   /** True once a league has been saved. False on first run. */
   configured: boolean;
   /** Updates the open league. */
-  updateLeague(patch: Partial<Pick<LeagueRecord, "name" | "settings" | "datasetId">>): void;
+  updateLeague(patch: Partial<Pick<LeagueRecord, "name" | "settings" | "datasetId" | "draftAt">>): void;
   /** Saves a new league and opens it. */
-  createLeague(name: string, settings: LeagueSettings): void;
+  /** Makes a league and opens it. `draftAt` is the optional draft day (see draftDay.ts). */
+  createLeague(name: string, settings: LeagueSettings, draftAt?: string | null): void;
   switchLeague(id: string): void;
   deleteLeague(id: string): void;
   /** Re-reads leagues from the store, e.g. after importing some. */
@@ -68,8 +69,8 @@ export function LeagueProvider({ children }: { children: React.ReactNode }) {
   );
 
   const createLeague = useCallback(
-    (name: string, settings: LeagueSettings) => {
-      const record = newLeagueRecord(name, settings);
+    (name: string, settings: LeagueSettings, draftAt?: string | null) => {
+      const record = { ...newLeagueRecord(name, settings), ...(draftAt ? { draftAt } : {}) };
       setLeagues((ls) => [...ls, record]);
       setPrefs({ activeLeagueId: record.id });
       void getStores().league.saveLeague(record);

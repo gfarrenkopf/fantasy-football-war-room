@@ -1,17 +1,27 @@
 "use client";
 
 import { forwardRef } from "react";
+import { parseDraftAt } from "@/lib/draft/draftDay";
 import { formatRoundPick, isMyPick, nextMyPick, roundOf } from "@/lib/draft/snake";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { EspnClock } from "./EspnSync";
 import { useLeague } from "./LeagueProvider";
 import { useDraftActions } from "./useDraftActions";
+import { useDraftClock } from "./useDraftClock";
 
 /** Option value in the league switcher that opens the new-league dialog instead of switching. */
 const NEW_LEAGUE = "__new__";
 
 const SCORING_LABEL = { ppr: "Full-PPR", half: "Half-PPR", std: "Standard" } as const;
+
+/** A league's draft date in the switcher, "· 9/27", or nothing when it has none. */
+const draftDate = (raw: string | null | undefined) => {
+  const d = parseDraftAt(raw);
+  if (!d) return "";
+  const at = d.kind === "time" ? d.at : new Date(d.year, d.month - 1, d.day);
+  return ` · ${at.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}`;
+};
 
 export const leagueSummary = (league: { scoring: keyof typeof SCORING_LABEL; teams: number; mySlot: number }) =>
   `${SCORING_LABEL[league.scoring]}, ${league.teams} teams, slot ${formatRoundPick(league.mySlot, league.teams)}`;
@@ -41,6 +51,10 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
   const { undo, reset } = useDraftActions();
   const { leagues, active, switchLeague } = useLeague();
   const { current: cur, total, done, onClock, league } = model;
+  // Before the first pick, the turn line also says when the draft starts: on a phone, whose
+  // header drops the focus hero, this is the only place the countdown shows.
+  const clock = useDraftClock();
+  const startsIn = clock ? ` · draft ${clock.label}` : "";
 
   let turn: React.ReactNode;
   let turnClass: string | false = false;
@@ -63,7 +77,10 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
     turn = (
       <>
         <b>You&apos;re on the clock — pick {cur}</b>
-        <small>{nxt <= total ? (nxt === cur + 1 ? `and again at ${cur + 1}` : `next after this: pick ${nxt}`) : "final pick"}</small>
+        <small>
+          {nxt <= total ? (nxt === cur + 1 ? `and again at ${cur + 1}` : `next after this: pick ${nxt}`) : "final pick"}
+          {startsIn}
+        </small>
       </>
     );
     mode = (
@@ -88,6 +105,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
           </b>
           <small>
             then {nxt + 1 <= total && isMyPick(nxt + 1, league) ? `pick ${nxt + 1} right after` : "one pick"} (round {roundOf(nxt, league.teams)})
+            {startsIn}
           </small>
         </>
       );
@@ -113,6 +131,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
             {leagues.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
+                {draftDate(l.draftAt)}
               </option>
             ))}
             <option value={NEW_LEAGUE}>+ New league…</option>

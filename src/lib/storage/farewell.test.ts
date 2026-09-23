@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_LEAGUE } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
 import type { DraftState } from "@/lib/draft/types";
-import { farewellMood, farewellOrder, saveFarewell, summarizeLeague, takeFarewell, type Farewell } from "./farewell";
+import { farewellMood, farewellOrder, saveFarewell, soonestDraft, summarizeLeague, takeFarewell, type Farewell } from "./farewell";
 import { newLeagueRecord } from "./newLeague";
 import { memoryStorage } from "./testing";
 
@@ -45,6 +45,37 @@ describe("farewellOrder", () => {
     const at = (name: string, n: number) => ({ ...summarizeLeague(league, draftOf(n)), name });
     const order = farewellOrder([at("waiting", 0), at("done", total), at("early", 10), at("late", 150)]);
     expect(order.map((l) => l.name)).toEqual(["late", "early", "done", "waiting"]);
+  });
+});
+
+describe("draft dates in the goodbye", () => {
+  const waiting = (name: string, draftAt: string | null) => ({ ...summarizeLeague({ ...league, draftAt }, null), name });
+  const now = new Date("2026-09-24T18:00:00.000Z");
+
+  it("carries the league's draft date", () => {
+    expect(summarizeLeague({ ...league, draftAt: "2026-09-27" }, null).draftAt).toBe("2026-09-27");
+    expect(summarizeLeague(league, null).draftAt).toBeNull();
+  });
+
+  it("lists waiting leagues soonest first, undated last", () => {
+    const order = farewellOrder([waiting("none", null), waiting("next week", "2026-10-01"), waiting("tonight", "2026-09-25T00:00:00.000Z")]);
+    expect(order.map((l) => l.name)).toEqual(["tonight", "next week", "none"]);
+  });
+
+  it("finds the next draft still ahead, skipping past ones and started leagues", () => {
+    const f: Farewell = {
+      email: null,
+      leagues: [waiting("gone", "2026-09-20"), waiting("sunday", "2026-09-27"), waiting("tonight", "2026-09-25T00:00:00.000Z"), { ...summarizeLeague({ ...league, draftAt: "2026-09-24T19:00:00.000Z" }, draftOf(10)), name: "paused" }],
+    };
+    expect(soonestDraft(f, now)?.league.name).toBe("tonight");
+    expect(soonestDraft({ email: null, leagues: [waiting("none", null)] }, now)).toBeNull();
+    expect(soonestDraft(null, now)).toBeNull();
+  });
+
+  it("round-trips the date through the hand-off and drops a bad one", () => {
+    const storage = memoryStorage();
+    saveFarewell({ email: null, leagues: [waiting("a", "2026-09-27"), { ...waiting("b", null), draftAt: "soon" }] }, storage);
+    expect(takeFarewell(storage)?.leagues.map((l) => l.draftAt)).toEqual(["2026-09-27", null]);
   });
 });
 

@@ -1,3 +1,4 @@
+import { isDraftAt } from "@/lib/draft/draftDay";
 import { parseStoredLeague } from "@/lib/draft/league";
 import { DRAFT_STATE_VERSION } from "@/lib/draft/state";
 import type { DraftPick, DraftState, PickLabel } from "@/lib/draft/types";
@@ -59,5 +60,8 @@ export function parseLeagueRecord(raw: unknown): LeagueRecord | null {
     return null;
   }
   const name = r.name.trim().slice(0, MAX_LEAGUE_NAME) || "Untitled league";
-  return { id: r.id, name, season: r.season, datasetId: r.datasetId, settings, createdAt: r.createdAt, updatedAt: r.updatedAt };
+  const record: LeagueRecord = { id: r.id, name, season: r.season, datasetId: r.datasetId, settings, createdAt: r.createdAt, updatedAt: r.updatedAt };
+  // Kept only when present: a record without the key (an older client) must not clear the date.
+  if ("draftAt" in r) record.draftAt = isDraftAt(r.draftAt) ? r.draftAt : null;
+  return record;
 }

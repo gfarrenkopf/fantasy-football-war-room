@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { standardRoster } from "@/lib/data";
 import type { LeagueSettings } from "@/lib/draft/types";
-import { leagueDifferences, slotOf, toLeagueSettings } from "./league";
+import { draftAtOf, leagueDifferences, slotOf, toLeagueSettings } from "./league";
 
 /** ESPN's own shape, from league 110222051's mSettings on 2026-09-22. */
 const SETTINGS = {
@@ -68,6 +68,17 @@ describe("importing an ESPN league (8.8)", () => {
     const notYet = toLeagueSettings(settings({ draftSettings: { type: "SNAKE" } }), 1);
     expect(notYet).toEqual({ ok: false, error: "ESPN hasn't set the draft order yet. It's drawn when the draft room opens, about an hour before." });
     expect(toLeagueSettings(settings(), 99)).toMatchObject({ ok: false });
+  });
+
+  it("carries ESPN's scheduled draft time, even before the pick order is drawn", () => {
+    const date = Date.UTC(2026, 8, 28, 0, 0);
+    expect(draftAtOf({ draftSettings: { date } })).toBe("2026-09-28T00:00:00.000Z");
+    expect(draftAtOf({ draftSettings: { date: 0 } })).toBeNull();
+    expect(draftAtOf({})).toBeNull();
+    expect(toLeagueSettings(settings({ draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2], date } }), 4)).toMatchObject({ ok: true, draftAt: "2026-09-28T00:00:00.000Z" });
+    // No pick order yet (the lobby opens an hour before): still not importable, but the date comes through.
+    expect(toLeagueSettings(settings({ draftSettings: { type: "SNAKE", date } }), 4)).toMatchObject({ ok: false, draftAt: "2026-09-28T00:00:00.000Z" });
+    expect(toLeagueSettings(settings(), 4)).not.toHaveProperty("draftAt");
   });
 
   it("re-reads the slot, because ESPN redraws the order when the lobby opens", () => {

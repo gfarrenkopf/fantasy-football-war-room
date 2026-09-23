@@ -405,7 +405,7 @@ Identity is not a draft action, so it takes one slot in the action row: a `.btn`
 
 ### Inputs
 
-`#282e37` fill, 1px `line` border, 6px radius, `6px 8px` padding (`8px 10px 8px 30px` for the search field, whose 14px stroked magnifier sits absolutely at 9px/9px). Placeholder in `dim` (`#5f6a78`). Setup fields use a `150px / 1fr` label-value grid. No dedicated error styling on the field itself — validation surfaces as a list above the footer.
+`#282e37` fill, 1px `line` border, 6px radius, `6px 8px` padding (`8px 10px 8px 30px` for the search field, whose 14px stroked magnifier sits absolutely at 9px/9px). Placeholder in `dim` (`#5f6a78`). Setup fields use a `150px / 1fr` label-value grid. No dedicated error styling on the field itself — validation surfaces as a list above the footer. The optional **Draft day** row pairs a native date and time input (dark `color-scheme` so the pickers match; the time stays disabled until there's a date), an underlined text "Clear", and one 11px line under both: what the date is for, or, in amber, that it has already passed — a note, never a block, since an old draft can still be logged.
 
 ### Chips
 
@@ -491,7 +491,11 @@ Opening Night in reverse, the room's way of saying goodnight. The moment sign-ou
 
 ### Farewell Face (`/` after sign-out)
 
-The entry panel's third face: a goodbye with the practice draft still running behind it. The sign-out reads every league and its draft before this device's copy is cleared and hands the summary to the landing page in this tab's sessionStorage. It's read once, so a reload never replays it, and nothing goes in the URL.
+The entry panel's third face: a goodbye with the practice draft still running behind it. The sign-out reads every league and its draft before this device's copy is cleared and hands the summary to the landing page in this tab's sessionStorage. It's read once, so a reload never replays it, and nothing goes in the URL. When a league has a draft date, the goodbye uses it: waiting leagues are listed soonest first (undated ones last) and say when ("Drafts tonight · 8:00 PM · you pick 6th" in place of "Not drafted yet"); with nothing paused, a draft under a day away takes the headline ("Your draft is tonight.") and gets one plain sentence under it, and the sign-out's follow-spot line names it ("See you tonight.", "See you Sunday.").
+
+### Draft Countdown (`/draft`, before the first pick)
+
+A league with a draft date still ahead and no pick logged shows when the room fills: a recessed row in the focus hero ("Draft starts Sun 8:00 PM" and the time left in sky, tabular), which in the last hour turns amber and runs a live mm:ss; and "· draft in 3 days" appended to the turn banner's small line, the phone's only place for it since the phone drops the hero. It ticks once a minute (every second in the last hour), pauses while the tab is hidden, and is gone at the first pick or once the start time passes. It is never an animated ring: the Glow-Means-Now Rule keeps those for the clock itself. The league switcher adds each league's date ("Home league · 9/27").
 
 **Every league gets a line**, ordered by what matters on the way out: paused drafts first (furthest along first), then finished ones, then ones not drafted yet. Each line has the league's name, its status, and a **round track**: one 14px square per round, the pick track's vocabulary.
 

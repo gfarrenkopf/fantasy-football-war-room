@@ -49,15 +49,24 @@ const RECEPTION_STAT = 53;
 /** The slice of `mSettings` we use. Everything is optional: this is ESPN's shape, not ours. */
 export interface EspnSettings {
   size?: number;
-  draftSettings?: { type?: string; pickOrder?: number[] };
+  /** `date` is the scheduled draft, in epoch milliseconds; 0 or missing when the commissioner hasn't set one. */
+  draftSettings?: { type?: string; pickOrder?: number[]; date?: number };
   rosterSettings?: { lineupSlotCounts?: Record<string, number> };
   scoringSettings?: { scoringItems?: { statId?: number; points?: number }[] };
 }
 
-export type EspnImport =
+export type EspnImport = (
   | { ok: true; league: Omit<LeagueSettings, "valueThreshold">; rounds: number }
   /** Why this ESPN league can't become a war room league, in words for the user. */
-  | { ok: false; error: string };
+  | { ok: false; error: string }
+) & {
+  /**
+   * When ESPN has the draft scheduled, as an ISO instant (LeagueRecord.draftAt). On both branches:
+   * the pick order is only drawn an hour before, so before then the import is usually `ok: false`
+   * and the date is the one thing worth taking from it. Absent when ESPN has none.
+   */
+  draftAt?: string;
+};
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
@@ -108,6 +117,14 @@ function rosterOf(settings: EspnSettings): { counts: Partial<SlotCounts> } | { e
   return { counts: out };
 }
 
+/** ESPN's scheduled draft time as an ISO instant, or null when the commissioner hasn't set one. */
+export function draftAtOf(settings: EspnSettings): string | null {
+  const ms = settings.draftSettings?.date;
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return null;
+  const at = new Date(ms);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+}
+
 /**
  * ESPN's settings as a war room league. `valueThreshold` is left out: it's the user's own
  * preference, not ESPN's, so the caller keeps whatever the league already had.
@@ -115,6 +132,12 @@ function rosterOf(settings: EspnSettings): { counts: Partial<SlotCounts> } | { e
 export function toLeagueSettings(raw: unknown, espnTeamId: number): EspnImport {
   const settings = parseEspnSettings(raw);
   if (!settings) return { ok: false, error: "That doesn't look like an ESPN league." };
+  const imported = importOf(settings, espnTeamId);
+  const draftAt = draftAtOf(settings);
+  return draftAt ? { ...imported, draftAt } : imported;
+}
+
+function importOf(settings: EspnSettings, espnTeamId: number): EspnImport {
 
   const type = settings.draftSettings?.type;
   if (type && type !== "SNAKE") {

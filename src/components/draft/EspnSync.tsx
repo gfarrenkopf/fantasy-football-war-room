@@ -448,9 +448,26 @@ const isTyping = () => {
  */
 export function EspnLeagueBar() {
   const { espnLeague } = useEspnSync();
-  const { league, updateLeague } = useLeague();
+  const { league, active, updateLeague } = useLeague();
   const { state } = useDraft();
+  const toast = useToast();
   const [dismissed, setDismissed] = useState(false);
+
+  // ESPN is the authority on when a paired league drafts: before the first pick, when the
+  // commissioner sets or moves the draft, the board follows without asking. Only on a change from
+  // ESPN — a date the user types afterwards stands until ESPN moves the draft again.
+  const espnDraftAt = espnLeague?.draftAt;
+  const followed = useRef<string | undefined>(undefined);
+  const follow = useEffectEvent((at: string) => {
+    if (state.picks.length || !active || active.draftAt === at) return;
+    updateLeague({ draftAt: at });
+    toast("Draft time updated from ESPN");
+  });
+  useEffect(() => {
+    if (!espnDraftAt || followed.current === espnDraftAt) return;
+    followed.current = espnDraftAt;
+    follow(espnDraftAt);
+  }, [espnDraftAt]);
 
   if (!espnLeague?.ok || state.picks.length || dismissed) return null;
   const differences = leagueDifferences(league, espnLeague.settings);

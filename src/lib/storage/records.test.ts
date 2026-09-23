@@ -19,6 +19,14 @@ describe("parseLeagueRecord", () => {
     expect(parsed).not.toHaveProperty("userId");
   });
 
+  it("keeps a valid draft date, clears an invalid one, and leaves an absent one absent", () => {
+    expect(parseLeagueRecord({ ...valid, draftAt: "2026-09-27" })?.draftAt).toBe("2026-09-27");
+    expect(parseLeagueRecord({ ...valid, draftAt: "2026-09-28T00:00:00.000Z" })?.draftAt).toBe("2026-09-28T00:00:00.000Z");
+    expect(parseLeagueRecord({ ...valid, draftAt: null })?.draftAt).toBeNull();
+    expect(parseLeagueRecord({ ...valid, draftAt: "next sunday" })?.draftAt).toBeNull();
+    expect(parseLeagueRecord(valid)).not.toHaveProperty("draftAt");
+  });
+
   it("names an unnamed league", () => {
     expect(parseLeagueRecord({ ...valid, name: "   " })?.name).toBe("Untitled league");
   });

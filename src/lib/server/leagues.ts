@@ -23,6 +23,7 @@ const toRecord = (row: LeagueRow): LeagueRecord => ({
   season: row.season,
   datasetId: row.datasetId,
   settings: row.settings,
+  ...(row.draftAt ? { draftAt: row.draftAt } : {}),
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });
@@ -64,6 +65,7 @@ export async function upsertLeague(db: Db, userId: string, record: LeagueRecord)
     season: record.season,
     datasetId: record.datasetId,
     settings: record.settings,
+    draftAt: record.draftAt ?? null,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
   };
@@ -84,7 +86,16 @@ export async function upsertLeague(db: Db, userId: string, record: LeagueRecord)
     .values(values)
     .onConflictDoUpdate({
       target: leagues.id,
-      set: { name: values.name, season: values.season, datasetId: values.datasetId, settings: values.settings, updatedAt: values.updatedAt },
+      set: {
+        name: values.name,
+        season: values.season,
+        datasetId: values.datasetId,
+        settings: values.settings,
+        // Only when the edit carries it: a record from an older client, which doesn't know the
+        // field, must not wipe a draft date set elsewhere.
+        ...("draftAt" in record ? { draftAt: values.draftAt } : {}),
+        updatedAt: values.updatedAt,
+      },
       // Only the owner's live league, and only with a newer (or equal) edit.
       setWhere: sql`${leagues.userId} = ${userId} and ${leagues.deletedAt} is null and ${leagues.updatedAt} <= excluded.updated_at`,
     })

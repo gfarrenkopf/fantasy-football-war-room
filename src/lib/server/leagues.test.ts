@@ -59,6 +59,21 @@ describe("leagues", () => {
     expect((await listLeagues(db, alice))[0]).toEqual(a);
   });
 
+  it("stores a draft date, clears it, and keeps it when an older client leaves it out", async () => {
+    const a = record({ draftAt: "2026-09-28T00:00:00.000Z" });
+    await upsertLeague(db, alice, a);
+    expect((await listLeagues(db, alice))[0].draftAt).toBe("2026-09-28T00:00:00.000Z");
+
+    // A client that predates the field sends the record without the key: the date stays.
+    const { draftAt: _omit, ...legacy } = { ...a, name: "Renamed", updatedAt: "2026-09-02T00:00:00.000Z" };
+    void _omit;
+    expect(await upsertLeague(db, alice, legacy)).toMatchObject({ applied: true, league: { name: "Renamed", draftAt: "2026-09-28T00:00:00.000Z" } });
+
+    // An explicit null clears it, and a league without a date comes back without the key.
+    await upsertLeague(db, alice, { ...a, draftAt: null, updatedAt: "2026-09-03T00:00:00.000Z" });
+    expect((await listLeagues(db, alice))[0]).not.toHaveProperty("draftAt");
+  });
+
   it("caps leagues per user", async () => {
     const heavy = await createTestUser(db);
     for (let i = 0; i < MAX_LEAGUES_PER_USER; i++) await upsertLeague(db, heavy, record());

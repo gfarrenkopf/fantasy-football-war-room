@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DATASET_ID, LEAGUE_PRESETS } from "@/lib/data";
+import { draftAtFields, draftCountdown, toDraftAt } from "@/lib/draft/draftDay";
 import { leagueChanged, MAX_TEAMS, MIN_TEAMS, rosterFromCounts, SLOT_DEFS, slotCounts, validateLeague } from "@/lib/draft/league";
 import { formatRoundPick, totalPicks } from "@/lib/draft/snake";
 import type { Dataset, LeagueSettings, ScoringFormat } from "@/lib/draft/types";
@@ -33,6 +34,11 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
   // A new league starts from the open league's settings (or the default league on first run).
   const [form, setForm] = useState<LeagueSettings>(league);
   const [name, setName] = useState(creating ? (leagues.length ? `League ${leagues.length + 1}` : "My league") : (active?.name ?? ""));
+  // Draft day, as the form holds it: a local date and an optional local time (see draftDay.ts).
+  const [day, setDay] = useState(() => draftAtFields(creating ? null : active?.draftAt));
+  const draftAt = toDraftAt(day.date, day.time);
+  // Read once per render, only to say a date is already behind us; it never blocks saving.
+  const past = draftCountdown(draftAt, new Date())?.phase === "started";
   const pickCount = creating ? 0 : draft.state.picks.length;
   /** Logged picks reference players missing from the loaded data. */
   const stalePicks = useMemo(() => {
@@ -62,7 +68,7 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
     if (errors.length) return;
     const trimmed = name.trim().slice(0, MAX_LEAGUE_NAME);
     if (creating) {
-      createLeague(trimmed, form);
+      createLeague(trimmed, form, draftAt);
       toast(`${trimmed} created`);
       onClose();
       return;
@@ -79,7 +85,7 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
       reset = true;
     }
     // Picks still on the board were logged against the league's original data; an empty draft now matches this data.
-    updateLeague({ name: trimmed, settings: form, datasetId: reset || !pickCount ? DATASET_ID : (active?.datasetId ?? DATASET_ID) });
+    updateLeague({ name: trimmed, settings: form, draftAt, datasetId: reset || !pickCount ? DATASET_ID : (active?.datasetId ?? DATASET_ID) });
     toast("League settings saved");
     onClose();
   };
@@ -153,6 +159,38 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
               ))}
             </select>
           </label>
+
+          <div className={s.field}>
+            <span className={s.fieldLabel}>
+              Draft day
+              <small>optional</small>
+            </span>
+            <div className={s.draftDay}>
+              <input
+                className={s.input}
+                type="date"
+                aria-label="Draft date"
+                value={day.date}
+                onChange={(e) => setDay((d) => ({ date: e.target.value, time: e.target.value ? d.time : "" }))}
+              />
+              <input
+                className={s.input}
+                type="time"
+                aria-label="Draft time (optional)"
+                value={day.time}
+                disabled={!day.date}
+                onChange={(e) => setDay((d) => ({ ...d, time: e.target.value }))}
+              />
+              {day.date && (
+                <button type="button" className={s.textBtn} onClick={() => setDay({ date: "", time: "" })}>
+                  Clear
+                </button>
+              )}
+              <small className={cx("draftDayNote", past && "warn")}>
+                {past ? "That's already passed. Fine if you're logging an old draft." : "Adds a countdown, and a reminder of how close it is when you sign out."}
+              </small>
+            </div>
+          </div>
 
           <label className={s.field}>
             <span className={s.fieldLabel}>Scoring</span>

@@ -78,7 +78,10 @@ export interface ServerClientView {
 }
 
 /** This league as ESPN has it (8.8), or why it can't be imported. */
-export type EspnLeague = { ok: true; settings: Omit<LeagueSettings, "valueThreshold"> } | { ok: false; error: string };
+export type EspnLeague = ({ ok: true; settings: Omit<LeagueSettings, "valueThreshold"> } | { ok: false; error: string }) & {
+  /** ESPN's scheduled draft time (ISO instant), when it has one; on both branches (see EspnImport). */
+  draftAt?: string;
+};
 
 export interface LiveSnapshot {
   status: LiveStatus;
