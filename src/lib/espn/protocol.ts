@@ -16,7 +16,11 @@ export type EspnFrame =
   | { kind: "token" }
   | { kind: "joined"; teamId: number; memberId: string }
   | { kind: "left"; teamId: number; memberId: string }
-  /** Sent every 5s. `state` 0 is the pre-draft countdown, with team 0; during the draft it names the team on the clock. After the draft it's a bare `CLOCK 4`, with no time left and no team. */
+  /**
+   * Sent every 5s. `state` 0 is the pre-draft countdown, with team 0; during the draft it names the
+   * team on the clock. After the draft it's a bare `CLOCK 4`, with no time left and no team. While the
+   * League Manager has the draft paused it's a bare `CLOCK` with nothing at all, parsed as state -1.
+   */
   | { kind: "clock"; state: number; teamId: number; msRemaining: number }
   /** 1 = draft started, 2 = draft complete. */
   | { kind: "state"; state: number }
@@ -36,6 +40,9 @@ export type EspnFrame =
   | { kind: "unknown"; raw: string };
 
 const GUID = /^\{[0-9A-Fa-f-]{36}\}$/;
+
+/** The `state` a bare `CLOCK` parses to: the League Manager paused the draft (seen 2026-09-23). */
+export const PAUSED = -1;
 
 const int = (s: string | undefined): number | null => (s !== undefined && /^-?\d+$/.test(s) ? Number(s) : null);
 
@@ -65,7 +72,8 @@ export function parseFrame(raw: string): EspnFrame {
     }
     case "CLOCK": {
       // CLOCK <state> [msRemaining] [teamId]: state 0 is the pre-draft countdown (no team), 6 a live pick,
-      // and after the draft ESPN sends a bare "CLOCK 4" every 20s.
+      // and after the draft ESPN sends a bare "CLOCK 4" every 20s. A paused draft sends just "CLOCK".
+      if (rest.length === 0) return { kind: "clock", state: PAUSED, teamId: 0, msRemaining: 0 };
       const state = int(rest[0]);
       const msRemaining = rest[1] === undefined ? 0 : int(rest[1]);
       const teamId = rest[2] === undefined ? 0 : int(rest[2]);

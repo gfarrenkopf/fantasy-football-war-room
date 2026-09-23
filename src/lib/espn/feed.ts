@@ -1,4 +1,4 @@
-import { parseFrame, type EspnFrame } from "./protocol";
+import { PAUSED, parseFrame, type EspnFrame } from "./protocol";
 
 /**
  * Folds ESPN draft-socket frames into the draft as the socket has shown it.
@@ -69,6 +69,8 @@ export function applyFrame(feed: DraftFeed, frame: EspnFrame): DraftFeed {
       // State 0 is the pre-draft countdown, not a team on the clock: seeing it means no pick has been missed.
       // Other teamless clocks (the bare "CLOCK 4" after the draft) say nothing either way.
       if (frame.state === 0) return feed.picks.length || feed.anchored ? feed : { ...feed, anchored: true };
+      // Paused: nobody's clock is running. The next SELECTING or CLOCK after the resume sets it again.
+      if (frame.state === PAUSED) return feed.onClock ? { ...feed, onClock: null } : feed;
       if (frame.teamId === 0) return feed;
       return { ...feed, onClock: { teamId: frame.teamId, msRemaining: frame.msRemaining } };
     case "autodraft": {

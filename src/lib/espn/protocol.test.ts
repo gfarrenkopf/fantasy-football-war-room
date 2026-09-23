@@ -36,6 +36,8 @@ describe("parseFrame", () => {
     expect(parseFrame("CLOCK 6 85495 1")).toEqual({ kind: "clock", state: 6, teamId: 1, msRemaining: 85495 });
     // After the draft, a bare CLOCK 4 every 20s: no time left, no team. Not malformed.
     expect(parseFrame("CLOCK 4")).toEqual({ kind: "clock", state: 4, teamId: 0, msRemaining: 0 });
+    // A paused draft: a bare CLOCK every few seconds (2026-09-23). Not malformed either.
+    expect(parseFrame("CLOCK")).toEqual({ kind: "clock", state: -1, teamId: 0, msRemaining: 0 });
     expect(parseFrame("STATE 1")).toEqual({ kind: "state", state: 1 });
     expect(parseFrame("SELECTING 4 60000")).toEqual({ kind: "selecting", teamId: 4, msAllowed: 60000 });
     expect(parseFrame("AUTOSUGGEST 4429795")).toEqual({ kind: "autosuggest", playerId: 4429795 });
@@ -66,7 +68,6 @@ describe("parseFrame", () => {
     expect(parseFrame("SELECTED 1 4362628").kind).toBe("malformed");
     expect(parseFrame("SELECTED 1 4362628 4 not-a-guid").kind).toBe("malformed");
     expect(parseFrame("AUTODRAFT 1 maybe").kind).toBe("malformed");
-    expect(parseFrame("CLOCK").kind).toBe("malformed");
     expect(parseFrame("CLOCK 6 85495 x").kind).toBe("malformed");
   });
 
