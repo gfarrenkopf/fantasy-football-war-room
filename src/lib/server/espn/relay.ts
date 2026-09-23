@@ -75,6 +75,16 @@ export interface CommandResult {
   reason?: string;
 }
 
+/**
+ * War Room's own connection to ESPN (Epic 9), when it holds one: sends on ESPN's socket directly
+ * instead of waiting for a bridge's next check-in. Each returns false when it couldn't send.
+ */
+export interface RelaySender {
+  select(espnPlayerId: number): boolean;
+  /** Replaces ESPN's pick queue with these players, in order. */
+  setQueue(espnPlayerIds: readonly number[]): boolean;
+}
+
 /** The overlay's turn plan, versioned so a bridge only downloads it when it changed. */
 export interface VersionedPlan {
   version: number;
@@ -107,6 +117,11 @@ interface Channel {
   espnLeague: EspnLeague | null;
   degraded: DriftReport | null;
   serverClient: ServerClientView | null;
+  sender: RelaySender | null;
+  /** Keep ESPN's queue set to the turn plan (9.3). Only while War Room holds the connection. */
+  queueSync: boolean;
+  /** ESPN's pick queue as last set from the turn plan, so an unchanged plan isn't sent again. */
+  queueSent: string;
 }
 
 export interface Relay {
@@ -128,6 +143,21 @@ export interface Relay {
   /** Where War Room's own ESPN connection for this league stands (Epic 9), for every war room watching. */
   setServerClient(userId: string, leagueId: string, view: ServerClientView | null): void;
   serverClient(userId: string, leagueId: string): ServerClientView | null;
+  /** Picks and queue updates go out through `sender` while it's attached (9.3). Returns a detach. */
+  attachSender(userId: string, leagueId: string, sender: RelaySender): () => void;
+  /** Sets ESPN's pick queue from the latest turn plan, now. The ESPN ids queued, or null with no sender or no plan. */
+  pushQueue(userId: string, leagueId: string): number[] | null;
+  /** Keeps ESPN's queue set to every new turn plan, or stops. Sets it now when turned on. */
+  setQueueSync(userId: string, leagueId: string, on: boolean): number[] | null;
+}
+
+/** ESPN's queue from a turn plan: targets, then fallbacks, then the best on the board, each once, none already drafted. */
+export function queueFromPlan(plan: OverlayPlan, drafted: ReadonlySet<number>): number[] {
+  const ids: number[] = [];
+  for (const p of [...plan.targets, ...plan.fallbacks, ...plan.best]) {
+    if (p.espnPlayerId !== undefined && !drafted.has(p.espnPlayerId) && !ids.includes(p.espnPlayerId)) ids.push(p.espnPlayerId);
+  }
+  return ids;
 }
 
 const key = (userId: string, leagueId: string) => `${userId}\u0000${leagueId}`;
@@ -188,6 +218,9 @@ export function createRelay({
         espnLeague: null,
         degraded: null,
         serverClient: null,
+        sender: null,
+        queueSync: false,
+        queueSent: "",
       };
       channels.set(k, ch);
     }
@@ -213,9 +246,12 @@ export function createRelay({
       request: viewOf(ch.request),
       espnLeague: ch.espnLeague,
       degraded: ch.degraded,
-      serverClient: ch.serverClient,
+      serverClient: serverClientOf(ch),
     };
   }
+
+  const serverClientOf = (ch: Channel): ServerClientView | null =>
+    ch.serverClient && (ch.queueSync ? { ...ch.serverClient, queueSync: true } : ch.serverClient);
 
   /** The clock as of now: the last frame's time left, less what has passed since it arrived. */
   function clockNow(ch: Channel): LiveSnapshot["onClock"] {
@@ -268,6 +304,17 @@ export function createRelay({
         (error ? ` error=${error.code} ${error.message}` : ""),
     );
     emit(ch, { type: "degraded", degraded: ch.degraded });
+  }
+
+  /** Sends the turn plan to ESPN's queue if there's a sender, a plan, and something new to send. */
+  function pushQueue(ch: Channel, force = false): number[] | null {
+    if (!ch.sender || !ch.plan) return null;
+    const ids = queueFromPlan(ch.plan.plan, new Set(ch.feed.picks.map((p) => p.espnPlayerId)));
+    const serialized = ids.join(" ");
+    if (!ids.length || (!force && serialized === ch.queueSent)) return ids;
+    if (!ch.sender.setQueue(ids)) return null;
+    ch.queueSent = serialized;
+    return ids;
   }
 
   function emitStatus(ch: Channel) {
@@ -335,6 +382,8 @@ export function createRelay({
             settle(ch, pick.espnPlayerId === ch.request.espnPlayerId ? "confirmed" : "superseded");
           }
         }
+        // ESPN refused the pick War Room just sent: the socket stays open and the user picks again.
+        if (ch.feed.refusedPicks > before.refusedPicks && ch.request?.state === "sent") settle(ch, "refused", "not-on-the-clock");
         if (!rebuilt && clockMoved) emit(ch, { type: "clock", onClock: ch.feed.onClock });
       } else if (teamChanged && ch.picks.length) {
         ch.picks = resolvePicks(ch.feed, walk, scope.espnTeamId);
@@ -364,6 +413,7 @@ export function createRelay({
       const ch = channels.get(key(userId, leagueId));
       if (!ch?.scope) return false;
       ch.plan = { version: (ch.plan?.version ?? 0) + 1, plan };
+      if (ch.queueSync) pushQueue(ch);
       return true;
     },
 
@@ -376,9 +426,13 @@ export function createRelay({
       if (ch.feed.picks.some((p) => p.espnPlayerId === pick.espnPlayerId)) return { ok: false, reason: "taken" };
       if (requestActive(ch.request)) return { ok: false, reason: "busy" };
       ch.request = { id: newId(), playerId: pick.playerId, espnPlayerId: pick.espnPlayerId, state: "pending", createdAt: now() };
-      const request = viewOf(ch.request)!;
-      emit(ch, { type: "request", request });
-      return { ok: true, request };
+      emit(ch, { type: "request", request: viewOf(ch.request)! });
+      // War Room holds the ESPN connection itself: the pick goes out now, not on a bridge's next check-in.
+      if (ch.sender?.select(pick.espnPlayerId)) {
+        ch.request = { ...ch.request, state: "sent" };
+        emit(ch, { type: "request", request: viewOf(ch.request)! });
+      }
+      return { ok: true, request: viewOf(ch.request)! };
     },
 
     subscribe(userId, leagueId, listener) {
@@ -411,13 +465,40 @@ export function createRelay({
 
     setServerClient(userId, leagueId, view) {
       const ch = channel(userId, leagueId);
+      // Queue syncing only means something while War Room holds the connection.
+      if (view?.state !== "holding" && view?.state !== "connecting") ch.queueSync = false;
       if (JSON.stringify(view) === JSON.stringify(ch.serverClient)) return;
       ch.serverClient = view;
-      emit(ch, { type: "serverClient", serverClient: view });
+      emit(ch, { type: "serverClient", serverClient: serverClientOf(ch) });
     },
 
     serverClient(userId, leagueId) {
-      return channels.get(key(userId, leagueId))?.serverClient ?? null;
+      const ch = channels.get(key(userId, leagueId));
+      return ch ? serverClientOf(ch) : null;
+    },
+
+    attachSender(userId, leagueId, sender) {
+      const ch = channel(userId, leagueId);
+      ch.sender = sender;
+      ch.queueSent = "";
+      return () => {
+        if (ch.sender === sender) ch.sender = null;
+      };
+    },
+
+    pushQueue(userId, leagueId) {
+      return pushQueue(channel(userId, leagueId), true);
+    },
+
+    setQueueSync(userId, leagueId, on) {
+      const ch = channel(userId, leagueId);
+      if (on && !ch.sender) return null;
+      const ids = on ? pushQueue(ch, true) : null;
+      if (ch.queueSync !== on) {
+        ch.queueSync = on;
+        emit(ch, { type: "serverClient", serverClient: serverClientOf(ch) });
+      }
+      return ids;
     },
   };
 }

@@ -89,6 +89,12 @@ describe("foldFrames", () => {
     expect(foldFrames(["ERROR 1 Invalid+security+code"]).error).toEqual({ code: 1, message: "Invalid security code" });
   });
 
+  it("counts a refused pick apart from errors: the socket stays open and the feed is fine", () => {
+    const feed = foldFrames(["ERROR 1 Invalid+selection+team+%281%29%3B+team+4+is+currently+on+the+clock."]);
+    expect(feed.error).toBeNull();
+    expect(feed.refusedPicks).toBe(1);
+  });
+
   it("is deterministic, so re-folding a re-sent log rebuilds the same feed", () => {
     expect(foldFrames(OPENING)).toEqual(foldFrames(OPENING));
     const half = foldFrames(OPENING.slice(0, 12));

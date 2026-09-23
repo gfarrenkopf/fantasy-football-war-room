@@ -3,6 +3,7 @@ import WebSocket from "ws";
 import { config } from "@/lib/config";
 import type { Db } from "@/lib/db/types";
 import type { ServerClientView } from "@/lib/espn/live";
+import { draftListFrame, selectFrame } from "@/lib/espn/join";
 import { createEspnClient, type Connect, type EndReason, type EspnClient, type EspnSocket } from "./client";
 import { getRelay } from "./live";
 import { deleteCredential, hasCredential, loadCredential, setServerClientState } from "./serverClients";
@@ -19,6 +20,7 @@ interface Running {
   leagueId: string;
   client: EspnClient;
   hardStop: ReturnType<typeof setTimeout>;
+  detach: () => void;
 }
 
 const g = globalThis as { __espnClients?: Map<string, Running> };
@@ -82,9 +84,14 @@ export async function takeOver(db: Db, userId: string, leagueId: string, { conne
     onJoin: () => view(userId, leagueId, { state: "holding" }),
     onEnd: (reason, detail) => ended(db, userId, leagueId, client, reason, detail),
   });
+  // Picks and queue updates from War Room go straight out on this socket (9.3).
+  const detach = relay.attachSender(userId, leagueId, {
+    select: (espnPlayerId) => client.send(selectFrame(espnPlayerId)),
+    setQueue: (ids) => client.send(draftListFrame(ids)),
+  });
   // A draft never outlives its credential.
   const hardStop = setTimeout(() => client.stop("War Room's hold on this draft ran out of time."), Math.max(0, stored.expiresAt.getTime() - Date.now()));
-  running().set(userId, { leagueId, client, hardStop });
+  running().set(userId, { leagueId, client, hardStop, detach });
   return { ok: true };
 }
 
@@ -92,6 +99,7 @@ function ended(db: Db, userId: string, leagueId: string, client: EspnClient, rea
   const entry = running().get(userId);
   if (entry?.client === client) {
     clearTimeout(entry.hardStop);
+    entry.detach();
     running().delete(userId);
   }
   if (reason === "complete") {

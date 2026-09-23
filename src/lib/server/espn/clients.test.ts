@@ -134,6 +134,21 @@ describe("taking over and handing back an ESPN draft connection", () => {
     expect(relay.serverClient(userId, leagueId)).toEqual({ state: "complete" });
   });
 
+  it("sends a War Room pick and the turn plan's queue on its own socket (9.3)", async () => {
+    const { takeOver, relay } = await load();
+    await takeOver(db, userId, leagueId, { connect });
+    sockets[0].fire("open");
+    for (const f of ["TOKEN x", "CLOCK 0 5000", "STATE 1", "SELECTING 1 60000"]) sockets[0].fire("message", `${f}\n`);
+    await vi.waitFor(() => expect(relay.snapshot(userId, leagueId).status).toBe("live"));
+    expect(relay.requestPick(userId, leagueId, { playerId: "p1", espnPlayerId: 4429795 })).toMatchObject({ ok: true, request: { state: "sent" } });
+    expect(sockets[0].sent).toContain("SELECT 4429795\n");
+
+    const p = { playerId: "p2", espnPlayerId: 4430807, name: "B", pos: "WR" as const, team: "DET", bye: 8, badge: "80%" };
+    relay.publishPlan(userId, leagueId, { picks: [1], rounds: "1", onClock: true, targets: [p], fallbacks: [], best: [], after: null });
+    expect(relay.pushQueue(userId, leagueId)).toEqual([4430807]);
+    expect(sockets[0].sent).toContain("DRAFT_LIST 4430807\n");
+  });
+
   it("refuses to take over without a handed-over code", async () => {
     const { takeOver } = await load();
     const other = await createTestLeague(db, userId, "No code");

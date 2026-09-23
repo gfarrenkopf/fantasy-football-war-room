@@ -68,6 +68,11 @@ export interface ServerClientView {
   state: ServerClientState;
   /** For `lost`: what happened, in words for the user. */
   reason?: string;
+  /**
+   * The user asked War Room to keep ESPN's pick queue set to their turn plan (9.3): ESPN autopicks
+   * from the queue, so it's the safety net if War Room's connection dies while they're on the clock.
+   */
+  queueSync?: boolean;
 }
 
 /** This league as ESPN has it (8.8), or why it can't be imported. */

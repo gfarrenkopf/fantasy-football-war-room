@@ -33,8 +33,13 @@ export interface DraftFeed {
   onClock: { teamId: number; msRemaining: number } | null;
   /** Teams with autopick switched on. */
   autodraft: number[];
-  /** The latest ERROR frame, if any. ESPN closes the socket after one. */
+  /** The latest ERROR frame, if any, other than a refused pick. ESPN closes the socket after one. */
   error: { code: number; message: string } | null;
+  /**
+   * Picks ESPN refused, e.g. `ERROR 1 Invalid selection team (N); team M is currently on the clock.`
+   * after a SELECT out of turn (9.3). The socket stays open: that's a pick failing, not the feed.
+   */
+  refusedPicks: number;
   /** Frames we couldn't make sense of, for drift detection. */
   unknownFrames: number;
   malformedFrames: number;
@@ -47,6 +52,7 @@ export const emptyFeed = (): DraftFeed => ({
   onClock: null,
   autodraft: [],
   error: null,
+  refusedPicks: 0,
   unknownFrames: 0,
   malformedFrames: 0,
 });
@@ -87,6 +93,7 @@ export function applyFrame(feed: DraftFeed, frame: EspnFrame): DraftFeed {
       return { ...feed, status: feed.status === "complete" ? "complete" : "live", picks: [...feed.picks, pick] };
     }
     case "error":
+      if (/^Invalid selection/i.test(frame.message)) return { ...feed, refusedPicks: feed.refusedPicks + 1 };
       return { ...feed, error: { code: frame.code, message: frame.message } };
     case "unknown":
       return { ...feed, unknownFrames: feed.unknownFrames + 1 };
