@@ -135,8 +135,9 @@ export function ByePanel({ collapsible }: { collapsible?: boolean }) {
     <Fold collapsible={collapsible} title="Starter byes" meta={meta}>
       <div className={s.byes} style={{ "--weeks": weeks.length } as React.CSSProperties}>
         {counts.map(({ week, n }) => (
-          <div key={week} className={cx("bw", n >= 2 ? "two" : n === 1 && "one")}>
-            wk {week}
+          // Just the number: the panel head already says "weeks 5–14", and "wk 10" wrapped in a 9-week row.
+          <div key={week} className={cx("bw", n >= 2 ? "two" : n === 1 && "one")} title={`Week ${week}: ${n} starter${n === 1 ? "" : "s"} out`}>
+            {week}
             <b>{n || "–"}</b>
           </div>
         ))}

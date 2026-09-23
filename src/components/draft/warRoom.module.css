@@ -9,6 +9,9 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+  /* clip, not just hidden: a hidden box can still be scrolled by focus or scrollIntoView, which
+     slid the whole room sideways whenever the header ran wider than the window. */
+  overflow: clip;
   background: var(--color-bg);
 }
 
@@ -199,8 +202,14 @@
 }
 .actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 8px;
+  min-width: 0;
   margin-left: auto;
+}
+.actions .btn {
+  white-space: nowrap;
 }
 .btn {
   padding: 7px 11px;
@@ -478,6 +487,26 @@
 .compact .tag.na {
   display: none;
 }
+/* Best available shares the focus view's middle column with two fixed rails; below 1500px its
+   cards get the compact stats so the name and bye line keep their room. */
+@media (max-width: 1500px) {
+  .ba .stats {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+  .ba .rr {
+    grid-template-columns: auto auto auto auto;
+    font-size: 10px;
+  }
+  .ba .tag {
+    min-width: 0;
+    padding: 1px 5px;
+  }
+  .ba .tag.na {
+    display: none;
+  }
+}
 
 /* ---------- panels ---------- */
 .panel {
@@ -642,6 +671,8 @@
   padding: 7px 8px;
 }
 .bw {
+  min-width: 0;
+  white-space: nowrap;
   text-align: center;
   border-radius: 4px;
   border: 1px solid var(--color-line);
@@ -1386,16 +1417,26 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1 1 340px;
-  min-width: 300px;
+  /* A rail: it wraps to its own line rather than squeeze below 360px, and never paints past its
+     own border. */
+  flex: 1 1 360px;
+  min-width: min(360px, 100%);
   max-width: 760px;
+  overflow: hidden;
+  overflow-x: auto;
+  scrollbar-width: none;
+  container-type: inline-size;
   padding: 4px 8px;
   border: 1px solid var(--color-line);
   border-radius: 6px;
   background: var(--color-panel2);
 }
+.needs::-webkit-scrollbar {
+  display: none;
+}
 .np {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 3px;
   font-size: 11px;
@@ -1453,11 +1494,22 @@
 }
 .nxt {
   margin-left: auto;
+  min-width: 0;
   font-size: 12px;
   font-weight: 700;
   color: var(--color-warn);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding-left: 8px;
+}
+/* Short of room, the summary goes first: the amber chips and the green border say the same. */
+@media (min-width: 768px) {
+  @container (max-width: 520px) {
+    .nxt {
+      display: none;
+    }
+  }
 }
 .needs.done {
   border-color: color-mix(in srgb, var(--color-mine) 50%, transparent);
@@ -1758,7 +1810,7 @@
 }
 .ba {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
   gap: 0 8px;
   padding: 0 6px 6px;
 }
@@ -2216,6 +2268,9 @@
   padding: 1px 2px;
   margin: 2px 0 1px -3px;
   max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 .leagueSelect:hover,
@@ -2231,11 +2286,6 @@
 }
 
 /* ---------- account ---------- */
-.account {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .accountEmail {
   color: var(--color-muted);
   font-size: 11.5px;
@@ -2243,6 +2293,74 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Signed in, identity is one button; email, Purchases and Sign out live in its popover. */
+.accountBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 6px;
+  anchor-name: --account;
+}
+.accountBtn::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin: -3px 1px 0 1px;
+  border: solid var(--color-muted);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.accountInitial {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-chip);
+  border: 1px solid var(--color-line2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.accountMenu {
+  position: fixed;
+  position-anchor: --account;
+  inset: auto;
+  top: anchor(bottom);
+  right: anchor(right);
+  margin: 6px 0 0;
+  width: max-content;
+  min-width: 200px;
+  max-width: min(280px, calc(100vw - 20px));
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text);
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.4);
+}
+.accountMenu:popover-open {
+  display: flex;
+}
+.accountMenu .accountEmail {
+  max-width: none;
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--color-line);
+  margin-bottom: 2px;
+}
+.accountMenu .btn {
+  text-align: left;
+  white-space: nowrap;
+}
+@supports not (anchor-name: --a) {
+  .accountMenu {
+    top: 56px;
+    right: 14px;
+  }
 }
 a.btn {
   text-decoration: none;
@@ -2595,11 +2713,6 @@ a.btn {
     min-width: 0;
     max-width: none;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .needs::-webkit-scrollbar {
-    display: none;
   }
   .needs .nxt {
     margin-left: 8px;
@@ -2627,6 +2740,8 @@ a.btn {
     order: 1;
     margin-left: 0;
     flex: 1 1 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
     min-width: 0;
     gap: 6px;
     overflow-x: auto;
@@ -2638,6 +2753,18 @@ a.btn {
   .actions > * {
     flex: none;
   }
+  .accountMenu {
+    top: auto;
+    bottom: anchor(top);
+    margin: 0 0 6px;
+  }
+  @supports not (anchor-name: --a) {
+    .accountMenu {
+      top: auto;
+      bottom: calc(64px + env(safe-area-inset-bottom));
+      right: 10px;
+    }
+  }
   /* Thumb order: the two you reach for mid-draft first, the destructive one last. */
   .btn.undo {
     order: -2;
@@ -2645,7 +2772,7 @@ a.btn {
   .btn.plan {
     order: -1;
   }
-  .account {
+  .accountBtn {
     order: 1;
   }
   .btn.danger {

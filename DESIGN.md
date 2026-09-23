@@ -312,7 +312,7 @@ The board layer keeps the app's own density — `font-size: 13px`, `line-height:
 
 The landing route carries its own three breakpoints, and they are the page's, not the app's (`1100 / 900 / 640` against the app's `1100 / 768 / 767`). At ≥1100px the board runs full-bleed behind the centred pair with a 236px column floor, so its last column bleeds off the right edge — the board continues past the window rather than fitting inside it. At ≤900px the pair stacks, clock first, in a fixed 184px slot above the panel (the pick card replaces the banner inside it, so nothing under a thumb moves when a pick lands), the running team list is dropped, the board goes to three columns and the veil turns vertical. At ≤640px the board drops to two columns, the panel goes full width, and the email row stacks.
 
-Anything that must overflow does so as a named, snapping or scrolling rail — the action bar, needs strip, mock bar, best-available strip, board track. The document itself never scrolls sideways at any width.
+Anything that must overflow does so as a named, snapping or scrolling rail — the action bar, needs strip, mock bar, best-available strip, board track. The document itself never scrolls sideways at any width. The header wraps into two rows by role: what's read under a clock (brand, view switch, pick box, turn, click mode, search), then roster needs leading and the draft actions trailing. Needs holds a 360px floor and wraps before it squeezes; its text summary is the first thing dropped when the rail is short. Actions wrap as a right-aligned group rather than overflow. The root is `overflow: clip`, not `hidden`, so focus and `scrollIntoView` can't slide the room sideways.
 
 ### Named Rules
 
@@ -398,6 +398,10 @@ The most important element in the product and the densest. A four-column grid �
 ### Tier Headers
 
 Sticky bands (`position: sticky; top: 0; z-index: 2`) inside scrolling columns. 11px muted text on `#1f242c` — *darker* than the panel around them — with hairlines top and bottom, tier number in paper white, metadata pushed right. Recessed rather than raised, so they read as grooves cut into the list.
+
+### Account Menu (`/draft`, signed in)
+
+Identity is not a draft action, so it takes one slot in the action row: a `.btn` with the email's initial in a 20px chip and a caret, opening a native `popover` anchored under it (above it in the phone's bottom bar). Inside: the email in Muted, a hairline, then Purchases and Sign out as full-width buttons. Panel ground, `--color-line` border, 8px radius, the drawer's shadow.
 
 ### Inputs
 

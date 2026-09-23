@@ -41,7 +41,7 @@ export function NeedsStrip() {
       </span>
       <span className={s.nxt}>
         {needs.allStartersFilled
-          ? `Starters set · bench ${needs.bench.filled}/${needs.bench.total}`
+          ? "Starters set"
           : needs.need.length
             ? `Need: ${needs.need.join(", ")}`
             : "Starters set for now"}
