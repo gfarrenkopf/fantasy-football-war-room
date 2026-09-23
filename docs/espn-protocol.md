@@ -84,7 +84,7 @@ Frames are space-delimited text ending in a newline. `INIT` is the exception: a 
 | `INIT <base64>` | in | full room state on join, picks included (§4.1) |
 | `TOKEN 1:{L}:{team}:{SWID}:{code}` | in | join accepted |
 | `JOINED <team> <memberGuid>` / `LEFT <team> <memberGuid> <n>` | in | presence |
-| `CLOCK <state> [<msRemaining>] [team]` | in | every 5s. State 0 is the pre-draft countdown, with no team; state 6 is a live pick, and the third field is the team on the clock. After the draft it's a bare `CLOCK 4` every 20s, with no time and no team. |
+| `CLOCK <state> [<msRemaining>] [team]` | in | every 5s. State 0 is the pre-draft countdown, with no team; state 6 is a live pick, and the third field is the team on the clock. After the draft it's a bare `CLOCK 4` every 20s, with no time and no team. While the League Manager has the draft paused it's a bare `CLOCK` with no fields at all (2026-09-23). |
 | `STATE 1` / `STATE 2` | in | draft started / complete |
 | `SELECTING <team> <msAllowed>` | in | team on the clock |
 | `AUTOSUGGEST <playerId>` | in | ESPN's suggestion for the team on the clock |
