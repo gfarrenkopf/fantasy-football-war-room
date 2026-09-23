@@ -1,32 +1,15 @@
 import { config } from "@/lib/config";
 import { getDb } from "@/lib/db";
+import { ESPN_HANDOVER_DISCLOSURE, ESPN_HANDOVER_VERSION } from "@/lib/espn/disclosure";
+import { preflight, withCors } from "@/lib/server/espn/bridgeCors";
 import { getRelay, verifyBridge } from "@/lib/server/espn/live";
 import type { CommandResult } from "@/lib/server/espn/relay";
-import { empty, error, json, readJson } from "@/lib/server/http";
-
-/** The only page that may call this: the user's ESPN draft tab, where the bridge runs. */
-const ESPN_ORIGIN = "https://fantasy.espn.com";
-
-function withCors(response: Response, request: Request): Response {
-  if (request.headers.get("origin") === ESPN_ORIGIN) {
-    response.headers.set("Access-Control-Allow-Origin", ESPN_ORIGIN);
-    response.headers.set("Vary", "Origin");
-  }
-  response.headers.set("Cache-Control", "no-store");
-  return response;
-}
+import { deleteCredential } from "@/lib/server/espn/serverClients";
+import { error, json, readJson } from "@/lib/server/http";
 
 /** CORS preflight for the bridge's JSON POST with an Authorization header. */
 export function OPTIONS(request: Request) {
-  if (!config.espnSyncEnabled || request.headers.get("origin") !== ESPN_ORIGIN) return empty(404);
-  const response = empty(204);
-  response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "authorization, content-type");
-  response.headers.set("Access-Control-Max-Age", "600");
-  // Chrome's Private Network Access asks before a public site calls a local server, as it does when
-  // testing the bridge against `next dev` on localhost. Harmless for the hosted site.
-  if (request.headers.get("access-control-request-private-network") === "true") response.headers.set("Access-Control-Allow-Private-Network", "true");
-  return withCors(response, request);
+  return preflight(request, config.espnSyncEnabled);
 }
 
 interface FramesRequest {
@@ -40,6 +23,8 @@ interface FramesRequest {
   planVersion: number;
   /** ESPN's own league settings, sent when the bridge first reads them and whenever they change (8.8). */
   settings?: unknown;
+  /** The version of the hand-over opt-in (9.1) the bridge already shows. */
+  handoverVersion: number;
 }
 
 function parse(body: unknown): FramesRequest | null {
@@ -52,7 +37,8 @@ function parse(body: unknown): FramesRequest | null {
       ? { id: r.id.slice(0, 64), sent: r.sent, ...(typeof r.reason === "string" ? { reason: r.reason.slice(0, 64) } : {}) }
       : undefined;
   const planVersion = Number.isInteger(b.planVersion) && b.planVersion! >= 0 ? b.planVersion! : 0;
-  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result, planVersion, settings: b.settings };
+  const handoverVersion = Number.isInteger(b.handoverVersion) ? b.handoverVersion! : 0;
+  return { espnLeagueId: b.espnLeagueId, session: b.session, seq: b.seq!, frames: b.frames, result, planVersion, settings: b.settings, handoverVersion };
 }
 
 /**
@@ -64,7 +50,8 @@ function parse(body: unknown): FramesRequest | null {
  * relay's count when it doesn't (the bridge resends from there). An empty `frames` is a heartbeat.
  * `command` is a pick the user made in War Room, for the bridge to make in ESPN; the bridge reports
  * what it did with it as `result` on its next request. `plan` is the overlay's turn plan, sent only
- * when it's newer than the bridge's `planVersion`.
+ * when it's newer than the bridge's `planVersion`. `handover` is the opt-in for drafting without this
+ * tab (9.1), sent when that's available and newer than the bridge's `handoverVersion`.
  */
 export async function POST(request: Request) {
   if (!config.espnSyncEnabled) return withCors(error(404, "Not found"), request);
@@ -82,6 +69,12 @@ export async function POST(request: Request) {
   // describe the league it just moved to.
   if (body.settings !== undefined) getRelay().setLeague(bridge, body.settings);
   if (result.status === 413) return withCors(error(413, "Too many frames"), request);
+  // The draft is over: a join credential the user handed over has done its job (9.1).
+  if (result.status === 200 && body.frames.some((f) => f.startsWith("STATE 2"))) await deleteCredential(getDb(), bridge.userId, bridge.leagueId);
   const { status, ...reply } = result;
-  return withCors(json(status, reply), request);
+  const handover =
+    config.espnServerClientEnabled && body.handoverVersion !== ESPN_HANDOVER_VERSION
+      ? { handover: { version: ESPN_HANDOVER_VERSION, lines: ESPN_HANDOVER_DISCLOSURE } }
+      : {};
+  return withCors(json(status, { ...reply, ...handover }), request);
 }

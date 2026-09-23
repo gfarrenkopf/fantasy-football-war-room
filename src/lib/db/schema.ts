@@ -238,3 +238,39 @@ export const espnDisclosureAcks = pgTable("espn_disclosure_acks", {
   version: integer("version").notNull(),
   acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
+
+/** Where a server-side ESPN client stands for one draft (Epic 9); see src/lib/server/espn/serverClients.ts. */
+export type EspnServerClientState = "stored" | "holding" | "lost" | "released" | "complete";
+
+/**
+ * The ESPN join credential a user handed War Room so it can draft for them without their ESPN tab
+ * open (Epic 9): their draft room's join code and SWID, sealed with ESPN_CODE_KEY
+ * (src/lib/server/espn/secretBox.ts). One per war room league. Deleted when the draft completes, and
+ * by a sweep once it expires, so a draft that never finishes doesn't keep a credential around.
+ */
+export const espnServerClients = pgTable(
+  "espn_server_clients",
+  {
+    leagueId: text("league_id")
+      .primaryKey()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    espnLeagueId: text("espn_league_id").notNull(),
+    espnTeamId: integer("espn_team_id").notNull(),
+    season: integer("season").notNull(),
+    /** `{ code, swid }` as JSON, sealed. Never logged, never returned by an API. */
+    sealed: text("sealed").notNull(),
+    /** ESPN's league settings as the bridge read them, so a restarted process can rebuild the draft (9.5). */
+    leagueSettings: jsonb("league_settings").$type<unknown>(),
+    /** The team that owns each overall pick, in order, for catching up from INIT after a restart. */
+    pickTeams: jsonb("pick_teams").$type<number[]>(),
+    consentVersion: integer("consent_version").notNull(),
+    state: text("state").$type<EspnServerClientState>().notNull().default("stored"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (t) => [index("espn_server_clients_state_idx").on(t.state), index("espn_server_clients_expires_at_idx").on(t.expiresAt)],
+);

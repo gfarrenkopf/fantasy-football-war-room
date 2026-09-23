@@ -12,6 +12,9 @@
  *   member GUID is zeroed. War Room never sees ESPN cookies or passwords.
  * - It authenticates to War Room with a pairing token from a popup on War Room's own site, because
  *   cross-site requests from espn.com don't carry War Room's session cookie.
+ * - Only if the user opts in from the overlay (9.1), it hands War Room this draft room's join code
+ *   and the user's ESPN id, once, to their own endpoint, so War Room can join the draft itself and the
+ *   user can draft from a phone with no ESPN tab open. Never in a frame, and never without that click.
  *
  * Plain script, no build step, so what's tested (src/lib/espn/bridge.test.ts) is exactly what ships.
  * The frame grammar is documented in docs/espn-protocol.md.
@@ -44,6 +47,7 @@
   const espnTeamId = Number(params.get("teamId")) || 0;
   const season = Number(params.get("seasonId")) || new Date().getFullYear();
   const TOKEN_KEY = `warroom-bridge:${espnLeagueId}`;
+  const HANDOVER_KEY = `warroom-handover:${espnLeagueId}`;
   /**
    * This page load's id. A reloaded ESPN tab starts a fresh frame log; the session id tells War Room
    * it's a new log continuing the same draft, not a gap in the old one.
@@ -88,6 +92,17 @@
   /** @type {"unpaired" | "listening" | "live" | "offline" | "expired" | "purchase" | "denied"} */
   let status = "unpaired";
   let token = readToken();
+  /**
+   * The join credential in the draft socket's URL: param 5 is `1:{league}:{team}:{SWID}:{code}`. Kept
+   * here only so an opt-in can hand it over (9.1); it's never logged and never goes in a frame.
+   * @type {string | null}
+   */
+  let joinParam = null;
+  /** The hand-over opt-in War Room offers (its text is War Room's), and where the user is with it. */
+  /** @type {{ version: number, lines: string[] } | null} */
+  let handoverOffer = null;
+  /** @type {"none" | "sending" | "done" | "failed" | "declined"} */
+  let handover = readSession(HANDOVER_KEY) ? "done" : "none";
 
   /* ---------------- frames ---------------- */
 
@@ -270,6 +285,11 @@
     attached.add(ws);
     sockets++;
     current = ws;
+    try {
+      joinParam = new URL(String(ws.url)).searchParams.get("5") || joinParam;
+    } catch {
+      /* not a URL we can read: nothing to hand over */
+    }
     ws.addEventListener("message", (e) => {
       if (typeof e.data !== "string") return;
       // INIT is the draft so far. Only useful before we've seen picks of our own, i.e. we joined late.
@@ -322,12 +342,16 @@
 
   /* ---------------- relay ---------------- */
 
-  function readToken() {
+  /** @param {string} key */
+  function readSession(key) {
     try {
-      return sessionStorage.getItem(TOKEN_KEY);
+      return sessionStorage.getItem(key);
     } catch {
       return null;
     }
+  }
+  function readToken() {
+    return readSession(TOKEN_KEY);
   }
   /** @param {string | null} value */
   function writeToken(value) {
@@ -363,6 +387,7 @@
           seq: sent,
           frames,
           planVersion,
+          handoverVersion: handoverOffer ? handoverOffer.version : 0,
           ...(result ? { result } : {}),
           ...(sendingSettings ? { settings: sendingSettings } : {}),
         }),
@@ -383,6 +408,10 @@
         if (body.plan && typeof body.plan.version === "number" && body.plan.plan) {
           planVersion = body.plan.version;
           plan = body.plan.plan;
+        }
+        const offer = body.handover;
+        if (offer && typeof offer.version === "number" && Array.isArray(offer.lines)) {
+          handoverOffer = { version: offer.version, lines: offer.lines.map(String) };
         }
       } else if (res.status === 401) {
         writeToken(null);
@@ -450,6 +479,57 @@
     if (!myTurn()) return render();
     select(player.espnPlayerId);
     draftingName = player.name;
+    render();
+  }
+
+  /* ---------------- hand-over (9.1) ---------------- */
+
+  /**
+   * Hands War Room this draft room's join code, once, because the user clicked to. The code only
+   * exists in the socket URL; War Room stores it encrypted and deletes it when the draft completes.
+   */
+  async function handOver() {
+    if (!token || !handoverOffer || handover === "sending") return;
+    const parts = (joinParam || "").split(":");
+    const code = parts[parts.length - 1];
+    const swid = parts[3];
+    // Only this draft's own credential: this league, this team, and a code shaped like ESPN's.
+    if (parts.length !== 5 || parts[1] !== espnLeagueId || Number(parts[2]) !== espnTeamId || !/^-?\d{1,12}$/.test(code)) {
+      handover = "failed";
+      return render();
+    }
+    handover = "sending";
+    render();
+    /** @type {number[] | null} */
+    let pickTeams = null;
+    try {
+      pickTeams = await pickOwnership();
+    } catch {
+      // War Room can still draft for the user; it just can't recover picks it missed after a restart.
+    }
+    try {
+      const res = await fetch(`${ORIGIN}/api/espn/bridge/handover`, {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ espnLeagueId, consentVersion: handoverOffer.version, code, swid, settings: lastSettings, pickTeams }),
+      });
+      if (res.status === 409) {
+        // The opt-in text changed since it was shown: show the current one before anything is stored.
+        handoverOffer = null;
+        handover = "none";
+      } else if (res.ok) {
+        handover = "done";
+        try {
+          sessionStorage.setItem(HANDOVER_KEY, String(handoverOffer.version));
+        } catch {
+          /* private mode: the overlay may offer again after a reload, which is harmless */
+        }
+      } else handover = "failed";
+    } catch {
+      handover = "failed";
+    }
     render();
   }
 
@@ -530,9 +610,13 @@
     .g{font-size:11px;padding:1px 5px;border-radius:4px}.g.value{color:#5ee39a;border:1px solid #2e7d4f}.g.reach{color:#ff8a8a;border:1px solid #8a3434}
     .d{padding:2px 8px;font-size:12px}.d.on{background:#3ddc91;border-color:#3ddc91;color:#0d1a14;font-weight:700}
     .note{color:#8f9aa8;font-size:12px;margin-top:6px}
+    .ho{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px}.ho b{display:block;margin-bottom:4px}
+    .ho ul{margin:0;padding-left:18px;color:#aab7c4;font-size:12px}.ho li{margin-top:3px}
   </style><div class="box"><div class="t">War Room <i>●</i></div><div class="s"></div>
   <div class="plan" hidden><div class="ph"><b class="pt"></b><span class="pr"></span><button class="more" type="button">More</button></div>
   <div class="rows"></div><div class="note"></div></div>
+  <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="note hn"></div>
+  <div class="row"><button class="go ha" type="button">Let War Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
   <div class="row"><button class="go" type="button">Connect to War Room</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
@@ -544,6 +628,16 @@
   const moreEl = /** @type {HTMLButtonElement} */ (root.querySelector(".more"));
   const rowsEl = /** @type {HTMLElement} */ (root.querySelector(".rows"));
   const noteEl = /** @type {HTMLElement} */ (root.querySelector(".note"));
+  const handoverEl = /** @type {HTMLElement} */ (root.querySelector(".ho"));
+  const handoverListEl = /** @type {HTMLElement} */ (root.querySelector(".ho ul"));
+  const handoverNoteEl = /** @type {HTMLElement} */ (root.querySelector(".hn"));
+  const handoverYesEl = /** @type {HTMLButtonElement} */ (root.querySelector(".ha"));
+  const handoverNoEl = /** @type {HTMLButtonElement} */ (root.querySelector(".hd"));
+  handoverYesEl.onclick = () => void handOver();
+  handoverNoEl.onclick = () => {
+    handover = "declined";
+    render();
+  };
   goEl.onclick = pair;
   hideEl.onclick = () => (host.hidden = true);
   moreEl.onclick = () => {
@@ -640,6 +734,25 @@
             : "";
   }
 
+  function renderHandover() {
+    const live = !!token && sockets > 0 && onDraftPage && !!joinParam;
+    handoverEl.hidden = !live || !handoverOffer || handover === "declined";
+    if (handoverEl.hidden || !handoverOffer) return;
+    handoverListEl.replaceChildren(...handoverOffer.lines.map((line) => el("li", undefined, line)));
+    const done = handover === "done";
+    handoverListEl.hidden = done;
+    handoverYesEl.hidden = done;
+    handoverNoEl.hidden = done;
+    handoverYesEl.disabled = handover === "sending";
+    handoverNoteEl.textContent = done
+      ? "Handed over. Take over from War Room when you're ready to leave this tab."
+      : handover === "sending"
+        ? "Handing over…"
+        : handover === "failed"
+          ? "Couldn't hand over. Keep drafting here; try again in a moment."
+          : "";
+  }
+
   const picks = () => log.filter((f) => f.startsWith("SELECTED ")).length;
 
   function render() {
@@ -659,6 +772,7 @@
     statusEl.textContent = text;
     dotEl.style.color = token && sockets && status !== "offline" ? "#5fd38d" : "#e0a100";
     renderPlan();
+    renderHandover();
   }
 
   (document.body || document.documentElement).appendChild(host);
@@ -671,7 +785,7 @@
       render();
     },
     /** For tests and support: what the bridge is doing. */
-    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, planVersion, armed, drafting: draftingName }),
+    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, planVersion, armed, drafting: draftingName, handover }),
     /** Exposed so the INIT decoder can be run against blobs recorded from real drafts (8.12). */
     decodeInitPicks,
   };
