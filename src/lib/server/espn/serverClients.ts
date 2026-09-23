@@ -1,4 +1,4 @@
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, gt, lt } from "drizzle-orm";
 import { espnServerClients, type EspnServerClientState } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
 import type { BridgeScope } from "./bridgeTokens";
@@ -106,6 +106,14 @@ export async function deleteCredential(db: Db, userId: string, leagueId: string)
     .where(and(eq(espnServerClients.leagueId, leagueId), eq(espnServerClients.userId, userId)))
     .returning({ leagueId: espnServerClients.leagueId });
   return deleted.length > 0;
+}
+
+/** Drafts a server-side client was holding, unexpired: what a restarted process rejoins (9.5). */
+export async function listHolding(db: Db, now = new Date()): Promise<{ userId: string; leagueId: string }[]> {
+  return db
+    .select({ userId: espnServerClients.userId, leagueId: espnServerClients.leagueId })
+    .from(espnServerClients)
+    .where(and(eq(espnServerClients.state, "holding"), gt(espnServerClients.expiresAt, now)));
 }
 
 /** Deletes credentials past their expiry, for drafts that never reached completion. */

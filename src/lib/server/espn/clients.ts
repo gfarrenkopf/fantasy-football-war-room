@@ -6,7 +6,7 @@ import type { ServerClientView } from "@/lib/espn/live";
 import { draftListFrame, selectFrame } from "@/lib/espn/join";
 import { createEspnClient, type Connect, type EndReason, type EspnClient, type EspnSocket } from "./client";
 import { getRelay } from "./live";
-import { deleteCredential, hasCredential, loadCredential, setServerClientState } from "./serverClients";
+import { deleteCredential, hasCredential, listHolding, loadCredential, setServerClientState } from "./serverClients";
 
 /**
  * The server-side ESPN clients running in this process (9.2), one per user at most. Like the relay,
@@ -58,7 +58,7 @@ const logFailure = (what: string) => (err: unknown) => console.error(`[espn-clie
  * Joins ESPN's draft room for this league with the stored join code. Idempotent for a league that's
  * already held; a client for the user's other league is handed back first (one per user).
  */
-export async function takeOver(db: Db, userId: string, leagueId: string, { connect = wsConnect } = {}): Promise<TakeOverResult> {
+export async function takeOver(db: Db, userId: string, leagueId: string, { connect = wsConnect, resuming = false } = {}): Promise<TakeOverResult> {
   const key = config.espnCodeKey;
   if (!config.espnServerClientEnabled || !key) return { ok: false, reason: "unavailable" };
   const current = running().get(userId);
@@ -72,7 +72,7 @@ export async function takeOver(db: Db, userId: string, leagueId: string, { conne
   const { scope } = stored;
   // After a restart the relay knows nothing about this draft; the settings the bridge handed over say what league it is.
   if (stored.leagueSettings) relay.setLeague(scope, stored.leagueSettings);
-  view(userId, leagueId, { state: "connecting" });
+  view(userId, leagueId, resuming ? { state: "connecting", reason: "War Room restarted. Rejoining your ESPN draft room…" } : { state: "connecting" });
   await setServerClientState(db, userId, leagueId, "holding");
 
   const client = createEspnClient({
@@ -113,6 +113,27 @@ function ended(db: Db, userId: string, leagueId: string, client: EspnClient, rea
     void setServerClientState(db, userId, leagueId, "lost").catch(logFailure("marking lost"));
     console.warn(`[espn-client] ${reason} league=${leagueId}`);
   }
+}
+
+/**
+ * Rejoins every draft this process's predecessor was holding (9.5): a deploy or crash restarts the
+ * process, and the socket dies with it. Picks made in the gap come back through INIT catch-up. The
+ * user's clock doesn't wait for this, which is what ESPN's queue (9.3) is for.
+ */
+export async function resumeServerClients(db: Db, { connect = wsConnect } = {}): Promise<number> {
+  if (!config.espnServerClientEnabled) return 0;
+  const holding = await listHolding(db);
+  let resumed = 0;
+  for (const { userId, leagueId } of holding) {
+    const result = await takeOver(db, userId, leagueId, { connect, resuming: true }).catch((err: unknown) => {
+      logFailure("resuming a draft")(err);
+      return null;
+    });
+    if (result?.ok) resumed++;
+    else if (result) await setServerClientState(db, userId, leagueId, "lost").catch(logFailure("marking lost"));
+  }
+  if (holding.length) console.log(`[espn-client] resumed ${resumed} of ${holding.length} held drafts`);
+  return resumed;
 }
 
 /** Closes War Room's connection, so the user can reconnect in ESPN. */

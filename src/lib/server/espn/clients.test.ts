@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { espnServerClients } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
@@ -49,6 +49,17 @@ class FakeSocket implements EspnSocket {
   }
 }
 
+/** An ESPN INIT blob with these picks made (docs/espn-protocol.md §4.1). */
+function initBlob(drafted: number[], total = 8, league = 704343562) {
+  const bytes = new Uint8Array(96 + 45 * total);
+  const view = new DataView(bytes.buffer);
+  for (let k = 0; k < total; k++) {
+    view.setInt32(96 + 45 * k, drafted[k] ?? -1);
+    view.setInt32(96 + 45 * k + 33, league);
+  }
+  return Buffer.from(bytes).toString("base64").replace(/=+$/, "") + " ####";
+}
+
 async function load() {
   for (const [name, value] of Object.entries({ DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: KEY.toString("base64") }))
     vi.stubEnv(name, value);
@@ -68,6 +79,8 @@ describe("taking over and handing back an ESPN draft connection", () => {
     sockets.push(socket);
     return socket;
   };
+  /** Earlier tests share the database and leave drafts held; a restart would resume those too. */
+  const releaseOthers = () => db.update(espnServerClients).set({ state: "released" }).where(ne(espnServerClients.leagueId, leagueId));
   const row = async () => (await db.select().from(espnServerClients).where(eq(espnServerClients.leagueId, leagueId)))[0];
 
   beforeEach(async () => {
@@ -147,6 +160,47 @@ describe("taking over and handing back an ESPN draft connection", () => {
     relay.publishPlan(userId, leagueId, { picks: [1], rounds: "1", onClock: true, targets: [p], fallbacks: [], best: [], after: null });
     expect(relay.pushQueue(userId, leagueId)).toEqual([4430807]);
     expect(sockets[0].sent).toContain("DRAFT_LIST 4430807\n");
+  });
+
+  it("rejoins a held draft after a restart, and recovers the picks made in the gap from INIT (9.5)", async () => {
+    const first = await load();
+    await first.takeOver(db, userId, leagueId, { connect });
+    sockets[0].fire("open");
+    for (const f of ["TOKEN x", "CLOCK 0 5000", "STATE 1", "SELECTING 1 60000", "SELECTED 1 4429795 2"]) sockets[0].fire("message", `${f}\n`);
+    await vi.waitFor(() => expect(first.relay.snapshot(userId, leagueId).picks).toHaveLength(1));
+
+    // The process dies: its memory, relay and socket go with it. The row still says holding.
+    vi.resetModules();
+    const g = globalThis as { __espnRelay?: unknown; __espnClients?: unknown };
+    delete g.__espnRelay;
+    delete g.__espnClients;
+    const next = await load();
+    expect(next.relay.snapshot(userId, leagueId).picks).toEqual([]);
+
+    await releaseOthers();
+    expect(await next.resumeServerClients(db, { connect })).toBe(1);
+    expect(next.relay.serverClient(userId, leagueId)).toMatchObject({ state: "connecting", reason: expect.stringContaining("restarted") });
+    const socket = sockets[1];
+    socket.fire("open");
+    // ESPN's INIT on rejoin carries every pick: ours from before, and team 2's made while we were down.
+    socket.fire("message", `INIT ${initBlob([4429795, 4430807])}\n`);
+    socket.fire("message", "SELECTING 1 60000\n");
+    await vi.waitFor(() =>
+      expect(next.relay.snapshot(userId, leagueId).picks.map((p) => [p.n, p.teamId, p.espnPlayerId])).toEqual([
+        [1, 1, 4429795],
+        [2, 2, 4430807],
+      ]),
+    );
+    expect(next.relay.serverClient(userId, leagueId)).toEqual({ state: "holding" });
+    expect(next.relay.snapshot(userId, leagueId)).toMatchObject({ status: "live", anchored: true });
+  });
+
+  it("doesn't resume drafts that were handed back, lost or never taken over", async () => {
+    const { resumeServerClients } = await load();
+    await releaseOthers();
+    await db.update(espnServerClients).set({ state: "lost" }).where(eq(espnServerClients.leagueId, leagueId));
+    expect(await resumeServerClients(db, { connect })).toBe(0);
+    expect(sockets).toHaveLength(0);
   });
 
   it("refuses to take over without a handed-over code", async () => {

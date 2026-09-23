@@ -214,11 +214,14 @@ sudo systemctl start warroom
 | Deploy `main` | `sudo -iu warroom current/deploy/deploy.sh` |
 | Deploy a branch, tag or commit | `sudo -iu warroom current/deploy/deploy.sh <ref>` |
 | Roll back (run again to undo) | `sudo -iu warroom current/deploy/deploy.sh rollback` |
+| Deploy during a live ESPN draft | `sudo -iu warroom env FORCE=1 current/deploy/deploy.sh` (see below) |
 | What's live | `sudo cat /srv/warroom/current/REVISION` |
 | App logs | `journalctl -u warroom -f` |
 | Restart | `sudo systemctl restart warroom` |
 | Change a secret | edit `/etc/warroom/.env`, then restart. No rebuild needed. |
 | AI plan costs (see [database §6](database.md#6-ai-plan-costs)) | `sudo -iu warroom bash -c 'set -a; . /etc/warroom/.env; set +a; cd current && npm run ai:costs -- --from 2026-09-01'` |
+
+**Deploys wait for live ESPN drafts.** When War Room holds a user's ESPN draft connection (drafting with no ESPN tab open), a restart drops it. The app rejoins on boot and recovers any picks made in the gap, but the user's pick clock keeps running meanwhile. So `deploy.sh` refuses to switch releases while any such draft is live, and a CI deploy fails with that message. Re-run it after the draft, or use `FORCE=1` for an urgent fix. `npm run db:live-drafts` prints the count.
 
 **Rollback only swaps code.** Migrations stay applied, so write schema changes to work with both the old and new code (add a column in one release, start relying on it in the next). To undo a bad migration, restore the dump that `deploy.sh` took just before it (§8).
 

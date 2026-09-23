@@ -17,6 +17,7 @@
 #
 # Overrides for a local dry run: WARROOM_ROOT, WARROOM_REPO, WARROOM_ENV_FILE, WARROOM_BACKUP_DIR,
 # WARROOM_RESTART (e.g. `true`), WARROOM_HEALTH_URL (empty skips the health check).
+# FORCE=1 deploys even while War Room holds a user's live ESPN draft (see db:live-drafts).
 set -euo pipefail
 
 root="${WARROOM_ROOT:-/srv/warroom}"
@@ -106,6 +107,18 @@ deploy() {
   (cd "$release" && with_env npm run db:backup -- "$backup_dir")
   log "Migrating"
   (cd "$release" && with_env npm run db:migrate)
+
+  # Restarting drops every ESPN draft War Room holds for a user (Epic 9). The app rejoins them on
+  # boot, but the user's pick clock doesn't wait: better to deploy after the draft.
+  local live
+  live="$(cd "$release" && with_env npm run --silent db:live-drafts)" || die "couldn't check for live ESPN drafts"
+  if [[ "$live" != "0" ]]; then
+    if [[ "${FORCE:-}" == "1" ]]; then
+      log "WARNING: restarting during $live live ESPN draft(s) (FORCE=1); they'll rejoin on boot"
+    else
+      die "$live ESPN draft(s) are live right now, and a restart would drop them for up to a minute. Deploy after they finish, or run with FORCE=1."
+    fi
+  fi
 
   log "Switching to $sha"
   if [[ -n "$current" ]]; then ln -sfn "$current" "$root/previous"; fi

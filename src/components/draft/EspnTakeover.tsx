@@ -42,7 +42,12 @@ export function EspnTakeover() {
     return (
       <div className={s.espnArm} role="status">
         <span className={s.espnArmText}>
-          Connecting to your ESPN draft room…<small>Your ESPN draft room will show &ldquo;Duplicate Connection&rdquo;. That&apos;s expected.</small>
+          {serverClient.reason ?? "Connecting to your ESPN draft room…"}
+          <small>
+            {serverClient.reason
+              ? "Picks made meanwhile land on your board once it's back. If you're on the clock, ESPN autopicks from your queue."
+              : "Your ESPN draft room will show “Duplicate Connection”. That's expected."}
+          </small>
         </span>
       </div>
     );
