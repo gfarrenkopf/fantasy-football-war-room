@@ -49,6 +49,7 @@ export function AccountMenu() {
   const [showSignIn, setShowSignIn] = useState(false);
   const [signInNotice, setSignInNotice] = useState<string | undefined>();
   const signInBtn = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // A sign-in link that failed (used, expired, cancelled) lands here with `?error=`: reopen the
   // dialog saying what happened. Signed in already, there's nothing to recover, so just tidy up.
@@ -124,21 +125,38 @@ export function AccountMenu() {
     window.location.assign("/?farewell=1");
   };
 
+  const label = user.email ?? "Signed in";
+  // Picking an item closes the popover first, so a dialog it opens isn't stacked under it.
+  const pick = (action: () => void) => () => {
+    menuRef.current?.hidePopover();
+    action();
+  };
+
+  // One button, not three: the header's action row is the draft's, and identity sat in it wide
+  // enough to push the roster needs under the buttons. The popover is native (Esc, light dismiss).
   return (
-    <span className={s.account}>
-      <span className={s.accountEmail} title={user.email ?? undefined}>
-        {user.email ?? "Signed in"}
-      </span>
-      {paymentsEnabled && (
-        <button className={cx("btn")} onClick={() => setShowPurchases(true)}>
-          Purchases
-        </button>
-      )}
-      <button className={cx("btn")} onClick={() => void signOut()}>
-        Sign out
+    <>
+      <button className={cx("btn", "accountBtn")} popoverTarget="account-menu" aria-haspopup="menu" title={label}>
+        <span className={s.accountInitial} aria-hidden="true">
+          {(user.email ?? "?").charAt(0)}
+        </span>
+        Account
       </button>
+      <div ref={menuRef} id="account-menu" popover="auto" role="menu" aria-label="Account" className={s.accountMenu}>
+        <span className={s.accountEmail} title={label}>
+          {label}
+        </span>
+        {paymentsEnabled && (
+          <button className={cx("btn")} role="menuitem" onClick={pick(() => setShowPurchases(true))}>
+            Purchases
+          </button>
+        )}
+        <button className={cx("btn")} role="menuitem" onClick={pick(() => void signOut())}>
+          Sign out
+        </button>
+      </div>
       {showPurchases && <PurchasesDialog onClose={() => setShowPurchases(false)} />}
-    </span>
+    </>
   );
 }
 
