@@ -356,7 +356,7 @@ describe("relay with War Room holding the ESPN connection (9.3)", () => {
 
   async function holding() {
     const s = setup();
-    const sender = { select: vi.fn(() => true), setQueue: vi.fn(() => true) };
+    const sender = { select: vi.fn(() => true), setQueue: vi.fn(() => true), setAutopick: vi.fn(() => true) };
     s.relay.attachSender("u1", "L1", sender, "srv1");
     s.relay.subscribe("u1", "L1", (e) => s.events.push(e));
     await s.relay.ingest(scope, "srv1", 0, [...PRE, "SELECTED 4 1 2", "SELECTING 1 60000"]);
@@ -427,7 +427,7 @@ describe("relay with War Room holding the ESPN connection (9.3)", () => {
 });
 
 describe("one source at a time while War Room holds the connection (APE-168)", () => {
-  const sender = () => ({ select: vi.fn(() => true), setQueue: vi.fn(() => true) });
+  const sender = () => ({ select: vi.fn(() => true), setQueue: vi.fn(() => true), setAutopick: vi.fn(() => true) });
   const DRAFT = [...PRE, "SELECTED 4 1 2", "SELECTING 1 60000"];
 
   it("folds the draft from War Room's session alone, never both copies of it", async () => {
@@ -476,5 +476,30 @@ describe("one source at a time while War Room holds the connection (APE-168)", (
     expect(lines).toHaveLength(5);
     expect(lines[0]).toContain('kind=unknown frame="WHAT_IS_THIS 0"');
     warn.mockRestore();
+  });
+});
+
+describe("ESPN's autopick on the user's team", () => {
+  it("says when ESPN switches autopick on for the user, and when it's off again", async () => {
+    const { relay, events } = setup();
+    relay.subscribe("u1", "L1", (e) => events.push(e));
+    await relay.ingest(scope, "s1", 0, [...PRE, "AUTODRAFT 4 true"]);
+    expect(relay.snapshot("u1", "L1").autopick).toBe(false); // another team's
+    await relay.ingest(scope, "s1", 4, ["AUTODRAFT 1 true"]);
+    expect(relay.snapshot("u1", "L1").autopick).toBe(true);
+    await relay.ingest(scope, "s1", 5, ["AUTODRAFT 1 false"]);
+    expect(events.filter((e) => e.type === "autopick")).toEqual([
+      { type: "autopick", autopick: true },
+      { type: "autopick", autopick: false },
+    ]);
+  });
+
+  it("turns it off only through War Room's own connection", () => {
+    const { relay } = setup();
+    expect(relay.setAutopick("u1", "L1", false)).toBe(false);
+    const sender = { select: vi.fn(() => true), setQueue: vi.fn(() => true), setAutopick: vi.fn(() => true) };
+    relay.attachSender("u1", "L1", sender, "srv1");
+    expect(relay.setAutopick("u1", "L1", false)).toBe(true);
+    expect(sender.setAutopick).toHaveBeenCalledWith(false);
   });
 });

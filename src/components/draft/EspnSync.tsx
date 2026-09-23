@@ -48,6 +48,10 @@ export interface EspnSyncValue {
   serverClientAction(action: "take-over" | "hand-back"): Promise<string | null>;
   /** Sets ESPN's pick queue to the turn plan now, or keeps it synced (9.3). Resolves with an error to show, or null. */
   queuePlan(sync?: boolean): Promise<string | null>;
+  /** ESPN has autopick on for the user's team: ESPN picks for them as soon as they're on the clock. */
+  autopick: boolean;
+  /** Turns ESPN's autopick off through War Room's connection. Resolves with an error to show, or null. */
+  turnOffAutopick(): Promise<string | null>;
   /** Arms a player; arming the one already armed drafts him (double-click, or Enter twice). */
   arm(playerId: string): void;
   disarm(): void;
@@ -72,6 +76,8 @@ const OFF: EspnSyncValue = {
   serverClient: null,
   serverClientAction: unavailable,
   queuePlan: unavailable,
+  autopick: false,
+  turnOffAutopick: unavailable,
   arm: noop,
   disarm: noop,
   draftArmed: noop,
@@ -159,6 +165,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     on("league", ({ espnLeague }) => setSnapshot((cur) => cur && { ...cur, espnLeague }));
     on("degraded", ({ degraded }) => setSnapshot((cur) => cur && { ...cur, degraded }));
     on("serverClient", ({ serverClient }) => setSnapshot((cur) => cur && { ...cur, serverClient }));
+    on("autopick", ({ autopick }) => setSnapshot((cur) => cur && { ...cur, autopick }));
 
     let retry: ReturnType<typeof setTimeout> | undefined;
     source.onopen = () => {
@@ -283,6 +290,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   );
   const serverClientAction = useCallback((action: "take-over" | "hand-back") => post("server-client", { action }), [post]);
   const queuePlan = useCallback((sync?: boolean) => post("queue", sync === undefined ? {} : { sync }), [post]);
+  const turnOffAutopick = useCallback(() => post("autopick", {}), [post]);
 
   const toldDrift = useRef(false);
   useEffect(() => {
@@ -326,6 +334,8 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       serverClient: flags.espnServerClientEnabled ? snapshot.serverClient : null,
       serverClientAction,
       queuePlan,
+      autopick: snapshot.status === "live" && snapshot.autopick,
+      turnOffAutopick,
       link,
       degraded: snapshot.degraded,
       sessions: snapshot.sessions,
@@ -333,7 +343,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       disarm,
       draftArmed,
     };
-  }, [leagueId, snapshot, clock, link, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed, flags.espnServerClientEnabled, serverClientAction, queuePlan]);
+  }, [leagueId, snapshot, clock, link, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed, flags.espnServerClientEnabled, serverClientAction, queuePlan, turnOffAutopick]);
 
   return <EspnSyncContext.Provider value={value}>{children}</EspnSyncContext.Provider>;
 }

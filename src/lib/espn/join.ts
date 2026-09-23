@@ -38,6 +38,9 @@ export const pingFrame = (ms: number) => `PING PING%20${ms}\n`;
 /** A pick, as ESPN's own Draft button sends it. */
 export const selectFrame = (espnPlayerId: number) => `SELECT ${espnPlayerId}\n`;
 
+/** Switches ESPN's autopick for the user's own team, as the toggle in ESPN's Pick Queue panel does. */
+export const autodraftFrame = (on: boolean) => `AUTODRAFT ${on}\n`;
+
 /** Sets ESPN's pick queue to these players, in order, replacing whatever was queued. */
 export const draftListFrame = (espnPlayerIds: readonly number[]) => `DRAFT_LIST ${espnPlayerIds.join(" ")}\n`;
 
