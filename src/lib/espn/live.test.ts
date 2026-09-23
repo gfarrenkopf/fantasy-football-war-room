@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clockDeadline, clockUrgency, formatClock } from "./live";
+import { clockDeadline, clockUrgency, formatClock, resyncOnWake, WAKE_RESYNC_MS } from "./live";
 
 describe("ESPN pick clock", () => {
   it("turns the time left into a deadline on this device's clock", () => {
@@ -20,5 +20,17 @@ describe("ESPN pick clock", () => {
     expect(clockUrgency(30_001)).toBe("ok");
     expect(clockUrgency(30_000)).toBe("low");
     expect(clockUrgency(10_000)).toBe("urgent");
+  });
+});
+
+describe("resyncOnWake", () => {
+  it("reopens a closed stream, or one hidden long enough to distrust", () => {
+    expect(resyncOnWake(null, 50_000, false)).toBe(true);
+    expect(resyncOnWake(40_000, 40_000 + WAKE_RESYNC_MS, true)).toBe(true);
+  });
+
+  it("leaves a healthy stream alone after a glance away", () => {
+    expect(resyncOnWake(40_000, 42_000, true)).toBe(false);
+    expect(resyncOnWake(null, 50_000, true)).toBe(false);
   });
 });

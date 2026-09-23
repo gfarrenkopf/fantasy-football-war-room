@@ -137,6 +137,17 @@ export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: 
   });
 }
 
+/**
+ * A phone that locks mid-draft suspends the page, and mobile browsers drop or freeze its event
+ * stream without always saying so (9.7). Hidden this long, the stream is reopened on wake: a fresh
+ * connection starts with a snapshot, so the board and the pick clock are current again.
+ */
+export const WAKE_RESYNC_MS = 10_000;
+
+/** Whether to reopen the stream as the page becomes visible: it's closed, or the page was hidden long enough to distrust it. */
+export const resyncOnWake = (hiddenAt: number | null, now: number, streamOpen: boolean): boolean =>
+  !streamOpen || (hiddenAt !== null && now - hiddenAt >= WAKE_RESYNC_MS);
+
 /** ESPN's pick clock as a local deadline: the time left when it arrived, on this device's own clock, so server skew doesn't matter. */
 export interface ClockDeadline {
   teamId: number;

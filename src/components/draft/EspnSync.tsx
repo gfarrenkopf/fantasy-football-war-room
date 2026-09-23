@@ -6,7 +6,7 @@ import { samePicks } from "@/lib/draft/state";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { listenForEspnPaired } from "@/lib/espn/channel";
 import { leagueDifferences } from "@/lib/espn/league";
-import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type DriftReport, type EspnLeague, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView, type ServerClientView } from "@/lib/espn/live";
+import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type DriftReport, type EspnLeague, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView, type ServerClientView, resyncOnWake } from "@/lib/espn/live";
 import { myPlayers, positionCounts } from "@/lib/draft/roster";
 import { computeTurnPlan } from "@/lib/draft/sim/turnPlan";
 import { buildOverlayPlan } from "@/lib/espn/overlayPlan";
@@ -105,6 +105,37 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   // A league connected in the pairing popup: reconnect so its bridge's picks flow right away.
   useEffect(() => listenForEspnPaired((id) => id === leagueId && setConnection((n) => n + 1)), [leagueId]);
 
+  // A phone coming back from a locked screen (9.7): the stream may be dead or frozen, and the clock
+  // with it. Reopening starts with a fresh snapshot, which also resets the countdown.
+  const streamOpen = useRef(false);
+  /** Set while reopening on wake: the board keeps what it shows until the new snapshot replaces it, rather than unlocking for a moment. */
+  const keepSnapshot = useRef(false);
+  useEffect(() => {
+    if (!enabled) return;
+    let hiddenAt: number | null = document.hidden ? Date.now() : null;
+    const reopen = () => {
+      attempt.current = 0;
+      keepSnapshot.current = true;
+      setConnection((n) => n + 1);
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt ??= Date.now();
+        return;
+      }
+      if (resyncOnWake(hiddenAt, Date.now(), streamOpen.current)) reopen();
+      hiddenAt = null;
+    };
+    // Restored from the back/forward cache: the page's old connections are gone.
+    const onPageShow = (e: PageTransitionEvent) => e.persisted && reopen();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [enabled]);
+
   useEffect(() => {
     if (!enabled) return;
     const source = new EventSource(`/api/leagues/${encodeURIComponent(leagueId!)}/espn/stream`);
@@ -132,10 +163,12 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     let retry: ReturnType<typeof setTimeout> | undefined;
     source.onopen = () => {
       attempt.current = 0;
+      streamOpen.current = true;
       setLink("open");
     };
     source.onerror = () => {
       if (source.readyState !== EventSource.CLOSED) return; // still retrying by itself
+      streamOpen.current = false;
       source.close();
       setSnapshot(null);
       setClock(null);
@@ -149,7 +182,9 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     };
     return () => {
       clearTimeout(retry);
+      streamOpen.current = false;
       source.close();
+      if (keepSnapshot.current) return void (keepSnapshot.current = false);
       setSnapshot(null);
       setClock(null);
     };
