@@ -115,6 +115,8 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
     setTimeout,
     Date,
     atob,
+    EventTarget,
+    Event,
   };
   context.window = context;
   vm.createContext(context);
@@ -595,7 +597,7 @@ describe("catching up on picks made before the bridge attached (8.12)", () => {
     expect(p.bodies().flatMap((b) => b.frames)).toEqual(["INIT", "SELECTED 3 4362628 2"]);
   });
 
-  it("only tries once, and not when it has already seen picks of its own", async () => {
+  it("catches up once per socket, including a socket the page reconnects after a gap", async () => {
     const p = page({ stored: "tok-1" });
     p.fetch.mockImplementation(async (url, init) => {
       if (url.includes("lm-api-reads")) return new Response(JSON.stringify(OWNERSHIP), { status: 200 });
@@ -603,12 +605,25 @@ describe("catching up on picks made before the bridge attached (8.12)", () => {
       return new Response(JSON.stringify({ have: body.seq + body.frames.length }), { status: 200 });
     });
     p.load();
-    const ws = new (p.Socket())(DRAFT_URL);
-    ws.emit("SELECTED 3 4362628 2");
-    ws.emit(`INIT ${initBlob({ drafted: DRAFTED })}\n`);
+    const first = new (p.Socket())(DRAFT_URL);
+    first.emit(`INIT ${initBlob({ drafted: DRAFTED.slice(0, 1) })}\n`);
+    first.emit(`INIT ${initBlob({ drafted: DRAFTED.slice(0, 1) })}\n`); // the same socket again: once is enough
     await vi.advanceTimersByTimeAsync(300);
-    expect(p.bodies().flatMap((b) => b.frames)).toEqual(["SELECTED 3 4362628 2", "INIT"]);
-    expect(p.fetch.mock.calls.filter(([u]) => u.includes("mDraftDetail"))).toHaveLength(0);
+    first.close();
+    // Two picks were made while this tab was away; the page's new socket starts with an INIT that has them.
+    const second = new (p.Socket())(DRAFT_URL);
+    second.emit(`INIT ${initBlob({ drafted: DRAFTED })}\n`);
+    await vi.advanceTimersByTimeAsync(300);
+    // War Room applies only the recovered picks it doesn't have yet (feed.ts), so repeating pick 1 is harmless.
+    expect(p.bodies().flatMap((b) => b.frames)).toEqual([
+      "WR_CATCHUP 1 4 4429795",
+      "INIT",
+      "INIT",
+      "WR_CATCHUP 1 4 4429795",
+      "WR_CATCHUP 2 1 4430807",
+      "WR_CATCHUP 3 2 -16034",
+      "INIT",
+    ]);
   });
 });
 
@@ -777,5 +792,61 @@ describe("handing over the join code (9.1)", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(p.handovers()).toHaveLength(0);
     expect(p.bridge().handover).toBe("failed");
+  });
+});
+
+describe("standing down while War Room holds the ESPN connection (APE-168)", () => {
+  function setup() {
+    const p = page({ stored: "tok-1" });
+    let held = false;
+    p.fetch.mockImplementation(async (_u, init) => {
+      const body = JSON.parse(String(init.body));
+      if (body.release) held = false;
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length, ...(held ? { held: true } : {}) }), { status: 200 });
+    });
+    p.load();
+    const ws = new (p.Socket())(DRAFT_URL);
+    ws.emit("SELECTING 4 60000\n");
+    return { ...p, ws, hold: (on: boolean) => (held = on) };
+  }
+
+  it("closes the page's socket and gives ESPN's reconnects a socket that never connects", async () => {
+    const p = setup();
+    let closed = false;
+    p.ws.addEventListener("close", () => (closed = true));
+    p.hold(true);
+    await vi.advanceTimersByTimeAsync(5_300); // the next check-in hears War Room is taking over
+    expect(closed).toBe(true);
+    expect(p.bridge()).toMatchObject({ held: true });
+
+    // ESPN's page reconnecting: it gets a stand-in, not a socket to ESPN.
+    const again = new (p.Socket())(DRAFT_URL) as unknown as { readyState: number; send(d: string): void; sent?: unknown[] };
+    expect(again.readyState).toBe(0);
+    expect(again.sent).toBeUndefined(); // not a FakeSocket: nothing reached ESPN
+    expect(p.bridge()).toMatchObject({ standIns: 1 });
+    expect(p.shadow.querySelector(".s").textContent).toContain("War Room is drafting for you");
+    expect(p.shadow.querySelector(".rel").hidden).toBe(false);
+    expect(p.shadow.querySelector(".plan").hidden).toBe(true);
+    // Sockets that aren't ESPN's draft socket are left alone.
+    expect((new (p.Socket())("wss://example.com/x") as unknown as { sent?: unknown[] }).sent).toEqual([]);
+  });
+
+  it("hands back on \"Draft here instead\", and lets the page reconnect for real", async () => {
+    const p = setup();
+    p.hold(true);
+    await vi.advanceTimersByTimeAsync(5_300);
+    const standIn = new (p.Socket())(DRAFT_URL) as unknown as EventTarget & { readyState: number; onclose: ((e: Event) => void) | null };
+    const onclose = vi.fn();
+    standIn.onclose = onclose;
+
+    p.shadow.querySelector(".rel").onclick!();
+    await vi.advanceTimersByTimeAsync(300);
+    const releasing = p.bodies().filter((b) => (b as { release?: boolean }).release);
+    expect(releasing.length).toBeGreaterThanOrEqual(1);
+    expect(p.bridge()).toMatchObject({ held: false, standIns: 0 });
+    expect(standIn.readyState).toBe(3);
+    expect(onclose).toHaveBeenCalledOnce();
+    // The page's own reconnect is a real socket again.
+    expect((new (p.Socket())(DRAFT_URL) as unknown as { sent?: unknown[] }).sent).toEqual([]);
   });
 });

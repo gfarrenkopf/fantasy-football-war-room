@@ -203,6 +203,28 @@ describe("taking over and handing back an ESPN draft connection", () => {
     expect(sockets).toHaveLength(0);
   });
 
+  it("waits for an open ESPN tab to stand down before joining, so the page can't take the connection back", async () => {
+    const { takeOver, relay } = await load();
+    const scope = { userId, leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026 };
+    await relay.ingest(scope, "tab1", 0, ["CLOCK 0 5000"]); // a bridge is live in the user's ESPN tab
+    const pending = takeOver(db, userId, leagueId, { connect, standDownMs: 2_000 });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(sockets).toHaveLength(0); // not yet: the tab hasn't heard
+    expect((await relay.ingest(scope, "tab1", 1, [])) as { held?: true }).toMatchObject({ held: true });
+    expect(await pending).toEqual({ ok: true });
+    expect(sockets).toHaveLength(1);
+  });
+
+  it("releases the tab when it never gets in", async () => {
+    const { takeOver, relay } = await load();
+    const scope = { userId, leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026 };
+    await relay.ingest(scope, "tab1", 0, ["CLOCK 0 5000"]);
+    await takeOver(db, userId, leagueId, { connect, standDownMs: 50 });
+    sockets[0].fire("unexpected-response", 500);
+    await vi.waitFor(async () => expect((await row()).state).toBe("lost"));
+    expect((await relay.ingest(scope, "tab1", 1, [])) as { held?: true }).not.toHaveProperty("held");
+  });
+
   it("refuses to take over without a handed-over code", async () => {
     const { takeOver } = await load();
     const other = await createTestLeague(db, userId, "No code");

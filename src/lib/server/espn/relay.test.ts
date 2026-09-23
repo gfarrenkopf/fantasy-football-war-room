@@ -315,7 +315,7 @@ describe("when ESPN's protocol drifts (8.6)", () => {
     expect(degraded).toMatchObject({ reason: expect.stringContaining("changed"), unknownFrames: 20 });
     expect(events.filter((e) => e.type === "degraded")).toHaveLength(1);
     // The log line is what deploy/warroom-alerts.sh emails on.
-    expect(warn.mock.calls[0][0]).toContain("[espn-sync] protocol-drift");
+    expect(warn.mock.calls.find(([line]) => String(line).includes("protocol-drift"))![0]).toContain("[espn-sync] protocol-drift");
     expect(warn.mock.calls[0][0]).toContain("league=704343562");
 
     await relay.ingest(scope, "s1", 23, junk(20));
@@ -357,7 +357,7 @@ describe("relay with War Room holding the ESPN connection (9.3)", () => {
   async function holding() {
     const s = setup();
     const sender = { select: vi.fn(() => true), setQueue: vi.fn(() => true) };
-    s.relay.attachSender("u1", "L1", sender);
+    s.relay.attachSender("u1", "L1", sender, "srv1");
     s.relay.subscribe("u1", "L1", (e) => s.events.push(e));
     await s.relay.ingest(scope, "srv1", 0, [...PRE, "SELECTED 4 1 2", "SELECTING 1 60000"]);
     return { ...s, sender };
@@ -423,5 +423,58 @@ describe("relay with War Room holding the ESPN connection (9.3)", () => {
     const { relay } = setup();
     expect(relay.setQueueSync("u1", "L1", true)).toBeNull();
     expect(relay.pushQueue("u1", "L1")).toBeNull();
+  });
+});
+
+describe("one source at a time while War Room holds the connection (APE-168)", () => {
+  const sender = () => ({ select: vi.fn(() => true), setQueue: vi.fn(() => true) });
+  const DRAFT = [...PRE, "SELECTED 4 1 2", "SELECTING 1 60000"];
+
+  it("folds the draft from War Room's session alone, never both copies of it", async () => {
+    const { relay } = setup();
+    await relay.ingest(scope, "tab1", 0, DRAFT);
+    relay.attachSender("u1", "L1", sender(), "srv1");
+    // Both are watching the same draft: the tab's bridge and War Room's own client.
+    await relay.ingest(scope, "srv1", 0, DRAFT);
+    await relay.ingest(scope, "tab1", DRAFT.length, ["SELECTED 1 2 4"]);
+    await relay.ingest(scope, "srv1", DRAFT.length, ["SELECTED 1 2 4"]);
+    expect(relay.snapshot("u1", "L1").picks.map((p) => [p.n, p.espnPlayerId])).toEqual([
+      [1, 1],
+      [2, 2],
+    ]);
+  });
+
+  it("falls back to the bridge's copy when War Room hands the connection back", async () => {
+    const { relay } = setup();
+    await relay.ingest(scope, "tab1", 0, DRAFT);
+    const detach = relay.attachSender("u1", "L1", sender(), "srv1");
+    await relay.ingest(scope, "srv1", 0, [...DRAFT, "SELECTED 1 2 4"]);
+    expect(relay.snapshot("u1", "L1").picks).toHaveLength(2);
+    detach();
+    // The tab was blocked meanwhile, so its copy is one pick short until its own catch-up arrives.
+    expect(relay.snapshot("u1", "L1").picks).toHaveLength(1);
+    await relay.ingest(scope, "tab1", DRAFT.length, ["WR_CATCHUP 1 4 1", "WR_CATCHUP 2 1 2", "INIT"]);
+    expect(relay.snapshot("u1", "L1").picks.map((p) => p.espnPlayerId)).toEqual([1, 2]);
+  });
+
+  it("tells a live bridge to stand down before War Room joins, and only then", async () => {
+    const { relay } = setup();
+    expect((await relay.ingest(scope, "tab1", 0, DRAFT)) as { held?: true }).not.toHaveProperty("held");
+    expect(relay.requestHold("u1", "L1")).toEqual({ bridgeLive: true });
+    expect(relay.bridgeStoodDown("u1", "L1")).toBe(false);
+    expect((await relay.ingest(scope, "tab1", DRAFT.length, [])) as { held?: true }).toMatchObject({ held: true });
+    expect(relay.bridgeStoodDown("u1", "L1")).toBe(true);
+    relay.releaseHold("u1", "L1");
+    expect((await relay.ingest(scope, "tab1", DRAFT.length, [])) as { held?: true }).not.toHaveProperty("held");
+  });
+
+  it("logs the first few frames it can't read, so a drift alert says what changed", async () => {
+    const { relay } = setup();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await relay.ingest(scope, "tab1", 0, Array.from({ length: 8 }, (_, i) => `WHAT_IS_THIS ${i}`));
+    const lines = warn.mock.calls.map(([l]) => String(l)).filter((l) => l.includes("unreadable"));
+    expect(lines).toHaveLength(5);
+    expect(lines[0]).toContain('kind=unknown frame="WHAT_IS_THIS 0"');
+    warn.mockRestore();
   });
 });
