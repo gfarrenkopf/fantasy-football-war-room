@@ -6,7 +6,7 @@ import { samePicks } from "@/lib/draft/state";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { listenForEspnPaired } from "@/lib/espn/channel";
 import { leagueDifferences } from "@/lib/espn/league";
-import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type DriftReport, type EspnLeague, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView } from "@/lib/espn/live";
+import { clockDeadline, clockUrgency, formatClock, requestActive, type ClockDeadline, type DriftReport, type EspnLeague, type LiveEvent, type LiveSnapshot, type LiveStatus, type PickRequestView, type ServerClientView } from "@/lib/espn/live";
 import { myPlayers, positionCounts } from "@/lib/draft/roster";
 import { computeTurnPlan } from "@/lib/draft/sim/turnPlan";
 import { buildOverlayPlan } from "@/lib/espn/overlayPlan";
@@ -42,6 +42,12 @@ export interface EspnSyncValue {
   clock: (ClockDeadline & { mine: boolean }) | null;
   /** This league as ESPN has it (8.8), once a bridge has read its settings. */
   espnLeague: EspnLeague | null;
+  /** War Room's own connection to the user's ESPN draft room (Epic 9), once they've handed over a join code. */
+  serverClient: ServerClientView | null;
+  /** Asks War Room to take over, or hand back, the ESPN connection. Resolves with an error to show, or null. */
+  serverClientAction(action: "take-over" | "hand-back"): Promise<string | null>;
+  /** Sets ESPN's pick queue to the turn plan now, or keeps it synced (9.3). Resolves with an error to show, or null. */
+  queuePlan(sync?: boolean): Promise<string | null>;
   /** Arms a player; arming the one already armed drafts him (double-click, or Enter twice). */
   arm(playerId: string): void;
   disarm(): void;
@@ -50,7 +56,26 @@ export interface EspnSyncValue {
 }
 
 const noop = () => {};
-const OFF: EspnSyncValue = { leagueId: null, status: "off", link: "idle", degraded: null, sessions: 0, locked: false, myTurn: false, armed: null, request: null, clock: null, espnLeague: null, arm: noop, disarm: noop, draftArmed: noop };
+const unavailable = async () => "ESPN live sync isn't connected";
+const OFF: EspnSyncValue = {
+  leagueId: null,
+  status: "off",
+  link: "idle",
+  degraded: null,
+  sessions: 0,
+  locked: false,
+  myTurn: false,
+  armed: null,
+  request: null,
+  clock: null,
+  espnLeague: null,
+  serverClient: null,
+  serverClientAction: unavailable,
+  queuePlan: unavailable,
+  arm: noop,
+  disarm: noop,
+  draftArmed: noop,
+};
 const EspnSyncContext = createContext<EspnSyncValue>(OFF);
 
 export const useEspnSync = () => useContext(EspnSyncContext);
@@ -102,6 +127,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     on("request", ({ request }) => setSnapshot((cur) => cur && { ...cur, request }));
     on("league", ({ espnLeague }) => setSnapshot((cur) => cur && { ...cur, espnLeague }));
     on("degraded", ({ degraded }) => setSnapshot((cur) => cur && { ...cur, degraded }));
+    on("serverClient", ({ serverClient }) => setSnapshot((cur) => cur && { ...cur, serverClient }));
 
     let retry: ReturnType<typeof setTimeout> | undefined;
     source.onopen = () => {
@@ -205,6 +231,24 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     if (armed) void draftPlayer(armed);
   }, [armed, draftPlayer]);
 
+  /* ---- War Room's own ESPN connection (Epic 9) ---- */
+  const post = useCallback(
+    async (path: string, body: unknown): Promise<string | null> => {
+      const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId!)}/espn/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }).catch(() => null);
+      if (!res) return "Couldn't reach War Room. Try again.";
+      if (res.ok) return null;
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      return data.error ?? "That didn't work. Try again.";
+    },
+    [leagueId],
+  );
+  const serverClientAction = useCallback((action: "take-over" | "hand-back") => post("server-client", { action }), [post]);
+  const queuePlan = useCallback((sync?: boolean) => post("queue", sync === undefined ? {} : { sync }), [post]);
+
   const toldDrift = useRef(false);
   useEffect(() => {
     if (!snapshot?.degraded || toldDrift.current) return;
@@ -213,14 +257,25 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   }, [snapshot?.degraded, toast]);
 
   // Say how a War Room pick turned out; a confirmed one simply appears on the board.
+  const holding = snapshot?.serverClient?.state === "holding";
   const told = useRef<string | null>(null);
   useEffect(() => {
     if (!request || told.current === `${request.id}:${request.state}`) return;
     told.current = `${request.id}:${request.state}`;
     if (request.state === "superseded") toast("ESPN had already made a pick for you");
-    else if (request.state === "refused") toast("ESPN didn't have you on the clock. Check your ESPN tab.");
-    else if (request.state === "expired") toast("ESPN didn't confirm that pick. Check your ESPN tab and pick there.");
-  }, [request, toast]);
+    else if (request.state === "refused") toast(holding ? "ESPN didn't have you on the clock." : "ESPN didn't have you on the clock. Check your ESPN tab.");
+    else if (request.state === "expired") toast(holding ? "ESPN didn't confirm that pick. Try again, or hand back and pick in ESPN." : "ESPN didn't confirm that pick. Check your ESPN tab and pick there.");
+  }, [request, toast, holding]);
+
+  // Losing the connection War Room held is worth a toast wherever the user is looking.
+  const serverClient = snapshot?.serverClient ?? null;
+  const toldLost = useRef<string | null>(null);
+  useEffect(() => {
+    if (serverClient?.state !== "lost") return void (toldLost.current = null);
+    if (toldLost.current) return;
+    toldLost.current = serverClient.reason ?? "lost";
+    toast(serverClient.reason ?? "War Room's connection to ESPN ended.");
+  }, [serverClient, toast]);
 
   const value = useMemo<EspnSyncValue>(() => {
     if (!snapshot) return OFF;
@@ -233,6 +288,9 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       request: sending ? { id: "sending", playerId: armedId ?? "", espnPlayerId: 0, state: "pending" } : request,
       clock: snapshot.status === "live" && clock ? { ...clock, mine: clock.teamId === snapshot.espnTeamId } : null,
       espnLeague: snapshot.espnLeague,
+      serverClient: flags.espnServerClientEnabled ? snapshot.serverClient : null,
+      serverClientAction,
+      queuePlan,
       link,
       degraded: snapshot.degraded,
       sessions: snapshot.sessions,
@@ -240,7 +298,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
       disarm,
       draftArmed,
     };
-  }, [leagueId, snapshot, clock, link, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed]);
+  }, [leagueId, snapshot, clock, link, myTurn, armed, armedId, sending, request, arm, disarm, draftArmed, flags.espnServerClientEnabled, serverClientAction, queuePlan]);
 
   return <EspnSyncContext.Provider value={value}>{children}</EspnSyncContext.Provider>;
 }
@@ -253,7 +311,7 @@ const CHIP: Record<Exclude<LiveStatus, "waiting">, { label: string; title: strin
 
 /** Header control: the sync state, or the way to set it up. */
 export function EspnSyncChip() {
-  const { status, link, degraded, sessions } = useEspnSync();
+  const { status, link, degraded, sessions, serverClient } = useEspnSync();
   if (status === "off") return null;
   if (degraded) {
     return (
@@ -274,6 +332,13 @@ export function EspnSyncChip() {
       <a className={cx("btn")} href="/espn" target="_blank" rel="noreferrer" title="Have picks from your ESPN draft land on this board automatically">
         Sync ESPN draft
       </a>
+    );
+  }
+  if (serverClient?.state === "holding" && status === "live") {
+    return (
+      <span className={cx("btn", "on")} title="War Room holds your ESPN draft connection: draft here, on any device. Your ESPN draft room is disconnected until you hand back." role="status">
+        ● Drafting via War Room
+      </span>
     );
   }
   const chip = CHIP[status];

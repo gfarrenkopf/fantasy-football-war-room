@@ -159,11 +159,13 @@ describe("the server-side ESPN client", () => {
     expect(JSON.stringify(ended)).not.toContain("342755166");
   });
 
-  it("ends as refused on an HTTP answer instead of a socket", async () => {
-    const { socket, ended } = setup();
-    socket.fire("unexpected-response", 403);
+  it("ends as refused on an HTTP answer instead of a socket, without ever checking in", async () => {
+    const { socket, ended, ingest } = setup();
+    socket.fire("unexpected-response", 500);
     await vi.advanceTimersByTimeAsync(0);
-    expect(ended).toEqual([["refused", expect.stringContaining("HTTP 403")]]);
+    expect(ended).toEqual([["refused", expect.stringContaining("HTTP 500")]]);
+    // A client that never joined mustn't make the draft look live.
+    expect(ingest).not.toHaveBeenCalled();
   });
 
   it("ends as lost when ESPN takes the connection back, and never tries again", async () => {

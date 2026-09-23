@@ -109,7 +109,7 @@ function ended(db: Db, userId: string, leagueId: string, client: EspnClient, rea
     view(userId, leagueId, { state: "released" });
     void setServerClientState(db, userId, leagueId, "released").catch(logFailure("releasing"));
   } else {
-    view(userId, leagueId, { state: "lost", reason: detail });
+    view(userId, leagueId, { state: "lost", reason: detail, ...(reason === "refused" ? { refused: true } : {}) });
     void setServerClientState(db, userId, leagueId, "lost").catch(logFailure("marking lost"));
     console.warn(`[espn-client] ${reason} league=${leagueId}`);
   }

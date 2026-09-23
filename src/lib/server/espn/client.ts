@@ -120,8 +120,10 @@ export function createEspnClient({
     } catch {
       /* already closed */
     }
-    // Whatever arrived last still goes to the relay: STATE 2 above all.
-    void flush().finally(() => onEnd?.(reason, detail));
+    // Whatever arrived last still goes to the relay, STATE 2 above all. Nothing to send means no
+    // check-in either: a client that never joined mustn't make the draft look live.
+    const last = sent < log.length || inFlight ? flush() : Promise.resolve();
+    void last.finally(() => onEnd?.(reason, detail));
   }
 
   async function post(): Promise<void> {

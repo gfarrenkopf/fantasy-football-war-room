@@ -17,6 +17,7 @@ import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
 import { EspnLeagueBar, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider } from "./EspnSync";
+import { EspnTakeover } from "./EspnTakeover";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
 import { OpeningNight } from "./OpeningNight";
@@ -271,6 +272,7 @@ function WarRoomView() {
         </div>
       </Header>
       <EspnLeagueBar />
+      <EspnTakeover />
       <EspnPickBar />
       <EspnPlanPublisher planOdds={planStale ? null : planOdds} />
       {prefs.mockOn && <MockBar onReport={() => void openReport()} reportMocks={REPORT_MOCKS} />}

@@ -68,6 +68,8 @@ export interface ServerClientView {
   state: ServerClientState;
   /** For `lost`: what happened, in words for the user. */
   reason?: string;
+  /** For `lost`: ESPN never let War Room in (a stale code, or the draft room isn't open yet), as opposed to taking the connection back. */
+  refused?: boolean;
   /**
    * The user asked War Room to keep ESPN's pick queue set to their turn plan (9.3): ESPN autopicks
    * from the queue, so it's the safety net if War Room's connection dies while they're on the clock.
