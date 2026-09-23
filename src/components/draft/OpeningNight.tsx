@@ -4,7 +4,10 @@ import localFont from "next/font/local";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { roundsOf, totalPicks } from "@/lib/draft/snake";
 import { cx, s } from "./cx";
+import { getStores } from "@/lib/storage";
+import { seedPremiered, shouldPremiere } from "@/lib/storage/premiere";
 import { useLeague } from "./LeagueProvider";
+import { usePrefs } from "./PrefsProvider";
 
 /**
  * The broadcast face for the one night a year this product is allowed to shout. Big Shoulders
@@ -37,8 +40,8 @@ const subscribeReduced = (onChange: () => void) => {
 };
 
 /**
- * Opening night: the first time a league opens, straight from the landing page (`?new=1`), the war
- * room goes dark and announces the draft the way the league announces its own — lights up, the
+ * Opening night: the first time a new league opens on this device, before any pick is logged —
+ * however it was made: the landing page, league setup here, or an ESPN import — the war room goes dark and announces the draft the way the league announces its own — lights up, the
  * year slammed onto the stage, the league's shape counted onto the board, your slot called, the
  * position colors going off in both corners — then the clock starts and the whole stage irises
  * down into the header's pick box, where the real clock lives.
@@ -48,39 +51,71 @@ const subscribeReduced = (onChange: () => void) => {
  * motion gets the same announcement as a still card. Every number on it is the league's own.
  */
 export function OpeningNight() {
-  const { active, hydrated } = useLeague();
+  const { active, leagues, hydrated } = useLeague();
+  const { prefs, setPrefs } = usePrefs();
   const reduced = useSyncExternalStore(subscribeReduced, () => window.matchMedia(REDUCED).matches, () => false);
   const [show, setShow] = useState<null | { name: string; season: number; teams: number; rounds: number; total: number; slot: number }>(null);
   const [beat, setBeat] = useState(0);
   const [leaving, setLeaving] = useState<{ x: number; y: number } | null>(null);
-  const read = useRef(false);
+  const fresh = useRef<string | null | undefined>(undefined);
+  const checked = useRef(new Set<string>());
   const cta = useRef<HTMLButtonElement>(null);
-
-  // Read (and strip) the one-time parameter the landing page set, once the league is known.
+  // Read by the check below without re-running it: marking a league premiered mustn't cancel its show.
+  const latest = useRef({ active, premiered: prefs.premiered });
   useEffect(() => {
-    if (read.current || !hydrated) return;
-    read.current = true;
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("new") !== "1") return;
-    url.searchParams.delete("new");
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    if (!active) return;
-    const settings = active.settings;
-    // Set from a timeout so the stage mounts after the war room's first paint, not in front of it.
-    const t = setTimeout(
-      () =>
-        setShow({
-          name: active.name,
-          season: active.season,
-          teams: settings.teams,
-          rounds: roundsOf(settings),
-          total: totalPicks(settings),
-          slot: settings.mySlot,
-        }),
-      0,
-    );
-    return () => clearTimeout(t);
-  }, [hydrated, active]);
+    latest.current = { active, premiered: prefs.premiered };
+  });
+
+  // Read (and strip) the one-time parameter the landing page sets on the league it just made, and
+  // seed a device from before premieres were kept (see premiere.ts).
+  useEffect(() => {
+    if (!hydrated) return;
+    if (fresh.current === undefined) {
+      const url = new URL(window.location.href);
+      fresh.current = url.searchParams.get("new") === "1" ? (active?.id ?? null) : null;
+      if (url.searchParams.has("new")) {
+        url.searchParams.delete("new");
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    }
+    if (prefs.premiered === null) setPrefs({ premiered: seedPremiered(leagues.map((l) => l.id), fresh.current) });
+  }, [hydrated, active, leagues, prefs.premiered, setPrefs]);
+
+  // Whether the league now open premieres. Once per league per visit, as leagues load and switch.
+  const seeded = prefs.premiered !== null;
+  const activeId = active?.id ?? null;
+  useEffect(() => {
+    const seen = checked.current;
+    if (!hydrated || !seeded || !activeId || seen.has(activeId)) return;
+    seen.add(activeId);
+    let live = true;
+    void getStores()
+      .draft.getDraftState(activeId)
+      .then((draft) => {
+        const { active: league, premiered } = latest.current;
+        if (!live || !league || league.id !== activeId || !premiered) return;
+        if (!shouldPremiere(premiered, league.id, draft?.picks.length ?? 0)) return;
+        // Marked as it starts, not as it ends: a reload mid-show doesn't run it again.
+        setPrefs({ premiered: [...premiered, league.id] });
+        const settings = league.settings;
+        // Set from a timeout so the stage mounts after the war room's first paint, not in front of it.
+        setTimeout(() =>
+          setShow({
+            name: league.name,
+            season: league.season,
+            teams: settings.teams,
+            rounds: roundsOf(settings),
+            total: totalPicks(settings),
+            slot: settings.mySlot,
+          }),
+        );
+      });
+    return () => {
+      // Switched away before the draft was read: look again if this league opens later.
+      if (live) seen.delete(activeId);
+      live = false;
+    };
+  }, [hydrated, seeded, activeId, setPrefs]);
 
   const end = useCallback(() => {
     if (leaving) return;
