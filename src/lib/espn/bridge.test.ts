@@ -686,6 +686,17 @@ describe("telling War Room how ESPN has this league set up (8.8)", () => {
   });
 });
 
+describe("the overlay's markup", () => {
+  // The overlay finds its controls with querySelector, which returns the first match. A second
+  // element sharing a control's class steals its handler: that left "Connect to War Room" dead.
+  it("gives every control a class nothing else in the overlay uses", () => {
+    const markup = SOURCE.slice(SOURCE.indexOf("root.innerHTML = `"), SOURCE.indexOf("`;", SOURCE.indexOf("root.innerHTML = `")));
+    const tokens = [...markup.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/));
+    const selected = [...SOURCE.matchAll(/root\.querySelector\("\.([\w-]+)/g)].map((m) => m[1]);
+    for (const cls of new Set(selected)) expect(tokens.filter((t) => t === cls), `.${cls}`).toHaveLength(1);
+  });
+});
+
 describe("handing over the join code (9.1)", () => {
   const CODE = "-342755166";
   const JOIN_URL =
