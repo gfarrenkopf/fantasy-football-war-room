@@ -117,6 +117,8 @@ export interface UiPrefs {
    * from before this field existed, whose leagues must not all premiere at once (see premiere.ts).
    */
   premiered: string[] | null;
+  /** Leagues whose draft-complete reveal has played on this device, so an undo and re-log doesn't replay it. */
+  wrapped: string[];
 }
 
 export interface Dataset {

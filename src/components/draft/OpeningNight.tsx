@@ -14,7 +14,7 @@ import { usePrefs } from "./PrefsProvider";
  * (SIL OFL 1.1, see fonts/OFL.txt) is committed rather than fetched, so a build never needs the
  * network — the app still has to boot with zero configuration.
  */
-const stage = localFont({
+export const stage = localFont({
   src: "./fonts/BigShoulders-latin.woff2",
   weight: "700 900",
   display: "swap",
@@ -27,7 +27,7 @@ const CONFETTI = ["--color-qb", "--color-rb", "--color-wr", "--color-te", "--col
 /** When each beat lands, in ms from the lights going down. */
 const BEAT = { title: 250, slam: 520, league: 1250, stats: 1650, slot: 2750, clock: 3700, out: 6200 } as const;
 
-const ordinal = (n: number) => {
+export const ordinal = (n: number) => {
   const tail = n % 100 >= 11 && n % 100 <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
   return `${n}${tail}`;
 };
@@ -38,6 +38,9 @@ const subscribeReduced = (onChange: () => void) => {
   mql.addEventListener("change", onChange);
   return () => mql.removeEventListener("change", onChange);
 };
+
+/** Whether the visitor asked for reduced motion; false on the server. Shared with the draft finale. */
+export const useReducedMotion = () => useSyncExternalStore(subscribeReduced, () => window.matchMedia(REDUCED).matches, () => false);
 
 /**
  * Opening night: the first time a new league opens on this device, before any pick is logged —
@@ -53,7 +56,7 @@ const subscribeReduced = (onChange: () => void) => {
 export function OpeningNight() {
   const { active, leagues, hydrated } = useLeague();
   const { prefs, setPrefs } = usePrefs();
-  const reduced = useSyncExternalStore(subscribeReduced, () => window.matchMedia(REDUCED).matches, () => false);
+  const reduced = useReducedMotion();
   const [show, setShow] = useState<null | { name: string; season: number; teams: number; rounds: number; total: number; slot: number }>(null);
   const [beat, setBeat] = useState(0);
   const [leaving, setLeaving] = useState<{ x: number; y: number } | null>(null);
@@ -225,7 +228,7 @@ export function OpeningNight() {
 }
 
 /** Tabular digits running up to the league's real number, fast, the way a broadcast graphic fills. */
-function CountUp({ to, delay, still }: { to: number; delay: number; still: boolean }) {
+export function CountUp({ to, delay, still }: { to: number; delay: number; still: boolean }) {
   const [n, setN] = useState(still ? to : 0);
   useEffect(() => {
     if (still) return;
