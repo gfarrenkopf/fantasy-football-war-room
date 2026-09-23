@@ -492,20 +492,38 @@ describe("ESPN bridge", () => {
  * pick slot, each holding the drafted player id (or -1) and this league's id. Built rather than
  * captured, so no real member GUIDs live in the repo.
  */
-function initBlob({ league = 704343562, total = 8, drafted = [] as number[], header = 96, leagueAt = 33, stride = 45 } = {}) {
+function initBlob({ league = 704343562, total = 8, drafted = [] as number[], header = 96, leagueAt = 33, stride = 45, headerField = 0, numbered = false } = {}) {
   const bytes = new Uint8Array(header + stride * total);
   const view = new DataView(bytes.buffer);
   // A header field carrying the league id too: the real blob has one, and it's why the decoder
-  // can't just trust the first match.
+  // can't just trust the first match. Its first field is whatever ESPN keeps there (16777216 and
+  // 65536 have both been seen), which may or may not pass for a player id.
+  view.setInt32(header - stride, headerField);
   view.setInt32(header - stride + leagueAt, league);
   for (let k = 0; k < total; k++) {
     const at = header + stride * k;
     view.setInt32(at, drafted[k] ?? -1);
     view.setInt32(at + leagueAt, league);
+    // Real blobs precede each record with its 1-based pick number (in the last 4 bytes of the one before).
+    if (numbered) view.setInt32(at - 4, k + 1);
   }
   // ESPN sends "INIT <base64> ####…": the base64 loses its = padding and a run of # follows it.
   return Buffer.from(bytes).toString("base64").replace(/=+$/, "") + ` ${"#".repeat(32)}`;
 }
+
+describe("decoding INIT before and during the draft (§4.1)", () => {
+  it("finds no picks before the draft, even when the header record's first field looks like a player", () => {
+    // Pre-draft on draftroom.online, 2026-09-23: the header held 65536 and became pick 1.
+    expect(decodeInitPicks(initBlob({ drafted: [], headerField: 65536, numbered: true }), 704343562)).toEqual([]);
+    expect(decodeInitPicks(initBlob({ drafted: [], numbered: true }), 704343562)).toEqual([]);
+  });
+
+  it("reads the picks from the numbered table, not the header, whatever the header holds", () => {
+    for (const headerField of [0, 65536, 16777216, 4429795]) {
+      expect(decodeInitPicks(initBlob({ drafted: [4430807, -16034], headerField, numbered: true }), 704343562)).toEqual([4430807, -16034]);
+    }
+  });
+});
 
 describe("the server-side client's ports of the bridge (Epic 9)", () => {
   it("decodes INIT exactly as the shipped bridge does", () => {
@@ -516,6 +534,9 @@ describe("the server-side client's ports of the bridge (Epic 9)", () => {
       initBlob({ total: 160, drafted: Array.from({ length: 37 }, (_, i) => 3_000_000 + i) }),
       initBlob({ header: 51, drafted: [4429795] }),
       initBlob({ drafted: [] }),
+      initBlob({ drafted: [], headerField: 65536, numbered: true }),
+      initBlob({ drafted: [4429795, -16034], headerField: 65536, numbered: true }),
+      initBlob({ drafted: [4429795], headerField: 16777216, numbered: true }),
       initBlob({ league: 1, drafted: [4429795] }),
       "not base64 at all!",
     ];
@@ -632,7 +653,7 @@ describe("telling War Room how ESPN has this league set up (8.8)", () => {
     settings: {
       size: 4,
       name: "App Test",
-      draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2], timePerSelection: 300 },
+      draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2], timePerSelection: 300, date: 1790208000000 },
       rosterSettings: { lineupSlotCounts: { "0": 1, "2": 2, "20": 3 } },
       // A real league carries dozens of these; only the reception item should travel.
       scoringSettings: { scoringItems: [{ statId: 42, points: 0.04 }, { statId: 53, points: 1 }, { statId: 24, points: 0.1 }] },
@@ -661,7 +682,8 @@ describe("telling War Room how ESPN has this league set up (8.8)", () => {
       // The name travels too: the pairing popup labels a league built from ESPN with it.
       name: "App Test",
       size: 4,
-      draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2] },
+      // The date too: War Room's draft-day countdown follows ESPN's schedule.
+      draftSettings: { type: "SNAKE", pickOrder: [1, 3, 4, 2], date: 1790208000000 },
       rosterSettings: { lineupSlotCounts: { "0": 1, "2": 2, "20": 3 } },
       scoringSettings: { scoringItems: [{ statId: 53, points: 1 }] },
     });
