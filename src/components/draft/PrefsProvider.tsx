@@ -5,7 +5,7 @@ import { CPU_STYLES } from "@/lib/draft/sim";
 import type { UiPrefs } from "@/lib/draft/types";
 import { getStores } from "@/lib/storage";
 
-export const DEFAULT_PREFS: UiPrefs = { view: "focus", center: "ba", baMode: "pos", mockOn: false, room: null, activeLeagueId: null, premiered: null };
+export const DEFAULT_PREFS: UiPrefs = { view: "focus", center: "ba", baMode: "pos", mockOn: false, room: null, activeLeagueId: null, premiered: null, wrapped: [] };
 
 /** Accepts only well-formed prefs fields, falling back to defaults per field. */
 export function parsePrefs(raw: unknown): UiPrefs {
@@ -18,6 +18,7 @@ export function parsePrefs(raw: unknown): UiPrefs {
     room: Array.isArray(p.room) && p.room.every((s) => CPU_STYLES.includes(s)) ? p.room : null,
     activeLeagueId: typeof p.activeLeagueId === "string" ? p.activeLeagueId : null,
     premiered: Array.isArray(p.premiered) && p.premiered.every((id) => typeof id === "string") ? p.premiered : null,
+    wrapped: Array.isArray(p.wrapped) && p.wrapped.every((id) => typeof id === "string") ? p.wrapped : [],
   };
 }
 

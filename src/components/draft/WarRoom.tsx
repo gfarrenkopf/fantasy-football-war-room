@@ -20,6 +20,7 @@ import { EspnLeagueBar, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncPr
 import { EspnTakeover } from "./EspnTakeover";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
+import { DraftFinale } from "./DraftFinale";
 import { OpeningNight } from "./OpeningNight";
 import { useWelcomeHold, Welcome } from "./Welcome";
 import { FlagsProvider } from "./Flags";
@@ -79,6 +80,7 @@ function LeagueGate() {
             <AiPlanProvider leagueId={active?.id ?? null}>
               <PickCelebrationProvider>
                 <WarRoomView />
+                <DraftFinale />
               </PickCelebrationProvider>
             </AiPlanProvider>
           </SimProvider>
