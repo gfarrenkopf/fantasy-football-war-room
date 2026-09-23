@@ -160,6 +160,8 @@ describe("taking over and handing back an ESPN draft connection", () => {
     relay.publishPlan(userId, leagueId, { picks: [1], rounds: "1", onClock: true, targets: [p], fallbacks: [], best: [], after: null });
     expect(relay.pushQueue(userId, leagueId)).toEqual([4430807]);
     expect(sockets[0].sent).toContain("DRAFT_LIST 4430807\n");
+    expect(relay.setAutopick(userId, leagueId, false)).toBe(true);
+    expect(sockets[0].sent).toContain("AUTODRAFT false\n");
   });
 
   it("rejoins a held draft after a restart, and recovers the picks made in the gap from INIT (9.5)", async () => {

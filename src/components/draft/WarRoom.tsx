@@ -17,6 +17,7 @@ import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
 import { EspnLeagueBar, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider } from "./EspnSync";
+import { EspnAutopickAlert } from "./EspnAutopickAlert";
 import { EspnTakeover } from "./EspnTakeover";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
 import { SyncNotices } from "./SyncNotices";
@@ -273,6 +274,7 @@ function WarRoomView() {
           ))}
         </div>
       </Header>
+      <EspnAutopickAlert />
       <EspnLeagueBar />
       <EspnTakeover />
       <EspnPickBar />

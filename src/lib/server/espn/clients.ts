@@ -4,7 +4,7 @@ import WebSocket from "ws";
 import { config } from "@/lib/config";
 import type { Db } from "@/lib/db/types";
 import type { ServerClientView } from "@/lib/espn/live";
-import { draftListFrame, selectFrame } from "@/lib/espn/join";
+import { autodraftFrame, draftListFrame, selectFrame } from "@/lib/espn/join";
 import { createEspnClient, type Connect, type EndInfo, type EndReason, type EspnClient, type EspnSocket } from "./client";
 import { getRelay } from "./live";
 import { deleteCredential, hasCredential, listHolding, loadCredential, setServerClientState } from "./serverClients";
@@ -121,7 +121,11 @@ export async function takeOver(
       detach = relay.attachSender(
         userId,
         leagueId,
-        { select: (espnPlayerId) => client.send(selectFrame(espnPlayerId)), setQueue: (ids) => client.send(draftListFrame(ids)) },
+        {
+          select: (espnPlayerId) => client.send(selectFrame(espnPlayerId)),
+          setQueue: (ids) => client.send(draftListFrame(ids)),
+          setAutopick: (on) => client.send(autodraftFrame(on)),
+        },
         session,
       );
       view(userId, leagueId, { state: "holding" });

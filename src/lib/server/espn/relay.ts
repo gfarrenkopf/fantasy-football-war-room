@@ -89,6 +89,8 @@ export interface RelaySender {
   select(espnPlayerId: number): boolean;
   /** Replaces ESPN's pick queue with these players, in order. */
   setQueue(espnPlayerIds: readonly number[]): boolean;
+  /** Switches ESPN's autopick for the user's team. */
+  setAutopick(on: boolean): boolean;
 }
 
 /** The overlay's turn plan, versioned so a bridge only downloads it when it changed. */
@@ -185,6 +187,8 @@ export interface Relay {
   pushQueue(userId: string, leagueId: string): number[] | null;
   /** Keeps ESPN's queue set to every new turn plan, or stops. Sets it now when turned on. */
   setQueueSync(userId: string, leagueId: string, on: boolean): number[] | null;
+  /** Switches ESPN's autopick for the user's team through War Room's connection. False with nothing holding it. */
+  setAutopick(userId: string, leagueId: string, on: boolean): boolean;
 }
 
 /** ESPN's queue from a turn plan: targets, then fallbacks, then the best on the board, each once, none already drafted. */
@@ -289,6 +293,7 @@ export function createRelay({
       request: viewOf(ch.request),
       espnLeague: ch.espnLeague,
       degraded: ch.degraded,
+      autopick: autopickOf(ch),
       serverClient: serverClientOf(ch),
     };
   }
@@ -397,6 +402,8 @@ export function createRelay({
     }
   }
 
+  const autopickOf = (ch: Channel) => ch.scope !== null && ch.feed.autodraft.includes(ch.scope.espnTeamId);
+
   function reset(ch: Channel) {
     ch.sessions.clear();
     ch.frameCount = 0;
@@ -452,6 +459,7 @@ export function createRelay({
         ch.frameCount += frames.length;
         logUnreadable(ch, scope, session, frames);
         const before = ch.feed;
+        const autopickBefore = autopickOf(ch);
         // Appending to the newest session folds incrementally; frames for an older one (two tabs
         // bridging at once) change the order, so the whole draft is refolded.
         ch.feed = latest ? foldFrames(frames, ch.feed) : foldFrames(sourceFrames(ch));
@@ -472,6 +480,7 @@ export function createRelay({
         // ESPN refused the pick War Room just sent: the socket stays open and the user picks again.
         if (ch.feed.refusedPicks > before.refusedPicks && ch.request?.state === "sent") settle(ch, "refused", "not-on-the-clock");
         if (!rebuilt && clockMoved) emit(ch, { type: "clock", onClock: ch.feed.onClock });
+        if (!rebuilt && autopickOf(ch) !== autopickBefore) emit(ch, { type: "autopick", autopick: autopickOf(ch) });
       } else if (teamChanged && ch.picks.length) {
         ch.picks = resolvePicks(ch.feed, walk, scope.espnTeamId);
         emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
@@ -598,6 +607,10 @@ export function createRelay({
     releaseHold(userId, leagueId) {
       const ch = channels.get(key(userId, leagueId));
       if (ch && !ch.source) ch.holdAt = null;
+    },
+
+    setAutopick(userId, leagueId, on) {
+      return channels.get(key(userId, leagueId))?.sender?.setAutopick(on) ?? false;
     },
 
     pushQueue(userId, leagueId) {

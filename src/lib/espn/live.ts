@@ -105,6 +105,11 @@ export interface LiveSnapshot {
   degraded: DriftReport | null;
   /** War Room's own ESPN connection (Epic 9), or null when the user hasn't handed over a join code. */
   serverClient: ServerClientView | null;
+  /**
+   * ESPN has autopick on for the user's team, so ESPN picks for them as soon as they're on the clock.
+   * ESPN switches it on by itself after a turn times out, and leaves it on.
+   */
+  autopick: boolean;
 }
 
 /** Why the feed stopped being trusted, in words for the user plus counts for the log. */
@@ -122,7 +127,8 @@ export type LiveEvent =
   | { type: "request"; request: PickRequestView }
   | { type: "league"; espnLeague: EspnLeague }
   | { type: "degraded"; degraded: DriftReport }
-  | { type: "serverClient"; serverClient: ServerClientView | null };
+  | { type: "serverClient"; serverClient: ServerClientView | null }
+  | { type: "autopick"; autopick: boolean };
 
 /** Resolves the feed's picks from `from` onward (earlier ones are already resolved). */
 export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: number | null, from = 0): LivePick[] {

@@ -3821,6 +3821,76 @@ a.btn {
   color: var(--color-mine-ink);
   font-weight: 700;
 }
+/*
+ * ESPN's autopick is on for the user (EspnAutopickAlert.tsx): ESPN, not the user, is making their
+ * picks. The one bar that must never be missed, so it's the reach red, heavy, and arrives with a flash.
+ */
+.espnAuto {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--color-reach) 22%, var(--color-panel));
+  border-top: 2px solid var(--color-reach);
+  border-bottom: 2px solid var(--color-reach);
+  color: var(--color-text);
+  animation: espnAutoIn 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.espnAutoIcon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--color-reach-ink);
+}
+.espnAutoText {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.espnAutoText strong {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--color-reach-ink);
+}
+.espnAutoText span {
+  display: block;
+  color: color-mix(in srgb, var(--color-reach-ink) 55%, var(--color-text));
+}
+.btn.espnAutoOff {
+  border-color: var(--color-reach);
+  background: var(--color-reach);
+  color: #fff;
+  font-weight: 800;
+  padding-inline: 16px;
+}
+.btn.espnAutoOff:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-reach) 85%, #fff);
+}
+@keyframes espnAutoIn {
+  from {
+    background: color-mix(in srgb, var(--color-reach) 60%, var(--color-panel));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .espnAuto {
+    animation: none;
+  }
+}
+@media (max-width: 767px) {
+  .espnAuto {
+    padding: 12px max(14px, env(safe-area-inset-right)) 12px max(14px, env(safe-area-inset-left));
+  }
+  .espnAutoText {
+    flex-basis: calc(100% - 42px);
+  }
+  .btn.espnAutoOff {
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+}
+
 /* War Room holding the user's ESPN connection (EspnTakeover.tsx): a standing state, so quieter than a pick. */
 .espnArm.espnHold {
   background: color-mix(in srgb, var(--color-focus) 10%, var(--color-panel));
