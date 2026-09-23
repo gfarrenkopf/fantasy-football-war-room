@@ -160,6 +160,7 @@ The variables exist for the paid hosted version. Accounts, cross-device sync, AI
 | `ANTHROPIC_API_KEY` | AI-written draft plan | cloud features (database + auth secret) | Available |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID` | Payments: a one-time season pass per league that unlocks AI plans. See [payments.md](payments.md). **Leave unset when self-hosting.** Without them nothing is paywalled. | cloud features, and all three set | Available |
 | `SPORTSDATA_API_KEY` | The [data pipeline](data-pipeline.md), for refreshing player data from SportsDataIO | nothing | Available |
+| `ESPN_CODE_KEY` | Drafting from a phone with no ESPN tab open: War Room joins the user's ESPN draft room itself, with a join code the bookmarklet hands over on the user's say-so. The key encrypts that code at rest. Generate with `openssl rand -base64 32`. | cloud features | Available |
 
 If a key is set without what it depends on (say, a Stripe key without a database), the feature stays off and the server logs a `[config]` warning explaining why.
 

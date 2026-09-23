@@ -11,3 +11,17 @@ export const ESPN_DISCLOSURE: readonly string[] = [
   "Only draft data (picks, the draft clock, league settings) is sent to War Room. War Room never sees your ESPN password or cookies.",
   "It's best-effort and can stop working without notice if ESPN changes their draft room. Your War Room board always works by hand.",
 ];
+
+/**
+ * The separate opt-in for handing War Room the ESPN draft room's join code (9.1), shown in the
+ * bridge overlay. Deliberately not folded into the disclosure above: it's a credential, and taking
+ * over costs the user their own ESPN draft room's connection. Bump the version when the substance changes.
+ */
+export const ESPN_HANDOVER_VERSION = 1;
+
+export const ESPN_HANDOVER_DISCLOSURE: readonly string[] = [
+  "Let War Room join your ESPN draft room itself, so you can draft from War Room on your phone with no ESPN tab open anywhere.",
+  "This tab hands War Room your draft room's join code. War Room stores it encrypted and deletes it when the draft completes, or after 12 hours if it never does.",
+  "ESPN allows one connection per team. When you tell War Room to take over, your ESPN draft room disconnects on every device until you hand back.",
+  "War Room still only picks players you choose, and only while you're on the clock.",
+];

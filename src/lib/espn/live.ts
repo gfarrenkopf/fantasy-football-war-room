@@ -51,6 +51,32 @@ export interface PickRequestView {
 
 export const requestActive = (r: Pick<PickRequestView, "state"> | null): boolean => r?.state === "pending" || r?.state === "sent";
 
+/**
+ * War Room's own connection to the user's ESPN draft room (Epic 9), for drafting with no ESPN tab open:
+ * - `stored`: the user handed over the join code; War Room isn't connected.
+ * - `connecting`: joining ESPN's draft socket.
+ * - `holding`: War Room holds the user's ESPN connection. ESPN allows one per team, so their own
+ *   ESPN draft room is disconnected until they hand back.
+ * - `lost`: the connection ended without War Room ending it: ESPN took it back (the user clicked
+ *   Reconnect in ESPN), refused the join, or went quiet. War Room doesn't reconnect on its own.
+ * - `released`: the user handed the connection back.
+ * - `complete`: the draft finished; the join code is deleted.
+ */
+export type ServerClientState = "stored" | "connecting" | "holding" | "lost" | "released" | "complete";
+
+export interface ServerClientView {
+  state: ServerClientState;
+  /** For `lost`: what happened, in words for the user. */
+  reason?: string;
+  /** For `lost`: ESPN never let War Room in (a stale code, or the draft room isn't open yet), as opposed to taking the connection back. */
+  refused?: boolean;
+  /**
+   * The user asked War Room to keep ESPN's pick queue set to their turn plan (9.3): ESPN autopicks
+   * from the queue, so it's the safety net if War Room's connection dies while they're on the clock.
+   */
+  queueSync?: boolean;
+}
+
 /** This league as ESPN has it (8.8), or why it can't be imported. */
 export type EspnLeague = { ok: true; settings: Omit<LeagueSettings, "valueThreshold"> } | { ok: false; error: string };
 
@@ -74,6 +100,8 @@ export interface LiveSnapshot {
    * piling up (8.6). Picks stop being applied and the board goes back to being logged by hand.
    */
   degraded: DriftReport | null;
+  /** War Room's own ESPN connection (Epic 9), or null when the user hasn't handed over a join code. */
+  serverClient: ServerClientView | null;
 }
 
 /** Why the feed stopped being trusted, in words for the user plus counts for the log. */
@@ -90,7 +118,8 @@ export type LiveEvent =
   | { type: "status"; status: LiveStatus; draft: FeedStatus }
   | { type: "request"; request: PickRequestView }
   | { type: "league"; espnLeague: EspnLeague }
-  | { type: "degraded"; degraded: DriftReport };
+  | { type: "degraded"; degraded: DriftReport }
+  | { type: "serverClient"; serverClient: ServerClientView | null };
 
 /** Resolves the feed's picks from `from` onward (earlier ones are already resolved). */
 export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: number | null, from = 0): LivePick[] {
@@ -107,6 +136,17 @@ export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: 
     };
   });
 }
+
+/**
+ * A phone that locks mid-draft suspends the page, and mobile browsers drop or freeze its event
+ * stream without always saying so (9.7). Hidden this long, the stream is reopened on wake: a fresh
+ * connection starts with a snapshot, so the board and the pick clock are current again.
+ */
+export const WAKE_RESYNC_MS = 10_000;
+
+/** Whether to reopen the stream as the page becomes visible: it's closed, or the page was hidden long enough to distrust it. */
+export const resyncOnWake = (hiddenAt: number | null, now: number, streamOpen: boolean): boolean =>
+  !streamOpen || (hiddenAt !== null && now - hiddenAt >= WAKE_RESYNC_MS);
 
 /** ESPN's pick clock as a local deadline: the time left when it arrived, on this device's own clock, so server skew doesn't matter. */
 export interface ClockDeadline {

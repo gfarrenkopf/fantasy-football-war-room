@@ -3215,3 +3215,22 @@ a.btn {
   color: var(--color-mine-ink);
   font-weight: 700;
 }
+/* War Room holding the user's ESPN connection (EspnTakeover.tsx): a standing state, so quieter than a pick. */
+.espnArm.espnHold {
+  background: color-mix(in srgb, var(--color-focus) 10%, var(--color-panel));
+  border-bottom-color: var(--color-focus);
+}
+.espnArm .btn[aria-pressed="true"] {
+  border-color: var(--color-mine);
+  color: var(--color-mine);
+}
+@media (max-width: 767px) {
+  /* Phone: the text takes the full row and the buttons share the next, so nothing is a thin sliver. */
+  .espnArmText {
+    flex: 1 0 100%;
+  }
+  .espnArm .btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

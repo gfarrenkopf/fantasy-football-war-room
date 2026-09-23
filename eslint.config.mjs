@@ -6,9 +6,10 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   // All env access goes through src/lib/config.ts, or scripts/ingest/env.mts, scripts/ai/env.mts
-  // and scripts/db/migrate.mts for the CLIs — config.ts imports "server-only" and can't be loaded by a node script.
+  // and scripts/db/*.mts for the CLIs — config.ts imports "server-only" and can't be loaded by a node script.
+  // src/instrumentation.ts reads only NEXT_RUNTIME, which Next sets, to skip the edge runtime.
   {
-    ignores: ["src/lib/config.ts", "scripts/ingest/env.mts", "scripts/ai/env.mts", "scripts/db/migrate.mts"],
+    ignores: ["src/lib/config.ts", "scripts/ingest/env.mts", "scripts/ai/env.mts", "scripts/db/*.mts", "src/instrumentation.ts"],
     rules: {
       "no-restricted-properties": [
         "error",

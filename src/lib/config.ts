@@ -1,4 +1,5 @@
 import "server-only";
+import { parseKey } from "@/lib/server/espn/secretBox";
 
 /**
  * The only module allowed to read `process.env` (enforced by ESLint).
@@ -47,6 +48,12 @@ const espnSyncAllowlist = (readEnv("ESPN_SYNC_ALLOWLIST") ?? "")
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
+/**
+ * 32 random bytes, base64. Encrypts the ESPN join code a user hands War Room so it can draft for them
+ * without their ESPN tab open (Epic 9). Without it that option is off; the bookmarklet still works.
+ */
+const espnCodeKeyRaw = readEnv("ESPN_CODE_KEY");
+const espnCodeKey = parseKey(espnCodeKeyRaw);
 
 /** Accounts + server-backed persistence. Requires a database and auth. */
 const cloudEnabled = Boolean(databaseUrl && nextAuthSecret);
@@ -84,6 +91,7 @@ export const config = Object.freeze({
   stripePriceId,
   sportsDataApiKey,
   espnSyncAllowlist,
+  espnCodeKey,
 
   cloudEnabled,
   googleAuthEnabled,
@@ -96,9 +104,14 @@ export const config = Object.freeze({
   dataPipelineEnabled: Boolean(sportsDataApiKey),
   /**
    * ESPN live draft sync: picks relayed from a bridge in the user's ESPN tab. Needs accounts (picks
-   * are relayed per user and league) and nothing else: no ESPN credentials are ever stored.
+   * are relayed per user and league) and nothing else. No ESPN cookies or passwords are ever stored.
    */
   espnSyncEnabled: cloudEnabled,
+  /**
+   * Drafting without an ESPN tab open (Epic 9): the user hands over their draft room's join code,
+   * stored encrypted until the draft completes, and War Room joins ESPN's draft socket itself.
+   */
+  espnServerClientEnabled: cloudEnabled && espnCodeKey !== null,
 });
 
 export type Config = typeof config;
@@ -113,6 +126,7 @@ export const publicFlags = Object.freeze({
   paymentsEnabled: config.paymentsEnabled,
   dataPipelineEnabled: config.dataPipelineEnabled,
   espnSyncEnabled: config.espnSyncEnabled,
+  espnServerClientEnabled: config.espnServerClientEnabled,
 });
 
 export type PublicFlags = typeof publicFlags;
@@ -152,6 +166,11 @@ if (stripeAnySet && !cloudEnabled) {
 }
 if (espnSyncAllowlist.length && !cloudEnabled) {
   warnings.push("ESPN_SYNC_ALLOWLIST is set but cloud features are disabled, so ESPN live sync is off.");
+}
+if (espnCodeKeyRaw && !espnCodeKey) {
+  warnings.push("ESPN_CODE_KEY isn't 32 bytes of base64 (try `openssl rand -base64 32`), so drafting without an ESPN tab open is off.");
+} else if (espnCodeKey && !cloudEnabled) {
+  warnings.push("ESPN_CODE_KEY is set but cloud features are disabled, so drafting without an ESPN tab open is off.");
 }
 for (const warning of warnings) {
   console.warn(`[config] ${warning}`);

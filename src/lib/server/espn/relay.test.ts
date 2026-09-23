@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Crosswalk } from "@/lib/espn/crosswalk";
 import type { LiveEvent } from "@/lib/espn/live";
-import { createRelay, type RelayScope } from "./relay";
+import { createRelay, queueFromPlan, type RelayScope } from "./relay";
 
 /** Players 1 and 2 are on the board; everything else is off it. */
 const crosswalk: Crosswalk = (id) =>
@@ -339,5 +339,89 @@ describe("when ESPN's protocol drifts (8.6)", () => {
     await relay.ingest({ ...scope, espnLeagueId: "999" }, "s2", 0, ["STATE 1"]);
     expect(relay.snapshot("u1", "L1").degraded).toBeNull();
     warn.mockRestore();
+  });
+});
+
+describe("relay with War Room holding the ESPN connection (9.3)", () => {
+  const player = (espnPlayerId: number | undefined, name = `P${espnPlayerId}`) => ({ playerId: name, espnPlayerId, name, pos: "RB" as const, team: "DET", bye: 8, badge: "90%" });
+  const plan = {
+    picks: [5],
+    rounds: "1",
+    onClock: true,
+    targets: [player(11), player(12)],
+    fallbacks: [player(12), player(undefined, "nobody"), player(13)],
+    best: [player(1), player(14)],
+    after: null,
+  };
+
+  async function holding() {
+    const s = setup();
+    const sender = { select: vi.fn(() => true), setQueue: vi.fn(() => true) };
+    s.relay.attachSender("u1", "L1", sender);
+    s.relay.subscribe("u1", "L1", (e) => s.events.push(e));
+    await s.relay.ingest(scope, "srv1", 0, [...PRE, "SELECTED 4 1 2", "SELECTING 1 60000"]);
+    return { ...s, sender };
+  }
+
+  it("sends a War Room pick on ESPN's socket at once, and ESPN's echo confirms it", async () => {
+    const { relay, sender, events } = await holding();
+    const result = relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
+    expect(result).toMatchObject({ ok: true, request: { state: "sent" } });
+    expect(sender.select).toHaveBeenCalledWith(2);
+    // Nothing is left for a bridge to carry.
+    expect(((await relay.ingest(scope, "srv1", 5, [])) as { command?: unknown }).command).toBeUndefined();
+    await relay.ingest(scope, "srv1", 5, ["SELECTED 1 2 4 {00000000-0000-0000-0000-000000000000}"]);
+    expect(events.filter((e) => e.type === "request").map((e) => e.type === "request" && e.request.state)).toEqual(["pending", "sent", "confirmed"]);
+  });
+
+  it("settles an out-of-turn refusal as refused, without calling the feed untrustworthy", async () => {
+    const { relay } = await holding();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
+    await relay.ingest(scope, "srv1", 5, ["ERROR 1 Invalid+selection+team+%281%29%3B+team+4+is+currently+on+the+clock."]);
+    const snap = relay.snapshot("u1", "L1");
+    expect(snap.request).toMatchObject({ state: "refused", reason: "not-on-the-clock" });
+    expect(snap.degraded).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("falls back to the bridge's check-in when the socket couldn't send", async () => {
+    const { relay, sender } = await holding();
+    sender.select.mockReturnValue(false);
+    expect(relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 })).toMatchObject({ ok: true, request: { state: "pending" } });
+    expect(((await relay.ingest(scope, "srv1", 5, [])) as { command?: unknown }).command).toEqual({ id: "r1", select: 2 });
+  });
+
+  it("queues the turn plan in ESPN: targets, fallbacks, then best, each once, none drafted", () => {
+    expect(queueFromPlan(plan, new Set([1]))).toEqual([11, 12, 13, 14]);
+  });
+
+  it("sets ESPN's queue only when asked, and keeps it in step with new plans while syncing", async () => {
+    const { relay, sender } = await holding();
+    relay.publishPlan("u1", "L1", plan);
+    expect(sender.setQueue).not.toHaveBeenCalled(); // never silently
+
+    expect(relay.pushQueue("u1", "L1")).toEqual([11, 12, 13, 14]);
+    expect(sender.setQueue).toHaveBeenCalledTimes(1);
+
+    relay.setServerClient("u1", "L1", { state: "holding" });
+    relay.setQueueSync("u1", "L1", true);
+    expect(relay.serverClient("u1", "L1")).toEqual({ state: "holding", queueSync: true });
+    relay.publishPlan("u1", "L1", { ...plan, targets: [player(15)] });
+    expect(sender.setQueue).toHaveBeenLastCalledWith([15, 12, 13, 14]);
+    const calls = sender.setQueue.mock.calls.length;
+    relay.publishPlan("u1", "L1", { ...plan, targets: [player(15)] }); // unchanged: not sent again
+    expect(sender.setQueue).toHaveBeenCalledTimes(calls);
+
+    // Losing the connection ends syncing.
+    relay.setServerClient("u1", "L1", { state: "lost", reason: "gone" });
+    expect(relay.serverClient("u1", "L1")).toEqual({ state: "lost", reason: "gone" });
+  });
+
+  it("won't sync a queue with nothing holding the connection", () => {
+    const { relay } = setup();
+    expect(relay.setQueueSync("u1", "L1", true)).toBeNull();
+    expect(relay.pushQueue("u1", "L1")).toBeNull();
   });
 });

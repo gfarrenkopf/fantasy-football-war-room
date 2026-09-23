@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { decodeInitPicks, sanitizeFrame } from "./join";
 
 /**
  * Runs the shipped bridge (public/espn-bridge.js) in a sandbox standing in for an ESPN draft tab:
@@ -119,14 +120,16 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
   vm.createContext(context);
   const load = () => vm.runInContext(SOURCE, context);
   const bridge = () => (context.__warRoomBridge as { state(): Record<string, unknown> }).state();
+  const decode = (b64: string, league: number) =>
+    (context.__warRoomBridge as { decodeInitPicks(b64: string, league: number): number[] | null }).decodeInitPicks(b64, league);
   const Socket = () => context.WebSocket as typeof FakeSocket;
   const postMessage = (data: unknown, origin = WAR_ROOM) => windowListeners.forEach((fn) => fn({ data, origin }));
   /** The frame posts only: the bridge also calls ESPN's own API when it catches up. */
   const bodies = () =>
     fetch.mock.calls
-      .filter(([, init]) => init && init.body)
-      .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number });
-  return { load, bridge, Socket, postMessage, fetch, open, storage, shadow, bodies, press };
+      .filter(([url, init]) => init && init.body && String(url).endsWith("/frames"))
+      .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number; handoverVersion?: number });
+  return { load, bridge, decode, Socket, postMessage, fetch, open, storage, shadow, bodies, press };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -158,6 +161,7 @@ describe("ESPN bridge", () => {
       espnLeagueId: "704343562",
       session: expect.stringMatching(/^[a-z0-9]{8,}$/),
       planVersion: 0,
+      handoverVersion: 0,
       seq: 0,
       frames: ["INIT", "TOKEN", "SELECTED 1 4362628 4 {00000000-0000-0000-0000-000000000000}", "SELECTED 4 4429795 2"],
     });
@@ -501,6 +505,32 @@ function initBlob({ league = 704343562, total = 8, drafted = [] as number[], hea
   return Buffer.from(bytes).toString("base64").replace(/=+$/, "") + ` ${"#".repeat(32)}`;
 }
 
+describe("the server-side client's ports of the bridge (Epic 9)", () => {
+  it("decodes INIT exactly as the shipped bridge does", () => {
+    const p = page();
+    p.load();
+    const blobs = [
+      initBlob({ drafted: [4429795, 4430807, -16034] }),
+      initBlob({ total: 160, drafted: Array.from({ length: 37 }, (_, i) => 3_000_000 + i) }),
+      initBlob({ header: 51, drafted: [4429795] }),
+      initBlob({ drafted: [] }),
+      initBlob({ league: 1, drafted: [4429795] }),
+      "not base64 at all!",
+    ];
+    for (const blob of blobs) expect(decodeInitPicks(blob, 704343562)).toEqual(p.decode(blob, 704343562));
+  });
+
+  it("sanitizes frames exactly as the shipped bridge does", async () => {
+    const p = page({ stored: "tok-1" });
+    p.load();
+    const raw = ["INIT AAAA\n", `TOKEN 1:704343562:1:${SWID}:342755166\n`, "PONG PING%201\n", `SELECTED 1 4362628 4 ${SWID}\n`, "CLOCK 6 30000 4", "  "];
+    const ws = new (p.Socket())(DRAFT_URL);
+    raw.forEach((f) => ws.emit(f));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.bodies().find((b) => b.frames.length)!.frames).toEqual(raw.map(sanitizeFrame).filter((f) => f !== null));
+  });
+});
+
 describe("catching up on picks made before the bridge attached (8.12)", () => {
   const DRAFTED = [4429795, 4430807, -16034];
   /** ESPN's pre-listed pick ownership: every slot's team, known even mid-draft. */
@@ -653,5 +683,88 @@ describe("telling War Room how ESPN has this league set up (8.8)", () => {
     await vi.advanceTimersByTimeAsync(300);
     expect(p.bodies().some((b) => "settings" in b)).toBe(false);
     expect(p.bodies().flatMap((b) => b.frames)).toEqual(["SELECTED 1 1 1"]);
+  });
+});
+
+describe("handing over the join code (9.1)", () => {
+  const CODE = "-342755166";
+  const JOIN_URL =
+    "wss://fantasydraft.espn.com/game-1/league-704343562/JOIN?1=1&2=704343562&3=1" +
+    `&4=${encodeURIComponent(SWID)}&5=${encodeURIComponent(`1:704343562:1:${SWID}:${CODE}`)}&6=false&7=false&8=KONA&nocache=0.5`;
+  const OFFER = { version: 1, lines: ["Let War Room join your ESPN draft room itself.", "Your ESPN draft room disconnects."] };
+
+  function setup({ offer = true as boolean, url = JOIN_URL } = {}) {
+    const p = page({ stored: "tok-1" });
+    p.fetch.mockImplementation(async (u, init) => {
+      if (String(u).includes("mDraftDetail")) {
+        return new Response(JSON.stringify({ draftDetail: { picks: [2, 1, 3].map((teamId, i) => ({ overallPickNumber: i + 1, teamId })) } }), { status: 200 });
+      }
+      if (String(u).endsWith("/handover")) return new Response(JSON.stringify({ stored: true }), { status: 200 });
+      if (!init || !init.body) return new Response("{}", { status: 404 });
+      const body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ have: body.seq + body.frames.length, ...(offer ? { handover: OFFER } : {}) }), { status: 200 });
+    });
+    p.load();
+    const ws = new (p.Socket())(url);
+    ws.emit(`TOKEN 1:704343562:1:${SWID}:${CODE}\n`);
+    ws.emit("SELECTING 4 60000\n");
+    const handovers = () =>
+      p.fetch.mock.calls.filter(([u]) => String(u).endsWith("/handover")).map(([, init]) => JSON.parse(String(init.body)) as Record<string, unknown>);
+    const box = () => p.shadow.querySelector(".ho");
+    return { ...p, ws, handovers, box };
+  }
+
+  it("offers only what War Room offers, and sends nothing until the user opts in", async () => {
+    const p = setup();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.box().hidden).toBe(false);
+    expect(p.shadow.querySelector(".ho ul").textContent).toContain("disconnects");
+    expect(p.handovers()).toHaveLength(0);
+    // The bridge tells War Room it has the offer, so it isn't sent again on every check-in.
+    expect(p.bodies().at(-1)!.handoverVersion).toBe(1);
+
+    const q = setup({ offer: false });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(q.box().hidden).toBe(true);
+  });
+
+  it("hands over the code, the SWID and who owns each pick, once, to War Room's own endpoint", async () => {
+    const p = setup();
+    await vi.advanceTimersByTimeAsync(300);
+    p.shadow.querySelector(".ha").onclick!();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(p.handovers()).toEqual([expect.objectContaining({ espnLeagueId: "704343562", consentVersion: 1, code: CODE, swid: SWID, pickTeams: [2, 1, 3] })]);
+    const [url, init] = p.fetch.mock.calls.find(([u]) => String(u).endsWith("/handover"))!;
+    expect(url).toBe(`${WAR_ROOM}/api/espn/bridge/handover`);
+    expect(init.credentials).toBe("omit");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer tok-1");
+    expect(p.bridge().handover).toBe("done");
+    expect(p.storage.get("warroom-handover:704343562")).toBe("1");
+
+    // The credential never rides in a frame post, before or after.
+    p.ws.emit("SELECTED 4 4429795 2\n");
+    await vi.advanceTimersByTimeAsync(300);
+    const frames = JSON.stringify(p.bodies());
+    expect(frames).not.toContain("342755166");
+    expect(frames).not.toContain("154E132F");
+  });
+
+  it("sends nothing when the user declines", async () => {
+    const p = setup();
+    await vi.advanceTimersByTimeAsync(300);
+    p.shadow.querySelector(".hd").onclick!();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(p.handovers()).toHaveLength(0);
+    expect(p.box().hidden).toBe(true);
+  });
+
+  it("refuses to hand over a credential for another league or team", async () => {
+    const other = JOIN_URL.replace(encodeURIComponent(`1:704343562:1:`), encodeURIComponent(`1:704343562:7:`));
+    const p = setup({ url: other });
+    await vi.advanceTimersByTimeAsync(300);
+    p.shadow.querySelector(".ha").onclick!();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(p.handovers()).toHaveLength(0);
+    expect(p.bridge().handover).toBe("failed");
   });
 });

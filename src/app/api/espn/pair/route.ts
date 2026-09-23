@@ -4,6 +4,7 @@ import { withUser } from "@/lib/server/api";
 import { espnAccess } from "@/lib/server/espn/access";
 import { mintBridgeToken, purgeExpiredBridgeTokens } from "@/lib/server/espn/bridgeTokens";
 import { acknowledgeDisclosure, hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
+import { purgeExpiredCredentials } from "@/lib/server/espn/serverClients";
 import { error, json, readJson } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
 
@@ -49,6 +50,7 @@ export const POST = withUser(async (request, _ctx, { db, userId, email }) => {
     await acknowledgeDisclosure(db, userId, ESPN_DISCLOSURE_VERSION);
   }
   await purgeExpiredBridgeTokens(db);
+  await purgeExpiredCredentials(db);
   const { leagueId, espnLeagueId, espnTeamId, season } = pair;
   const { token, expiresAt } = await mintBridgeToken(db, { userId, leagueId, espnLeagueId, espnTeamId, season });
   return json(200, { token, expiresAt: expiresAt.toISOString() });
