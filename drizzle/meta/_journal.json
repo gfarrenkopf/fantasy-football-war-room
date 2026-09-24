@@ -57,6 +57,13 @@
       "when": 1790189057863,
       "tag": "0007_superb_may_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790285436635,
+      "tag": "0008_espn_logins",
+      "breakpoints": true
     }
   ]
 }
