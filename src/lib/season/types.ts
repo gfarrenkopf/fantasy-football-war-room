@@ -80,4 +80,21 @@ export interface SeasonLeague {
   starters: LineupSlotCount[];
   benchSize: number;
   teams: SeasonTeam[];
+  /** Trades waiting on ESPN that the user can see: their own offers, in both directions. */
+  pendingTrades: PendingTrade[];
+}
+
+/** A trade pending on ESPN (`mPendingTransactions`), between two teams. */
+export interface PendingTrade {
+  id: string;
+  /** proposed: waiting on the other team. accepted: agreed, in the league's review period. */
+  status: "proposed" | "accepted";
+  proposerTeamId: number;
+  /** The other team. */
+  partnerTeamId: number;
+  moves: { playerId: number; fromTeamId: number; toTeamId: number }[];
+  /** ISO instants, when ESPN gave them. */
+  proposedAt: string | null;
+  expiresAt: string | null;
+  processesAt: string | null;
 }

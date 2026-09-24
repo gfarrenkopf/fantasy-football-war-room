@@ -1,6 +1,6 @@
 import { optimalLineup, type LineupPlan } from "./lineup";
 import { restOfSeason, weeklyPoints } from "./scoring";
-import type { LineupSlotCount, PlayerProjections, RosterEntry, SeasonLeague } from "./types";
+import type { LineupSlotCount, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague } from "./types";
 
 /**
  * Everything the season page shows, computed on the server from ESPN's league and projections and
@@ -38,6 +38,8 @@ export interface SeasonView {
   teams: ViewTeam[];
   /** The user's lineup for this week. */
   lineup: LineupPlan;
+  /** Trades pending on ESPN that involve the user's team. */
+  pendingTrades: PendingTrade[];
 }
 
 export function buildSeasonView(league: SeasonLeague, myTeamId: number, projections: ReadonlyMap<number, PlayerProjections>): SeasonView {
@@ -69,6 +71,7 @@ export function buildSeasonView(league: SeasonLeague, myTeamId: number, projecti
     myTeamId,
     teams,
     lineup: optimalLineup(mine, league.starters),
+    pendingTrades: league.pendingTrades.filter((t) => t.proposerTeamId === myTeamId || t.partnerTeamId === myTeamId),
   };
 }
 

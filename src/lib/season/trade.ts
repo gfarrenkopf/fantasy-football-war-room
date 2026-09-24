@@ -1,5 +1,5 @@
 import { optimalLineup } from "./lineup";
-import type { LineupSlotCount } from "./types";
+import type { LineupSlotCount, PendingTrade } from "./types";
 import type { ViewPlayer } from "./view";
 
 /**
@@ -96,6 +96,18 @@ function verdictFor(team: TradeTeam, out: ReadonlySet<number>, incoming: readonl
     perWeek: weeks ? (after.total - before.total) / weeks : 0,
     bySlot: league.starters.map((s) => ({ key: s.key, before: (before.bySlot.get(s.key) ?? 0) / weeks, after: (after.bySlot.get(s.key) ?? 0) / weeks })),
     drops: next.drops,
+  };
+}
+
+/** A pending ESPN trade as a Trade from `myTeamId`'s side, or null if the user isn't in it. */
+export function tradeFromPending(pending: PendingTrade, myTeamId: number): Trade | null {
+  if (pending.proposerTeamId !== myTeamId && pending.partnerTeamId !== myTeamId) return null;
+  const partner = pending.proposerTeamId === myTeamId ? pending.partnerTeamId : pending.proposerTeamId;
+  return {
+    teamA: myTeamId,
+    gives: pending.moves.filter((m) => m.fromTeamId === myTeamId).map((m) => m.playerId),
+    teamB: partner,
+    gets: pending.moves.filter((m) => m.fromTeamId === partner).map((m) => m.playerId),
   };
 }
 

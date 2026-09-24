@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { Position } from "@/lib/draft/types";
-import { evaluateTrade, type TeamVerdict } from "@/lib/season/trade";
+import { evaluateTrade, tradeFromPending, type TeamVerdict, type Trade } from "@/lib/season/trade";
+import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 
 const POS_TEXT: Record<Position, string> = { QB: "text-qb", RB: "text-rb", WR: "text-wr", TE: "text-te", K: "text-k", DST: "text-dst" };
@@ -30,9 +31,17 @@ export function TradePanel({ view }: { view: SeasonView }) {
 
   const names = new Map(view.teams.flatMap((t) => t.roster.map((p) => [p.playerId, p.name] as const)));
   const toggle = (list: number[], set: (next: number[]) => void, id: number) => set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  /** Loads a pending trade into the builder below, to tweak it into a counter. */
+  const open = (trade: Trade) => {
+    setPartnerId(trade.teamB);
+    setGives([...trade.gives]);
+    setGets([...trade.gets]);
+    document.getElementById("trade-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <section className="space-y-3" aria-labelledby="trade-title">
+      <PendingTrades view={view} names={names} onOpen={open} />
       <div className="rounded-card border border-line bg-panel p-4 space-y-3">
         <h2 id="trade-title" className="font-semibold">
           Check a trade
@@ -69,15 +78,72 @@ export function TradePanel({ view }: { view: SeasonView }) {
   );
 }
 
+const TEAM_NAME = (view: SeasonView, id: number) => view.teams.find((t) => t.id === id)?.name ?? `Team ${id}`;
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : null);
+
+/** The user's trades pending on ESPN, each graded where it stands (10.9). */
+function PendingTrades({ view, names, onOpen }: { view: SeasonView; names: Map<number, string>; onOpen: (trade: Trade) => void }) {
+  if (!view.pendingTrades.length) return null;
+  return (
+    <section className="rounded-card border border-line bg-panel p-4 space-y-3" aria-labelledby="pending-title">
+      <h2 id="pending-title" className="font-semibold">
+        Pending on ESPN
+      </h2>
+      <ul className="space-y-3">
+        {view.pendingTrades.map((pending) => (
+          <PendingRow key={pending.id} view={view} pending={pending} names={names} onOpen={onOpen} />
+        ))}
+      </ul>
+      <p className="text-xs text-muted">Accept, decline or counter on ESPN. War Room only grades them.</p>
+    </section>
+  );
+}
+
+function PendingRow({ view, pending, names, onOpen }: { view: SeasonView; pending: PendingTrade; names: Map<number, string>; onOpen: (trade: Trade) => void }) {
+  const trade = tradeFromPending(pending, view.myTeamId);
+  if (!trade) return null;
+  const partner = TEAM_NAME(view, trade.teamB);
+  const verdict = evaluateTrade(view.teams, view, trade);
+  const title =
+    pending.status === "accepted"
+      ? `Accepted with ${partner}${pending.processesAt ? ` · goes through ${when(pending.processesAt)}` : ""}`
+      : pending.proposerTeamId === view.myTeamId
+        ? `Your offer to ${partner}${pending.expiresAt ? ` · expires ${when(pending.expiresAt)}` : ""}`
+        : `Offer from ${partner}${pending.expiresAt ? ` · expires ${when(pending.expiresAt)}` : ""}`;
+  const list = (ids: readonly number[]) => ids.map((id) => names.get(id) ?? `ESPN player ${id}`).join(", ");
+  return (
+    <li className="rounded-card border border-line2 bg-panel2 p-3 space-y-2">
+      <p className="text-sm font-semibold">{title}</p>
+      <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-0.5 text-sm">
+        <dt className="text-muted">You get</dt>
+        <dd>{list(trade.gets) || "Nothing"}</dd>
+        <dt className="text-muted">You send</dt>
+        <dd>{list(trade.gives) || "Nothing"}</dd>
+      </dl>
+      {verdict ? (
+        <p className="text-sm">
+          <b>{headlineFor(verdict.a.delta, verdict.b.delta)}</b> · you{" "}
+          <span className={`tabular-nums ${verdict.a.delta >= 0 ? "text-value-ink" : "text-reach-ink"}`}>{signed(verdict.a.perWeek)}</span> a week,{" "}
+          {partner} <span className="tabular-nums">{signed(verdict.b.perWeek)}</span>
+        </p>
+      ) : (
+        <p className="text-sm text-muted">Can&apos;t grade this one: a player in it is no longer on those rosters.</p>
+      )}
+      {verdict && (
+        <button type="button" className="text-sm text-focus underline" onClick={() => onOpen(trade)}>
+          Open in the trade builder
+        </button>
+      )}
+    </li>
+  );
+}
+
+function headlineFor(you: number, them: number): string {
+  return you > 0.05 && them > 0.05 ? "Helps both of you" : you > 0.05 ? "Good for you" : you < -0.05 ? "Bad for you" : "Makes no real difference to you";
+}
+
 function Verdict({ you, them, partnerName, weeks, names }: { you: TeamVerdict; them: TeamVerdict; partnerName: string; weeks: number; names: Map<number, string> }) {
-  const headline =
-    you.delta > 0.05 && them.delta > 0.05
-      ? "Helps both of you"
-      : you.delta > 0.05
-        ? "Good for you"
-        : you.delta < -0.05
-          ? "Bad for you"
-          : "Makes no real difference to you";
+  const headline = headlineFor(you.delta, them.delta);
   return (
     <div className="space-y-2" role="status">
       <p className="text-lg font-semibold">{headline}</p>

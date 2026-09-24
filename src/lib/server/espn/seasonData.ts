@@ -25,7 +25,7 @@ export type SeasonLoad =
 
 export type SeasonLoader = (db: Db, key: Buffer, userId: string, leagueId: string, options?: { refresh?: boolean }) => Promise<SeasonLoad>;
 
-const VIEWS = ["mSettings", "mStatus", "mRoster", "mTeam"] as const;
+const VIEWS = ["mSettings", "mStatus", "mRoster", "mTeam", "mPendingTransactions"] as const;
 
 export function createSeasonLoader({ fetchImpl, now = () => new Date(), ttlMs = 3 * 60 * 1000 }: { fetchImpl?: typeof fetch; now?: () => Date; ttlMs?: number } = {}): SeasonLoader {
   const cache = new Map<string, { league: SeasonLeague; espnTeamId: number; fetchedAt: Date }>();

@@ -41,7 +41,7 @@ describe("the season loader", () => {
     expect(first).toMatchObject({ kind: "ok", espnTeamId: 1, stale: false });
     expect(first.kind === "ok" && first.league.teams).toHaveLength(4);
     const [url, init] = fetchImpl.mock.calls[0];
-    expect(String(url)).toContain("/leagues/110222051?view=mSettings&view=mStatus&view=mRoster&view=mTeam");
+    expect(String(url)).toContain("/leagues/110222051?view=mSettings&view=mStatus&view=mRoster&view=mTeam&view=mPendingTransactions");
     expect((init?.headers as Record<string, string>).Cookie).toContain(LOGIN.espnS2);
     expect((await loginStatus(db, userId))?.verifiedAt).not.toBeNull();
 

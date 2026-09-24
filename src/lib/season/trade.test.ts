@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Position } from "@/lib/draft/types";
-import { evaluateTrade, type TradeLeague, type TradeTeam } from "./trade";
+import { evaluateTrade, tradeFromPending, type TradeLeague, type TradeTeam } from "./trade";
 import type { ViewPlayer } from "./view";
 
 /** Weeks 3–5: three weeks left. */
@@ -104,5 +104,34 @@ describe("evaluateTrade", () => {
     expect(evaluateTrade([a, b], LEAGUE, { teamA: 1, gives: [], teamB: 2, gets: [] })).toBeNull();
     expect(evaluateTrade([a, b], LEAGUE, { teamA: 1, gives: [a.roster[0].playerId], teamB: 1, gets: [] })).toBeNull();
     expect(evaluateTrade([a, b], LEAGUE, { teamA: 1, gives: [b.roster[0].playerId], teamB: 2, gets: [] })).toBeNull();
+  });
+});
+
+describe("tradeFromPending", () => {
+  const pending = {
+    id: "t1",
+    status: "proposed" as const,
+    proposerTeamId: 8,
+    partnerTeamId: 6,
+    moves: [
+      { playerId: 1, fromTeamId: 8, toTeamId: 6 },
+      { playerId: 2, fromTeamId: 8, toTeamId: 6 },
+      { playerId: 3, fromTeamId: 6, toTeamId: 8 },
+    ],
+    proposedAt: null,
+    expiresAt: null,
+    processesAt: null,
+  };
+
+  it("turns an offer to the user into what they'd send and get", () => {
+    expect(tradeFromPending(pending, 6)).toEqual({ teamA: 6, gives: [3], teamB: 8, gets: [1, 2] });
+    expect(tradeFromPending(pending, 8)).toEqual({ teamA: 8, gives: [1, 2], teamB: 6, gets: [3] });
+    expect(tradeFromPending(pending, 5)).toBeNull();
+  });
+
+  it("can't grade a trade whose player has since left the roster", () => {
+    const a = team(6, [p("QB", 10)]);
+    const b = team(8, [p("QB", 10)]);
+    expect(evaluateTrade([a, b], LEAGUE, { teamA: 6, gives: [a.roster[0].playerId], teamB: 8, gets: [999] })).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import league from "./__fixtures__/espn-league-2026.json";
-import { ESPN_SLOT_ID, ownTeamId, parseSeasonLeague } from "./espnLeague";
+import { ESPN_SLOT_ID, ownTeamId, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
 
 describe("parseSeasonLeague", () => {
   const parsed = parseSeasonLeague(league, "110222051");
@@ -67,5 +67,54 @@ describe("ownTeamId", () => {
     expect(ownTeamId(doc, "{154E132F-8C13-4AC0-9DAC-20C2C5625594}")).toBe(2);
     expect(ownTeamId(doc, "{BBBB}")).toBeNull();
     expect(ownTeamId(null, "{BBBB}")).toBeNull();
+  });
+});
+
+describe("parsePendingTrades", () => {
+  // The shape of the dogfood league's mPendingTransactions on 2026-09-24, member ids left out.
+  const pending = {
+    pendingTransactions: [
+      {
+        id: "397af86f", type: "TRADE_ACCEPT", status: "PENDING", teamId: 8, teamActions: { "6": "ACCEPTED", "8": "ACCEPTED" },
+        proposedDate: 1790174042513, expirationDate: 1790346842537, processDate: 1790346971933,
+        items: [
+          { playerId: 3128429, fromTeamId: 8, toTeamId: 6, type: "TRADE", fromLineupSlotId: 20, toLineupSlotId: -1 },
+          { playerId: 4429205, fromTeamId: 6, toTeamId: 8, type: "TRADE", fromLineupSlotId: 20, toLineupSlotId: -1 },
+        ],
+      },
+      {
+        id: "efecb0eb", type: "TRADE_PROPOSAL", status: "PENDING", teamId: 8, teamActions: { "8": "ACCEPTED" }, expirationDate: 1790430104466,
+        items: [
+          { playerId: 4239996, fromTeamId: 8, toTeamId: 6, type: "TRADE" },
+          { playerId: 4870808, fromTeamId: 6, toTeamId: 8, type: "TRADE" },
+        ],
+      },
+      { id: "w1", type: "WAIVER", status: "PENDING", teamId: 6, items: [{ playerId: 1, fromTeamId: 0, toTeamId: 6, type: "ADD" }] },
+      { id: "x", type: "TRADE_PROPOSAL", status: "CANCELED", teamId: 8, items: [{ playerId: 2, fromTeamId: 8, toTeamId: 6, type: "TRADE" }] },
+    ],
+  };
+
+  it("reads proposals and accepted trades, with who proposed and every player's direction", () => {
+    expect(parsePendingTrades(pending)).toEqual([
+      {
+        id: "397af86f",
+        status: "accepted",
+        proposerTeamId: 8,
+        partnerTeamId: 6,
+        moves: [
+          { playerId: 3128429, fromTeamId: 8, toTeamId: 6 },
+          { playerId: 4429205, fromTeamId: 6, toTeamId: 8 },
+        ],
+        proposedAt: new Date(1790174042513).toISOString(),
+        expiresAt: new Date(1790346842537).toISOString(),
+        processesAt: new Date(1790346971933).toISOString(),
+      },
+      expect.objectContaining({ id: "efecb0eb", status: "proposed", proposerTeamId: 8, partnerTeamId: 6, proposedAt: null, processesAt: null }),
+    ]);
+  });
+
+  it("leaves out waiver claims, finished trades, and anything that isn't a list", () => {
+    expect(parsePendingTrades({ pendingTransactions: pending.pendingTransactions.slice(2) })).toEqual([]);
+    expect(parsePendingTrades({})).toEqual([]);
   });
 });

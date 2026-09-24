@@ -2,7 +2,7 @@ import type { RosterSlotKey } from "@/lib/draft/types";
 import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
-import type { LineupSlot, LineupSlotCount, RosterEntry, SeasonLeague, SeasonTeam } from "./types";
+import type { LineupSlot, LineupSlotCount, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -60,6 +60,44 @@ function parseEntry(raw: unknown): RosterEntry | null {
   };
 }
 
+const TRADE_STATUS: Readonly<Record<string, PendingTrade["status"]>> = { TRADE_PROPOSAL: "proposed", TRADE_ACCEPT: "accepted" };
+
+const isoOf = (ms: unknown) => (typeof ms === "number" && Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : null);
+
+/**
+ * `mPendingTransactions` as pending trades (10.9): proposals waiting on a team, and accepted trades
+ * in their review period. Anything else pending (waiver claims) is left out, and so is a trade that
+ * isn't between exactly two teams.
+ */
+export function parsePendingTrades(raw: unknown): PendingTrade[] {
+  const list = isObject(raw) && Array.isArray(raw.pendingTransactions) ? raw.pendingTransactions : [];
+  return list.flatMap((tx): PendingTrade[] => {
+    if (!isObject(tx) || tx.status !== "PENDING" || typeof tx.type !== "string" || typeof tx.id !== "string" || typeof tx.teamId !== "number") return [];
+    const status = TRADE_STATUS[tx.type];
+    if (!status || !Array.isArray(tx.items)) return [];
+    const moves = tx.items.flatMap((i) =>
+      isObject(i) && i.type === "TRADE" && typeof i.playerId === "number" && typeof i.fromTeamId === "number" && typeof i.toTeamId === "number"
+        ? [{ playerId: i.playerId, fromTeamId: i.fromTeamId, toTeamId: i.toTeamId }]
+        : [],
+    );
+    const teams = new Set(moves.flatMap((m) => [m.fromTeamId, m.toTeamId]));
+    if (!moves.length || teams.size !== 2 || !teams.has(tx.teamId)) return [];
+    const partnerTeamId = [...teams].find((t) => t !== tx.teamId)!;
+    return [
+      {
+        id: tx.id,
+        status,
+        proposerTeamId: tx.teamId,
+        partnerTeamId,
+        moves,
+        proposedAt: isoOf(tx.proposedDate),
+        expiresAt: isoOf(tx.expirationDate),
+        processesAt: isoOf(tx.processDate),
+      },
+    ];
+  });
+}
+
 /**
  * ESPN's league document as a SeasonLeague, or why it can't be one. Players at positions War Room
  * doesn't play (IDP, say) are left off rosters; a lineup slot War Room can't represent is an error,
@@ -109,6 +147,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       starters,
       benchSize,
       teams,
+      pendingTrades: parsePendingTrades(raw),
     },
   };
 }
