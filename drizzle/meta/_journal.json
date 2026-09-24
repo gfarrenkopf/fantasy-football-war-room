@@ -64,6 +64,13 @@
       "when": 1790285436635,
       "tag": "0008_espn_logins",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790285684248,
+      "tag": "0009_espn_season_links",
+      "breakpoints": true
     }
   ]
 }

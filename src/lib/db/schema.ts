@@ -1,4 +1,4 @@
-import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AiPlan } from "@/lib/ai/planSchema";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
@@ -304,4 +304,27 @@ export const espnLogins = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   },
   (t) => [index("espn_logins_expires_at_idx").on(t.expiresAt)],
+);
+
+/**
+ * Which ESPN league and team a war room league follows during the season (10.3). Written when the
+ * user connects their season from ESPN; the season page reads rosters for this ESPN league with the
+ * user's stored login (`espn_logins`). One per war room league, and one war room league per ESPN
+ * league and season for each user.
+ */
+export const espnSeasonLinks = pgTable(
+  "espn_season_links",
+  {
+    leagueId: text("league_id")
+      .primaryKey()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    espnLeagueId: text("espn_league_id").notNull(),
+    espnTeamId: integer("espn_team_id").notNull(),
+    season: integer("season").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("espn_season_links_user_espn_idx").on(t.userId, t.espnLeagueId, t.season)],
 );
