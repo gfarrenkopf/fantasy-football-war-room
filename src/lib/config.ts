@@ -49,8 +49,10 @@ const espnSyncAllowlist = (readEnv("ESPN_SYNC_ALLOWLIST") ?? "")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
 /**
- * 32 random bytes, base64. Encrypts the ESPN join code a user hands War Room so it can draft for them
- * without their ESPN tab open (Epic 9). Without it that option is off; the bookmarklet still works.
+ * 32 random bytes, base64. Encrypts the ESPN credentials a user hands War Room: the draft room's join
+ * code, so it can draft for them without their ESPN tab open (Epic 9), and their ESPN login, so it
+ * can read their leagues during the season (Epic 10). Without it both are off; the bookmarklet still
+ * works for live draft sync.
  */
 const espnCodeKeyRaw = readEnv("ESPN_CODE_KEY");
 const espnCodeKey = parseKey(espnCodeKeyRaw);
@@ -104,7 +106,8 @@ export const config = Object.freeze({
   dataPipelineEnabled: Boolean(sportsDataApiKey),
   /**
    * ESPN live draft sync: picks relayed from a bridge in the user's ESPN tab. Needs accounts (picks
-   * are relayed per user and league) and nothing else. No ESPN cookies or passwords are ever stored.
+   * are relayed per user and league) and nothing else. Live sync itself stores no ESPN cookies or
+   * passwords; the in-season login below is a separate opt-in.
    */
   espnSyncEnabled: cloudEnabled,
   /**
@@ -112,6 +115,11 @@ export const config = Object.freeze({
    * stored encrypted until the draft completes, and War Room joins ESPN's draft socket itself.
    */
   espnServerClientEnabled: cloudEnabled && espnCodeKey !== null,
+  /**
+   * In-season lineups and trades (Epic 10): the user hands over their ESPN login cookies once, stored
+   * encrypted until the season ends or they disconnect, and War Room reads their leagues each week.
+   */
+  espnSeasonEnabled: cloudEnabled && espnCodeKey !== null,
 });
 
 export type Config = typeof config;
@@ -127,6 +135,9 @@ export const publicFlags = Object.freeze({
   dataPipelineEnabled: config.dataPipelineEnabled,
   espnSyncEnabled: config.espnSyncEnabled,
   espnServerClientEnabled: config.espnServerClientEnabled,
+  espnSeasonEnabled: config.espnSeasonEnabled,
+  /** In-season help is open to everyone, not just the ESPN_SYNC_ALLOWLIST beta: the landing page may advertise it. */
+  espnSeasonOpen: config.espnSeasonEnabled && config.espnSyncAllowlist.length === 0,
 });
 
 export type PublicFlags = typeof publicFlags;
@@ -168,9 +179,9 @@ if (espnSyncAllowlist.length && !cloudEnabled) {
   warnings.push("ESPN_SYNC_ALLOWLIST is set but cloud features are disabled, so ESPN live sync is off.");
 }
 if (espnCodeKeyRaw && !espnCodeKey) {
-  warnings.push("ESPN_CODE_KEY isn't 32 bytes of base64 (try `openssl rand -base64 32`), so drafting without an ESPN tab open is off.");
+  warnings.push("ESPN_CODE_KEY isn't 32 bytes of base64 (try `openssl rand -base64 32`), so drafting without an ESPN tab open and in-season features are off.");
 } else if (espnCodeKey && !cloudEnabled) {
-  warnings.push("ESPN_CODE_KEY is set but cloud features are disabled, so drafting without an ESPN tab open is off.");
+  warnings.push("ESPN_CODE_KEY is set but cloud features are disabled, so drafting without an ESPN tab open and in-season features are off.");
 }
 for (const warning of warnings) {
   console.warn(`[config] ${warning}`);

@@ -1,0 +1,1119 @@
+/*
+ * The season page (/season/[leagueId]): the instrument's world, read weekly instead of under a
+ * draft clock. Same ground, hairlines, position hues and escalation grammar as /draft; see the
+ * "Season page" section of DESIGN.md for its route-scoped exceptions (the gain ladder).
+ */
+
+.root {
+  --gain: var(--color-mine);
+  --loss: var(--color-reach);
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.root ::selection {
+  background: color-mix(in srgb, var(--color-focus) 35%, transparent);
+  color: var(--color-text);
+}
+
+.root :focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.frame {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 14px 20px 28px;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.titleBlock {
+  min-width: 0;
+  flex: 1;
+}
+
+.brand {
+  display: inline-block;
+  color: var(--color-muted);
+  font-size: 11px;
+  text-decoration: none;
+}
+.brand:hover {
+  color: var(--color-text);
+}
+
+.title {
+  margin: 1px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 3px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.metaStale {
+  color: var(--color-warn-ink);
+}
+
+.refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-muted);
+  text-decoration: none;
+}
+.refresh:hover {
+  color: var(--color-text);
+}
+.refresh svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ------------------------------------------------------------------ tabs */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+/* The in-page segmented control (the phone's send/get switch): the tabs' look, never pinned. */
+.segment {
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 108px;
+  justify-content: center;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+.tab[aria-selected="true"] {
+  background: var(--color-seg-on);
+  color: #fff;
+}
+
+.badge {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-warn) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warn) 55%, transparent);
+  color: var(--color-warn-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* ------------------------------------------------------------------ panels */
+
+.panel {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--color-row-line);
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.panelNote {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.note {
+  padding: 14px 16px;
+  color: var(--color-text);
+}
+
+.banner {
+  margin-bottom: 14px;
+}
+
+.fine {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.link {
+  color: var(--color-focus);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+/* ------------------------------------------------------------------ lineup layout */
+
+.lineup {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ the gain (hero verdict) */
+
+.gain {
+  --tone: var(--gain);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 18px;
+  padding: 16px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.gain[data-sign="loss"] {
+  --tone: var(--loss);
+}
+
+.gainNumber {
+  grid-row: span 2;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  color: var(--color-muted);
+  animation: gainIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.gainUnit {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--color-muted);
+}
+
+.gainHeadline {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.gainDetail {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+/* Rest: nothing to do. Quiet, and it says so with a check rather than a zero. */
+.gain[data-level="rest"] .gainNumber {
+  font-size: 30px;
+  color: var(--color-mine);
+}
+.gain[data-level="rest"] .gainNumber svg {
+  width: 30px;
+  height: 30px;
+}
+
+/* Trim: under a point. Worth knowing, not worth shouting. */
+.gain[data-level="trim"] .gainNumber {
+  font-size: 30px;
+  color: color-mix(in srgb, var(--tone) 70%, var(--color-muted));
+}
+
+/* Gain: a point or more. The number takes the tone. */
+.gain[data-level="gain"] .gainNumber {
+  font-size: 40px;
+  color: var(--tone);
+}
+.gain[data-level="gain"] {
+  border-color: color-mix(in srgb, var(--tone) 35%, var(--color-line));
+}
+
+/* Swing: the panel itself commits. */
+.gain[data-level="swing"] .gainNumber {
+  font-size: 50px;
+  color: var(--tone);
+}
+.gain[data-level="swing"] {
+  background: color-mix(in srgb, var(--tone) 9%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--tone) 55%, transparent);
+}
+
+/* Must: the most the page ever says. A gain breathes like the draft room's on-clock glow. */
+.gain[data-level="must"] .gainNumber {
+  font-size: 60px;
+  color: var(--tone);
+}
+.gain[data-level="must"] {
+  background: color-mix(in srgb, var(--tone) 14%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--tone) 70%, transparent);
+}
+.gain[data-level="must"][data-sign="gain"] {
+  animation: breathe 1.6s ease-in-out infinite alternate;
+}
+
+/* Inside an offer: the verdict reads as part of the card, not a card of its own. */
+.gainInline,
+.gainInline[data-level] {
+  padding: 10px 0 0;
+  margin-top: 10px;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  border-radius: 0;
+  background: transparent;
+  animation: none;
+}
+
+.gainCompact {
+  padding: 12px 14px;
+  gap: 2px 14px;
+}
+.gainCompact[data-level="gain"] .gainNumber {
+  font-size: 32px;
+}
+.gainCompact[data-level="swing"] .gainNumber {
+  font-size: 38px;
+}
+.gainCompact[data-level="must"] .gainNumber {
+  font-size: 44px;
+}
+.gainCompact[data-level="rest"] .gainNumber,
+.gainCompact[data-level="trim"] .gainNumber {
+  font-size: 26px;
+}
+
+@keyframes gainIn {
+  from {
+    opacity: 0.4;
+    transform: translateY(5px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes breathe {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--tone) 0%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 22%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------------ ESPN vs War Room table */
+
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.compare caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.compare th,
+.compare td {
+  padding: 5px 0;
+  vertical-align: middle;
+}
+
+.colSlot {
+  width: 56px;
+}
+.colArrow {
+  width: 26px;
+}
+.colDelta {
+  width: 58px;
+}
+
+.compare thead th {
+  padding: 8px 0 7px;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.compare thead .headTotal {
+  margin-left: 6px;
+  color: var(--color-text);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.compare thead .headOurs {
+  color: var(--color-mine);
+}
+
+.compare tbody tr {
+  border-bottom: 1px solid var(--color-row-line);
+}
+.compare tbody tr:last-child {
+  border-bottom: 0;
+}
+
+.compare tbody tr[data-changed="true"] {
+  background: color-mix(in srgb, var(--color-mine) 7%, transparent);
+}
+
+.slot {
+  padding-left: 14px !important;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  letter-spacing: 0.02em;
+}
+
+.arrow {
+  color: var(--color-mine);
+  text-align: center;
+}
+.arrow svg {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+
+.delta {
+  padding-right: 14px !important;
+  text-align: right;
+  font-weight: 700;
+  color: var(--color-value-ink);
+  font-size: 12px;
+}
+
+.keep {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-dim);
+  font-size: 12px;
+}
+.keep svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ------------------------------------------------------------------ a player, in a cell or a list */
+
+.player {
+  display: block;
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.playerLine {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.player[data-tone="out"] .name {
+  color: var(--color-muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--color-reach) 70%, transparent);
+  text-decoration-thickness: 1.5px;
+}
+
+.player[data-tone="in"] .name {
+  color: var(--color-mine);
+  font-weight: 700;
+}
+
+.facts {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+
+.pts {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.tag {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.tag[data-kind="warn"] {
+  color: var(--color-warn-ink);
+  background: color-mix(in srgb, var(--color-warn) 16%, transparent);
+}
+.tag[data-kind="out"] {
+  color: var(--color-reach-ink);
+  background: color-mix(in srgb, var(--color-reach) 16%, transparent);
+}
+
+.lock {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  color: var(--color-muted);
+  align-self: center;
+}
+
+.pos {
+  font-weight: 700;
+}
+.pos[data-pos="QB"] {
+  color: var(--color-qb);
+}
+.pos[data-pos="RB"] {
+  color: var(--color-rb);
+}
+.pos[data-pos="WR"] {
+  color: var(--color-wr);
+}
+.pos[data-pos="TE"] {
+  color: var(--color-te);
+}
+.pos[data-pos="K"] {
+  color: var(--color-k);
+}
+.pos[data-pos="DST"] {
+  color: var(--color-dst);
+}
+
+/* ------------------------------------------------------------------ moves on ESPN */
+
+.moves {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.move {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 2px 10px;
+  padding: 8px 14px;
+}
+.move + .move {
+  border-top: 1px solid var(--color-row-line);
+}
+
+.moveIcon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-mine) 16%, transparent);
+  color: var(--color-mine);
+}
+.moveIcon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.moveText b {
+  color: var(--color-mine);
+}
+
+.moveWhy {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.moveWhy[data-kind="out"] {
+  color: var(--color-reach-ink);
+}
+
+.espnLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 4px 14px 14px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-sky-line);
+  background: var(--color-panel2);
+  color: var(--color-sky);
+  font-weight: 600;
+  text-decoration: none;
+}
+.espnLink:hover {
+  background: var(--color-btn-hover);
+}
+.espnLink svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* ------------------------------------------------------------------ bench */
+
+.bench {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.benchRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+}
+.benchRow + .benchRow {
+  border-top: 1px solid var(--color-row-line);
+}
+.benchRow[data-moved="true"] {
+  background: color-mix(in srgb, var(--color-reach) 6%, transparent);
+}
+
+.benchPts {
+  color: var(--color-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.benchNote {
+  color: var(--color-reach-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ trades */
+
+.trades {
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+/* The two trade columns sit on the ground: their contents are the surfaces. */
+.column {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.columnHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+}
+
+.columnTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pending {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.offer {
+  padding: 12px 14px 14px;
+  border-radius: 8px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+}
+.offer[data-active="true"] {
+  border-color: var(--color-focus);
+}
+
+.offerHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.offerTitle {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.offerWhen {
+  flex-shrink: 0;
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+
+.offerKind {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  vertical-align: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-sky);
+  background: color-mix(in srgb, var(--color-sky) 12%, transparent);
+}
+.offerKind[data-kind="accepted"] {
+  color: var(--color-warn-ink);
+  background: color-mix(in srgb, var(--color-warn) 14%, transparent);
+}
+
+.sides {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 3px 8px;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.sides dt {
+  color: var(--color-muted);
+}
+.sides dd {
+  margin: 0;
+}
+
+.offerFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+.offerFoot .button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.button {
+  padding: 7px 11px;
+  border-radius: 6px;
+  border: 1px solid var(--color-line2);
+  background: var(--color-panel2);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.button:hover {
+  background: var(--color-btn-hover);
+}
+.buttonGhost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+}
+.buttonGhost:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+/* The builder */
+
+.builder {
+  display: grid;
+  gap: 10px;
+}
+
+.builderTop {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-line2);
+  background: var(--color-panel2);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  color-scheme: dark;
+}
+
+.verdictSticky {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
+}
+
+.slotChanges {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  padding: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.up {
+  color: var(--color-value-ink);
+  font-weight: 700;
+}
+.down {
+  color: var(--color-reach-ink);
+  font-weight: 700;
+}
+
+.pickerToggle {
+  display: none;
+}
+
+.pickers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.picker {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-bg);
+  min-width: 0;
+}
+
+.pickerHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-row-line);
+  font-size: 12px;
+  font-weight: 700;
+}
+.pickerHead span {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.pickerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: calc(100dvh - 330px);
+  min-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scroll) transparent;
+}
+
+.pick {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.pick:hover {
+  background: var(--color-hover);
+}
+.pick + .pick {
+  border-top: 1px solid var(--color-row-line);
+}
+.pick[data-picked="true"] {
+  background: color-mix(in srgb, var(--color-focus) 12%, transparent);
+}
+.pick input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-focus);
+}
+
+.ros {
+  text-align: right;
+  font-size: 11px;
+  color: var(--color-muted);
+  line-height: 1.2;
+}
+.ros b {
+  display: block;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------------ footer */
+
+.footer {
+  margin-top: 22px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.textButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.textButton:hover {
+  color: var(--color-text);
+}
+.danger {
+  color: var(--color-reach-ink);
+}
+
+/* ------------------------------------------------------------------ tablet */
+
+@media (max-width: 1023px) {
+  .lineup,
+  .trades {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pickerList {
+    max-height: 520px;
+  }
+}
+
+/* ------------------------------------------------------------------ phone: a designed state */
+
+@media (max-width: 767px) {
+  .frame {
+    padding: 12px 12px calc(84px + env(safe-area-inset-bottom));
+  }
+
+  .top {
+    margin-bottom: 12px;
+  }
+
+  .title {
+    font-size: 18px;
+  }
+
+  /* The tabs move to the thumb zone. */
+  .tabs {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 10;
+    padding: 4px;
+    border-color: var(--color-line2);
+    background: color-mix(in srgb, var(--color-panel) 94%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+  }
+  .tab {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  /* The number takes its own line, so the headline gets the full width. */
+  .gain {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+    gap: 4px;
+  }
+  .gainNumber {
+    grid-row: auto;
+    margin-bottom: 2px;
+  }
+  .gainInline .gainNumber,
+  .gainCompact .gainNumber {
+    margin-bottom: 0;
+  }
+  .gain[data-level="gain"] .gainNumber {
+    font-size: 36px;
+  }
+  .gain[data-level="swing"] .gainNumber {
+    font-size: 42px;
+  }
+  .gain[data-level="must"] .gainNumber {
+    font-size: 48px;
+  }
+
+  /* Moves come before the table: they're what the user does next. */
+  .lineup {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .stack {
+    display: contents;
+  }
+  .orderGain {
+    order: 1;
+  }
+  .orderMoves {
+    order: 2;
+  }
+  .orderTable {
+    order: 3;
+  }
+  .orderBench {
+    order: 4;
+  }
+
+  .colSlot {
+    width: 48px;
+  }
+  .colArrow {
+    width: 18px;
+  }
+  .colDelta {
+    width: 46px;
+  }
+  .slot {
+    padding-left: 10px !important;
+  }
+  .delta {
+    padding-right: 10px !important;
+  }
+  .keepLabel {
+    display: none;
+  }
+
+  .select {
+    font-size: 16px;
+  }
+
+  .offerHead {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* One roster at a time, switched by a toggle, instead of two lists side by side. */
+  .pickerToggle {
+    display: flex;
+  }
+  .pickers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .picker[data-hidden="true"] {
+    display: none;
+  }
+  .pickerList {
+    max-height: none;
+    min-height: 0;
+  }
+  .pick {
+    min-height: 48px;
+  }
+  .verdictSticky {
+    top: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gainNumber,
+  .gain[data-level="must"][data-sign="gain"] {
+    animation: none;
+  }
+}

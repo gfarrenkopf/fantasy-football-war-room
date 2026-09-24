@@ -515,6 +515,14 @@ The magic link arrives as the room, not as Auth.js's template: a Room Black grou
 
 A wrapped row of 14px squares at 3px radius representing every pick in the draft: chip-grey for future, `#4a5566` for completed, pure white for the current pick, green for the user's picks, and green at 55% opacity once one has been used. The single most information-dense element per pixel in the product.
 
+### Season Page (`/season/[leagueId]`, hosted only)
+
+A league's week after the draft (Epic 10): the lineup War Room recommends, and trade verdicts. Same world as the instrument: ground, panels, hairlines, position hues, the three-step ink ramp, and escalation as the core grammar. It reads weekly rather than under a clock, and it departs in exactly three places, all scoped to this route (`src/components/season/season.module.css`):
+
+- **It scrolls, and roots at 14px.** On a desktop, everything that decides the week sits above the fold: one header row with the Lineup / Trades control on the right, then two columns. On the left, the gain and the lineup table (ESPN's lineup against War Room's, a row per slot, changed rows washed 7% green, the leaving player struck through, the arriving one in green). On the right, the moves to make on ESPN, then the bench. On a phone the columns flatten into gain → moves → table → bench, and the Lineup / Trades control moves to a translucent bar pinned in the thumb zone with 44px targets.
+- **The Gain Ladder.** A projected gain (or a trade's per-week swing) is set on a five-step ladder (`src/lib/season/emphasis.ts`), each step louder than the last: *rest* is a green check, not a zero; *trim* is 30px muted; *gain* is 40px in tone with a tinted border; *swing* is 50px on a 9% wash; *must* is 60px on a 14% wash and, for a gain, breathes on the on-clock ring glow (1.6s, off under reduced motion). The tone is Signal Green for a gain and Reach Red for a loss; a loss never breathes. Lineup steps start at 0.05, 1, 5 and 10 points a week; trade steps at 0.05, 0.5, 2 and 5, because a point a week over a season is already a lot. Compact (in the trade builder) and inline (inside an offer card, no box of its own) variants scale the same ladder down.
+- **Trade columns sit on the ground.** Offers and the builder are the surfaces; the columns holding them get no panel, so nothing nests.
+
 ## Do's and Don'ts
 
 ### Do:

@@ -25,3 +25,17 @@ export const ESPN_HANDOVER_DISCLOSURE: readonly string[] = [
   "ESPN allows one connection per team. When you tell War Room to take over, your ESPN draft room disconnects on every device until you hand back.",
   "War Room still only picks players you choose, and only while you're on the clock.",
 ];
+
+/**
+ * The opt-in for handing War Room the user's ESPN login for the season (10.2), shown in the bridge
+ * overlay before "Connect my season". A separate consent from both of the above: it's a long-lived
+ * credential covering every league on the account. Bump the version when the substance changes.
+ */
+export const ESPN_SEASON_VERSION = 1;
+
+export const ESPN_SEASON_DISCLOSURE: readonly string[] = [
+  "Let War Room read your ESPN leagues during the season, so it can recommend your lineup each week and weigh trades against everyone's real rosters.",
+  "This tab hands War Room your ESPN login cookies (not your password). War Room stores them encrypted, uses them only to read your leagues, and deletes them when the season ends or when you disconnect.",
+  "War Room never changes anything on ESPN unless you ask it to and confirm.",
+  "It's unofficial and can stop working if ESPN changes things. If ESPN signs you out, War Room asks you to click the bookmarklet again.",
+];

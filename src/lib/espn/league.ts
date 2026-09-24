@@ -12,7 +12,7 @@ import type { LeagueSettings, RosterSlotKey, ScoringFormat } from "@/lib/draft/t
  */
 
 /** ESPN's lineup slot ids → our roster slots. Anything else (IR, and the ones no league uses) is ignored. */
-const SLOT_BY_ESPN_ID: Record<number, RosterSlotKey> = {
+export const SLOT_BY_ESPN_ID: Readonly<Record<number, RosterSlotKey>> = {
   0: "QB",
   2: "RB",
   4: "WR",
@@ -156,6 +156,28 @@ function importOf(settings: EspnSettings, espnTeamId: number): EspnImport {
   if (!slots.length) return { ok: false, error: "ESPN didn't say what this league's roster looks like." };
 
   return { ok: true, league: { teams, mySlot, scoring: scoringOf(settings), roster: slots }, rounds: slots.length };
+}
+
+/**
+ * ESPN's settings as a war room league for in-season use (10.3). Unlike a draft import, the draft
+ * doesn't matter any more: an auction league is fine, and the draft slot is kept only when ESPN
+ * still has a pick order (otherwise 1). The roster must still be one War Room can represent.
+ */
+export function toSeasonSettings(raw: unknown, espnTeamId: number): { ok: true; league: Omit<LeagueSettings, "valueThreshold">; name?: string } | { ok: false; error: string } {
+  const settings = parseEspnSettings(raw);
+  if (!settings) return { ok: false, error: "That doesn't look like an ESPN league." };
+  const teams = settings.size;
+  if (typeof teams !== "number" || teams < 2) return { ok: false, error: "ESPN didn't say how many teams this league has." };
+  const roster = rosterOf(settings);
+  if ("error" in roster) return { ok: false, error: roster.error.replace("can't draft for yet", "doesn't support yet") };
+  const slots = rosterFromCounts(roster.counts);
+  if (!slots.length) return { ok: false, error: "ESPN didn't say what this league's roster looks like." };
+  const name = (settings as { name?: unknown }).name;
+  return {
+    ok: true,
+    league: { teams, mySlot: slotOf(settings, espnTeamId) ?? 1, scoring: scoringOf(settings), roster: slots },
+    ...(typeof name === "string" && name.trim() ? { name: name.trim().slice(0, 80) } : {}),
+  };
 }
 
 /** What an import would change about the open league, in words. Empty when they already agree. */

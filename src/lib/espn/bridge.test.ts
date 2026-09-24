@@ -13,7 +13,7 @@ const WAR_ROOM = "https://draftroom.online";
 const DRAFT_URL = "wss://fantasydraft.espn.com/game-1/league-704343562/JOIN?1=1";
 const SWID = "{154E132F-8C13-4AC0-9DAC-20C2C5625594}";
 
-type Listener = (e: { data?: unknown; origin?: string }) => void;
+type Listener = (e: { data?: unknown; origin?: string; source?: unknown }) => void;
 
 class FakeSocket {
   url: string;
@@ -78,12 +78,18 @@ class FakeEl {
   }
 }
 
-function page({ href = "https://fantasy.espn.com/football/draft?leagueId=704343562&seasonId=2026&teamId=1", stored = null as string | null } = {}) {
+function page({
+  href = "https://fantasy.espn.com/football/draft?leagueId=704343562&seasonId=2026&teamId=1",
+  stored = null as string | null,
+  cookie = "",
+} = {}) {
   const url = new URL(href);
   const storage = new Map<string, string>(stored ? [["warroom-bridge:704343562", stored]] : []);
   const windowListeners: Listener[] = [];
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ have: 0 }), { status: 200 }));
-  const open = vi.fn();
+  /** The popup the bridge opens, which it answers through postMessage. */
+  const popup = { postMessage: vi.fn() };
+  const open = vi.fn(() => popup);
   const shadow = new FakeEl();
   const keyListeners: ((e: { key: string; preventDefault(): void }) => void)[] = [];
   const document = {
@@ -93,6 +99,7 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
     body: new FakeEl(),
     documentElement: new FakeEl(),
     activeElement: null,
+    cookie,
     addEventListener: (type: string, fn: (e: { key: string; preventDefault(): void }) => void) => type === "keydown" && keyListeners.push(fn),
   };
   const press = (key: string) => keyListeners.forEach((fn) => fn({ key, preventDefault() {} }));
@@ -125,13 +132,13 @@ function page({ href = "https://fantasy.espn.com/football/draft?leagueId=7043435
   const decode = (b64: string, league: number) =>
     (context.__warRoomBridge as { decodeInitPicks(b64: string, league: number): number[] | null }).decodeInitPicks(b64, league);
   const Socket = () => context.WebSocket as typeof FakeSocket;
-  const postMessage = (data: unknown, origin = WAR_ROOM) => windowListeners.forEach((fn) => fn({ data, origin }));
+  const postMessage = (data: unknown, origin = WAR_ROOM, source: unknown = undefined) => windowListeners.forEach((fn) => fn({ data, origin, source }));
   /** The frame posts only: the bridge also calls ESPN's own API when it catches up. */
   const bodies = () =>
     fetch.mock.calls
       .filter(([url, init]) => init && init.body && String(url).endsWith("/frames"))
       .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number; handoverVersion?: number });
-  return { load, bridge, decode, Socket, postMessage, fetch, open, storage, shadow, bodies, press };
+  return { load, bridge, decode, Socket, postMessage, fetch, open, popup, storage, shadow, bodies, press };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -318,7 +325,7 @@ describe("ESPN bridge", () => {
   });
 
   it("does nothing but explain itself off the draft page", async () => {
-    const p = page({ href: "https://fantasy.espn.com/football/league?leagueId=704343562" });
+    const p = page({ href: "https://fantasy.espn.com/football/players/projections" });
     p.load();
     await vi.advanceTimersByTimeAsync(300);
     expect(p.bridge()).toMatchObject({ onDraftPage: false, paired: false });
@@ -872,3 +879,63 @@ describe("standing down while War Room holds the ESPN connection (APE-168)", () 
     expect((new (p.Socket())(DRAFT_URL) as unknown as { sent?: unknown[] }).sent).toEqual([]);
   });
 });
+
+describe("connecting the season from an ESPN league page (10.3)", () => {
+  const LEAGUE_PAGE = "https://fantasy.espn.com/football/team?leagueId=704343562&teamId=2&seasonId=2026";
+  const COOKIE = `region=us; espn_s2=AEB%2Fnot-real%3D; SWID=${SWID}; other=1`;
+
+  function connected() {
+    const p = page({ href: LEAGUE_PAGE, cookie: COOKIE });
+    p.load();
+    p.shadow.querySelector(".sc").onclick!();
+    return p;
+  }
+
+  it("offers to connect the season, and opens War Room's season popup for this league", () => {
+    const p = connected();
+    expect(p.bridge()).toMatchObject({ onSeasonPage: true, onDraftPage: false });
+    expect(p.open).toHaveBeenCalledWith(`${WAR_ROOM}/espn/season?league=704343562&season=2026`, "warroom-season", expect.any(String));
+  });
+
+  it("hands the login only to its own popup, only when asked, and only to War Room's origin", async () => {
+    const p = connected();
+    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, { other: "window" });
+    p.postMessage({ type: "warroom-season-login?" }, "https://evil.example", p.popup);
+    expect(p.popup.postMessage).not.toHaveBeenCalled();
+    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, p.popup);
+    expect(p.popup.postMessage).toHaveBeenCalledWith(
+      { type: "warroom-season-login", espnLeagueId: "704343562", season: 2026, login: { espnS2: "AEB%2Fnot-real%3D", swid: SWID } },
+      WAR_ROOM,
+    );
+    // Nothing goes anywhere else: no request to War Room or ESPN carries it.
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.fetch).not.toHaveBeenCalled();
+  });
+
+  it("answers nothing before the user has opened the popup", () => {
+    const p = page({ href: LEAGUE_PAGE, cookie: COOKIE });
+    p.load();
+    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, p.popup);
+    expect(p.popup.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("says when ESPN has no login to give, and shows when the season is connected", () => {
+    const p = page({ href: LEAGUE_PAGE, cookie: "region=us" });
+    p.load();
+    p.shadow.querySelector(".sc").onclick!();
+    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, p.popup);
+    expect(p.popup.postMessage).toHaveBeenCalledWith(expect.objectContaining({ login: null }), WAR_ROOM);
+    p.postMessage({ type: "warroom-season-connected" }, WAR_ROOM, p.popup);
+    expect(p.bridge()).toMatchObject({ seasonConnected: true });
+    expect(p.shadow.querySelector(".s").textContent).toContain("Connected");
+    expect(p.shadow.querySelector(".sc").hidden).toBe(true);
+  });
+
+  it("never offers it in the draft room", () => {
+    const p = page({ cookie: COOKIE });
+    p.load();
+    expect(p.bridge()).toMatchObject({ onSeasonPage: false });
+    expect(p.shadow.querySelector(".sc").hidden).toBe(true);
+  });
+});
+

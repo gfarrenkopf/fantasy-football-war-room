@@ -1,4 +1,4 @@
-import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AiPlan } from "@/lib/ai/planSchema";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
@@ -275,4 +275,56 @@ export const espnServerClients = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   },
   (t) => [index("espn_server_clients_state_idx").on(t.state), index("espn_server_clients_expires_at_idx").on(t.expiresAt)],
+);
+
+/** Whether a stored ESPN login still works: `disconnected` once ESPN refuses it (401/403). */
+export type EspnLoginStatus = "connected" | "disconnected";
+
+/**
+ * The ESPN login a user handed War Room for the season (Epic 10, 10.2): their `espn_s2` and SWID
+ * cookies, sealed with ESPN_CODE_KEY (src/lib/server/espn/secretBox.ts), so the server can read
+ * their private leagues each week without their ESPN tab. One per user, since one ESPN login covers
+ * all of a user's leagues. Deleted when they disconnect, with their account, and by a sweep once the
+ * fantasy season is over (`expiresAt`).
+ */
+export const espnLogins = pgTable(
+  "espn_logins",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** `{ espnS2, swid }` as JSON, sealed. Never logged, never returned by an API. */
+    sealed: text("sealed").notNull(),
+    season: integer("season").notNull(),
+    consentVersion: integer("consent_version").notNull(),
+    status: text("status").$type<EspnLoginStatus>().notNull().default("connected"),
+    /** When ESPN last accepted it. */
+    verifiedAt: timestamp("verified_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (t) => [index("espn_logins_expires_at_idx").on(t.expiresAt)],
+);
+
+/**
+ * Which ESPN league and team a war room league follows during the season (10.3). Written when the
+ * user connects their season from ESPN; the season page reads rosters for this ESPN league with the
+ * user's stored login (`espn_logins`). One per war room league, and one war room league per ESPN
+ * league and season for each user.
+ */
+export const espnSeasonLinks = pgTable(
+  "espn_season_links",
+  {
+    leagueId: text("league_id")
+      .primaryKey()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    espnLeagueId: text("espn_league_id").notNull(),
+    espnTeamId: integer("espn_team_id").notNull(),
+    season: integer("season").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("espn_season_links_user_espn_idx").on(t.userId, t.espnLeagueId, t.season)],
 );

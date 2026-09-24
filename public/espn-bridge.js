@@ -19,6 +19,10 @@
  *   down: it keeps ESPN's page from reconnecting (the page would take the connection straight back)
  *   until the user hands back, from War Room or with "Draft here instead" in the overlay.
  *
+ * - Outside the draft, on an ESPN league or team page, it offers "Connect my season" (10.3). Only
+ *   after the user agrees in War Room's own popup, and only when that popup asks, it hands the popup
+ *   the user's ESPN login cookies, so War Room can read their leagues during the season.
+ *
  * Plain script, no build step, so what's tested (src/lib/espn/bridge.test.ts) is exactly what ships.
  * The frame grammar is documented in docs/espn-protocol.md.
  */
@@ -48,7 +52,12 @@
   const onDraftPage = location.hostname === "fantasy.espn.com" && location.pathname.startsWith("/football/draft");
   const espnLeagueId = params.get("leagueId") || "";
   const espnTeamId = Number(params.get("teamId")) || 0;
-  const season = Number(params.get("seasonId")) || new Date().getFullYear();
+  // ESPN's league pages usually leave seasonId out. A season's playoffs run into January, so before
+  // July the season that's on is last year's.
+  const now = new Date();
+  const season = Number(params.get("seasonId")) || (now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear());
+  /** An ESPN league or team page outside the draft: where "Connect my season" is offered (10.3). */
+  const onSeasonPage = !onDraftPage && location.hostname === "fantasy.espn.com" && location.pathname.startsWith("/football/") && /^\d+$/.test(espnLeagueId);
   const TOKEN_KEY = `warroom-bridge:${espnLeagueId}`;
   const HANDOVER_KEY = `warroom-handover:${espnLeagueId}`;
   /**
@@ -645,6 +654,29 @@
   // Only once paired: an unpaired bridge has no business calling ESPN's API on the user's behalf.
   if (onDraftPage && token) void readLeagueSettings();
 
+  /* ---------------- connecting the season (10.3) ---------------- */
+
+  /** War Room's season popup, the one window the login may go to. */
+  /** @type {Window | null} */
+  let seasonPopup = null;
+  let seasonConnected = false;
+
+  function connectSeason() {
+    const url = `${ORIGIN}/espn/season?league=${encodeURIComponent(espnLeagueId)}&season=${season}`;
+    seasonPopup = w.open(url, "warroom-season", "popup,width=520,height=760");
+  }
+
+  /** The user's ESPN login cookies, or null if ESPN hasn't set them (signed out). */
+  function espnLogin() {
+    /** @type {Record<string, string>} */
+    const jar = {};
+    for (const pair of String(document.cookie || "").split(/;\s*/)) {
+      const at = pair.indexOf("=");
+      if (at > 0) jar[pair.slice(0, at)] = pair.slice(at + 1);
+    }
+    return jar.espn_s2 && jar.SWID ? { espnS2: jar.espn_s2, swid: jar.SWID } : null;
+  }
+
   /* ---------------- pairing ---------------- */
 
   function pair() {
@@ -661,6 +693,19 @@
         e.source && /** @type {Window} */ (e.source).postMessage({ type: "warroom-bridge-settings", settings }, ORIGIN);
       if (lastSettings) reply(lastSettings);
       else void readLeagueSettings().then(() => reply(lastSettings));
+      return;
+    }
+    // The season popup asking for the login, once the user has agreed there. Only that popup, which
+    // this tab opened, gets an answer, and only on a league page.
+    if (e.data.type === "warroom-season-login?") {
+      if (!onSeasonPage || !seasonPopup || e.source !== seasonPopup) return;
+      seasonPopup.postMessage({ type: "warroom-season-login", espnLeagueId, season, login: espnLogin() }, ORIGIN);
+      return;
+    }
+    if (e.data.type === "warroom-season-connected") {
+      if (!seasonPopup || e.source !== seasonPopup) return;
+      seasonConnected = true;
+      render();
       return;
     }
     if (e.data.type !== "warroom-bridge-paired" || typeof e.data.token !== "string") return;
@@ -684,7 +729,7 @@
     .t{font-weight:700;letter-spacing:.02em;margin-bottom:2px}.t i{font-style:normal;color:#5fd38d}
     .s{color:#aab7c4}.row{display:flex;gap:8px;margin-top:8px}
     button{font:inherit;border-radius:6px;border:1px solid #2b3a48;background:#1b2530;color:inherit;padding:4px 10px;cursor:pointer}
-    button.go,button.ha{background:#2e7d4f;border-color:#2e7d4f}[hidden]{display:none}
+    button.go,button.ha,button.sc{background:#2e7d4f;border-color:#2e7d4f}[hidden]{display:none}
     .plan{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px}
     .ph{display:flex;align-items:baseline;gap:8px}.ph b{flex:1}.ph span{color:#8f9aa8;font-size:12px}
     .ph button{padding:1px 8px;font-size:12px}
@@ -704,7 +749,7 @@
   <div class="rows"></div><div class="note"></div></div>
   <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="hn"></div>
   <div class="row"><button class="ha" type="button">Let War Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
-  <div class="row"><button class="go" type="button">Connect to War Room</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
+  <div class="row"><button class="go" type="button">Connect to War Room</button><button class="sc" type="button" hidden>Connect my season</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
   const goEl = /** @type {HTMLButtonElement} */ (root.querySelector(".go"));
@@ -733,6 +778,8 @@
     render();
   };
   goEl.onclick = pair;
+  const seasonEl = /** @type {HTMLButtonElement} */ (root.querySelector(".sc"));
+  seasonEl.onclick = connectSeason;
   hideEl.onclick = () => (host.hidden = true);
   moreEl.onclick = () => {
     expanded = !expanded;
@@ -855,7 +902,12 @@
     goEl.hidden = !needsPairing;
     goEl.textContent = status === "expired" ? "Connect again" : "Connect to War Room";
     let text;
-    if (!onDraftPage) text = "Open your ESPN draft room, then click the War Room bookmark again.";
+    seasonEl.hidden = !onSeasonPage || seasonConnected;
+    if (onSeasonPage)
+      text = seasonConnected
+        ? "Connected. Your lineup and trade help are in the War Room window."
+        : "Get War Room's weekly lineup and trade help for this league.";
+    else if (!onDraftPage) text = "Open your ESPN draft room, then click the War Room bookmark again.";
     else if (status === "expired") text = "Your War Room connection expired.";
     else if (status === "denied") text = "ESPN live sync isn't available on this War Room account yet.";
     else if (status === "purchase") text = "This league needs a War Room season pass for live sync.";
@@ -882,7 +934,7 @@
       render();
     },
     /** For tests and support: what the bridge is doing. */
-    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, planVersion, armed, drafting: draftingName, handover, held: heldByWarRoom, standIns: standIns.size }),
+    state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, onSeasonPage, seasonConnected, planVersion, armed, drafting: draftingName, handover, held: heldByWarRoom, standIns: standIns.size }),
     /** Exposed so the INIT decoder can be run against blobs recorded from real drafts (8.12). */
     decodeInitPicks,
   };
