@@ -1,4 +1,4 @@
-import type { Position } from "@/lib/draft/types";
+import type { Position, RosterSlotKey } from "@/lib/draft/types";
 
 /**
  * The in-season vocabulary (Epic 10, docs/in-season.md). In-season players are ESPN's, keyed by
@@ -33,4 +33,51 @@ export interface PlayerProjections {
   injuryStatus: InjuryStatus;
   /** Projected raw stats by NFL week (ESPN's scoringPeriodId). A week with no row isn't projected. */
   weeks: ReadonlyMap<number, StatLine>;
+}
+
+/** Where a rostered player sits: one of our starting slots, the bench, or ESPN's IR slot. */
+export type LineupSlot = RosterSlotKey | "IR";
+
+/** One player on a team's ESPN roster this week. */
+export interface RosterEntry {
+  playerId: number;
+  name: string;
+  pos: Position;
+  /** NFL team abbreviation; null for a free agent. */
+  team: string | null;
+  slot: LineupSlot;
+  /** ESPN's own lineup slot id for `slot`, which lineup writes need. */
+  espnSlotId: number;
+  /** The player's game has started this week: ESPN won't move them until next week. */
+  locked: boolean;
+  injuryStatus: InjuryStatus;
+}
+
+export interface SeasonTeam {
+  id: number;
+  name: string;
+  abbrev: string;
+  roster: RosterEntry[];
+}
+
+/** A starting slot of the league's lineup, and how many of it there are. */
+export interface LineupSlotCount {
+  key: Exclude<RosterSlotKey, "BN">;
+  count: number;
+}
+
+/** An ESPN league as the in-season engine needs it, read from `mSettings`, `mStatus`, `mRoster` and `mTeam`. */
+export interface SeasonLeague {
+  espnLeagueId: string;
+  season: number;
+  name: string;
+  /** The NFL week ESPN is on (its `scoringPeriodId`). */
+  currentWeek: number;
+  /** The last week the league plays, playoffs included. */
+  finalWeek: number;
+  scoringItems: ScoringItem[];
+  /** Starting slots, in lineup order. */
+  starters: LineupSlotCount[];
+  benchSize: number;
+  teams: SeasonTeam[];
 }
