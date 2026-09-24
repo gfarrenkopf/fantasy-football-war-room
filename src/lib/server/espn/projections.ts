@@ -30,6 +30,8 @@ export type ProjectionSource = (query: ProjectionQuery) => Promise<Map<number, P
 
 export interface ProjectionSourceOptions {
   fetchImpl?: typeof fetch;
+  /** Where cached projections live; the process-wide source keeps it across hot reloads. */
+  cache?: Map<number, Entry>;
   now?: () => number;
   ttlMs?: number;
   timeoutMs?: number;
@@ -46,9 +48,8 @@ export function createProjectionSource({
   now = Date.now,
   ttlMs = 60 * 60 * 1000,
   timeoutMs = 15_000,
+  cache = new Map(),
 }: ProjectionSourceOptions = {}): ProjectionSource {
-  const cache = new Map<number, Entry>();
-
   async function fetchBatch(season: number, ids: number[], fromWeek: number, toWeek: number): Promise<PlayerProjections[]> {
     const res = await fetchImpl(url(season), {
       headers: { "X-Fantasy-Filter": projectionFilter(season, ids, fromWeek, toWeek), Accept: "application/json" },
@@ -85,7 +86,7 @@ export function createProjectionSource({
   };
 }
 
-const g = globalThis as { __espnProjectionSource?: ProjectionSource };
+const g = globalThis as { __espnProjectionCache?: Map<number, Entry> };
 
-/** The process-wide source, surviving hot reloads like the db pool does. */
-export const getEspnProjections: ProjectionSource = (query) => (g.__espnProjectionSource ??= createProjectionSource())(query);
+/** The process-wide source. Only its cache survives hot reloads, so edits to the code take effect. */
+export const getEspnProjections: ProjectionSource = (query) => createProjectionSource({ cache: (g.__espnProjectionCache ??= new Map()) })(query);

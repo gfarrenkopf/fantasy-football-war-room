@@ -5,7 +5,8 @@ import { SeasonRoom, type SeasonProblem } from "@/components/season/SeasonRoom";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
 import { getDb } from "@/lib/db";
-import { buildSeasonView, type SeasonView } from "@/lib/season/view";
+import type { PlayerProjections } from "@/lib/season/types";
+import { buildSeasonView } from "@/lib/season/view";
 import { getEspnProjections } from "@/lib/server/espn/projections";
 import { loadSeason } from "@/lib/server/espn/seasonData";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
@@ -36,16 +37,16 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
 
   const { league: season } = load;
   const ids = season.teams.flatMap((t) => t.roster.map((e) => e.playerId));
-  let view: SeasonView;
+  // Only the projections fetch is allowed to fail: without it every player shows 0, with a note.
+  let projections = new Map<number, PlayerProjections>();
   let projectionsMissing = false;
   try {
-    const projections = await getEspnProjections({ season: season.season, playerIds: ids, fromWeek: season.currentWeek, toWeek: season.finalWeek, ...(refresh ? { maxAgeMs: 0 } : {}) });
-    view = buildSeasonView(season, load.espnTeamId, projections);
+    projections = await getEspnProjections({ season: season.season, playerIds: ids, fromWeek: season.currentWeek, toWeek: season.finalWeek, ...(refresh ? { maxAgeMs: 0 } : {}) });
   } catch (err) {
     console.warn(`[espn-season] projections unavailable: ${(err as Error).message}`);
-    view = buildSeasonView(season, load.espnTeamId, new Map());
     projectionsMissing = true;
   }
+  const view = buildSeasonView(season, load.espnTeamId, projections);
 
   return (
     <SeasonRoom
