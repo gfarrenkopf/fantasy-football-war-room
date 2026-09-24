@@ -92,12 +92,14 @@ export function EntryPanel({
   /*
    * The panel holds the height of the face it's leaving, so a shorter face doesn't pull the panel
    * up out from beside the landing clock mid-flip. It can still grow (the sent state is taller).
+   * The goodbye is the exception: it lists every league, so holding its height would leave the
+   * next face stretched to fit leagues it doesn't show, for as long as the page is open.
    */
   const panel = useRef<HTMLDivElement>(null);
   const [holdHeight, setHoldHeight] = useState<number | undefined>();
   const flip = (to: Face) => {
     flipped.current = true;
-    setHoldHeight(panel.current?.offsetHeight);
+    setHoldHeight(face === "farewell" ? undefined : panel.current?.offsetHeight);
     setFace(to);
   };
 
