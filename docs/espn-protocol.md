@@ -11,6 +11,7 @@ What we know about ESPN's live draft, from test drafts on 2026-09-21: the origin
 5. [Player ids](#5-player-ids)
 6. [Probe scripts](#6-probe-scripts)
 7. [Open questions](#7-open-questions)
+8. [In-season reads and lineup writes](#8-in-season-reads-and-lineup-writes)
 
 ---
 
@@ -146,3 +147,57 @@ The probes behind these findings aren't committed. They run against real ESPN ac
 - **Where does the security code come from?** Still unanswered by any server-reachable endpoint. It matters less now: the bridge can read it from the page's own socket URL, and that's enough for a server client (§3).
 - **How long does a code stay valid?** The one thing the server-side design rests on. The draft room only opens about an hour before the draft, so a capture days ahead isn't possible; 2026-09-22 showed a code lasting about an hour, through a page exit and into a live draft.
 - **How do we catch up on picks made before the bridge attached?** `INIT` holds them (§4.1). What's left is decoding its records properly rather than fishing ids out by stride.
+
+## 8. In-season reads and lineup writes
+
+From probes on 2026-09-24 (NFL week 3) against leagues 110222051 and 704343562, for Epic 10. What War Room does with these facts is in [in-season.md](in-season.md).
+
+### Credentials
+
+- **A private league refuses anonymous reads:** `401` with `type: "AUTH_LEAGUE_NOT_VISIBLE"`. With `espn_s2` + `SWID` as cookies, every view below works from Node.
+- **`espn_s2` is not `HttpOnly`.** On `fantasy.espn.com`, `document.cookie` includes both `espn_s2` (294 characters in this sample) and `SWID`, so code running in the user's ESPN tab (the bookmarklet) can read them.
+
+### Reads
+
+Same base as §2.
+
+| View | Useful fields |
+|---|---|
+| `mStatus` | `scoringPeriodId` (the current NFL week); `status.{firstScoringPeriod, finalScoringPeriod, currentMatchupPeriod, latestScoringPeriod}` |
+| `mSettings` | `scoringSettings.scoringItems[].{statId, points, pointsOverrides}`, where `pointsOverrides` is keyed by lineup slot id (e.g. D/ST points-allowed tiers under `"16"`); `rosterSettings.{lineupSlotCounts, lineupLocktimeType}` (`INDIVIDUAL_GAME`); `scheduleSettings.{matchupPeriodCount, matchupPeriods, playoffTeamCount, playoffMatchupPeriodLengthByRound}` (a two-week final shows as `"16": [16, 17]`); `tradeSettings.deadlineDate` |
+| `mRoster` + `mTeam` | `teams[].roster.entries[]`: `playerId`, `lineupSlotId`, `injuryStatus`, `acquisitionType`, `pendingTransactionIds`, and `playerPoolEntry.{lineupLocked, rosterLocked, tradeLocked, player.eligibleSlots, player.stats}` |
+| `mPendingTransactions` | Pending trades and claims. Empty in the test league, so the shape is still unrecorded. |
+
+Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/ST, 17 K, 20 bench, 21 IR, 23 FLEX, 7 OP (superflex).
+
+### Projections
+
+`player.stats[]` entries are identified by `statSourceId` (0 actual, 1 projected) and `statSplitTypeId` (0 season, 1 one week, 2 unknown, see below). Their ids follow the pattern `{source}{split}{season}` for season rows and `{source}{split}{season}{week}` for weekly projections. Weekly actuals are keyed by game id instead.
+
+- **Every future week is projected.** The public view `.../seasons/{season}/segments/0/leaguedefaults/3?view=kona_player_info`, with `filterStatsForTopScoringPeriodIds.additionalValue` listing ids such as `"11202617"`, returns a projection for each requested week through week 17 with no cookies. A bye week is projected as `0.0`.
+- **The league-scoped `kona_player_info` returns only the requested `scoringPeriodId`'s weekly projection**, one week per request.
+- **`appliedTotal` is scored for whoever asks.** Under `leaguedefaults/3` it's ESPN's default PPR. Under a league it's that league's scoring, and it matches Σ `stats[statId]` × `points` exactly for every row checked. So public raw `stats` + the league's `scoringItems` reproduces league scoring.
+- **Split 2 (`12{season}`) is unexplained.** It's close to, but not equal to, the season projection (Gibbs: 386.3 against 380.6), and it doesn't match actuals plus the remaining weekly projections. Don't use it.
+- **Public queries also return last season's weekly actuals**, keyed by game ids with the prior season's prefix. Filter on `seasonId`.
+
+### Lineup writes
+
+`POST https://lm-api-writes.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{leagueId}/transactions/`, with cookies:
+
+```json
+{
+  "isLeagueManager": false, "teamId": 2, "type": "ROSTER", "memberId": "{SWID}",
+  "scoringPeriodId": 3, "executionType": "EXECUTE",
+  "items": [
+    { "playerId": 16800, "type": "LINEUP", "fromLineupSlotId": 20, "toLineupSlotId": 4 },
+    { "playerId": 4426515, "type": "LINEUP", "fromLineupSlotId": 4, "toLineupSlotId": 20 }
+  ]
+}
+```
+
+- **One request carries many moves, applied atomically.** ESPN's own page sends a swap as two items. A request with a valid swap plus one illegal move was refused whole, and the swap didn't land.
+- **Errors are `409`** with `details[].type`. Seen so far: `TRAN_ROSTER_INELIGIBLE_SLOT` ("… is not eligible for the QB slot."), `TRAN_ROSTER_SLOT_LIMIT_EXCEEDED` ("Too many players in the RB slot (maximum 2)"), `TRAN_ROSTER_SAME_SLOT` ("… is already in the BE slot").
+- **`fromLineupSlotId` isn't checked against the roster.** A move with the wrong `fromLineupSlotId` failed only because its target was the player's current slot. Callers must re-read the roster before writing.
+- **There is no dry run.** `executionType: "VALIDATE"` returns `400 Invalid Input.`
+- **Still unrecorded: moving a locked player.** Nothing was locked during the probe. Check after a Thursday kickoff.
+
