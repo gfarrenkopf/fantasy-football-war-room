@@ -122,6 +122,15 @@ export function Landing({ flags, farewell = false }: { flags: PublicFlags; farew
               </p>
             )}
           </article>
+          {flags.espnSeasonOpen && (
+            <article className={s.persona}>
+              <h3>Already drafted on ESPN?</h3>
+              <p>
+                Connect your ESPN league once and War Room sets your best lineup every week and checks any trade against both teams&apos; real rosters,
+                for the rest of the season. Free.
+              </p>
+            </article>
+          )}
         </div>
       </section>
 

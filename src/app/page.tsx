@@ -3,7 +3,10 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Landing } from "@/components/landing/Landing";
 import { getSessionUser } from "@/lib/auth";
-import { publicFlags } from "@/lib/config";
+import { config, publicFlags } from "@/lib/config";
+import { getDb } from "@/lib/db";
+import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
 
 export const metadata: Metadata = {
   title: "Fantasy War Room — know who to pick",
@@ -21,12 +24,19 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   // Anyone with a session has already made this decision. The query string rides along, so an
   // old link (e.g. a Stripe return to `/?checkout=success`) still lands where it was meant to.
-  if (!publicFlags.cloudEnabled || (await getSessionUser())) {
+  const user = publicFlags.cloudEnabled ? await getSessionUser() : null;
+  if (!publicFlags.cloudEnabled || user) {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(await searchParams)) {
       for (const v of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, v);
     }
     const qs = query.toString();
+    // In season, a league following ESPN opens on its season page (10.7), unless the link was
+    // meant for the draft room (anything with a query string).
+    if (user && !qs && config.espnSeasonEnabled && mayUseSeason(config.espnSyncAllowlist, user.email)) {
+      const [latest] = await listSeasonLinks(getDb(), user.userId);
+      if (latest) redirect(`/season/${latest.leagueId}`);
+    }
     redirect(qs ? `/draft?${qs}` : "/draft");
   }
 

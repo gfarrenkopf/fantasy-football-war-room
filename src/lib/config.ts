@@ -136,6 +136,8 @@ export const publicFlags = Object.freeze({
   espnSyncEnabled: config.espnSyncEnabled,
   espnServerClientEnabled: config.espnServerClientEnabled,
   espnSeasonEnabled: config.espnSeasonEnabled,
+  /** In-season help is open to everyone, not just the ESPN_SYNC_ALLOWLIST beta: the landing page may advertise it. */
+  espnSeasonOpen: config.espnSeasonEnabled && config.espnSyncAllowlist.length === 0,
 });
 
 export type PublicFlags = typeof publicFlags;

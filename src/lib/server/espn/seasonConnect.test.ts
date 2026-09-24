@@ -4,11 +4,11 @@ import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { ESPN_SEASON_VERSION } from "@/lib/espn/disclosure";
 import league from "@/lib/season/__fixtures__/espn-league-2026.json";
-import { findLeague } from "../leagues";
+import { deleteLeague, findLeague } from "../leagues";
 import { createTestLeague } from "../testLeagues";
 import { mintBridgeToken } from "./bridgeTokens";
 import { loadLogin, loginStatus } from "./logins";
-import { findSeasonLink } from "./seasonLinks";
+import { findSeasonLink, linkSeason, listSeasonLinks } from "./seasonLinks";
 
 vi.mock("server-only", () => ({}));
 const { connectSeason } = await import("./seasonConnect");
@@ -81,5 +81,20 @@ describe("connectSeason", () => {
     const userId = await createTestUser(db);
     const idp = { ...espnLeague, settings: { ...league.settings, rosterSettings: { lineupSlotCounts: { ...league.settings.rosterSettings.lineupSlotCounts, "11": 1 } } } };
     expect(await connectSeason(db, KEY, userId, request, { fetchImpl: espn(200, idp) })).toMatchObject({ ok: false, status: 422, error: expect.stringContaining("linebacker") });
+  });
+});
+
+describe("listSeasonLinks", () => {
+  it("lists the user's live linked leagues, most recently connected first", async () => {
+    const userId = await createTestUser(db);
+    const older = await createTestLeague(db, userId);
+    const newer = await createTestLeague(db, userId);
+    const gone = await createTestLeague(db, userId);
+    await linkSeason(db, userId, { leagueId: older, espnLeagueId: "1", espnTeamId: 1, season: 2026 }, new Date("2026-09-01"));
+    await linkSeason(db, userId, { leagueId: newer, espnLeagueId: "2", espnTeamId: 1, season: 2026 }, new Date("2026-09-20"));
+    await linkSeason(db, userId, { leagueId: gone, espnLeagueId: "3", espnTeamId: 1, season: 2026 }, new Date("2026-09-21"));
+    await deleteLeague(db, userId, gone);
+    expect((await listSeasonLinks(db, userId)).map((l) => l.leagueId)).toEqual([newer, older]);
+    expect(await listSeasonLinks(db, await createTestUser(db))).toEqual([]);
   });
 });

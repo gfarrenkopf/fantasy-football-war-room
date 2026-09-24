@@ -13,6 +13,7 @@ const OFF: PublicFlags = {
   espnSyncEnabled: false,
   espnServerClientEnabled: false,
   espnSeasonEnabled: false,
+  espnSeasonOpen: false,
 };
 
 const FlagsContext = createContext<PublicFlags>(OFF);

@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { espnSeasonLinks } from "@/lib/db/schema";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { espnSeasonLinks, leagues } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
 
 /** Which ESPN league a war room league follows during the season (10.3). */
@@ -32,9 +32,14 @@ export async function findSeasonLinkByEspn(db: Db, userId: string, espnLeagueId:
   return row ?? null;
 }
 
-/** Every linked league of the user's. */
-export async function listSeasonLinks(db: Db, userId: string): Promise<SeasonLink[]> {
-  return db.select(columns).from(espnSeasonLinks).where(eq(espnSeasonLinks.userId, userId));
+/** The user's live leagues that follow an ESPN league this season, most recently connected first. */
+export async function listSeasonLinks(db: Db, userId: string, season?: number): Promise<SeasonLink[]> {
+  return db
+    .select(columns)
+    .from(espnSeasonLinks)
+    .innerJoin(leagues, and(eq(leagues.id, espnSeasonLinks.leagueId), eq(leagues.userId, userId), isNull(leagues.deletedAt)))
+    .where(and(eq(espnSeasonLinks.userId, userId), ...(season ? [eq(espnSeasonLinks.season, season)] : [])))
+    .orderBy(desc(espnSeasonLinks.updatedAt));
 }
 
 /** Links (or relinks) a war room league to an ESPN league and team. */

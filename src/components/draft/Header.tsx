@@ -7,6 +7,7 @@ import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
 import { EspnClock } from "./EspnSync";
 import { useLeague } from "./LeagueProvider";
+import { useHasSeasonPage } from "./SeasonLinks";
 import { useDraftActions } from "./useDraftActions";
 import { useDraftClock } from "./useDraftClock";
 
@@ -50,6 +51,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
   const model = useModel();
   const { undo, reset } = useDraftActions();
   const { leagues, active, switchLeague } = useLeague();
+  const hasSeasonPage = useHasSeasonPage(active?.id);
   const { current: cur, total, done, onClock, league } = model;
   // Before the first pick, the turn line also says when the draft starts: on a phone, whose
   // header drops the focus hero, this is the only place the countdown shows.
@@ -148,6 +150,11 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         {children}
         <div className={s.actions}>
           {actions}
+          {hasSeasonPage && active ? (
+            <a className={s.btn} href={`/season/${active.id}`} title="This week's lineup and trade checks, from ESPN">
+              Season
+            </a>
+          ) : null}
           <button className={s.btn} onClick={onOpenLeague} title="League size, draft slot, scoring and roster">
             League
           </button>

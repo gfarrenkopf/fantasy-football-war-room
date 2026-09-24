@@ -25,6 +25,7 @@ import { DraftFinale } from "./DraftFinale";
 import { OpeningNight } from "./OpeningNight";
 import { useWelcomeHold, Welcome } from "./Welcome";
 import { FlagsProvider } from "./Flags";
+import { SeasonLinksProvider } from "./SeasonLinks";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
@@ -42,28 +43,30 @@ const REPORT_MOCKS = 300;
 const PLAN_MOCKS = 100;
 
 /** The war room app: providers plus the active view. */
-export function WarRoom({ flags, user }: { flags: PublicFlags; user: SessionUser | null }) {
+export function WarRoom({ flags, user, seasonLeagueIds = [] }: { flags: PublicFlags; user: SessionUser | null; seasonLeagueIds?: readonly string[] }) {
   // Chooses local or server-backed persistence before any provider below reads from it. Idempotent.
   configureStores({ cloudEnabled: flags.cloudEnabled, userId: user?.userId ?? null });
   return (
     <FlagsProvider flags={flags}>
-      {/* Keyed by user: signing in or out swaps the stores, so every provider below reloads from the new ones. */}
-      <AccountProvider key={user?.userId ?? "signed-out"} user={user}>
-        <ToastProvider>
-          <SyncNotices />
-          <CheckoutReturn />
-          <ConfirmProvider>
-            <PrefsProvider>
-              <LeagueProvider>
-                <Welcome>
-                  <OpeningNight />
-                  <LeagueGate />
-                </Welcome>
-              </LeagueProvider>
-            </PrefsProvider>
-          </ConfirmProvider>
-        </ToastProvider>
-      </AccountProvider>
+      <SeasonLinksProvider leagueIds={seasonLeagueIds}>
+        {/* Keyed by user: signing in or out swaps the stores, so every provider below reloads from the new ones. */}
+        <AccountProvider key={user?.userId ?? "signed-out"} user={user}>
+          <ToastProvider>
+            <SyncNotices />
+            <CheckoutReturn />
+            <ConfirmProvider>
+              <PrefsProvider>
+                <LeagueProvider>
+                  <Welcome>
+                    <OpeningNight />
+                    <LeagueGate />
+                  </Welcome>
+                </LeagueProvider>
+              </PrefsProvider>
+            </ConfirmProvider>
+          </ToastProvider>
+        </AccountProvider>
+      </SeasonLinksProvider>
     </FlagsProvider>
   );
 }
