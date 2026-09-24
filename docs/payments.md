@@ -68,7 +68,11 @@ DELETE FROM entitlements WHERE league_id = '<league id>' AND kind = 'season_pass
 
 ## 5. What the season pass unlocks
 
-Only the AI game plan: the first plan plus the free rewrites (`FREE_REGENERATIONS`). It's enforced on the server in `planAccess()` (`src/lib/server/ai`):
+The pass is per league and per season. It unlocks two things for that league: the AI game plan before the draft, and in-season AI during the season (Epic 11). A pass bought for the draft covers the season too, at no extra cost. It never carries into next season: next year's league is a new league.
+
+### The AI game plan
+
+The pass unlocks the first plan plus the free rewrites (`FREE_REGENERATIONS`). It's enforced on the server in `planAccess()` (`src/lib/server/ai`):
 
 | | Payments off (self-hosted) | Payments on (hosted) |
 |---|---|---|
@@ -76,9 +80,20 @@ Only the AI game plan: the first plan plus the free rewrites (`FREE_REGENERATION
 | League without one | AI plans, unless `AI_ALLOWLIST` is set and the account isn't on it | Paywall: `GET /plan` returns `needsPurchase: true` and `POST /plan` gets `402` |
 | Account on `AI_ALLOWLIST` | AI plans | AI plans, no pass needed (for the operator's own testing) |
 
-The board, mock drafts, live odds, availability report and cross-device sync are never gated.
-
 The paywall shows in the AI game plan tab with the live turn plan underneath. After checkout the tab checks every 2 seconds, for up to 30 seconds, until the webhook has recorded the pass, then unlocks. If the webhook is slower than that, reloading picks it up.
+
+### In-season AI
+
+The AI lineup and the AI trade write-up on the season page ([in-season.md §6](in-season.md#6-free-and-paid)). It's enforced on the server in `seasonAiAccess()` (`src/lib/server/seasonAi.ts`):
+
+- **Trial:** every account gets 5 NFL weeks (`TRIAL_WEEKS`) free, counted from the week of its first in-season AI use, in any league. A week is ESPN's `scoringPeriodId`. The start week is stored per account and season in `season_ai_trials`, so linking another league doesn't restart it.
+- **After the trial,** in-season AI needs a pass on that league for the season being played. A second league without one shows the paywall, even if the first is paid for.
+- **Allowances per league and week:** one mid-week AI lineup and one Sunday AI lineup, recorded in `season_ai_uses`. A new `scoringPeriodId` starts with both unused. AI trade write-ups are unlimited.
+- Payments off and `AI_ALLOWLIST` work as for the game plan: with payments off the allowlist decides and there's no trial, and with payments on an allowlisted account skips the paywall.
+
+Checkout from the season page uses `POST /api/leagues/:id/checkout?from=season`, which sends the buyer back to `/season/:id?checkout=…` instead of the war room.
+
+The board, mock drafts, live odds, availability report, cross-device sync, the optimal lineup and the trade verdict are never gated.
 
 ## 6. Purchase history and refunds
 

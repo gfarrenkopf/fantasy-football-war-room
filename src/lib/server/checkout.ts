@@ -12,6 +12,8 @@ export type StartCheckoutResult =
   | { status: "not-found" }
   | { status: "already-paid" };
 
+export type CheckoutFrom = "draft" | "season";
+
 /**
  * Starts a Stripe Checkout for a league's season pass. The league and user ride along in the
  * session's metadata, which is how the webhook (4.3) knows what to grant. Stripe errors propagate.
@@ -19,18 +21,33 @@ export type StartCheckoutResult =
 export async function startCheckout(
   db: Db,
   createSession: CreateCheckoutSession,
-  { userId, email, leagueId, priceId, baseUrl }: { userId: string; email: string | null; leagueId: string; priceId: string; baseUrl: string },
+  {
+    userId,
+    email,
+    leagueId,
+    priceId,
+    baseUrl,
+    from = "draft",
+  }: {
+    userId: string;
+    email: string | null;
+    leagueId: string;
+    priceId: string;
+    baseUrl: string;
+    /** Where the buyer came from, and goes back to: the war room, or the league's season page (11.1). */
+    from?: CheckoutFrom;
+  },
 ): Promise<StartCheckoutResult> {
   const league = await findLeague(db, userId, leagueId);
   if (!league) return { status: "not-found" };
   if (await hasEntitlement(db, leagueId, SEASON_PASS)) return { status: "already-paid" };
 
-  // Straight back into the war room, where CheckoutReturn reads the outcome. (`/` is the landing
-  // page; it forwards its query string too, for sessions started before the route moved.)
+  // Straight back where they came from. The war room's CheckoutReturn reads the outcome. (`/` is the
+  // landing page; it forwards its query string too, for sessions started before the route moved.)
   const back = (outcome: "success" | "cancel") => {
-    const url = new URL("/draft", baseUrl);
+    const url = new URL(from === "season" ? `/season/${encodeURIComponent(leagueId)}` : "/draft", baseUrl);
     url.searchParams.set("checkout", outcome);
-    url.searchParams.set("league", leagueId);
+    if (from === "draft") url.searchParams.set("league", leagueId);
     return url.toString();
   };
   const metadata = { leagueId, userId, kind: SEASON_PASS };

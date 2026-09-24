@@ -71,6 +71,13 @@
       "when": 1790285684248,
       "tag": "0009_espn_season_links",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790292156238,
+      "tag": "0010_season_ai",
+      "breakpoints": true
     }
   ]
 }

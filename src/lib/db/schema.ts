@@ -328,3 +328,40 @@ export const espnSeasonLinks = pgTable(
   },
   (t) => [uniqueIndex("espn_season_links_user_espn_idx").on(t.userId, t.espnLeagueId, t.season)],
 );
+
+/**
+ * When each account started its in-season AI trial (Epic 11, 11.1): the ESPN `scoringPeriodId` of
+ * its first AI use that season. Kept on the user, not the league, so linking another league doesn't
+ * restart it. See src/lib/server/seasonAi.ts.
+ */
+export const seasonAiTrials = pgTable(
+  "season_ai_trials",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    firstWeek: integer("first_week").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.season] })],
+);
+
+/** A per-league-week in-season AI allowance (11.1): the mid-week lineup, and the Sunday one (11.3). */
+export type SeasonAiUseKind = "lineup-midweek" | "lineup-sunday";
+
+/** Which weekly in-season AI allowances a league has used. One row per league, week and kind. */
+export const seasonAiUses = pgTable(
+  "season_ai_uses",
+  {
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    /** ESPN's `scoringPeriodId`. */
+    week: integer("week").notNull(),
+    kind: text("kind").$type<SeasonAiUseKind>().notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind] })],
+);
