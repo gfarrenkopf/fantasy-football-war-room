@@ -1,9 +1,12 @@
 "use client";
 
-import type { Position } from "@/lib/draft/types";
-import { compareLineups, isRuledOut } from "@/lib/season/lineup";
+import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
+import { compareLineups, isRuledOut, type LineupRow } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import { ArrowRight, Check, External, Swap } from "./Icons";
+import { Gain, PlayerLine, pts, signed } from "./parts";
+import s from "./season.module.css";
 
 const SLOT_LABEL: Record<LineupSlot, string> = {
   QB: "QB",
@@ -18,164 +21,191 @@ const SLOT_LABEL: Record<LineupSlot, string> = {
   IR: "IR",
 };
 
-const POS_TEXT: Record<Position, string> = { QB: "text-qb", RB: "text-rb", WR: "text-wr", TE: "text-te", K: "text-k", DST: "text-dst" };
+const HEADLINE: Record<Emphasis, string> = {
+  rest: "Your ESPN lineup is already the best one",
+  trim: "A small tweak",
+  gain: "Worth changing",
+  swing: "A real swing this week",
+  must: "Don't leave these points on your bench",
+};
 
-/** ESPN's injury designations as the short tags ESPN itself shows. */
-const INJURY_TAG: Record<string, string> = { QUESTIONABLE: "Q", DOUBTFUL: "D", OUT: "O", INJURY_RESERVE: "IR", SUSPENSION: "SSPD" };
+const lastName = (name: string) => name.split(" ").filter((w) => !/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(w)).pop() ?? name;
 
-const pts = (n: number) => n.toFixed(1);
+/** Why a slot changes, in the words a manager would use. */
+function reason(row: LineupRow, now: ViewPlayer | undefined, next: ViewPlayer | undefined): { text: string; kind?: "out" } {
+  if (!now) return { text: `Your ${SLOT_LABEL[row.key]} slot is empty on ESPN` };
+  if (!next) return { text: "Nobody on your roster can play this slot" };
+  if (isRuledOut(now.injuryStatus)) return { text: `${now.name} is ruled out`, kind: "out" };
+  if (now.points === 0 && now.projected) return { text: `${now.name} has no game this week`, kind: "out" };
+  return { text: `${signed(next.points - now.points)} projected over ${lastName(now.name)}` };
+}
 
-/** This week's recommended lineup against what's set on ESPN (10.5). */
+/** This week's lineup: what's set on ESPN against War Room's, and the moves between them (10.5, 10.8). */
 export function LineupPanel({ view }: { view: SeasonView }) {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
-  const byId = new Map((mine?.roster ?? []).map((p) => [p.playerId, p]));
+  if (!mine) return <p className={`${s.panel} ${s.note}`}>ESPN didn&apos;t list your team in this league.</p>;
+
+  const byId = new Map(mine.roster.map((p) => [p.playerId, p]));
+  const get = (id: number | null) => (id === null ? undefined : byId.get(id));
   const { lineup } = view;
+  const rows = compareLineups(mine.roster, lineup);
+  const changed = rows.filter((r) => r.changed);
   const gain = lineup.total - lineup.currentTotal;
-  const moved = new Set(lineup.moves.map((m) => m.playerId));
-  const starts = lineup.moves.filter((m) => m.to !== "BN" && m.to !== "IR");
-  const benches = lineup.moves.filter((m) => m.to === "BN");
-  const rows = compareLineups(mine?.roster ?? [], lineup);
-
-  if (!mine) return <p className="rounded-card border border-line bg-panel p-4 text-sm">ESPN didn&apos;t list your team in this league.</p>;
+  const level = changed.length ? lineupEmphasis(gain) : "rest";
+  const benched = new Set(changed.flatMap((r) => (r.now === null ? [] : [r.now])));
+  const bench = lineup.bench
+    .flatMap((id) => get(id) ?? [])
+    .sort((a, b) => Number(benched.has(b.playerId)) - Number(benched.has(a.playerId)) || b.points - a.points);
+  const espnTeam = `https://fantasy.espn.com/football/team?leagueId=${view.espnLeagueId}&seasonId=${view.season}&teamId=${view.myTeamId}`;
 
   return (
-    <section className="space-y-3" aria-labelledby="lineup-title">
-      <div className="rounded-card border border-line bg-panel p-4 space-y-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 id="lineup-title" className="font-semibold">
-            Week {view.currentWeek} lineup
-          </h2>
-          <p className="text-sm tabular-nums text-muted">
-            <span className="text-text font-semibold">{pts(lineup.total)}</span> projected
-          </p>
-        </div>
-        {lineup.moves.length === 0 ? (
-          <p className="text-sm text-mine">Your ESPN lineup is already the best one ESPN&apos;s projections allow.</p>
-        ) : (
-          <>
-            <p className="text-sm text-muted">
-              {lineup.moves.length === 1 ? "One change" : `${lineup.moves.length} changes`} on ESPN gets you{" "}
-              <span className="font-semibold text-mine tabular-nums">+{pts(gain)}</span> projected points.
-            </p>
-            <ul className="space-y-1 text-sm">
-              {starts.map((m) => (
-                <li key={m.playerId}>
-                  Start <b>{byId.get(m.playerId)?.name}</b> at {SLOT_LABEL[m.to]}
-                </li>
-              ))}
-              {benches.map((m) => (
-                <li key={m.playerId} className="text-muted">
-                  Bench {byId.get(m.playerId)?.name}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+    <div className={s.lineup}>
+      <div className={s.stack}>
+        <Gain
+          className={s.orderGain}
+          level={level}
+          value={gain}
+          unit="pts"
+          headline={HEADLINE[level]}
+          detail={
+            changed.length ? (
+              <>
+                {changed.length === 1 ? "1 change" : `${changed.length} changes`} on ESPN takes you from{" "}
+                <span className="tabular-nums">{pts(lineup.currentTotal)}</span> to{" "}
+                <b className="tabular-nums">{pts(lineup.total)}</b> projected points in week {view.currentWeek}.
+              </>
+            ) : (
+              <>
+                <b className="tabular-nums">{pts(lineup.total)}</b> projected points in week {view.currentWeek}. Check back before kickoff: injury news can
+                change it.
+              </>
+            )
+          }
+        />
+
+        <section className={`${s.panel} ${s.orderTable}`} aria-label="Your lineup">
+          <table className={s.compare}>
+            <caption>Your starters on ESPN now, and War Room&apos;s lineup</caption>
+            <colgroup>
+              <col className={s.colSlot} />
+              <col />
+              <col className={s.colArrow} />
+              <col />
+              <col className={s.colDelta} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" className={s.slot}>
+                  <span className="sr-only">Slot</span>
+                </th>
+                <th scope="col">
+                  On ESPN <span className={`${s.headTotal} tabular-nums`}>{pts(lineup.currentTotal)}</span>
+                </th>
+                <th scope="col" aria-hidden />
+                <th scope="col">
+                  War Room <span className={`${s.headTotal} ${s.headOurs} tabular-nums`}>{pts(lineup.total)}</span>
+                </th>
+                <th scope="col" className={s.delta}>
+                  <span className="sr-only">Gain</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                const now = get(row.now);
+                const next = get(row.next);
+                return (
+                  <tr key={`${row.key}-${i}`} data-changed={row.changed}>
+                    <th scope="row" className={s.slot}>
+                      {SLOT_LABEL[row.key]}
+                    </th>
+                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} /> : <span className={s.fine}>Empty</span>}</td>
+                    <td className={s.arrow}>{row.changed && <ArrowRight />}</td>
+                    <td>
+                      {row.changed ? (
+                        next ? (
+                          <PlayerLine player={next} tone="in" locked={row.locked} />
+                        ) : (
+                          <span className={s.fine}>Nobody available</span>
+                        )
+                      ) : (
+                        <span className={s.keep}>
+                          <Check />
+                          <span className={s.keepLabel}>Keep</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className={`${s.delta} tabular-nums`}>{row.changed && next ? signed(next.points - (now?.points ?? 0)) : ""}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
       </div>
 
-      <div className="rounded-card border border-line bg-panel">
-        <table className="w-full table-fixed text-sm">
-          <caption className="sr-only">Your starters on ESPN now, and the recommended ones</caption>
-          <colgroup>
-            <col className="w-11" />
-            <col />
-            <col className="w-5" />
-            <col />
-          </colgroup>
-          <thead>
-            <tr className="border-b border-line text-left text-xs text-muted">
-              <th scope="col" className="py-2 pl-3 font-normal">
-                <span className="sr-only">Slot</span>
-              </th>
-              <th scope="col" className="py-2 pr-2 font-normal">
-                On ESPN now <span className="tabular-nums text-text">{pts(lineup.currentTotal)}</span>
-              </th>
-              <th scope="col" aria-hidden />
-              <th scope="col" className="py-2 pr-3 font-normal">
-                Recommended <span className="tabular-nums font-semibold text-text">{pts(lineup.total)}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              const now = row.now === null ? null : byId.get(row.now);
-              const next = row.next === null ? null : byId.get(row.next);
-              return (
-                <tr key={`${row.key}-${i}`} className={`border-b border-row-line last:border-0 ${row.changed ? "bg-panel2" : ""}`}>
-                  <th scope="row" className="py-2 pl-3 text-left align-top text-xs font-normal text-muted">
-                    {SLOT_LABEL[row.key]}
-                  </th>
-                  <td className="py-2 pr-2 align-top">
-                    <SlotCell player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} />
-                  </td>
-                  <td className="py-2 text-center align-top text-muted" aria-hidden>
-                    {row.changed ? "→" : ""}
-                  </td>
-                  <td className="py-2 pr-3 align-top">
-                    {row.changed ? <SlotCell player={next} tone="in" locked={row.locked} /> : <span className="text-xs text-dim">No change</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <div className={s.stack}>
+        <section className={`${s.panel} ${s.orderMoves}`} aria-labelledby="moves-title">
+          <div className={s.panelHead}>
+            <h2 id="moves-title" className={s.panelTitle}>
+              {changed.length ? "Make these moves on ESPN" : "Nothing to change on ESPN"}
+            </h2>
+            {changed.length > 0 && <span className={s.panelNote}>{changed.length === 1 ? "1 swap" : `${changed.length} swaps`}</span>}
+          </div>
+          {changed.length > 0 && (
+            <ol className={s.moves}>
+              {changed.map((row, i) => {
+                const now = get(row.now);
+                const next = get(row.next);
+                const why = reason(row, now, next);
+                return (
+                  <li key={`${row.key}-${i}`} className={s.move}>
+                    <span className={s.moveIcon}>
+                      <Swap />
+                    </span>
+                    <span className={s.moveText}>
+                      {next ? (
+                        <>
+                          Start <b>{next.name}</b> at {SLOT_LABEL[row.key]}
+                          {now ? `, bench ${now.name}` : ""}
+                        </>
+                      ) : (
+                        <>Bench {now?.name}</>
+                      )}
+                    </span>
+                    <span className={s.moveWhy} data-kind={why.kind}>
+                      {why.text}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          <a className={s.espnLink} href={espnTeam} target="_blank" rel="noreferrer">
+            Open my team on ESPN <External />
+          </a>
+        </section>
 
-      <div className="rounded-card border border-line bg-panel">
-        <h3 className="px-4 pt-3 text-xs uppercase tracking-wider text-muted">Bench</h3>
-        <ul>
-          {lineup.bench.map((id) => {
-            const p = byId.get(id);
-            if (!p) return null;
-            return (
-              <li key={id} className="flex items-center gap-3 border-b border-row-line px-4 py-2 last:border-0">
-                <span className="w-10 shrink-0 text-xs text-muted">BN</span>
-                <PlayerCell player={p} changed={moved.has(id)} locked={p.locked} />
-                <span className="w-12 text-right text-sm tabular-nums text-muted">{pts(p.points)}</span>
+        <section className={`${s.panel} ${s.orderBench}`} aria-labelledby="bench-title">
+          <div className={s.panelHead}>
+            <h2 id="bench-title" className={s.panelTitle}>
+              Bench
+            </h2>
+            <span className={s.panelNote}>{bench.length} players</span>
+          </div>
+          <ul className={s.bench}>
+            {bench.map((p) => (
+              <li key={p.playerId} className={s.benchRow} data-moved={benched.has(p.playerId)}>
+                <PlayerLine player={p} locked={p.locked} value="none" />
+                <span className="text-right">
+                  <span className={`${s.benchPts} tabular-nums`}>{pts(p.points)}</span>
+                  {benched.has(p.playerId) && <span className={`${s.benchNote} block`}>To the bench</span>}
+                </span>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        </section>
       </div>
-    </section>
-  );
-}
-
-/** One side of a lineup row: out (on ESPN, leaving), in (recommended, arriving), or unchanged. */
-function SlotCell({ player, tone, locked }: { player: ViewPlayer | null | undefined; tone: "same" | "out" | "in"; locked: boolean }) {
-  if (!player) return <span className="text-dim">{tone === "in" ? "Nobody available" : "Empty"}</span>;
-  const tag = INJURY_TAG[player.injuryStatus];
-  const name = tone === "in" ? "font-semibold text-mine" : tone === "out" ? "text-muted line-through decoration-reach/60" : undefined;
-  return (
-    <span className="block min-w-0">
-      <span className="flex items-baseline gap-1.5">
-        <span className={`truncate ${name ?? ""}`}>{player.name}</span>
-        {tag && <span className={`text-xs font-semibold ${isRuledOut(player.injuryStatus) ? "text-reach-ink" : "text-warn-ink"}`}>{tag}</span>}
-      </span>
-      <span className="block truncate text-xs text-muted">
-        <span className={POS_TEXT[player.pos]}>{player.pos === "DST" ? "D/ST" : player.pos}</span> · {player.team ?? "FA"} ·{" "}
-        <span className="tabular-nums text-text">{pts(player.points)}</span>
-        {player.points === 0 && player.projected && " · bye or no game"}
-        {locked && " · locked"}
-      </span>
-    </span>
-  );
-}
-
-function PlayerCell({ player, changed, locked }: { player: ViewPlayer; changed: boolean; locked: boolean }) {
-  const tag = INJURY_TAG[player.injuryStatus];
-  return (
-    <span className="min-w-0 flex-1">
-      <span className="block truncate text-sm">
-        <span className={changed ? "font-semibold text-mine" : undefined}>{player.name}</span>
-        {tag && <span className={`ml-1.5 text-xs font-semibold ${isRuledOut(player.injuryStatus) ? "text-reach-ink" : "text-warn-ink"}`}>{tag}</span>}
-      </span>
-      <span className="block text-xs text-muted">
-        <span className={POS_TEXT[player.pos]}>{player.pos === "DST" ? "D/ST" : player.pos}</span> · {player.team ?? "FA"}
-        {player.points === 0 && player.projected && " · bye or no game"}
-        {!player.projected && " · no ESPN projection"}
-        {locked && " · locked"}
-      </span>
-    </span>
+    </div>
   );
 }

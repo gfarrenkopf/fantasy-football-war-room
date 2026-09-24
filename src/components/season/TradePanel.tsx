@@ -1,214 +1,295 @@
 "use client";
 
 import { useState } from "react";
-import type { Position } from "@/lib/draft/types";
-import { evaluateTrade, tradeFromPending, type TeamVerdict, type Trade } from "@/lib/season/trade";
+import { tradeEmphasis, type Emphasis } from "@/lib/season/emphasis";
+import { evaluateTrade, tradeFromPending, type Trade, type TradeVerdict } from "@/lib/season/trade";
 import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import { Gain, PlayerLine, signed } from "./parts";
+import s from "./season.module.css";
 
-const POS_TEXT: Record<Position, string> = { QB: "text-qb", RB: "text-rb", WR: "text-wr", TE: "text-te", K: "text-k", DST: "text-dst" };
 const SLOT_LABEL: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
 
-const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
+const GOOD: Record<Emphasis, string> = {
+  rest: "About even for you",
+  trim: "Slightly better for you",
+  gain: "Better for you",
+  swing: "A strong trade for you",
+  must: "A steal for you",
+};
+const BAD: Record<Emphasis, string> = {
+  rest: "About even for you",
+  trim: "Slightly worse for you",
+  gain: "Costs you",
+  swing: "Costs you a lot",
+  must: "Lopsided against you",
+};
+
 const byRos = (a: ViewPlayer, b: ViewPlayer) => b.ros - a.ros;
+const teamName = (view: SeasonView, id: number) => view.teams.find((t) => t.id === id)?.name ?? `Team ${id}`;
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : null);
+
+/** The verdict for the user, told on the same scale as the lineup's gain. */
+function TradeGain({ verdict, partner, compact, inline }: { verdict: TradeVerdict; partner: string; compact?: boolean; inline?: boolean }) {
+  const you = verdict.a.perWeek;
+  const them = verdict.b.perWeek;
+  const level = tradeEmphasis(you);
+  const headline = you >= 0 ? GOOD[level] : BAD[level];
+  return (
+    <Gain
+      compact={compact}
+      inline={inline}
+      level={level}
+      value={you}
+      unit="a week"
+      headline={level !== "rest" && you > 0 && them > 0.05 ? `${headline}, and for them` : headline}
+      detail={
+        <>
+          {partner} <span className="tabular-nums">{signed(them)}</span> a week · you <span className="tabular-nums">{signed(verdict.a.delta)}</span> over the{" "}
+          {verdict.weeks} weeks left
+        </>
+      }
+    />
+  );
+}
 
 /**
- * Build a trade and see what it does to both starting lineups for the rest of the season (10.6).
- * Nothing here touches ESPN: it's a what-if, recomputed as players are picked.
+ * Trades (10.6, 10.9): the user's offers pending on ESPN, each graded, and a builder for a what-if
+ * or a counter. Every verdict compares both starting lineups for the rest of the season; nothing
+ * here is sent to ESPN.
  */
 export function TradePanel({ view }: { view: SeasonView }) {
   const others = view.teams.filter((t) => t.id !== view.myTeamId);
   const [partnerId, setPartnerId] = useState(others[0]?.id ?? 0);
   const [gives, setGives] = useState<number[]>([]);
   const [gets, setGets] = useState<number[]>([]);
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const [side, setSide] = useState<"send" | "get">("send");
   const mine = view.teams.find((t) => t.id === view.myTeamId);
   const partner = others.find((t) => t.id === partnerId);
 
+  if (!mine || !partner) return <p className={`${s.panel} ${s.note}`}>There&apos;s no one in this league to trade with.</p>;
+
   // The React Compiler memoizes this; it's a few milliseconds even for a 16-team league.
-  const verdict = partner ? evaluateTrade(view.teams, view, { teamA: view.myTeamId, gives, teamB: partner.id, gets }) : null;
-
-  if (!mine || !partner) return <p className="rounded-card border border-line bg-panel p-4 text-sm">There&apos;s no one in this league to trade with.</p>;
-
+  const verdict = evaluateTrade(view.teams, view, { teamA: view.myTeamId, gives, teamB: partner.id, gets });
   const names = new Map(view.teams.flatMap((t) => t.roster.map((p) => [p.playerId, p.name] as const)));
-  const toggle = (list: number[], set: (next: number[]) => void, id: number) => set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
-  /** Loads a pending trade into the builder below, to tweak it into a counter. */
-  const open = (trade: Trade) => {
+  const toggle = (list: number[], set: (next: number[]) => void, id: number) => {
+    setLoaded(null);
+    set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  };
+  const open = (pending: PendingTrade, trade: Trade) => {
     setPartnerId(trade.teamB);
     setGives([...trade.gives]);
     setGets([...trade.gets]);
-    document.getElementById("trade-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setLoaded(pending.id);
+    document.getElementById("builder-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const clear = () => {
+    setGives([]);
+    setGets([]);
+    setLoaded(null);
   };
 
   return (
-    <section className="space-y-3" aria-labelledby="trade-title">
-      <PendingTrades view={view} names={names} onOpen={open} />
-      <div className="rounded-card border border-line bg-panel p-4 space-y-3">
-        <h2 id="trade-title" className="font-semibold">
-          Check a trade
-        </h2>
-        <label className="block text-sm">
-          <span className="text-muted">Trade with</span>
-          <select
-            className="mt-1 block w-full rounded-card border border-line2 bg-panel2 px-2 py-2 text-base"
-            value={partner.id}
-            onChange={(e) => {
-              setPartnerId(Number(e.target.value));
-              setGets([]);
-            }}
-          >
-            {others.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
+    <div className={s.trades}>
+      <section className={s.column} aria-labelledby="pending-title">
+        <div className={s.columnHead}>
+          <h2 id="pending-title" className={s.columnTitle}>
+            Pending on ESPN
+          </h2>
+          <span className={s.panelNote}>Accept or decline on ESPN</span>
+        </div>
+        {view.pendingTrades.length ? (
+          <ul className={s.pending}>
+            {view.pendingTrades.map((pending) => (
+              <Offer key={pending.id} view={view} pending={pending} names={names} active={loaded === pending.id} onOpen={open} />
             ))}
-          </select>
-        </label>
-        {verdict ? (
-          <Verdict you={verdict.a} them={verdict.b} partnerName={partner.name} weeks={verdict.weeks} names={names} />
+          </ul>
         ) : (
-          <p className="text-sm text-muted">Pick who you&apos;d send and who you&apos;d get. The verdict compares both starting lineups for the rest of the season.</p>
+          <p className={`${s.panel} ${s.note} ${s.fine}`}>No trade offers waiting on ESPN. Build one to see how it would land for both teams.</p>
         )}
-      </div>
+      </section>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <RosterPicker title="You send" roster={mine.roster} picked={gives} onToggle={(id) => toggle(gives, setGives, id)} />
-        <RosterPicker title={`You get from ${partner.name}`} roster={partner.roster} picked={gets} onToggle={(id) => toggle(gets, setGets, id)} />
-      </div>
-    </section>
+      <section className={s.column} aria-labelledby="builder-title">
+        <div className={s.columnHead}>
+          <h2 id="builder-title" className={s.columnTitle}>
+            {loaded ? "Tweak it into a counter" : "Check a trade"}
+          </h2>
+          {(gives.length > 0 || gets.length > 0) && (
+            <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={clear}>
+              Clear
+            </button>
+          )}
+        </div>
+        <div className={s.builder}>
+          <div className={s.builderTop}>
+            <label className={s.field}>
+              Trade with
+              <select
+                className={s.select}
+                value={partner.id}
+                onChange={(e) => {
+                  setPartnerId(Number(e.target.value));
+                  setGets([]);
+                  setLoaded(null);
+                }}
+              >
+                {others.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className={s.verdictSticky}>
+            {verdict ? (
+              <>
+                <TradeGain verdict={verdict} partner={partner.name} compact />
+                <SlotChanges verdict={verdict} partner={partner.name} names={names} />
+              </>
+            ) : (
+              <p className={`${s.fine} ${s.panel} ${s.note}`}>Pick who you&apos;d send and who you&apos;d get. The verdict compares both starting lineups for the rest of the season.</p>
+            )}
+          </div>
+
+          <div className={`${s.segment} ${s.pickerToggle}`} role="tablist" aria-label="Which roster">
+            <button type="button" role="tab" className={s.tab} aria-selected={side === "send"} onClick={() => setSide("send")}>
+              You send {gives.length > 0 && <span className={s.badge}>{gives.length}</span>}
+            </button>
+            <button type="button" role="tab" className={s.tab} aria-selected={side === "get"} onClick={() => setSide("get")}>
+              You get {gets.length > 0 && <span className={s.badge}>{gets.length}</span>}
+            </button>
+          </div>
+
+          <div className={s.pickers}>
+            <RosterPicker title="You send" roster={mine.roster} picked={gives} hidden={side !== "send"} onToggle={(id) => toggle(gives, setGives, id)} />
+            <RosterPicker title={`You get from ${partner.name}`} roster={partner.roster} picked={gets} hidden={side !== "get"} onToggle={(id) => toggle(gets, setGets, id)} />
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
-const TEAM_NAME = (view: SeasonView, id: number) => view.teams.find((t) => t.id === id)?.name ?? `Team ${id}`;
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : null);
-
-/** The user's trades pending on ESPN, each graded where it stands (10.9). */
-function PendingTrades({ view, names, onOpen }: { view: SeasonView; names: Map<number, string>; onOpen: (trade: Trade) => void }) {
-  if (!view.pendingTrades.length) return null;
-  return (
-    <section className="rounded-card border border-line bg-panel p-4 space-y-3" aria-labelledby="pending-title">
-      <h2 id="pending-title" className="font-semibold">
-        Pending on ESPN
-      </h2>
-      <ul className="space-y-3">
-        {view.pendingTrades.map((pending) => (
-          <PendingRow key={pending.id} view={view} pending={pending} names={names} onOpen={onOpen} />
-        ))}
-      </ul>
-      <p className="text-xs text-muted">Accept, decline or counter on ESPN. War Room only grades them.</p>
-    </section>
-  );
-}
-
-function PendingRow({ view, pending, names, onOpen }: { view: SeasonView; pending: PendingTrade; names: Map<number, string>; onOpen: (trade: Trade) => void }) {
+function Offer({
+  view,
+  pending,
+  names,
+  active,
+  onOpen,
+}: {
+  view: SeasonView;
+  pending: PendingTrade;
+  names: Map<number, string>;
+  active: boolean;
+  onOpen: (pending: PendingTrade, trade: Trade) => void;
+}) {
   const trade = tradeFromPending(pending, view.myTeamId);
   if (!trade) return null;
-  const partner = TEAM_NAME(view, trade.teamB);
+  const partner = teamName(view, trade.teamB);
   const verdict = evaluateTrade(view.teams, view, trade);
-  const title =
-    pending.status === "accepted"
-      ? `Accepted with ${partner}${pending.processesAt ? ` · goes through ${when(pending.processesAt)}` : ""}`
-      : pending.proposerTeamId === view.myTeamId
-        ? `Your offer to ${partner}${pending.expiresAt ? ` · expires ${when(pending.expiresAt)}` : ""}`
-        : `Offer from ${partner}${pending.expiresAt ? ` · expires ${when(pending.expiresAt)}` : ""}`;
+  const [kind, label] =
+    pending.status === "accepted" ? ["accepted", "Accepted"] : pending.proposerTeamId === view.myTeamId ? ["mine", "Your offer"] : ["theirs", "Offer"];
+  const time = pending.status === "accepted" ? pending.processesAt && `Goes through ${when(pending.processesAt)}` : pending.expiresAt && `Expires ${when(pending.expiresAt)}`;
   const list = (ids: readonly number[]) => ids.map((id) => names.get(id) ?? `ESPN player ${id}`).join(", ");
   return (
-    <li className="rounded-card border border-line2 bg-panel2 p-3 space-y-2">
-      <p className="text-sm font-semibold">{title}</p>
-      <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-0.5 text-sm">
-        <dt className="text-muted">You get</dt>
+    <li className={s.offer} data-active={active}>
+      <div className={s.offerHead}>
+        <h3 className={s.offerTitle}>
+          <span className={s.offerKind} data-kind={kind}>
+            {label}
+          </span>
+          {partner}
+        </h3>
+        {time && (
+          <span className={s.offerWhen} suppressHydrationWarning>
+            {time}
+          </span>
+        )}
+      </div>
+      <dl className={s.sides}>
+        <dt>You get</dt>
         <dd>{list(trade.gets) || "Nothing"}</dd>
-        <dt className="text-muted">You send</dt>
+        <dt>You send</dt>
         <dd>{list(trade.gives) || "Nothing"}</dd>
       </dl>
       {verdict ? (
-        <p className="text-sm">
-          <b>{headlineFor(verdict.a.delta, verdict.b.delta)}</b> · you{" "}
-          <span className={`tabular-nums ${verdict.a.delta >= 0 ? "text-value-ink" : "text-reach-ink"}`}>{signed(verdict.a.perWeek)}</span> a week,{" "}
-          {partner} <span className="tabular-nums">{signed(verdict.b.perWeek)}</span>
-        </p>
+        <>
+          <TradeGain verdict={verdict} partner={partner} compact inline />
+          <div className={s.offerFoot}>
+            <span className={s.fine}>{pending.status === "accepted" ? "Already agreed; it goes through unless the league stops it." : ""}</span>
+            <button type="button" className={s.button} onClick={() => onOpen(pending, trade)}>
+              {pending.status === "accepted" ? "Look closer" : "Tweak as a counter"}
+            </button>
+          </div>
+        </>
       ) : (
-        <p className="text-sm text-muted">Can&apos;t grade this one: a player in it is no longer on those rosters.</p>
-      )}
-      {verdict && (
-        <button type="button" className="text-sm text-focus underline" onClick={() => onOpen(trade)}>
-          Open in the trade builder
-        </button>
+        <p className={s.fine}>Can&apos;t grade this one: a player in it is no longer on those rosters.</p>
       )}
     </li>
   );
 }
 
-function headlineFor(you: number, them: number): string {
-  return you > 0.05 && them > 0.05 ? "Helps both of you" : you > 0.05 ? "Good for you" : you < -0.05 ? "Bad for you" : "Makes no real difference to you";
-}
-
-function Verdict({ you, them, partnerName, weeks, names }: { you: TeamVerdict; them: TeamVerdict; partnerName: string; weeks: number; names: Map<number, string> }) {
-  const headline = headlineFor(you.delta, them.delta);
+/** Where the lineup moves, slot by slot, and who'd have to be cut to make room. */
+function SlotChanges({ verdict, partner, names }: { verdict: TradeVerdict; partner: string; names: Map<number, string> }) {
+  const moved = verdict.a.bySlot.filter((slot) => Math.abs(slot.after - slot.before) >= 0.05);
+  const drops = [...verdict.a.drops.map((id) => `You'd drop ${names.get(id)} to make room`), ...verdict.b.drops.map((id) => `${partner} would drop ${names.get(id)}`)];
+  if (!moved.length && !drops.length) return null;
   return (
-    <div className="space-y-2" role="status">
-      <p className="text-lg font-semibold">{headline}</p>
-      <dl className="grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-card bg-panel2 p-2">
-          <dt className="text-muted">You</dt>
-          <dd className={`tabular-nums font-semibold ${you.delta >= 0 ? "text-value-ink" : "text-reach-ink"}`}>
-            {signed(you.perWeek)} a week
-          </dd>
-          <dd className="text-xs text-muted tabular-nums">
-            {signed(you.delta)} over {weeks} weeks
-          </dd>
-        </div>
-        <div className="rounded-card bg-panel2 p-2">
-          <dt className="truncate text-muted">{partnerName}</dt>
-          <dd className={`tabular-nums font-semibold ${them.delta >= 0 ? "text-value-ink" : "text-reach-ink"}`}>
-            {signed(them.perWeek)} a week
-          </dd>
-          <dd className="text-xs text-muted tabular-nums">
-            {signed(them.delta)} over {weeks} weeks
-          </dd>
-        </div>
-      </dl>
-      <ul className="space-y-0.5 text-sm text-muted">
-        {you.bySlot
-          .filter((s) => Math.abs(s.after - s.before) >= 0.05)
-          .map((s) => (
-            <li key={s.key}>
-              Your {SLOT_LABEL[s.key] ?? s.key}: <span className="tabular-nums">{signed(s.after - s.before)}</span> a week
-            </li>
-          ))}
-      </ul>
-      {[...you.drops.map((id) => `You'd have to drop ${names.get(id)} to make room.`), ...them.drops.map((id) => `${partnerName} would have to drop ${names.get(id)}.`)].map((line) => (
-        <p key={line} className="text-xs text-muted">
-          {line}
-        </p>
+    <ul className={s.slotChanges}>
+      {moved.map((slot) => {
+        const d = slot.after - slot.before;
+        return (
+          <li key={slot.key}>
+            {SLOT_LABEL[slot.key] ?? slot.key} <span className={`${d >= 0 ? s.up : s.down} tabular-nums`}>{signed(d)}</span>
+          </li>
+        );
+      })}
+      {drops.map((line) => (
+        <li key={line}>{line}</li>
       ))}
-    </div>
+    </ul>
   );
 }
 
-function RosterPicker({ title, roster, picked, onToggle }: { title: string; roster: ViewPlayer[]; picked: number[]; onToggle: (id: number) => void }) {
+function RosterPicker({
+  title,
+  roster,
+  picked,
+  hidden,
+  onToggle,
+}: {
+  title: string;
+  roster: ViewPlayer[];
+  picked: number[];
+  hidden: boolean;
+  onToggle: (id: number) => void;
+}) {
   return (
-    <fieldset className="rounded-card border border-line bg-panel">
+    <fieldset className={s.picker} data-hidden={hidden}>
       <legend className="sr-only">{title}</legend>
-      <p className="px-4 pt-3 text-xs uppercase tracking-wider text-muted" aria-hidden>
+      <div className={s.pickerHead} aria-hidden>
         {title}
-      </p>
-      <ul>
-        {[...roster].sort(byRos).map((p) => (
-          <li key={p.playerId} className="border-b border-row-line last:border-0">
-            <label className="flex cursor-pointer items-center gap-3 px-4 py-2 hover:bg-hover">
-              <input type="checkbox" checked={picked.includes(p.playerId)} onChange={() => onToggle(p.playerId)} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{p.name}</span>
-                <span className="block text-xs text-muted">
-                  <span className={POS_TEXT[p.pos]}>{p.pos === "DST" ? "D/ST" : p.pos}</span> · {p.team ?? "FA"}
+        <span>Rest of season</span>
+      </div>
+      <ul className={s.pickerList}>
+        {/* Picked players first, so a trade loaded from ESPN shows who's in it without scrolling. */}
+        {[...roster].sort((a, b) => Number(picked.includes(b.playerId)) - Number(picked.includes(a.playerId)) || byRos(a, b)).map((p) => {
+          const on = picked.includes(p.playerId);
+          return (
+            <li key={p.playerId}>
+              <label className={s.pick} data-picked={on}>
+                <input type="checkbox" checked={on} onChange={() => onToggle(p.playerId)} />
+                <PlayerLine player={p} value="none" />
+                <span className={`${s.ros} tabular-nums`}>
+                  <b>{p.ros.toFixed(0)}</b>pts
                 </span>
-              </span>
-              <span className="text-right text-xs tabular-nums text-muted">
-                <span className="block text-sm text-text">{p.ros.toFixed(0)}</span>rest of season
-              </span>
-            </label>
-          </li>
-        ))}
+              </label>
+            </li>
+          );
+        })}
       </ul>
     </fieldset>
   );
