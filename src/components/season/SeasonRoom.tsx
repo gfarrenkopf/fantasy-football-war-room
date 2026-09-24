@@ -6,6 +6,7 @@ import type { PublicFlags } from "@/lib/config";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
 import { LineupPanel } from "./LineupPanel";
+import { TradePanel } from "./TradePanel";
 
 /** Why the page can't show a league, from the server's SeasonLoad. */
 export type SeasonProblem =
@@ -47,7 +48,7 @@ export function SeasonRoom(props: Props) {
                 ESPN&apos;s projections didn&apos;t load, so every player shows 0. Refresh in a minute.
               </p>
             )}
-            <LineupPanel view={props.view} />
+            <Tabs view={props.view} />
             <Disconnect />
           </>
         )}
@@ -75,6 +76,38 @@ function Freshness({ view, fetchedAt, stale, leagueId }: { view: SeasonView; fet
 }
 
 const noSubscription = () => () => {};
+
+const TABS = [
+  { id: "lineup", label: "Lineup" },
+  { id: "trade", label: "Trades" },
+] as const;
+
+function Tabs({ view }: { view: SeasonView }) {
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("lineup");
+  return (
+    <>
+      <div role="tablist" aria-label="Season tools" className="flex gap-1 rounded-card border border-line bg-panel p-1">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            id={`tab-${t.id}`}
+            aria-selected={tab === t.id}
+            aria-controls={`panel-${t.id}`}
+            className={`flex-1 rounded-card px-3 py-1.5 text-sm ${tab === t.id ? "bg-seg-on font-semibold" : "text-muted hover:text-text"}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === "lineup" ? <LineupPanel view={view} /> : <TradePanel view={view} />}
+      </div>
+    </>
+  );
+}
 
 function Problem({ flags, problem }: { flags: PublicFlags; problem: SeasonProblem }) {
   useEffect(() => (problem.kind === "signed-out" ? listenForSignIn(() => location.reload()) : undefined), [problem.kind]);
