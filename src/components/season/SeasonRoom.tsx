@@ -36,6 +36,8 @@ type Props = {
       ai: SeasonAiState | null;
       /** Stripe just sent the user back here (`?checkout=`). */
       checkout: CheckoutOutcome | null;
+      /** Whether the user gets the Sunday lineup email; null when there's no such email to offer. */
+      seasonEmails: boolean | null;
     }
 );
 
@@ -102,7 +104,7 @@ export function SeasonRoom(props: Props) {
                 <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
               )}
             </div>
-            <Disconnect />
+            <Disconnect seasonEmails={props.seasonEmails} />
           </>
         )}
       </div>
@@ -174,7 +176,7 @@ function Problem({ flags, problem }: { flags: PublicFlags; problem: SeasonProble
 }
 
 /** Deletes the stored ESPN login (10.2). Every connected league stops updating until the user reconnects. */
-function Disconnect() {
+function Disconnect({ seasonEmails }: { seasonEmails: boolean | null }) {
   const [phase, setPhase] = useState<"idle" | "confirm" | "working" | "done" | "failed">("idle");
   async function disconnect() {
     setPhase("working");
@@ -205,6 +207,30 @@ function Disconnect() {
           {phase === "failed" && <span className={s.metaStale}> Couldn&apos;t disconnect. Try again.</span>}
         </p>
       )}
+      {seasonEmails !== null && <SeasonEmails initial={seasonEmails} />}
     </footer>
+  );
+}
+
+/** The Sunday job's email (11.3): on unless the user turns it off here or from the email. */
+function SeasonEmails({ initial }: { initial: boolean }) {
+  const [on, setOn] = useState(initial);
+  const [failed, setFailed] = useState(false);
+  async function toggle(next: boolean) {
+    setOn(next);
+    setFailed(false);
+    const res = await fetch("/api/season/emails", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: next }) }).catch(() => null);
+    if (!res?.ok) {
+      setOn(!next);
+      setFailed(true);
+    }
+  }
+  return (
+    <p>
+      <label className={s.check}>
+        <input type="checkbox" checked={on} onChange={(e) => toggle(e.target.checked)} /> Email me when my Sunday AI lineup is ready
+      </label>
+      {failed && <span className={s.metaStale}> Couldn&apos;t save that. Try again.</span>}
+    </p>
   );
 }

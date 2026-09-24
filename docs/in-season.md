@@ -73,6 +73,16 @@ Both extend the draft plan's pipeline (`src/lib/ai/`): the same provider seam, s
 - **Routes:** `POST /api/leagues/:id/season/lineup` writes this week's mid-week lineup, and `POST /api/leagues/:id/season/trade { partner, gives, gets }` a write-up. Both answer 402 past the trial without a pass, and 503 when the model fails.
 - ESPN's league reads carry no NFL opponent, so the AI sees no matchups yet. It's told not to guess them.
 
+### The Sunday job (11.3)
+
+`runSundayJob()` (`src/lib/server/seasonSunday.ts`), started at 11:40 ET on Sundays by a timer on the droplet ([deployment.md §13](deployment.md#13-sunday-ai-lineups)):
+
+- **Who:** every connected league whose user opened its season page in the last 14 days (`espn_season_links.last_viewed_at`, set on each page load). Opening the page again re-enrols it. Of those, only leagues with a season pass, or whose account is in a trial it has already started: the job never starts a trial.
+- **What:** it re-reads ESPN and the projections (skipping the caches), then writes the league's `lineup-sunday` AI lineup through the same path as the mid-week one (11.2).
+- **Email:** one per user covering all their leagues, with each league's projected gain and top three moves, through Resend. A user whose ESPN login has lapsed gets a reconnect email instead. `season_emails` holds one row per user, kind and day, so a rerun never sends twice. Users opt out on the season page, or with the email's link (`/season/unsubscribe`, signed with `NEXTAUTH_SECRET`; mail providers get RFC 8058 one-click unsubscribe too). Opting out stops the emails, not the lineups.
+- **Failures** are logged as `[server-error]` lines, so the alert emails pick them up.
+- **Only one automatic run.** News before the 4pm, SNF or MNF games comes after it; the user can still use their mid-week lineup if it's unused, or the free lineup.
+
 ## 7. Writing lineups to ESPN
 
 Advice is the default. Applying a lineup to ESPN is an option (Epic 12), staged as several moves and sent as **one** transaction, which ESPN applies atomically. Guardrails:

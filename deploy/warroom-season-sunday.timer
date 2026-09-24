@@ -1,0 +1,11 @@
+[Unit]
+Description=Sunday-morning AI lineups, after the inactives for the 1pm games
+
+[Timer]
+# Inactives are posted about 90 minutes before kickoff: ~11:30 ET for 1pm games. Eastern time, so
+# daylight saving doesn't move it.
+OnCalendar=Sun *-*-* 11:40:00 America/New_York
+# No Persistent=: a run that missed its morning (the server was down) is worth nothing after kickoff.
+
+[Install]
+WantedBy=timers.target

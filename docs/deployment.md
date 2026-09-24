@@ -18,6 +18,7 @@ Following this from a fresh droplet should take under an hour.
 10. [Deploy on merge](#10-deploy-on-merge)
 11. [Monitoring](#11-monitoring)
 12. [Payments](#12-payments)
+13. [Sunday AI lineups](#13-sunday-ai-lineups)
 
 ---
 
@@ -315,3 +316,28 @@ Stripe setup, and what checkout and the webhook do, are in [payments.md](payment
 4. To go live, repeat steps 1 and 2 in live mode. Live mode has its own endpoint, signing secret, key and price.
 
 Failed deliveries show on the endpoint's page, and Stripe retries them for three days. A `500` from the webhook is also logged as `[server-error]`, which sends an alert email (§11).
+
+## 13. Sunday AI lineups
+
+`warroom-season-sunday.timer` fires on Sundays at **11:40 ET** (`America/New_York`, so daylight saving doesn't move it), after the inactives for the 1pm games are posted. It runs `deploy/warroom-season-sunday.sh`, which asks the running app (`POST /api/internal/season/sunday`) to write each entitled league's Sunday AI lineup and email it. What the job does is in [in-season.md §6](in-season.md#the-sunday-job-113).
+
+It needs in-season AI to be on (`ESPN_CODE_KEY` and an AI key) plus a shared secret. Emails also need `AUTH_RESEND_KEY` and `EMAIL_FROM`; without them the lineups are still written.
+
+```sh
+openssl rand -base64 32                          # a new secret
+sudo nano /etc/warroom/.env                      # add CRON_SECRET=<that secret>
+sudo systemctl restart warroom
+sudo systemctl daemon-reload
+sudo systemctl enable --now warroom-season-sunday.timer
+systemctl list-timers warroom-season-sunday      # the next run, in UTC
+```
+
+Check it without spending anything: a dry run counts the leagues it would write for, without calling the model or sending email.
+
+```sh
+sudo -u warroom bash -c 'set -a; . /etc/warroom/.env; set +a; /srv/warroom/current/deploy/warroom-season-sunday.sh --dry-run'
+```
+
+`sudo systemctl start warroom-season-sunday` runs it for real, and is safe to repeat: stored lineups aren't rewritten, and nobody gets a second email that day. Each run logs a JSON summary (`journalctl -u warroom-season-sunday`). A league that fails is a `[server-error]` line in the app's journal, which the alert emails pick up (§11), and a run that fails outright emails through `OnFailure=`.
+
+There's no catch-up after downtime (no `Persistent=`): a lineup that arrives after kickoff is worth nothing, so a missed morning is skipped.

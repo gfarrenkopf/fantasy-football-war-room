@@ -6,7 +6,9 @@ import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
+import { markSeasonViewed } from "@/lib/server/espn/seasonLinks";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
+import { wantsSeasonEmails } from "@/lib/server/seasonPrefs";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
 
@@ -36,7 +38,12 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   const load = await loadSeasonView(db, config.espnCodeKey, user.userId, leagueId, { refresh });
   if (load.kind !== "ok") return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} problem={load as SeasonProblem} />;
   const { view } = load;
-  const ai = await seasonAiState(db, user, league, view);
+  const [ai, emails] = await Promise.all([
+    seasonAiState(db, user, league, view),
+    // Only offered when the Sunday job can send email at all.
+    config.seasonJobEnabled && config.emailAuthEnabled ? wantsSeasonEmails(db, user.userId) : null,
+    markSeasonViewed(db, user.userId, leagueId),
+  ]);
 
   return (
     <SeasonRoom
@@ -49,6 +56,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       projectionsMissing={load.projectionsMissing}
       ai={ai}
       checkout={checkout}
+      seasonEmails={emails}
     />
   );
 }

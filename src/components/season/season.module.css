@@ -1039,6 +1039,10 @@
   padding-top: 1px;
 }
 
+.aiRefresh {
+  justify-self: start;
+}
+
 .aiError {
   margin: 0;
   color: var(--color-reach-ink);
@@ -1113,6 +1117,16 @@
 }
 .aiCounter .button {
   justify-self: start;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.check input {
+  accent-color: var(--color-mine);
 }
 
 @media (max-width: 1023px) {

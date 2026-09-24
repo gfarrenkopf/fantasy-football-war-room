@@ -93,8 +93,9 @@ export function useCheckoutReturn(ai: SeasonAiState | null, returned: CheckoutOu
   return null;
 }
 
-/** The newest of this week's AI lineups: Sunday's once it exists (11.3), else the mid-week one. */
-const latest = (ai: SeasonAiState): StoredAiOutput<AiLineup> | undefined => ai.lineups["lineup-sunday"] ?? ai.lineups["lineup-midweek"];
+/** The newest of this week's AI lineups: mid-week, Sunday's (11.3), or a mid-week one written after Sunday's as a late refresh. */
+const latest = (ai: SeasonAiState): StoredAiOutput<AiLineup> | undefined =>
+  [ai.lineups["lineup-sunday"], ai.lineups["lineup-midweek"]].filter((x) => x !== undefined).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
 /** The AI lineup for this week (11.2): the button that writes it, then the calls and their reasons. */
 export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: string; view: SeasonView; ai: SeasonAiState; className?: string }) {
@@ -155,6 +156,15 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
           <p className={s.fine} suppressHydrationWarning>
             Written {new Date(stored.createdAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} from the projections then.
           </p>
+          {/* Sunday's lineup came first: the unused mid-week one is a refresh for late news. */}
+          {!ai.midweekUsed && !written && (
+            <>
+              <button type="button" className={`${s.button} ${s.aiRefresh}`} onClick={write} disabled={phase === "writing"}>
+                {phase === "writing" ? "Rewriting…" : "Rewrite with the latest news"}
+              </button>
+              {phase === "failed" && <p className={s.aiError}>{problem}</p>}
+            </>
+          )}
         </div>
       ) : ai.midweekUsed ? (
         <p className={`${s.note} ${s.fine}`}>This week&apos;s mid-week AI lineup is used. The Sunday one comes after the inactives are posted.</p>

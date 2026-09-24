@@ -85,6 +85,13 @@
       "when": 1790292601213,
       "tag": "0011_season_ai_outputs",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790293624372,
+      "tag": "0012_season_sunday_job",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AiPlan } from "@/lib/ai/planSchema";
 import type { AiLineup } from "@/lib/ai/season/lineup";
 import type { SeasonAiUseKind } from "@/lib/ai/season/state";
@@ -331,6 +331,8 @@ export const espnSeasonLinks = pgTable(
     espnLeagueId: text("espn_league_id").notNull(),
     espnTeamId: integer("espn_team_id").notNull(),
     season: integer("season").notNull(),
+    /** When the user last opened this league's season page. The Sunday job (11.3) skips leagues left alone for two weeks. */
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true, mode: "date" }),
     ...timestamps,
   },
   (t) => [uniqueIndex("espn_season_links_user_espn_idx").on(t.userId, t.espnLeagueId, t.season)],
@@ -399,4 +401,35 @@ export const seasonAiOutputs = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind, t.key] })],
+);
+
+/** A user's email settings. No row means the defaults. */
+export const userPrefs = pgTable("user_prefs", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** The "Your Sunday lineup is ready" email, and the reconnect email the same job sends (11.3). */
+  seasonEmails: boolean("season_emails").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+/** Which email the Sunday job sent: the lineups, or a request to reconnect ESPN. */
+export type SeasonEmailKind = "lineup" | "reconnect";
+
+/**
+ * Emails the Sunday job (11.3) has sent, one per user, kind and day, so a rerun that morning never
+ * sends another. By day rather than NFL week: a reconnect email is sent when ESPN can't be read.
+ */
+export const seasonEmails = pgTable(
+  "season_emails",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<SeasonEmailKind>().notNull(),
+    /** "YYYY-MM-DD", UTC. */
+    sentOn: date("sent_on", { mode: "string" }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.sentOn] })],
 );
