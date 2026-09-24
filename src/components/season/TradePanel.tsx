@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import type { SeasonAiState } from "@/lib/ai/season/state";
 import { tradeEmphasis, type Emphasis } from "@/lib/season/emphasis";
 import { evaluateTrade, tradeFromPending, type Trade, type TradeVerdict } from "@/lib/season/trade";
 import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import { AiTradeWriteupCard } from "./AiPanel";
 import { Gain, PlayerLine, signed } from "./parts";
 import s from "./season.module.css";
 
@@ -58,7 +60,7 @@ function TradeGain({ verdict, partner, compact, inline }: { verdict: TradeVerdic
  * or a counter. Every verdict compares both starting lineups for the rest of the season; nothing
  * here is sent to ESPN.
  */
-export function TradePanel({ view }: { view: SeasonView }) {
+export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null }) {
   const others = view.teams.filter((t) => t.id !== view.myTeamId);
   const [partnerId, setPartnerId] = useState(others[0]?.id ?? 0);
   const [gives, setGives] = useState<number[]>([]);
@@ -71,7 +73,9 @@ export function TradePanel({ view }: { view: SeasonView }) {
   if (!mine || !partner) return <p className={`${s.panel} ${s.note}`}>There&apos;s no one in this league to trade with.</p>;
 
   // The React Compiler memoizes this; it's a few milliseconds even for a 16-team league.
-  const verdict = evaluateTrade(view.teams, view, { teamA: view.myTeamId, gives, teamB: partner.id, gets });
+  const trade: Trade = { teamA: view.myTeamId, gives, teamB: partner.id, gets };
+  const verdict = evaluateTrade(view.teams, view, trade);
+  const tradeId = `${partner.id}:${[...gives].sort().join(",")}:${[...gets].sort().join(",")}`;
   const names = new Map(view.teams.flatMap((t) => t.roster.map((p) => [p.playerId, p.name] as const)));
   const toggle = (list: number[], set: (next: number[]) => void, id: number) => {
     setLoaded(null);
@@ -148,6 +152,20 @@ export function TradePanel({ view }: { view: SeasonView }) {
               <>
                 <TradeGain verdict={verdict} partner={partner.name} compact />
                 <SlotChanges verdict={verdict} partner={partner.name} names={names} />
+                {ai && (
+                  <AiTradeWriteupCard
+                    key={tradeId}
+                    leagueId={leagueId}
+                    view={view}
+                    ai={ai}
+                    trade={trade}
+                    onCounter={(counter) => {
+                      setGives([...counter.gives]);
+                      setGets([...counter.gets]);
+                      setLoaded(null);
+                    }}
+                  />
+                )}
               </>
             ) : (
               <p className={`${s.fine} ${s.panel} ${s.note}`}>Pick who you&apos;d send and who you&apos;d get. The verdict compares both starting lineups for the rest of the season.</p>

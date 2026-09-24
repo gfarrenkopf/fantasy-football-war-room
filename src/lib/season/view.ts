@@ -32,6 +32,7 @@ export interface SeasonView {
   season: number;
   currentWeek: number;
   finalWeek: number;
+  playoffStartWeek: number | null;
   starters: LineupSlotCount[];
   benchSize: number;
   myTeamId: number;
@@ -66,6 +67,7 @@ export function buildSeasonView(league: SeasonLeague, myTeamId: number, projecti
     season: league.season,
     currentWeek: league.currentWeek,
     finalWeek: league.finalWeek,
+    playoffStartWeek: league.playoffStartWeek,
     starters: league.starters,
     benchSize: league.benchSize,
     myTeamId,

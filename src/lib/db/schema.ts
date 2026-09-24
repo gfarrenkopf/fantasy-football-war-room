@@ -1,5 +1,8 @@
 import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AiPlan } from "@/lib/ai/planSchema";
+import type { AiLineup } from "@/lib/ai/season/lineup";
+import type { SeasonAiUseKind } from "@/lib/ai/season/state";
+import type { AiTradeWriteup } from "@/lib/ai/season/trade";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
@@ -174,6 +177,9 @@ export const aiPlans = pgTable(
 /** How a model call for a plan ended: saved, outrun by a newer job, or a failure kind. */
 export type GenerationOutcome = "ready" | "superseded" | PlanModelErrorKind | "internal";
 
+/** What a model call was for: the draft plan (Epic 5), or in-season AI (Epic 11). */
+export type GenerationPurpose = "plan" | "season-lineup" | "season-trade";
+
 /**
  * Every model call made for an AI plan, with its token usage and cost, for checking unit economics
  * (see src/lib/server/aiCosts.ts). Append-only. League and user ids aren't foreign keys, so the
@@ -188,6 +194,7 @@ export const aiGenerations = pgTable(
     leagueId: text("league_id").notNull(),
     userId: text("user_id").notNull(),
     jobId: text("job_id").notNull(),
+    purpose: text("purpose").$type<GenerationPurpose>().notNull().default("plan"),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     promptVersion: integer("prompt_version").notNull(),
@@ -347,8 +354,7 @@ export const seasonAiTrials = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.season] })],
 );
 
-/** A per-league-week in-season AI allowance (11.1): the mid-week lineup, and the Sunday one (11.3). */
-export type SeasonAiUseKind = "lineup-midweek" | "lineup-sunday";
+export type { SeasonAiUseKind };
 
 /** Which weekly in-season AI allowances a league has used. One row per league, week and kind. */
 export const seasonAiUses = pgTable(
@@ -364,4 +370,33 @@ export const seasonAiUses = pgTable(
     usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind] })],
+);
+
+/** What a stored in-season AI output is: a weekly lineup (SeasonAiUseKind), or a trade write-up. */
+export type SeasonAiOutputKind = SeasonAiUseKind | "trade";
+
+/**
+ * In-season AI outputs (11.2), kept so reloading the page never pays for another. Lineups are one
+ * per league, week and kind; trade write-ups one per league, week and trade (`key`, a hash of the
+ * trade), since the verdict they explain changes week to week.
+ */
+export const seasonAiOutputs = pgTable(
+  "season_ai_outputs",
+  {
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    kind: text("kind").$type<SeasonAiOutputKind>().notNull(),
+    /** The trade's hash for a write-up; empty for a lineup. */
+    key: text("key").notNull().default(""),
+    output: jsonb("output").$type<AiLineup | AiTradeWriteup>().notNull(),
+    issues: jsonb("issues").$type<string[]>().notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    promptVersion: integer("prompt_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind, t.key] })],
 );

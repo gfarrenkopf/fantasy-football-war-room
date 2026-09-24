@@ -78,6 +78,13 @@
       "when": 1790292156238,
       "tag": "0010_season_ai",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790292601213,
+      "tag": "0011_season_ai_outputs",
+      "breakpoints": true
     }
   ]
 }

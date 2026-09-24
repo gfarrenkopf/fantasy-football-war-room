@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignIn } from "@/components/landing/SignIn";
+import type { SeasonAiState } from "@/lib/ai/season/state";
 import type { PublicFlags } from "@/lib/config";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
+import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
 import { Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { TradePanel } from "./TradePanel";
@@ -23,7 +25,19 @@ type Props = {
   flags: PublicFlags;
   leagueId: string;
   leagueName?: string;
-} & ({ problem: SeasonProblem } | { view: SeasonView; fetchedAt: string; stale: boolean; projectionsMissing: boolean });
+} & (
+  | { problem: SeasonProblem }
+  | {
+      view: SeasonView;
+      fetchedAt: string;
+      stale: boolean;
+      projectionsMissing: boolean;
+      /** In-season AI (Epic 11); null when it's off or not for this account. */
+      ai: SeasonAiState | null;
+      /** Stripe just sent the user back here (`?checkout=`). */
+      checkout: CheckoutOutcome | null;
+    }
+);
 
 type Tab = "lineup" | "trade";
 
@@ -35,6 +49,8 @@ export function SeasonRoom(props: Props) {
   const [tab, setTab] = useState<Tab>("lineup");
   const title = "view" in props ? props.view.name : (props.leagueName ?? "Your season");
   const view = "view" in props ? props.view : null;
+  const ai = "view" in props ? props.ai : null;
+  const checkout = useCheckoutReturn(ai, "view" in props ? props.checkout : null);
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
   return (
@@ -69,13 +85,22 @@ export function SeasonRoom(props: Props) {
           <Problem flags={props.flags} problem={props.problem} />
         ) : (
           <>
+            {checkout && (
+              <p className={`${s.panel} ${s.note} ${s.banner}`} role="status">
+                {checkout}
+              </p>
+            )}
             {props.projectionsMissing && (
               <p className={`${s.panel} ${s.note} ${s.metaStale} ${s.banner}`} role="status">
                 ESPN&apos;s projections didn&apos;t load, so every player shows 0. Refresh in a minute.
               </p>
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-              {tab === "lineup" ? <LineupPanel view={props.view} /> : <TradePanel view={props.view} />}
+              {tab === "lineup" ? (
+                <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+              ) : (
+                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+              )}
             </div>
             <Disconnect />
           </>

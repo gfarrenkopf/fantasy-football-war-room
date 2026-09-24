@@ -1,9 +1,11 @@
 "use client";
 
+import type { SeasonAiState } from "@/lib/ai/season/state";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
 import { compareLineups, isRuledOut, type LineupRow } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import { AiLineupCard } from "./AiPanel";
 import { ArrowRight, Check, External, Swap } from "./Icons";
 import { Gain, PlayerLine, pts, signed } from "./parts";
 import s from "./season.module.css";
@@ -41,7 +43,7 @@ function reason(row: LineupRow, now: ViewPlayer | undefined, next: ViewPlayer | 
 }
 
 /** This week's lineup: what's set on ESPN against War Room's, and the moves between them (10.5, 10.8). */
-export function LineupPanel({ view }: { view: SeasonView }) {
+export function LineupPanel({ view, leagueId, ai }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null }) {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
   if (!mine) return <p className={`${s.panel} ${s.note}`}>ESPN didn&apos;t list your team in this league.</p>;
 
@@ -185,6 +187,8 @@ export function LineupPanel({ view }: { view: SeasonView }) {
             Open my team on ESPN <External />
           </a>
         </section>
+
+        {ai && <AiLineupCard leagueId={leagueId} view={view} ai={ai} className={s.orderAi} />}
 
         <section className={`${s.panel} ${s.orderBench}`} aria-labelledby="bench-title">
           <div className={s.panelHead}>

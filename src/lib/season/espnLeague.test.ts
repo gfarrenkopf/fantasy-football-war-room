@@ -8,7 +8,7 @@ describe("parseSeasonLeague", () => {
   const { league: season } = parsed;
 
   it("reads the week, the lineup and the scoring", () => {
-    expect(season).toMatchObject({ season: 2026, name: "App Test 8.17", currentWeek: 3, finalWeek: 17, benchSize: 7 });
+    expect(season).toMatchObject({ season: 2026, name: "App Test 8.17", currentWeek: 3, finalWeek: 17, playoffStartWeek: 15, benchSize: 7 });
     expect(season.starters).toEqual([
       { key: "QB", count: 1 },
       { key: "RB", count: 2 },

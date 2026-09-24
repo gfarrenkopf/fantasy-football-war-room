@@ -55,6 +55,8 @@ try {
     console.log(`  avg per call       ${usd(report.avgUsdPerGeneration)}`);
     const outcomes = Object.entries(report.outcomes).sort((a, b) => b[1] - a[1]);
     if (outcomes.length) console.log(`\n  outcomes           ${outcomes.map(([k, n]) => `${k} ${n}`).join(" · ")}`);
+    const purposes = Object.entries(report.purposes).sort((a, b) => b[1].generations - a[1].generations);
+    if (purposes.length) console.log(`  purposes           ${purposes.map(([k, p]) => `${k} ${p.generations} ($${p.totalUsd.toFixed(2)})`).join(" · ")}`);
     for (const m of report.models) {
       console.log(
         `\n  ${m.provider}/${m.model}: ${m.generations} calls, ${usd(m.totalUsd)}, avg ${m.avgInputTokens} in / ${m.avgOutputTokens} out tokens (max out ${m.maxOutputTokens})`,

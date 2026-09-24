@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { aiGenerations, type GenerationOutcome } from "@/lib/db/schema";
+import { aiGenerations, type GenerationOutcome, type GenerationPurpose } from "@/lib/db/schema";
 import { createTestDb } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { costReport } from "./aiCosts";
@@ -15,8 +15,9 @@ beforeEach(async () => {
   await db.delete(aiGenerations);
 });
 
-function generation(leagueId: string, createdAt: string, outcome: GenerationOutcome, costUsd: number | null, model = "claude-sonnet-5") {
+function generation(leagueId: string, createdAt: string, outcome: GenerationOutcome, costUsd: number | null, model = "claude-sonnet-5", purpose: GenerationPurpose = "plan") {
   return {
+    purpose,
     leagueId,
     userId: "u1",
     jobId: crypto.randomUUID(),
@@ -55,8 +56,23 @@ describe("AI plan cost report", () => {
     ]);
   });
 
+  it("splits calls and spend by purpose", async () => {
+    await db.insert(aiGenerations).values([
+      generation("a", "2026-10-01T12:00:00Z", "ready", 0.1),
+      generation("a", "2026-10-02T12:00:00Z", "ready", 0.01, "claude-sonnet-5", "season-lineup"),
+      generation("a", "2026-10-02T13:00:00Z", "ready", 0.02, "claude-sonnet-5", "season-trade"),
+      generation("b", "2026-10-03T12:00:00Z", "ready", 0.01, "claude-sonnet-5", "season-lineup"),
+    ]);
+    const report = await costReport(db, { from: new Date("2026-10-01T00:00:00Z"), to: new Date("2026-10-08T00:00:00Z") });
+    expect(report.purposes).toEqual({
+      plan: { generations: 1, totalUsd: expect.closeTo(0.1, 6) },
+      "season-lineup": { generations: 2, totalUsd: expect.closeTo(0.02, 6) },
+      "season-trade": { generations: 1, totalUsd: expect.closeTo(0.02, 6) },
+    });
+  });
+
   it("reports an empty range without dividing by zero", async () => {
     const report = await costReport(db, { from: new Date("2026-01-01"), to: new Date("2026-02-01") });
-    expect(report).toMatchObject({ generations: 0, leagues: 0, totalUsd: 0, avgUsdPerLeague: null, avgUsdPerGeneration: null, outcomes: {}, models: [] });
+    expect(report).toMatchObject({ generations: 0, leagues: 0, totalUsd: 0, avgUsdPerLeague: null, avgUsdPerGeneration: null, outcomes: {}, purposes: {}, models: [] });
   });
 });

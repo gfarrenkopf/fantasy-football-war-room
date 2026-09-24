@@ -3,7 +3,7 @@ import { aiGenerations } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
 
 /**
- * What AI plans cost over a date range, from the `ai_generations` log (APE-103). The number that
+ * What AI plans and in-season AI cost over a date range, from the `ai_generations` log (APE-103). The number that
  * matters for pricing is `avgUsdPerLeague`: everything spent on a league's plans (retries,
  * regenerations and failures included) against what one league pays. Printed by `npm run ai:costs`.
  */
@@ -32,6 +32,8 @@ export interface CostReport {
   unpriced: number;
   /** Calls by outcome: ready, superseded, or a failure kind. */
   outcomes: Record<string, number>;
+  /** Calls and spend by what they were for: the draft plan, or in-season AI (Epic 11). */
+  purposes: Record<string, { generations: number; totalUsd: number }>;
   models: ModelCosts[];
 }
 
@@ -56,6 +58,12 @@ export async function costReport(db: Db, { from, to }: { from: Date; to: Date })
     .from(aiGenerations)
     .where(inRange)
     .groupBy(aiGenerations.outcome);
+
+  const purposeRows = await db
+    .select({ purpose: aiGenerations.purpose, n: count(), totalUsd: sum(aiGenerations.costUsd) })
+    .from(aiGenerations)
+    .where(inRange)
+    .groupBy(aiGenerations.purpose);
 
   const modelRows = await db
     .select({
@@ -85,6 +93,7 @@ export async function costReport(db: Db, { from, to }: { from: Date; to: Date })
     avgUsdPerGeneration: generations ? totalUsd / generations : null,
     unpriced: num(totals.unpriced),
     outcomes: Object.fromEntries(outcomeRows.map((row) => [row.outcome, num(row.n)])),
+    purposes: Object.fromEntries(purposeRows.map((row) => [row.purpose, { generations: num(row.n), totalUsd: num(row.totalUsd) }])),
     models: modelRows.map((row) => ({
       provider: row.provider,
       model: row.model,

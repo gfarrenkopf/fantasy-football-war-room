@@ -99,6 +99,17 @@ export function parsePendingTrades(raw: unknown): PendingTrade[] {
 }
 
 /**
+ * The first week of the fantasy playoffs: the first scoring period of the matchup period after the
+ * regular season's last. Null when ESPN doesn't say, or the playoffs are already underway.
+ */
+function parsePlayoffStart(schedule: unknown, finalWeek: number): number | null {
+  if (!isObject(schedule) || typeof schedule.matchupPeriodCount !== "number") return null;
+  const periods = isObject(schedule.matchupPeriods) ? schedule.matchupPeriods[String(schedule.matchupPeriodCount + 1)] : undefined;
+  const first = Array.isArray(periods) && typeof periods[0] === "number" ? periods[0] : schedule.matchupPeriodCount + 1;
+  return first <= finalWeek ? first : null;
+}
+
+/**
  * ESPN's league document as a SeasonLeague, or why it can't be one. Players at positions War Room
  * doesn't play (IDP, say) are left off rosters; a lineup slot War Room can't represent is an error,
  * like it is when the league is connected (toSeasonSettings()).
@@ -111,6 +122,8 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
   const currentWeek = typeof raw.scoringPeriodId === "number" ? raw.scoringPeriodId : 0;
   const finalWeek = typeof status.finalScoringPeriod === "number" ? status.finalScoringPeriod : 0;
   if (!season || !currentWeek || !finalWeek) return { ok: false, error: "ESPN didn't say which week it is." };
+
+  const playoffStartWeek = parsePlayoffStart(settings.scheduleSettings, finalWeek);
 
   const counts = isObject(settings.rosterSettings) && isObject(settings.rosterSettings.lineupSlotCounts) ? settings.rosterSettings.lineupSlotCounts : null;
   if (!counts) return { ok: false, error: "ESPN didn't say what this league's roster looks like." };
@@ -143,6 +156,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       name: typeof settings.name === "string" ? settings.name : `ESPN league ${espnLeagueId}`,
       currentWeek,
       finalWeek,
+      playoffStartWeek,
       scoringItems: parseScoringItems(isObject(settings.scoringSettings) ? settings.scoringSettings.scoringItems : undefined),
       starters,
       benchSize,
