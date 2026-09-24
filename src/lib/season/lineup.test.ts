@@ -3,7 +3,7 @@ import league from "./__fixtures__/espn-league-2026.json";
 import projections from "./__fixtures__/espn-projections-2026.json";
 import { maxWeightAssignment } from "./assign";
 import { parseSeasonLeague } from "./espnLeague";
-import { optimalLineup, type LineupCandidate } from "./lineup";
+import { compareLineups, optimalLineup, type LineupCandidate } from "./lineup";
 import { parseProjections } from "./projections";
 import { weeklyPoints } from "./scoring";
 import type { LineupSlotCount } from "./types";
@@ -115,3 +115,31 @@ describe("optimalLineup", () => {
     }
   });
 });
+
+describe("compareLineups", () => {
+  it("pairs each slot's ESPN player with the recommended one, keeping unchanged starters on their row", () => {
+    // The dogfood league's week 3: Love (bench) should replace Higgins at FLEX.
+    const qb = player("QB", 19.8, { slot: "QB" });
+    const rbs = [player("RB", 25.3, { slot: "RB" }), player("RB", 14.4, { slot: "RB" })];
+    const higgins = player("WR", 12.7, { slot: "FLEX" });
+    const love = player("RB", 12.8);
+    const wrs = [player("WR", 17.8, { slot: "WR" }), player("WR", 16.9, { slot: "WR" })];
+    const all = [qb, ...rbs, higgins, love, ...wrs];
+    const starters: LineupSlotCount[] = [
+      { key: "QB", count: 1 },
+      { key: "RB", count: 2 },
+      { key: "WR", count: 2 },
+      { key: "FLEX", count: 1 },
+    ];
+    const rows = compareLineups(all, optimalLineup(all, starters));
+    expect(rows.filter((r) => r.changed)).toEqual([{ key: "FLEX", now: higgins.playerId, next: love.playerId, changed: true, locked: false }]);
+    expect(rows.filter((r) => r.key === "RB").map((r) => r.now)).toEqual(rows.filter((r) => r.key === "RB").map((r) => r.next));
+  });
+
+  it("shows a slot ESPN has empty as nobody", () => {
+    const te = player("TE", 8);
+    const rows = compareLineups([te], optimalLineup([te], [{ key: "TE", count: 1 }]));
+    expect(rows).toEqual([{ key: "TE", now: null, next: te.playerId, changed: true, locked: false }]);
+  });
+});
+

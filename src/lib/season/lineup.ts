@@ -114,3 +114,41 @@ export function optimalLineup(players: readonly LineupCandidate[], starters: rea
     }),
   };
 }
+
+/** One starting slot, as set on ESPN now and as recommended. */
+export interface LineupRow {
+  key: StarterKey;
+  now: number | null;
+  next: number | null;
+  changed: boolean;
+  /** The recommended player's game has started: neither side can change. */
+  locked: boolean;
+}
+
+/**
+ * The ESPN lineup and the recommended one, row by row (10.8). A player who starts in both keeps the
+ * same row, so only the slots that change look different; a slot ESPN has empty shows as null.
+ */
+export function compareLineups(players: readonly LineupCandidate[], plan: LineupPlan): LineupRow[] {
+  const rows: LineupRow[] = plan.starters.map((f) => ({ key: f.key, now: null, next: f.playerId, changed: false, locked: f.locked }));
+  const byKey = new Map<StarterKey, number[]>();
+  for (const p of players) {
+    if (p.slot === "BN" || p.slot === "IR") continue;
+    const list = byKey.get(p.slot) ?? [];
+    list.push(p.playerId);
+    byKey.set(p.slot, list);
+  }
+  // Same player, same slot: same row.
+  for (const row of rows) {
+    const list = byKey.get(row.key) ?? [];
+    const at = row.next === null ? -1 : list.indexOf(row.next);
+    if (at >= 0) {
+      row.now = row.next;
+      list.splice(at, 1);
+    }
+  }
+  // Whoever else ESPN has in that slot fills its remaining rows, in order.
+  for (const row of rows) if (row.now === null) row.now = byKey.get(row.key)?.shift() ?? null;
+  for (const row of rows) row.changed = row.now !== row.next;
+  return rows;
+}
