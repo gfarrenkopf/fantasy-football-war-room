@@ -39,6 +39,7 @@ The bookmarklet, clicked once on an ESPN league page, reads `espn_s2` and `SWID`
 - The credential is stored **per user**, sealed with `secretBox`, because one ESPN login covers all of a user's leagues.
 - There's no fixed expiry. A 401 or 403 from ESPN marks the credential disconnected and asks for one more bookmarklet click.
 - The credential is hard-deleted on disconnect, on account deletion, and after the fantasy season ends.
+- **A finished draft comes onto the board (APE-193).** A league connected after its draft would otherwise open in the draft room on an empty board, and premiere as a draft still to come. Connecting reads `mDraftDetail` too, and when ESPN's draft is finished, its picks fill the league's board through the same crosswalk live sync uses. Leagues connected before this get it on their next season page load (`backfillEspnDraft()`, run with `after()`). It only ever fills an empty board, and only when ESPN's pick count matches the board's teams × rounds. The draft room's Final Whistle doesn't play for a draft that arrives finished all at once.
 - ESPN is the source of truth for rosters. The server re-reads `mRoster` + `mTeam` for every team, with a cache measured in minutes.
 
 ## 4. Lineups

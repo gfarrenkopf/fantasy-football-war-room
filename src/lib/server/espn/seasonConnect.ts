@@ -6,6 +6,7 @@ import { ownTeamId, settingsOf } from "@/lib/season/espnLeague";
 import { newLeagueRecord } from "@/lib/storage/newLeague";
 import { findLeague, upsertLeague } from "../leagues";
 import { lastPairedLeague } from "./bridgeTokens";
+import { importEspnDraft, type DraftImportDeps } from "./draftImport";
 import { readEspnLeague } from "./leagueReader";
 import { markVerified, purgeExpiredLogins, storeLogin, type EspnLogin } from "./logins";
 import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
@@ -15,7 +16,8 @@ import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
  * they're looking at. Checked against ESPN before anything is stored: the login must read the
  * league, and the user must own a team in it. Then the login is stored, and the ESPN league is
  * linked to a war room league: the one already following it, the one last paired with it for the
- * draft, or a new one built from ESPN's settings.
+ * draft, or a new one built from ESPN's settings. A draft ESPN has finished comes onto that league's
+ * board if it's empty (APE-193), so the draft room shows the draft that happened.
  */
 
 export interface ConnectRequest extends EspnLogin {
@@ -34,14 +36,14 @@ export async function connectSeason(
   key: Buffer,
   userId: string,
   req: ConnectRequest,
-  { fetchImpl, now = new Date() }: { fetchImpl?: typeof fetch; now?: Date } = {},
+  { fetchImpl, now = new Date(), crosswalkFor }: { fetchImpl?: typeof fetch; now?: Date } & DraftImportDeps = {},
 ): Promise<ConnectResult> {
   if (req.consentVersion !== ESPN_SEASON_VERSION) {
     return { ok: false, status: 409, error: "What War Room asks for has changed. Read it again.", seasonVersion: ESPN_SEASON_VERSION };
   }
 
   const login = { espnS2: req.espnS2, swid: req.swid };
-  const read = await readEspnLeague(login, { season: req.season, espnLeagueId: req.espnLeagueId, views: ["mSettings", "mTeam"] }, { fetchImpl });
+  const read = await readEspnLeague(login, { season: req.season, espnLeagueId: req.espnLeagueId, views: ["mSettings", "mTeam", "mDraftDetail"] }, { fetchImpl });
   if (!read.ok) {
     if (read.reason === "auth") return { ok: false, status: 400, error: "ESPN didn't let War Room read this league. Make sure you're signed in to ESPN, then try again." };
     if (read.reason === "not-found") return { ok: false, status: 404, error: `ESPN has no league ${req.espnLeagueId} for ${req.season}.` };
@@ -57,8 +59,17 @@ export async function connectSeason(
   const link = { espnLeagueId: req.espnLeagueId, espnTeamId, season: req.season };
   const existing = await findSeasonLinkByEspn(db, userId, req.espnLeagueId, req.season);
   const remembered = existing?.leagueId ?? (await lastPairedLeague(db, userId, req.espnLeagueId));
+  // Never fails the connect: the board can be filled later (backfillEspnDraft()).
+  const withDraft = async (leagueId: string) => {
+    try {
+      await importEspnDraft(db, userId, leagueId, read.data, { espnTeamId, season: req.season }, { crosswalkFor });
+    } catch (err) {
+      console.warn(`[espn-season] draft import failed: ${(err as Error).message}`);
+    }
+  };
   if (remembered && (await findLeague(db, userId, remembered))) {
     await linkSeason(db, userId, { leagueId: remembered, ...link }, now);
+    await withDraft(remembered);
     return { ok: true, leagueId: remembered, espnTeamId, created: false };
   }
 
@@ -68,5 +79,6 @@ export async function connectSeason(
   const saved = await upsertLeague(db, userId, record);
   if (saved.status !== "ok") return { ok: false, status: 409, error: "You have too many War Room leagues. Delete one, then try again." };
   await linkSeason(db, userId, { leagueId: record.id, ...link }, now);
+  await withDraft(record.id);
   return { ok: true, leagueId: record.id, espnTeamId, created: true };
 }

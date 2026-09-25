@@ -35,7 +35,7 @@ Base: `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/
 |---|---|
 | `mSettings` | `settings.size`; `draftSettings.{type, pickOrder, date, availableDate, timePerSelection, keeperCount}`; `rosterSettings.lineupSlotCounts`; the reception scoring item (`statId` 53, `points` 1 / 0.5 / 0) |
 | `mTeams` | `teams[].{id, abbrev, name, owners[]}`. The user's team is the one whose `owners` contains their SWID. |
-| `mDraftDetail` | `draftDetail.{drafted, inProgress, picks[]}` |
+| `mDraftDetail` | `draftDetail.{drafted, inProgress, completeDate, picks[]}`. Each pick has `overallPickNumber`, `roundId`, `roundPickNumber`, `teamId`, `playerId`, `keeper`, `autoDraftTypeId` and `lineupSlotId`. D/ST `playerId`s are negative (`-16000 - team`). |
 
 - **Before the draft, `picks` already lists every slot** with its `overallPickNumber`, `roundId`, `teamId`, `keeper` and `reservedForKeeper`, and `playerId: -1`. So pick ownership (including keepers) is known in advance.
 - **`pickOrder` is randomized when the lobby opens.** With `orderType: "DRAFT_START"` it changed from `[1,2,3,4]` to `[1,4,3,2]` at `availableDate`, one hour before `date`. Read the draft slot after the lobby opens, not at import time.

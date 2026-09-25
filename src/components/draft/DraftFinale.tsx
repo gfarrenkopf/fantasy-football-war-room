@@ -45,17 +45,18 @@ export function DraftFinale() {
     latest.current = { model, state, prefs, active };
   });
 
-  // The draft's `done` when it first loaded: a finished draft reopened is not a finish.
-  const was = useRef<boolean | null>(null);
+  // The open league's draft as last seen: a finished draft reopened, switched to, or arriving
+  // finished in one go (a draft imported from ESPN after it happened, APE-193) is not a finish.
+  const was = useRef<{ leagueId: string | null; done: boolean; picks: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const done = model.done;
+  const leagueId = active?.id ?? null;
+  const picks = state.picks.length;
   useEffect(() => {
     if (!hydrated) return;
-    if (was.current === null) {
-      was.current = done;
-      return;
-    }
-    const finished = !was.current && done;
-    was.current = done;
+    const prev = was.current;
+    was.current = { leagueId, done, picks };
+    const finished = prev !== null && prev.leagueId === leagueId && !prev.done && prev.picks > 0 && done;
     if (!finished) return;
     const { model: m, state: st, prefs: p, active: league } = latest.current;
     const mock = p.mockOn;
@@ -73,9 +74,10 @@ export function DraftFinale() {
       rounds: roundsOf(m.league),
     };
     // The user's own last pick gets its pick card first; then the lights go down.
-    const t = setTimeout(() => setShow(next), st.picks.at(-1)?.mine && !mock ? 1100 : 150);
-    return () => clearTimeout(t);
-  }, [hydrated, done, setPrefs]);
+    // Held in a ref, not an effect cleanup: the next render (the pick count settling) mustn't cancel it.
+    timer.current = setTimeout(() => setShow(next), st.picks.at(-1)?.mine && !mock ? 1100 : 150);
+  }, [hydrated, done, leagueId, picks, setPrefs]);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   const close = useCallback(() => setShow(null), []);
   if (!show) return null;

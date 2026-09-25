@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { connection } from "next/server";
+import { after, connection } from "next/server";
 import { SeasonRoom, type SeasonProblem } from "@/components/season/SeasonRoom";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
 import { ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
+import { backfillEspnDraft } from "@/lib/server/espn/draftImport";
 import { listSeasonLinks, markSeasonViewed } from "@/lib/server/espn/seasonLinks";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
 import { lineupWriteConsent, wantsSeasonEmails } from "@/lib/server/seasonPrefs";
@@ -39,7 +40,13 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   const leagues = links.map((l) => ({ id: l.leagueId, name: l.name }));
   if (!leagues.some((l) => l.id === leagueId)) leagues.unshift({ id: leagueId, name: league.name });
 
-  const load = await loadSeasonView(db, config.espnCodeKey, user.userId, leagueId, { refresh });
+  const key = config.espnCodeKey;
+  // A league connected before its draft could be imported (APE-193) gets its board now, after the
+  // page is sent; the draft room reads it from the server next time it opens.
+  after(() =>
+    backfillEspnDraft(db, key, user.userId, leagueId).catch((err: unknown) => console.warn(`[espn-season] draft backfill failed: ${(err as Error).message}`)),
+  );
+  const load = await loadSeasonView(db, key, user.userId, leagueId, { refresh });
   if (load.kind !== "ok") return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} />;
   const { view } = load;
   const [ai, emails, writeConsent] = await Promise.all([
