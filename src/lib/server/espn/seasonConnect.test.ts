@@ -85,16 +85,19 @@ describe("connectSeason", () => {
 });
 
 describe("listSeasonLinks", () => {
-  it("lists the user's live linked leagues, most recently connected first", async () => {
+  it("lists the user's live linked leagues, most recently connected first, with their names", async () => {
     const userId = await createTestUser(db);
-    const older = await createTestLeague(db, userId);
-    const newer = await createTestLeague(db, userId);
+    const older = await createTestLeague(db, userId, "Work league");
+    const newer = await createTestLeague(db, userId, "Family league");
     const gone = await createTestLeague(db, userId);
     await linkSeason(db, userId, { leagueId: older, espnLeagueId: "1", espnTeamId: 1, season: 2026 }, new Date("2026-09-01"));
     await linkSeason(db, userId, { leagueId: newer, espnLeagueId: "2", espnTeamId: 1, season: 2026 }, new Date("2026-09-20"));
     await linkSeason(db, userId, { leagueId: gone, espnLeagueId: "3", espnTeamId: 1, season: 2026 }, new Date("2026-09-21"));
     await deleteLeague(db, userId, gone);
-    expect((await listSeasonLinks(db, userId)).map((l) => l.leagueId)).toEqual([newer, older]);
+    expect((await listSeasonLinks(db, userId)).map((l) => [l.leagueId, l.name])).toEqual([
+      [newer, "Family league"],
+      [older, "Work league"],
+    ]);
     expect(await listSeasonLinks(db, await createTestUser(db))).toEqual([]);
   });
 });

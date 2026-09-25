@@ -32,10 +32,10 @@ export async function findSeasonLinkByEspn(db: Db, userId: string, espnLeagueId:
   return row ?? null;
 }
 
-/** The user's live leagues that follow an ESPN league this season, most recently connected first. */
-export async function listSeasonLinks(db: Db, userId: string, season?: number): Promise<SeasonLink[]> {
+/** The user's live leagues that follow an ESPN league this season, most recently connected first, with the war room league's name. */
+export async function listSeasonLinks(db: Db, userId: string, season?: number): Promise<(SeasonLink & { name: string })[]> {
   return db
-    .select(columns)
+    .select({ ...columns, name: leagues.name })
     .from(espnSeasonLinks)
     .innerJoin(leagues, and(eq(leagues.id, espnSeasonLinks.leagueId), eq(leagues.userId, userId), isNull(leagues.deletedAt)))
     .where(and(eq(espnSeasonLinks.userId, userId), ...(season ? [eq(espnSeasonLinks.season, season)] : [])))

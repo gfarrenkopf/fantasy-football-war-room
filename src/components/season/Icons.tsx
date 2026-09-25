@@ -48,3 +48,15 @@ export const Swap = ({ className }: IconProps) => (
     <path d="M7 4v14M3 14l4 4 4-4M17 20V6M13 10l4-4 4 4" />
   </svg>
 );
+
+export const ArrowLeft = ({ className }: IconProps) => (
+  <svg {...base} className={className}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </svg>
+);
+
+export const ChevronDown = ({ className }: IconProps) => (
+  <svg {...base} className={className}>
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);

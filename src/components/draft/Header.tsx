@@ -151,7 +151,8 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
         <div className={s.actions}>
           {actions}
           {hasSeasonPage && active ? (
-            <a className={s.btn} href={`/season/${active.id}`} title="This week's lineup and trade checks, from ESPN">
+            <a className={cx("btn", "seasonDoor")} href={`/season/${active.id}`} title="This week's lineup and trade checks, from ESPN">
+              <span className={s.doorMark} aria-hidden />
               Season
             </a>
           ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_LEAGUE } from "@/lib/data";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { getStores, newLeagueRecord, nowIso, type LeagueRecord } from "@/lib/storage";
@@ -55,6 +55,25 @@ export function LeagueProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // `/draft?league=<id>` opens that league: the season page's way back to its draft room (APE-194).
+  // Read once, at mount.
+  const requested = useRef<string | null>(null);
+  useEffect(() => {
+    requested.current = new URLSearchParams(window.location.search).get("league");
+  }, []);
+  useEffect(() => {
+    const id = requested.current;
+    if (!id || !loaded || !prefsHydrated) return;
+    requested.current = null;
+    if (leagues.some((l) => l.id === id) && prefs.activeLeagueId !== id) setPrefs({ activeLeagueId: id });
+    const url = new URL(window.location.href);
+    // A Stripe return carries `league` too; CheckoutReturn owns that query.
+    if (url.searchParams.get("league") === id && !url.searchParams.has("checkout")) {
+      url.searchParams.delete("league");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  }, [loaded, prefsHydrated, leagues, prefs.activeLeagueId, setPrefs]);
 
   const active = leagues.find((l) => l.id === prefs.activeLeagueId) ?? leagues[0] ?? null;
 
