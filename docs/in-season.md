@@ -21,7 +21,7 @@ The plan was settled on 2026-09-24. The tickets are Epic 10 (free foundation, AP
 
 Little of the draft engine. Snake math, the Monte Carlo simulator and availability odds only make sense before a draft. What carries over is the plumbing: ESPN league import (`espn/league.ts`), roster slotting (`roster.ts`), `LeagueSettings`, accounts and sync, `secretBox`, entitlements and checkout, and the AI plan pipeline (`src/lib/ai/`).
 
-In-season lives at its own route, `/season/[leagueId]`, with its own light provider tree. The draft room stays as it is.
+In-season lives at its own route, `/season/[leagueId]`, with its own light provider tree. The draft room stays as it is. The two link both ways: the draft room's Season button opens the league's season page, and the season page's "Draft room" link opens `/draft?league=<id>`, which switches the draft room to that league. When the user follows more than one ESPN league, the season page's title is a menu of them (APE-194).
 
 ## 2. Data
 

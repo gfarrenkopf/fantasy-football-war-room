@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import type { SeasonAiState } from "@/lib/ai/season/state";
@@ -7,7 +8,7 @@ import type { PublicFlags } from "@/lib/config";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
 import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
-import { Refresh } from "./Icons";
+import { ArrowLeft, ChevronDown, Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { TradePanel } from "./TradePanel";
 import s from "./season.module.css";
@@ -25,6 +26,8 @@ type Props = {
   flags: PublicFlags;
   leagueId: string;
   leagueName?: string;
+  /** The user's leagues that follow ESPN (APE-194), to switch between; absent when signed out. */
+  leagues?: SeasonLeagueLink[];
 } & (
   | { problem: SeasonProblem }
   | {
@@ -45,6 +48,11 @@ type Props = {
 
 type Tab = "lineup" | "trade";
 
+export interface SeasonLeagueLink {
+  id: string;
+  name: string;
+}
+
 /**
  * The season page (src/app/season/[leagueId]/page.tsx). On a desktop everything that decides the
  * week sits above the fold; on a phone the tabs move to a bar in the thumb zone.
@@ -62,10 +70,15 @@ export function SeasonRoom(props: Props) {
       <div className={s.frame}>
         <header className={s.top}>
           <div className={s.titleBlock}>
-            <a href="/draft" className={s.brand}>
-              Fantasy War Room
-            </a>
-            <h1 className={s.title}>{title}</h1>
+            <nav className={s.crumbs} aria-label="War Room">
+              <a href="/draft" className={s.brand}>
+                Fantasy War Room
+              </a>
+              <a href={`/draft?league=${encodeURIComponent(props.leagueId)}`} className={s.brand}>
+                <ArrowLeft /> Draft room
+              </a>
+            </nav>
+            {props.leagues && props.leagues.length > 1 ? <LeagueSwitcher leagues={props.leagues} current={props.leagueId} title={title} /> : <h1 className={s.title}>{title}</h1>}
             {"view" in props && <Freshness view={props.view} fetchedAt={props.fetchedAt} stale={props.stale} leagueId={props.leagueId} />}
           </div>
           {view && (
@@ -111,6 +124,34 @@ export function SeasonRoom(props: Props) {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * The page title, as a menu of the user's ESPN-linked leagues: picking one opens its season page.
+ * The select sits over the title, so it reads as the heading and opens as a native menu everywhere.
+ */
+function LeagueSwitcher({ leagues, current, title }: { leagues: SeasonLeagueLink[]; current: string; title: string }) {
+  const router = useRouter();
+  return (
+    <h1 className={`${s.title} ${s.switcher}`}>
+      <span className={s.switcherLabel} aria-hidden>
+        {title}
+        <ChevronDown />
+      </span>
+      <select
+        className={s.switcherSelect}
+        aria-label="League"
+        value={current}
+        onChange={(e) => router.push(`/season/${encodeURIComponent(e.target.value)}`)}
+      >
+        {leagues.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+    </h1>
   );
 }
 

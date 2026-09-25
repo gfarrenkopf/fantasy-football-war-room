@@ -57,6 +57,58 @@
   color: var(--color-text);
 }
 
+/* The way back to the draft room (APE-194), beside the brand. */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.crumbs .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.crumbs .brand svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* The title as a league menu: a native select laid invisibly over the heading text. */
+.switcher {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  width: fit-content;
+}
+.switcherLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.switcherLabel svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--color-muted);
+}
+.switcher:hover .switcherLabel svg {
+  color: var(--color-text);
+}
+.switcherSelect {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.switcher:has(.switcherSelect:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
 .title {
   margin: 1px 0 0;
   font-size: 20px;
