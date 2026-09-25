@@ -39,3 +39,17 @@ export const ESPN_SEASON_DISCLOSURE: readonly string[] = [
   "War Room never changes anything on ESPN unless you ask it to and confirm.",
   "It's unofficial and can stop working if ESPN changes things. If ESPN signs you out, War Room asks you to click the bookmarklet again.",
 ];
+
+/**
+ * The consent to change the user's lineup on ESPN (12.1), asked the first time they press Apply on
+ * the season page. Separate from the season login above, which only ever reads. Bump the version
+ * when the substance changes.
+ */
+export const ESPN_LINEUP_WRITE_VERSION = 1;
+
+export const ESPN_LINEUP_WRITE_DISCLOSURE: readonly string[] = [
+  "War Room may change your lineup on ESPN when you press Apply.",
+  "It only makes the moves you've just reviewed, only on your own team, and never on its own: not from the Sunday email, not from the AI.",
+  "Right before it writes, it re-reads your roster from ESPN and stops if anything has changed or a player's game has started. Afterwards it reads ESPN again and shows you which moves landed.",
+  "It's unofficial and can stop working if ESPN changes things. Your lineup on ESPN is always yours to check.",
+];

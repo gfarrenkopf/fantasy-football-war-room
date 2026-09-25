@@ -35,3 +35,16 @@ export function verifyUnsubscribeToken(secret: string, userId: string, token: st
   const given = Buffer.from(token);
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
+
+/** The lineup write-back consent version the user agreed to (12.1), or null if they never have. */
+export async function lineupWriteConsent(db: Db, userId: string): Promise<number | null> {
+  const [row] = await db.select({ version: userPrefs.lineupWriteConsent }).from(userPrefs).where(eq(userPrefs.userId, userId));
+  return row?.version ?? null;
+}
+
+export async function agreeToLineupWrites(db: Db, userId: string, version: number, now = new Date()): Promise<void> {
+  await db
+    .insert(userPrefs)
+    .values({ userId, lineupWriteConsent: version, updatedAt: now })
+    .onConflictDoUpdate({ target: userPrefs.userId, set: { lineupWriteConsent: version, updatedAt: now } });
+}

@@ -196,8 +196,9 @@ Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/S
 ```
 
 - **One request carries many moves, applied atomically.** ESPN's own page sends a swap as two items. A request with a valid swap plus one illegal move was refused whole, and the swap didn't land.
-- **Errors are `409`** with `details[].type`. Seen so far: `TRAN_ROSTER_INELIGIBLE_SLOT` ("… is not eligible for the QB slot."), `TRAN_ROSTER_SLOT_LIMIT_EXCEEDED` ("Too many players in the RB slot (maximum 2)"), `TRAN_ROSTER_SAME_SLOT` ("… is already in the BE slot").
+- **Errors are `409`** with `details[].{type, message}`. Seen so far: `TRAN_ROSTER_INELIGIBLE_SLOT` ("… is not eligible for the QB slot."), `TRAN_ROSTER_SLOT_LIMIT_EXCEEDED` ("Too many players in the RB slot (maximum 2)"), `TRAN_ROSTER_SAME_SLOT` ("… is already in the BE slot"), `TRAN_LINEUP_LOCKED` ("Lineup transaction could not be completed, Drake London is locked").
 - **`fromLineupSlotId` isn't checked against the roster.** A move with the wrong `fromLineupSlotId` failed only because its target was the player's current slot. Callers must re-read the roster before writing.
 - **There is no dry run.** `executionType: "VALIDATE"` returns `400 Invalid Input.`
-- **Still unrecorded: moving a locked player.** Nothing was locked during the probe. Check after a Thursday kickoff.
+- **A locked player can't move (2026-09-24, during Thursday night's game).** A swap of a locked starter with a bench player was refused whole with `TRAN_LINEUP_LOCKED`, and neither player moved. The roster read's `playerPoolEntry.lineupLocked` was `true` for exactly the players in that game, so checking it before writing catches this first.
+- **Six items in one transaction land together** (12.1 acceptance, three swaps on the test league), and a re-read straight after the write shows them.
 

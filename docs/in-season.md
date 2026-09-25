@@ -94,15 +94,19 @@ The Sunday job comes too late for players whose games kick off first: they're lo
 
 ## 7. Writing lineups to ESPN
 
-Advice is the default. Applying a lineup to ESPN is an option (Epic 12), staged as several moves and sent as **one** transaction, which ESPN applies atomically. Guardrails:
+Advice is the default. Applying a lineup to ESPN is an option (Epic 12, 12.1), in the lineup tab's move list. The user stages a lineup, either War Room's or one edited by hand (a picker per starting slot), and War Room sends the moves as **one** transaction, which ESPN applies atomically.
 
-1. The user confirms every apply, with the full diff shown. Nothing is applied automatically.
-2. Re-read the roster right before writing, and abort if anything changed or any player involved is locked. ESPN doesn't check `fromLineupSlotId`, and it has no dry run, so this check is ours to make.
-3. Re-read after writing, and show what landed. Failures log `[server-error]`.
-4. A separate, versioned consent line, asked the first time the user applies.
+- **Pure checks** (`src/lib/season/apply.ts`), run in the browser while staging and again on the server: every move is the user's own player, where ESPN has them, unlocked, into a slot they're eligible for, and the result fits the league's starting slots and bench. Players on IR are left alone.
+- **Route:** `POST /api/leagues/:id/season/apply { week, snapshot, moves, consentVersion? }` (`src/lib/server/espn/applyLineup.ts`, `lineupWriter.ts`). The team is the user's own, from their season link; the request never names one.
+
+Guardrails:
+
+1. The user reviews every move and confirms. Nothing is applied automatically: the Sunday job and the AI never write.
+2. Re-read the roster (skipping the cache) right before writing. Abort if ESPN has moved on a week, if anything on the roster changed since staging (`snapshot`), or if the checks fail against the fresh roster (a player now locked). ESPN doesn't check `fromLineupSlotId`, and it has no dry run, so this check is ours to make.
+3. Re-read after writing, even when the write timed out, and show which moves landed. ESPN refusing, a failed write, a move that didn't land, and a write that couldn't be checked all log `[server-error]`.
+4. A separate, versioned consent line (`ESPN_LINEUP_WRITE_VERSION` in `src/lib/espn/disclosure.ts`, stored in `user_prefs.lineup_write_consent`), asked the first time the user applies.
 
 ## 8. Open questions
 
-- **Moving a locked player:** what error does ESPN return? Probe after a Thursday kickoff.
 - **Do future-week projections update week to week?** Compare a stored week-17 projection against a later read.
 - **What shape does `mPendingTransactions` take** when a trade is pending? This is needed for importing offers.

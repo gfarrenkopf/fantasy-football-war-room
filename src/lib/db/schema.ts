@@ -410,6 +410,8 @@ export const userPrefs = pgTable("user_prefs", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** The "Your Sunday lineup is ready" email, and the reconnect email the same job sends (11.3). */
   seasonEmails: boolean("season_emails").notNull().default(true),
+  /** The version of the lineup write-back consent (12.1, ESPN_LINEUP_WRITE_VERSION) the user agreed to; null until they first apply. */
+  lineupWriteConsent: integer("lineup_write_consent"),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 

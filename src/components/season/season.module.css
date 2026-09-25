@@ -633,6 +633,115 @@
   height: 13px;
 }
 
+/* ------------------------------------------------------------------ apply to ESPN (12.1) */
+
+.apply {
+  display: grid;
+  gap: 8px;
+  margin: 0 14px 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-row-line);
+  background: var(--color-panel2);
+}
+
+.applyTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.applyHead {
+  margin: 0;
+  font-weight: 600;
+}
+
+.applyList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.applyList b {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.applyList li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.applyList li svg {
+  width: 12px;
+  height: 12px;
+  color: var(--color-value-ink);
+}
+.applyList li[data-landed="false"] {
+  color: var(--color-reach-ink);
+}
+
+.applyProblems {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  color: var(--color-reach-ink);
+  font-size: 12px;
+}
+.applyProblems p,
+.applyProblems ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seats {
+  display: grid;
+  gap: 6px;
+}
+
+.seat {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.seatKey {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.confirm {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-row-line);
+}
+.confirm p {
+  margin: 0;
+}
+
+.consent ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--color-muted);
+  font-size: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.confirmActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 /* ------------------------------------------------------------------ bench */
 
 .bench {

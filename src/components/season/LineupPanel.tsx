@@ -6,6 +6,7 @@ import { compareLineups, isRuledOut, type LineupRow } from "@/lib/season/lineup"
 import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
+import { ApplyLineup } from "./ApplyLineup";
 import { ArrowRight, Check, External, Swap } from "./Icons";
 import { Gain, PlayerLine, pts, signed } from "./parts";
 import s from "./season.module.css";
@@ -42,8 +43,8 @@ function reason(row: LineupRow, now: ViewPlayer | undefined, next: ViewPlayer | 
   return { text: `${signed(next.points - now.points)} projected over ${lastName(now.name)}` };
 }
 
-/** This week's lineup: what's set on ESPN against War Room's, and the moves between them (10.5, 10.8). */
-export function LineupPanel({ view, leagueId, ai }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null }) {
+/** This week's lineup: what's set on ESPN against War Room's, the moves between them (10.5, 10.8), and applying them (12.1). */
+export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null; writeConsented: boolean }) {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
   if (!mine) return <p className={`${s.panel} ${s.note}`}>ESPN didn&apos;t list your team in this league.</p>;
 
@@ -183,6 +184,7 @@ export function LineupPanel({ view, leagueId, ai }: { view: SeasonView; leagueId
               })}
             </ol>
           )}
+          <ApplyLineup view={view} leagueId={leagueId} agreed={writeConsented} />
           <a className={s.espnLink} href={espnTeam} target="_blank" rel="noreferrer">
             Open my team on ESPN <External />
           </a>
