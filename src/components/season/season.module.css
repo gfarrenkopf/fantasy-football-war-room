@@ -1166,6 +1166,15 @@
   justify-self: start;
 }
 
+.aiStatus {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.aiStatus[data-match="true"] {
+  color: var(--color-value-ink);
+}
+
 .aiError {
   margin: 0;
   color: var(--color-reach-ink);

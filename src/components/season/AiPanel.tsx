@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AiLineup } from "@/lib/ai/season/lineup";
+import { aiLineupStatus } from "@/lib/ai/season/lineupStatus";
 import type { SeasonAiState, StoredAiOutput } from "@/lib/ai/season/state";
 import type { AiTradeWriteup } from "@/lib/ai/season/trade";
 import type { Trade } from "@/lib/season/trade";
@@ -104,7 +105,8 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
   const [problem, setProblem] = useState("");
   const [paywalled, setPaywalled] = useState(false);
   const stored = written ?? latest(ai);
-  const names = new Map((view.teams.find((t) => t.id === view.myTeamId)?.roster ?? []).map((p) => [p.playerId, p.name]));
+  const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
+  const names = new Map(roster.map((p) => [p.playerId, p.name]));
   const name = (id: number | null) => (id === null ? "nobody" : (names.get(id) ?? `ESPN player ${id}`));
 
   async function write() {
@@ -122,6 +124,8 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
 
   const calls = stored?.output.slots.filter((slot) => slot.reason) ?? [];
   const departures = stored?.output.slots.filter((slot) => slot.playerId !== slot.enginePlayerId) ?? [];
+  // Live, against ESPN now: the stored text was written against the lineup ESPN had then.
+  const status = stored ? aiLineupStatus(stored.output, roster) : null;
   return (
     <section className={[s.panel, className].filter(Boolean).join(" ")} aria-labelledby="ai-lineup-title">
       <div className={s.panelHead}>
@@ -152,6 +156,14 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
                 </li>
               ))}
             </ul>
+          )}
+          {status && (
+            <p className={s.aiStatus} data-match={status.missing.length === 0} role="note">
+              {status.missing.length === 0
+                ? "ESPN has the AI's starters."
+                : `Not on ESPN yet: ${status.missing.map((m) => `${name(m.playerId)} at ${SLOT_LABEL[m.key]}`).join(", ")}.`}
+              {status.changedSince && " You've changed your ESPN lineup since this was written, so what it says about the lineup on ESPN is out of date."}
+            </p>
           )}
           <p className={s.fine} suppressHydrationWarning>
             Written {new Date(stored.createdAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} from the projections then.
