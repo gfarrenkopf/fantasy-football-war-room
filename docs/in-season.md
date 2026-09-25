@@ -94,7 +94,7 @@ The Sunday job comes too late for players whose games kick off first: they're lo
 
 ## 7. Writing lineups to ESPN
 
-Advice is the default. Applying a lineup to ESPN is an option (Epic 12, 12.1), in the lineup tab's move list. The user stages a lineup, either War Room's or one edited by hand (a picker per starting slot), and War Room sends the moves as **one** transaction, which ESPN applies atomically.
+Advice is the default. Applying a lineup to ESPN is an option (Epic 12, 12.1), in the lineup tab's move list. The user stages a lineup (War Room's, ESPN's own, or either edited by hand with a picker per starting slot), and War Room sends the moves as **one** transaction, which ESPN applies atomically. After an apply the editor starts again from ESPN's new lineup, so the user can keep managing their team from War Room.
 
 - **Pure checks** (`src/lib/season/apply.ts`), run in the browser while staging and again on the server: every move is the user's own player, where ESPN has them, unlocked, into a slot they're eligible for, and the result fits the league's starting slots and bench. Players on IR are left alone.
 - **Route:** `POST /api/leagues/:id/season/apply { week, snapshot, moves, consentVersion? }` (`src/lib/server/espn/applyLineup.ts`, `lineupWriter.ts`). The team is the user's own, from their season link; the request never names one.

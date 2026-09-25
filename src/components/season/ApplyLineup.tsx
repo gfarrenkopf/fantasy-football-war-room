@@ -3,24 +3,29 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ESPN_LINEUP_WRITE_DISCLOSURE, ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
-import { canPlay, checkMoves, label, movesToStaged, snapshotOf, starterSeats } from "@/lib/season/apply";
+import { canPlay, checkMoves, label, movesToStaged, seatsFromRoster, snapshotOf, starterSeats } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { Check } from "./Icons";
 import s from "./season.module.css";
 
 /**
- * Setting the lineup on ESPN from War Room (12.1). The user stages a lineup (War Room's, or edited
- * by hand), reviews every move, and confirms; the server re-reads ESPN, writes the moves in one
- * transaction, and reads ESPN back to show which landed. Nothing here ever writes on its own.
+ * Managing the lineup on ESPN from War Room (12.1). The user stages a lineup (War Room's, ESPN's
+ * own, or either edited by hand), reviews every move, and confirms; the server re-reads ESPN, writes
+ * the moves in one transaction, and reads ESPN back to show which landed. After that the user can
+ * keep editing and applying, as often as they like. Nothing here ever writes on its own.
  */
 
 type Phase =
   | { kind: "idle" }
   | { kind: "review" }
   | { kind: "sending" }
-  | { kind: "done"; moves: (LineupMove & { landed: boolean })[] }
   | { kind: "failed"; error: string; details: string[]; unverified?: boolean };
+
+type Landed = (LineupMove & { landed: boolean })[];
+
+/** Where each of the user's players sits on ESPN: changes whenever a fresh read does. */
+const rosterKey = (roster: readonly { playerId: number; slot: string }[]) => roster.map((p) => `${p.playerId}:${p.slot}`).join(",");
 
 const SLOT_NAME: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
 const seatName = (key: string) => SLOT_NAME[key] ?? key;
@@ -31,15 +36,25 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
   const byId = useMemo(() => new Map(roster.map((p) => [p.playerId, p])), [roster]);
   const seats = useMemo(() => starterSeats(view.starters), [view.starters]);
   const recommended = useMemo(() => view.lineup.starters.map((f) => f.playerId), [view.lineup]);
+  const onEspn = useMemo(() => seatsFromRoster(roster, seats), [roster, seats]);
+  // First visit: offer War Room's lineup. Once ESPN's lineup changes under us (after an apply, or a
+  // refresh), start again from what ESPN has, so moves already made don't show as still to make.
   const [staged, setStaged] = useState<(number | null)[]>(recommended);
+  const [seenRoster, setSeenRoster] = useState(() => rosterKey(roster));
   const [editing, setEditing] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [landed, setLanded] = useState<Landed | null>(null);
+  if (rosterKey(roster) !== seenRoster) {
+    setSeenRoster(rosterKey(roster));
+    setStaged(onEspn);
+  }
   const [agreed, setAgreed] = useState(agreedAtLoad);
   const [consenting, setConsenting] = useState(false);
 
   const moves = movesToStaged(roster, seats, staged);
   const problems = moves.length ? checkMoves(roster, moves, view.starters, view.benchSize) : [];
-  const edited = staged.some((id, i) => id !== recommended[i]);
+  const same = (a: readonly (number | null)[]) => staged.every((id, i) => id === a[i]);
+  const source = same(recommended) ? "War Room's lineup" : "your edits";
   const name = (id: number) => byId.get(id)?.name ?? `Player ${id}`;
 
   function choose(seat: number, id: number | null) {
@@ -56,6 +71,13 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
       return next;
     });
     setPhase({ kind: "idle" });
+    setLanded(null);
+  }
+
+  function startFrom(lineup: (number | null)[]) {
+    setStaged(lineup);
+    setPhase({ kind: "idle" });
+    setLanded(null);
   }
 
   async function apply() {
@@ -77,7 +99,8 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     };
     if (res.ok && body.moves) {
       setAgreed(true);
-      setPhase({ kind: "done", moves: body.moves });
+      setLanded(body.moves);
+      setPhase({ kind: "idle" });
       router.refresh();
       return;
     }
@@ -97,28 +120,12 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     </>
   );
 
-  if (phase.kind === "done") {
-    const missed = phase.moves.filter((m) => !m.landed);
-    return (
-      <div className={s.apply} role="status">
-        <p className={s.applyHead}>{missed.length ? "Some moves didn't land on ESPN" : "Done. ESPN has your new lineup."}</p>
-        <ul className={s.applyList}>
-          {phase.moves.map((m) => (
-            <li key={m.playerId} data-landed={m.landed}>
-              {m.landed ? <Check /> : <span aria-hidden>✕</span>} {moveLine(m)}
-              {!m.landed && <span className="sr-only"> (didn&apos;t land)</span>}
-            </li>
-          ))}
-        </ul>
-        {missed.length > 0 && <p className={s.aiError}>Check these on ESPN. War Room has been alerted.</p>}
-      </div>
-    );
-  }
-
   return (
     <div className={s.apply}>
+      {landed && <Results moves={landed} line={moveLine} />}
+
       <div className={s.applyTop}>
-        <p className={s.applyHead}>Set it on ESPN from here</p>
+        <p className={s.applyHead}>Manage your lineup on ESPN</p>
         <button type="button" className={s.textButton} onClick={() => setEditing((e) => !e)} aria-expanded={editing}>
           {editing ? "Done editing" : "Edit lineup"}
         </button>
@@ -145,21 +152,28 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
               </label>
             );
           })}
-          {edited && (
-            <button type="button" className={s.textButton} onClick={() => setStaged(recommended)}>
-              Back to War Room&apos;s lineup
-            </button>
-          )}
+          <div className={s.seatSources}>
+            {!same(onEspn) && (
+              <button type="button" className={s.textButton} onClick={() => startFrom(onEspn)}>
+                Start from ESPN&apos;s lineup
+              </button>
+            )}
+            {!same(recommended) && (
+              <button type="button" className={s.textButton} onClick={() => startFrom(recommended)}>
+                Start from War Room&apos;s lineup
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {moves.length === 0 ? (
-        <p className={s.fine}>{edited ? "This lineup is what ESPN already has." : "Nothing to send: ESPN already has this lineup."}</p>
+        <p className={s.fine}>ESPN already has this lineup.{editing ? "" : " Edit it to change anything, starters or bench."}</p>
       ) : (
         <>
           <p className={s.fine}>
             {moves.length === 1 ? "1 move" : `${moves.length} moves`}
-            {edited ? ", from your edits" : ", from War Room's lineup"}:
+            , from {source}:
           </p>
           <ul className={s.applyList}>
             {moves.map((m) => (
@@ -225,6 +239,25 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** What the last apply did, move by move, from ESPN's read after it. */
+function Results({ moves, line }: { moves: Landed; line: (m: LineupMove) => React.ReactNode }) {
+  const missed = moves.filter((m) => !m.landed);
+  return (
+    <div className={s.applyResult} role="status">
+      <p className={s.applyHead}>{missed.length ? "Some moves didn't land on ESPN" : "Done. ESPN has your new lineup."}</p>
+      <ul className={s.applyList}>
+        {moves.map((m) => (
+          <li key={m.playerId} data-landed={m.landed}>
+            {m.landed ? <Check /> : <span aria-hidden>✕</span>} {line(m)}
+            {!m.landed && <span className="sr-only"> (didn&apos;t land)</span>}
+          </li>
+        ))}
+      </ul>
+      {missed.length > 0 && <p className={s.aiError}>Check these on ESPN. War Room has been alerted.</p>}
     </div>
   );
 }

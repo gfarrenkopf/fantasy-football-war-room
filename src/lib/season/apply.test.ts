@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkMoves, espnRefusal, landedMoves, movesToStaged, rosterChanges, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
+import { checkMoves, espnRefusal, landedMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
 
@@ -43,6 +43,17 @@ describe("movesToStaged", () => {
     const t = team();
     const staged = [t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.wr.playerId, null];
     expect(movesToStaged(t.roster, starterSeats(STARTERS), staged)).toEqual([{ playerId: t.flex.playerId, from: "FLEX", to: "BN" }]);
+  });
+});
+
+describe("seatsFromRoster", () => {
+  it("seats ESPN's starters in order, leaves empty slots null, and stages no moves", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const roster = t.roster.filter((p) => p !== t.flex);
+    const staged = seatsFromRoster(roster, seats);
+    expect(staged).toEqual([t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.wr.playerId, null]);
+    expect(movesToStaged(roster, seats, staged)).toEqual([]);
   });
 });
 

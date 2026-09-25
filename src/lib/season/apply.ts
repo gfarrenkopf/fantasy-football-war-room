@@ -32,6 +32,16 @@ const ELIGIBLE = new Map<LineupSlot, readonly ApplyEntry["pos"][]>(SLOT_DEFS.map
 export const canPlay = (pos: ApplyEntry["pos"], slot: LineupSlot) => slot === "BN" || (ELIGIBLE.get(slot)?.includes(pos) ?? false);
 
 /**
+ * The lineup ESPN has now, seat by seat: who sits in each seat of `starterSeats()`, in roster order,
+ * or null where ESPN has the slot empty. Staging from here and changing nothing makes no moves.
+ */
+export function seatsFromRoster(roster: readonly ApplyEntry[], seats: readonly StarterKey[]): (number | null)[] {
+  const queue = new Map<LineupSlot, number[]>();
+  for (const p of roster) queue.set(p.slot, [...(queue.get(p.slot) ?? []), p.playerId]);
+  return seats.map((key) => queue.get(key)?.shift() ?? null);
+}
+
+/**
  * The moves that turn the roster as ESPN has it into a staged lineup: `staged` names who sits in
  * each seat of `starterSeats()`, or null to leave it empty. A starter not staged anywhere goes to the
  * bench; IR is left alone. A player staged in a seat of the slot they already hold doesn't move.
