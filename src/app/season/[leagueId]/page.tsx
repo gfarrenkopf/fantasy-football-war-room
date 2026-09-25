@@ -4,11 +4,12 @@ import { connection } from "next/server";
 import { SeasonRoom, type SeasonProblem } from "@/components/season/SeasonRoom";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
+import { ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
 import { markSeasonViewed } from "@/lib/server/espn/seasonLinks";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
-import { wantsSeasonEmails } from "@/lib/server/seasonPrefs";
+import { lineupWriteConsent, wantsSeasonEmails } from "@/lib/server/seasonPrefs";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Your season · Fantasy War Room" };
 
 /**
  * A league's in-season page (10.5): this week's recommended lineup, and trades (10.6), plus in-season
- * AI when it's on (Epic 11). Everything
+ * AI when it's on (Epic 11), and setting the lineup on ESPN (12.1). Everything
  * comes from ESPN, read on the server with the user's stored login; `?refresh=1` skips the cache.
  * Hosted only, and signed in only.
  */
@@ -38,10 +39,11 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   const load = await loadSeasonView(db, config.espnCodeKey, user.userId, leagueId, { refresh });
   if (load.kind !== "ok") return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} problem={load as SeasonProblem} />;
   const { view } = load;
-  const [ai, emails] = await Promise.all([
+  const [ai, emails, writeConsent] = await Promise.all([
     seasonAiState(db, user, league, view),
     // Only offered when the Sunday job can send email at all.
     config.seasonJobEnabled && config.emailAuthEnabled ? wantsSeasonEmails(db, user.userId) : null,
+    lineupWriteConsent(db, user.userId),
     markSeasonViewed(db, user.userId, leagueId),
   ]);
 
@@ -57,6 +59,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       ai={ai}
       checkout={checkout}
       seasonEmails={emails}
+      writeConsented={(writeConsent ?? 0) >= ESPN_LINEUP_WRITE_VERSION}
     />
   );
 }

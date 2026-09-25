@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { costUsd } from "@/lib/ai/pricing";
 import { PlanModelError, type ModelUsage, type PlanModel, type PlanModelErrorKind } from "@/lib/ai/provider";
 import { buildLineupInput, generateAiLineup, LINEUP_PROMPT_VERSION, type AiLineup } from "@/lib/ai/season/lineup";
+import { espnStartersOf } from "@/lib/ai/season/lineupStatus";
 import type { StoredAiOutput } from "@/lib/ai/season/state";
 import { buildTradeInput, generateTradeWriteup, TRADE_PROMPT_VERSION, type AiTradeWriteup } from "@/lib/ai/season/trade";
 import { aiGenerations, seasonAiOutputs, type GenerationPurpose, type SeasonAiOutputKind, type SeasonAiUseKind } from "@/lib/db/schema";
@@ -149,7 +150,9 @@ export async function writeAiLineup(
       await releaseSeasonAiUse(db, where);
       return { status: "failed", kind: result.kind };
     }
-    const { lineup, issues, provider, model: modelId } = result.value;
+    const { issues, provider, model: modelId } = result.value;
+    const mine = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
+    const lineup: AiLineup = { ...result.value.lineup, espnStarters: espnStartersOf(mine) };
     const [row] = await db
       .insert(seasonAiOutputs)
       .values({ ...where, output: lineup, issues, provider, model: modelId, promptVersion: LINEUP_PROMPT_VERSION })

@@ -75,6 +75,12 @@ export interface AiLineup {
   slots: AiLineupSlot[];
   /** Projected points of these starters. */
   total: number;
+  /**
+   * Who started on ESPN when it was written (12.1), sorted, so the page can tell when the user has
+   * since changed their lineup and the intro's comparison with ESPN is out of date. Missing on
+   * lineups written before it was recorded.
+   */
+  espnStarters?: number[];
 }
 
 const label = (key: StarterKey) => SLOT_DEFS.find((d) => d.key === key)?.label ?? key;
