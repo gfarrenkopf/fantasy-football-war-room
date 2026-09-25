@@ -413,11 +413,11 @@ export const userPrefs = pgTable("user_prefs", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
-/** Which email the Sunday job sent: the lineups, or a request to reconnect ESPN. */
-export type SeasonEmailKind = "lineup" | "reconnect";
+/** Which email a season job sent: the Sunday lineups, a request to reconnect ESPN, or an early-kickoff alert (11.4). */
+export type SeasonEmailKind = "lineup" | "reconnect" | "early";
 
 /**
- * Emails the Sunday job (11.3) has sent, one per user, kind and day, so a rerun that morning never
+ * Emails the season jobs have sent (11.3, 11.4), one per user, kind, day and slot, so a rerun never
  * sends another. By day rather than NFL week: a reconnect email is sent when ESPN can't be read.
  */
 export const seasonEmails = pgTable(
@@ -429,7 +429,9 @@ export const seasonEmails = pgTable(
     kind: text("kind").$type<SeasonEmailKind>().notNull(),
     /** "YYYY-MM-DD", UTC. */
     sentOn: date("sent_on", { mode: "string" }).notNull(),
+    /** The kickoff an early alert was for (ISO), since one day can have several; empty otherwise. */
+    slot: text("slot").notNull().default(""),
     sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.kind, t.sentOn] })],
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.sentOn, t.slot] })],
 );

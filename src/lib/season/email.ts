@@ -1,5 +1,6 @@
 import type { AiLineup } from "@/lib/ai/season/lineup";
 import { C, escape, FONT, STRIPE } from "@/lib/auth/email";
+import { compareLineups } from "./lineup";
 import type { SeasonView } from "./view";
 
 /**
@@ -139,4 +140,57 @@ export function renderReconnectEmail({ url, unsubscribeUrl }: { url: string; uns
     footer: footer(unsubscribeUrl),
   });
   return { subject, html, text: [subject, "", body, "", url, "", `Stop these emails: ${unsubscribeUrl}`, ""].join("\n") };
+}
+
+/**
+ * The lineup changes that involve a player in the early game (11.4), going in or coming out, as
+ * "Start A at FLEX over B". Moves among Sunday players can wait for Sunday; these can't.
+ */
+export function earlyMoves(view: SeasonView, teams: readonly string[]): string[] {
+  const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
+  const byId = new Map(roster.map((p) => [p.playerId, p]));
+  const early = (id: number | null) => {
+    const p = id === null ? undefined : byId.get(id);
+    return !!p && !p.locked && p.team !== null && teams.includes(p.team);
+  };
+  return compareLineups(roster, view.lineup)
+    .filter((row) => row.changed && !row.locked && (early(row.now) || early(row.next)))
+    .map((row) => {
+      const now = row.now === null ? undefined : byId.get(row.now);
+      const next = row.next === null ? undefined : byId.get(row.next);
+      const slot = SLOT[row.key] ?? row.key;
+      if (!next) return `Bench ${now!.name} (nobody can fill ${slot})`;
+      return `Start ${next.name} at ${slot}${now ? ` over ${now.name}` : ""}`;
+    });
+}
+
+/** "Set your lineup before Thursday's 8:15 PM kickoff": the moves involving that game, per league. */
+export function renderEarlyEmail({ kickoff, leagues, unsubscribeUrl }: { kickoff: string; leagues: { name: string; url: string; moves: string[] }[]; unsubscribeUrl: string }): SeasonEmail {
+  const subject = `Set your lineup before ${kickoff}`;
+  const lead = "These changes involve players in that game. They lock at kickoff, so the Sunday lineup comes too late for them.";
+  const sections = leagues
+    .map(
+      (l) => `<tr><td style="padding:22px 32px 0;">
+          <div style="font-family:${FONT};font-size:15px;line-height:20px;font-weight:700;color:${C.text};">${escape(l.name)}</div>
+          <ul style="margin:8px 0 0;padding-left:18px;font-family:${FONT};font-size:14px;line-height:22px;color:${C.text};">${l.moves.map((m) => `<li>${escape(m)}</li>`).join("")}</ul>
+          <div style="padding-top:12px;">${button(l.url, "See the lineup")}</div>
+        </td></tr>`,
+    )
+    .join("\n");
+  const html = shell({
+    title: subject,
+    preheader: leagues[0]?.moves[0] ?? lead,
+    headline: `Before ${kickoff}.`,
+    body: `<tr><td style="padding:10px 32px 0;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">${escape(lead)}</td></tr>\n${sections}`,
+    footer: footer(unsubscribeUrl),
+  });
+  const text = [subject, "", lead, ...leagues.flatMap((l) => ["", l.name, ...l.moves.map((m) => `- ${m}`), l.url]), "", `Stop these emails: ${unsubscribeUrl}`, ""].join("\n");
+  return { subject, html, text };
+}
+
+/** A kickoff as the email names it, in Eastern time: "Thursday's 8:15 PM ET kickoff". */
+export function kickoffLabel(at: number): string {
+  const day = new Date(at).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "long" });
+  const time = new Date(at).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+  return `${day}'s ${time} ET kickoff`;
 }

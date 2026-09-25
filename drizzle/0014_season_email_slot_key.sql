@@ -1,0 +1,2 @@
+ALTER TABLE "season_emails" DROP CONSTRAINT "season_emails_user_id_kind_sent_on_pk";--> statement-breakpoint
+ALTER TABLE "season_emails" ADD CONSTRAINT "season_emails_user_id_kind_sent_on_slot_pk" PRIMARY KEY("user_id","kind","sent_on","slot");

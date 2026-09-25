@@ -92,6 +92,20 @@
       "when": 1790293624372,
       "tag": "0012_season_sunday_job",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790298026224,
+      "tag": "0013_season_email_slot",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790298026924,
+      "tag": "0014_season_email_slot_key",
+      "breakpoints": true
     }
   ]
 }

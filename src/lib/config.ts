@@ -124,10 +124,11 @@ export const config = Object.freeze({
    */
   espnSeasonEnabled: cloudEnabled && espnCodeKey !== null,
   /**
-   * The Sunday-morning AI lineup job (Epic 11, 11.3), started by a timer on the droplet. Needs
-   * in-season, AI and the shared job secret; without Resend it still writes lineups, just no emails.
+   * The season jobs, started by timers on the droplet: the Sunday AI lineup (Epic 11, 11.3, which
+   * also needs AI) and the early-kickoff alert (11.4). Need in-season and the shared job secret;
+   * without Resend the Sunday job still writes lineups, and no alerts go out.
    */
-  seasonJobEnabled: cloudEnabled && espnCodeKey !== null && Boolean(aiApiKey) && Boolean(cronSecret),
+  seasonJobEnabled: cloudEnabled && espnCodeKey !== null && Boolean(cronSecret),
 });
 
 export type Config = typeof config;

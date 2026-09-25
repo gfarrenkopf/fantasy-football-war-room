@@ -83,6 +83,15 @@ Both extend the draft plan's pipeline (`src/lib/ai/`): the same provider seam, s
 - **Failures** are logged as `[server-error]` lines, so the alert emails pick them up.
 - **Only one automatic run.** News before the 4pm, SNF or MNF games comes after it; the user can still use their mid-week lineup if it's unused, or the free lineup.
 
+### The early-kickoff alert (11.4)
+
+The Sunday job comes too late for players whose games kick off first: they're locked by 11:40. `runEarlyJob()` (`src/lib/server/seasonEarly.ts`) covers them, for free, with no AI:
+
+- **Which games:** every kickoff before the week's Sunday job, from ESPN's public `proTeamSchedules_wl` view (`src/lib/season/schedule.ts`). The week's main slot is the one with the most games, so no weekday is assumed. In 2026 that means Thursday nights, the Sunday 9:30 AM London games (weeks 4 and 5), Saturday games in week 15, and Christmas Friday in week 16. A game whose time is still TBD is left out until ESPN sets one.
+- **When:** a timer every 15 minutes. The job acts only when an early kickoff is 60–75 minutes away, after the inactives (~90 minutes before).
+- **What:** for each league opened in the last 14 days, it re-reads ESPN and takes the free optimal lineup's changes that involve an unlocked player in that game, going in or out. Changes among Sunday players wait for Sunday.
+- **Email:** one per user and kickoff, listing each league's changes. It honours the same opt-out. A lapsed ESPN login is left to the Sunday job's reconnect email.
+
 ## 7. Writing lineups to ESPN
 
 Advice is the default. Applying a lineup to ESPN is an option (Epic 12), staged as several moves and sent as **one** transaction, which ESPN applies atomically. Guardrails:

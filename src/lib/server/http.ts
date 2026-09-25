@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 /**
  * Request helpers for the JSON API routes. No framework or session code here, so they're unit-testable.
  */
@@ -36,4 +38,11 @@ export async function readJson(request: Request): Promise<{ ok: true; body: unkn
   } catch {
     return { ok: false, response: error(400, "Malformed JSON") };
   }
+}
+
+/** Whether a request carries `Authorization: Bearer <secret>`, compared in constant time. For the droplet's job timers. */
+export function hasBearer(request: Request, secret: string): boolean {
+  const given = Buffer.from(request.headers.get("authorization") ?? "");
+  const expected = Buffer.from(`Bearer ${secret}`);
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }

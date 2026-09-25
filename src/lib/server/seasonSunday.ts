@@ -1,12 +1,10 @@
-import { and, eq, isNull } from "drizzle-orm";
 import type { PlanModel } from "@/lib/ai/provider";
-import { espnSeasonLinks, leagues, seasonEmails, users, type SeasonEmailKind } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
-import { lineupMoves, renderReconnectEmail, renderSundayEmail, type LeagueSummary, type SeasonEmail } from "@/lib/season/email";
+import { lineupMoves, renderReconnectEmail, renderSundayEmail, type LeagueSummary } from "@/lib/season/email";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { seasonAiAccess } from "./seasonAi";
 import { writeAiLineup } from "./seasonAiOutputs";
-import { unsubscribeToken, wantsSeasonEmails } from "./seasonPrefs";
+import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobLeague, type JobMail } from "./seasonJobs";
 
 /**
  * The Sunday-morning AI lineup job (Epic 11, 11.3). A timer on the droplet starts it at 11:40 ET,
@@ -19,21 +17,12 @@ import { unsubscribeToken, wantsSeasonEmails } from "./seasonPrefs";
  * user per day. Failures are logged as [server-error] lines, which the alert emails pick up.
  */
 
-/** Leagues nobody has opened for this long are skipped, to save AI cost. Opening the page re-enrols them. */
-export const INACTIVE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
-
-export interface SundayDeps {
+export interface SundayDeps extends JobMail {
   model: PlanModel;
   /** The league's season view, fresh from ESPN. */
   loadView(userId: string, leagueId: string): Promise<SeasonViewLoad>;
-  /** Sends one email, or null when email isn't configured (lineups are still written). */
-  sendEmail: ((to: string, email: SeasonEmail, headers: Record<string, string>) => Promise<void>) | null;
   paymentsEnabled: boolean;
   allowlist: readonly string[];
-  /** The public origin, for links in emails. */
-  baseUrl: string;
-  /** Signs unsubscribe links. */
-  secret: string;
   now?: Date;
 }
 
@@ -56,44 +45,12 @@ export interface SundaySummary {
   reconnects: number;
 }
 
-interface Candidate {
-  userId: string;
-  email: string | null;
-  leagueId: string;
-  name: string;
-  leagueSeason: number;
-  lastViewedAt: Date | null;
-}
-
-const logError = (message: string, detail: Record<string, unknown>) =>
-  console.error(`[server-error] ${JSON.stringify({ method: "JOB", path: "/api/internal/season/sunday", route: "season-sunday", message, ...detail })}`);
-
 export async function runSundayJob(db: Db, deps: SundayDeps, { dryRun = false }: { dryRun?: boolean } = {}): Promise<SundaySummary> {
   const now = deps.now ?? new Date();
   const summary: SundaySummary = { dryRun, leagues: 0, inactive: 0, notEntitled: 0, notConnected: 0, written: 0, existing: 0, failed: 0, emails: 0, reconnects: 0 };
-  const rows: Candidate[] = await db
-    .select({
-      userId: espnSeasonLinks.userId,
-      email: users.email,
-      leagueId: espnSeasonLinks.leagueId,
-      name: leagues.name,
-      leagueSeason: leagues.season,
-      lastViewedAt: espnSeasonLinks.lastViewedAt,
-    })
-    .from(espnSeasonLinks)
-    .innerJoin(leagues, and(eq(leagues.id, espnSeasonLinks.leagueId), eq(leagues.userId, espnSeasonLinks.userId), isNull(leagues.deletedAt)))
-    .innerJoin(users, eq(users.id, espnSeasonLinks.userId))
-    .orderBy(espnSeasonLinks.userId, espnSeasonLinks.createdAt);
-  summary.leagues = rows.length;
-
-  const byUser = new Map<string, Candidate[]>();
-  for (const row of rows) {
-    if (!row.lastViewedAt || now.getTime() - row.lastViewedAt.getTime() > INACTIVE_AFTER_MS) {
-      summary.inactive++;
-      continue;
-    }
-    byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), row]);
-  }
+  const { total, inactive, byUser } = await activeLeagues(db, now);
+  summary.leagues = total;
+  summary.inactive = inactive;
 
   for (const [userId, list] of byUser) {
     const lineups: LeagueSummary[] = [];
@@ -106,30 +63,24 @@ export async function runSundayJob(db: Db, deps: SundayDeps, { dryRun = false }:
       }
       summary[outcome]++;
     }
-    const email = list[0].email;
-    if (dryRun || !deps.sendEmail || !email) continue;
-    if (lineups.length && (await sendOnce(db, deps, userId, email, "lineup", now, renderSundayEmail({ leagues: lineups, unsubscribeUrl: unsubscribeUrl(deps, userId) })))) summary.emails++;
-    if (reconnect && (await sendOnce(db, deps, userId, email, "reconnect", now, renderReconnectEmail({ url: new URL("/espn", deps.baseUrl).toString(), unsubscribeUrl: unsubscribeUrl(deps, userId) })))) summary.reconnects++;
+    const to = list[0].email;
+    if (dryRun || !to) continue;
+    const unsubscribe = unsubscribeUrl(deps, userId);
+    if (lineups.length && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "lineup", now }, renderSundayEmail({ leagues: lineups, unsubscribeUrl: unsubscribe })))) summary.emails++;
+    if (reconnect && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "reconnect", now }, renderReconnectEmail({ url: new URL("/espn", deps.baseUrl).toString(), unsubscribeUrl: unsubscribe })))) summary.reconnects++;
   }
   return summary;
 }
 
-function unsubscribeUrl(deps: SundayDeps, userId: string): string {
-  const url = new URL("/season/unsubscribe", deps.baseUrl);
-  url.searchParams.set("u", userId);
-  url.searchParams.set("t", unsubscribeToken(deps.secret, userId));
-  return url.toString();
-}
-
 type LeagueOutcome = "written" | "existing" | "notEntitled" | "notConnected" | "failed" | "disconnected";
 
-async function runLeague(db: Db, deps: SundayDeps, league: Candidate, { dryRun, lineups }: { dryRun: boolean; lineups: LeagueSummary[] }): Promise<LeagueOutcome> {
+async function runLeague(db: Db, deps: SundayDeps, league: JobLeague, { dryRun, lineups }: { dryRun: boolean; lineups: LeagueSummary[] }): Promise<LeagueOutcome> {
   try {
     const load = await deps.loadView(league.userId, league.leagueId);
     if (load.kind === "disconnected") return "disconnected";
     if (load.kind === "no-login" || load.kind === "not-linked") return "notConnected";
     if (load.kind !== "ok" || load.projectionsMissing) {
-      logError("Sunday lineup: couldn't read the league", { leagueId: league.leagueId, reason: load.kind === "ok" ? "no projections" : load.kind });
+      jobError("sunday", "couldn't read the league", { leagueId: league.leagueId, reason: load.kind === "ok" ? "no projections" : load.kind });
       return "failed";
     }
     const { view } = load;
@@ -150,7 +101,7 @@ async function runLeague(db: Db, deps: SundayDeps, league: Candidate, { dryRun, 
     const result = await writeAiLineup(db, deps.model, { userId: league.userId, leagueId: league.leagueId, view, kind: "lineup-sunday" });
     if (result.status === "used") return "existing";
     if (result.status !== "ok") {
-      logError("Sunday lineup: the model failed", { leagueId: league.leagueId, reason: result.status === "failed" ? result.kind : result.status });
+      jobError("sunday", "the model failed", { leagueId: league.leagueId, reason: result.status === "failed" ? result.kind : result.status });
       return "failed";
     }
     lineups.push({
@@ -161,24 +112,7 @@ async function runLeague(db: Db, deps: SundayDeps, league: Candidate, { dryRun, 
     });
     return result.cached ? "existing" : "written";
   } catch (error) {
-    logError(`Sunday lineup: ${(error as Error).message}`, { leagueId: league.leagueId });
+    jobError("sunday", (error as Error).message, { leagueId: league.leagueId });
     return "failed";
-  }
-}
-
-/** Sends `email` unless this user already got one of this kind today, or opted out. */
-async function sendOnce(db: Db, deps: SundayDeps, userId: string, to: string, kind: SeasonEmailKind, now: Date, email: SeasonEmail): Promise<boolean> {
-  if (!(await wantsSeasonEmails(db, userId))) return false;
-  const sentOn = now.toISOString().slice(0, 10);
-  const claimed = await db.insert(seasonEmails).values({ userId, kind, sentOn, sentAt: now }).onConflictDoNothing().returning({ kind: seasonEmails.kind });
-  if (!claimed.length) return false;
-  const url = unsubscribeUrl(deps, userId);
-  try {
-    await deps.sendEmail!(to, email, { "List-Unsubscribe": `<${url.replace("/season/unsubscribe", "/api/season/unsubscribe")}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
-    return true;
-  } catch (error) {
-    await db.delete(seasonEmails).where(and(eq(seasonEmails.userId, userId), eq(seasonEmails.kind, kind), eq(seasonEmails.sentOn, sentOn)));
-    logError(`Sunday lineup: couldn't send the ${kind} email: ${(error as Error).message}`, { userId });
-    return false;
   }
 }

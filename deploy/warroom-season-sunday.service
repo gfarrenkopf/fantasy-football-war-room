@@ -1,6 +1,6 @@
 # The Sunday-morning AI lineup job (docs/in-season.md §6), started by warroom-season-sunday.timer.
 # Asks the running app to write every entitled league's Sunday AI lineup and email it; see
-# deploy/warroom-season-sunday.sh. Needs CRON_SECRET in /etc/warroom/.env. Install alongside the timer:
+# deploy/warroom-season-job.sh. Needs CRON_SECRET in /etc/warroom/.env. Install alongside the timer:
 #
 #   sudo cp deploy/warroom-season-sunday.service deploy/warroom-season-sunday.timer /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now warroom-season-sunday.timer
@@ -20,7 +20,7 @@ Type=oneshot
 User=warroom
 Group=warroom
 EnvironmentFile=/etc/warroom/.env
-ExecStart=/srv/warroom/current/deploy/warroom-season-sunday.sh
+ExecStart=/srv/warroom/current/deploy/warroom-season-job.sh sunday
 TimeoutStartSec=1h
 
 NoNewPrivileges=true
