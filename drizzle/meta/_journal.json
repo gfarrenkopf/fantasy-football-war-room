@@ -71,6 +71,41 @@
       "when": 1790285684248,
       "tag": "0009_espn_season_links",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790292156238,
+      "tag": "0010_season_ai",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790292601213,
+      "tag": "0011_season_ai_outputs",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790293624372,
+      "tag": "0012_season_sunday_job",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790298026224,
+      "tag": "0013_season_email_slot",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790298026924,
+      "tag": "0014_season_email_slot_key",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,8 @@
-import { index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AiPlan } from "@/lib/ai/planSchema";
+import type { AiLineup } from "@/lib/ai/season/lineup";
+import type { SeasonAiUseKind } from "@/lib/ai/season/state";
+import type { AiTradeWriteup } from "@/lib/ai/season/trade";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
@@ -174,6 +177,9 @@ export const aiPlans = pgTable(
 /** How a model call for a plan ended: saved, outrun by a newer job, or a failure kind. */
 export type GenerationOutcome = "ready" | "superseded" | PlanModelErrorKind | "internal";
 
+/** What a model call was for: the draft plan (Epic 5), or in-season AI (Epic 11). */
+export type GenerationPurpose = "plan" | "season-lineup" | "season-trade";
+
 /**
  * Every model call made for an AI plan, with its token usage and cost, for checking unit economics
  * (see src/lib/server/aiCosts.ts). Append-only. League and user ids aren't foreign keys, so the
@@ -188,6 +194,7 @@ export const aiGenerations = pgTable(
     leagueId: text("league_id").notNull(),
     userId: text("user_id").notNull(),
     jobId: text("job_id").notNull(),
+    purpose: text("purpose").$type<GenerationPurpose>().notNull().default("plan"),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     promptVersion: integer("prompt_version").notNull(),
@@ -324,7 +331,107 @@ export const espnSeasonLinks = pgTable(
     espnLeagueId: text("espn_league_id").notNull(),
     espnTeamId: integer("espn_team_id").notNull(),
     season: integer("season").notNull(),
+    /** When the user last opened this league's season page. The Sunday job (11.3) skips leagues left alone for two weeks. */
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true, mode: "date" }),
     ...timestamps,
   },
   (t) => [uniqueIndex("espn_season_links_user_espn_idx").on(t.userId, t.espnLeagueId, t.season)],
+);
+
+/**
+ * When each account started its in-season AI trial (Epic 11, 11.1): the ESPN `scoringPeriodId` of
+ * its first AI use that season. Kept on the user, not the league, so linking another league doesn't
+ * restart it. See src/lib/server/seasonAi.ts.
+ */
+export const seasonAiTrials = pgTable(
+  "season_ai_trials",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    firstWeek: integer("first_week").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.season] })],
+);
+
+export type { SeasonAiUseKind };
+
+/** Which weekly in-season AI allowances a league has used. One row per league, week and kind. */
+export const seasonAiUses = pgTable(
+  "season_ai_uses",
+  {
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    /** ESPN's `scoringPeriodId`. */
+    week: integer("week").notNull(),
+    kind: text("kind").$type<SeasonAiUseKind>().notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind] })],
+);
+
+/** What a stored in-season AI output is: a weekly lineup (SeasonAiUseKind), or a trade write-up. */
+export type SeasonAiOutputKind = SeasonAiUseKind | "trade";
+
+/**
+ * In-season AI outputs (11.2), kept so reloading the page never pays for another. Lineups are one
+ * per league, week and kind; trade write-ups one per league, week and trade (`key`, a hash of the
+ * trade), since the verdict they explain changes week to week.
+ */
+export const seasonAiOutputs = pgTable(
+  "season_ai_outputs",
+  {
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    kind: text("kind").$type<SeasonAiOutputKind>().notNull(),
+    /** The trade's hash for a write-up; empty for a lineup. */
+    key: text("key").notNull().default(""),
+    output: jsonb("output").$type<AiLineup | AiTradeWriteup>().notNull(),
+    issues: jsonb("issues").$type<string[]>().notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    promptVersion: integer("prompt_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind, t.key] })],
+);
+
+/** A user's email settings. No row means the defaults. */
+export const userPrefs = pgTable("user_prefs", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** The "Your Sunday lineup is ready" email, and the reconnect email the same job sends (11.3). */
+  seasonEmails: boolean("season_emails").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+/** Which email a season job sent: the Sunday lineups, a request to reconnect ESPN, or an early-kickoff alert (11.4). */
+export type SeasonEmailKind = "lineup" | "reconnect" | "early";
+
+/**
+ * Emails the season jobs have sent (11.3, 11.4), one per user, kind, day and slot, so a rerun never
+ * sends another. By day rather than NFL week: a reconnect email is sent when ESPN can't be read.
+ */
+export const seasonEmails = pgTable(
+  "season_emails",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<SeasonEmailKind>().notNull(),
+    /** "YYYY-MM-DD", UTC. */
+    sentOn: date("sent_on", { mode: "string" }).notNull(),
+    /** The kickoff an early alert was for (ISO), since one day can have several; empty otherwise. */
+    slot: text("slot").notNull().default(""),
+    sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.sentOn, t.slot] })],
 );

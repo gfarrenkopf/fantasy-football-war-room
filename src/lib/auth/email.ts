@@ -7,7 +7,7 @@
  * exception to DESIGN.md: it's an off-app surface, and the button has to win in a crowded inbox.
  */
 
-const C = {
+export const C = {
   bg: "#1a1e25", // --color-bg
   panel: "#22272f", // --color-panel
   line: "#323a45", // --color-line
@@ -20,9 +20,9 @@ const C = {
 } as const;
 
 /** The six position hues, in draft-board order: the stripe across the top of the card. */
-const STRIPE = ["#e5484d", "#3ddc91", "#4f9cf9", "#f59e42", "#b39ddb", "#9aa7b8"];
+export const STRIPE = ["#e5484d", "#3ddc91", "#4f9cf9", "#f59e42", "#b39ddb", "#9aa7b8"];
 
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+export const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 export interface SignInEmailInput {
   /** The magic link. */
@@ -41,7 +41,7 @@ export interface SignInEmail {
   text: string;
 }
 
-const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+export const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 /**
  * A zero-width space after each dot and @, so Gmail and Apple Mail don't turn the address into a

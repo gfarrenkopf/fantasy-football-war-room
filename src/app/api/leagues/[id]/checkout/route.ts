@@ -12,7 +12,7 @@ const ROUTE = "/api/leagues/[id]/checkout";
 /**
  * POST /api/leagues/:id/checkout → { url } of a Stripe Checkout page for the league's season pass.
  * 404 when payments are off or the league isn't on the server, 409 when it's already paid for,
- * 503 (logged) when Stripe can't be reached.
+ * 503 (logged) when Stripe can't be reached. `?from=season` sends the buyer back to the season page.
  */
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const stripe = getStripe();
@@ -26,6 +26,7 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
       priceId: config.stripePriceId,
       // Behind the proxy request.url is the internal address, so prefer the public URL.
       baseUrl: config.nextAuthUrl ?? new URL(request.url).origin,
+      from: new URL(request.url).searchParams.get("from") === "season" ? "season" : "draft",
     });
     if (result.status === "not-found") return error(404, "League not found");
     if (result.status === "already-paid") return error(409, "This league already has a season pass");

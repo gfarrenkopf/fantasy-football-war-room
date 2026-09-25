@@ -53,3 +53,11 @@ export async function linkSeason(db: Db, userId: string, link: SeasonLink, now =
     .values({ ...link, userId, createdAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: espnSeasonLinks.leagueId, set: { espnLeagueId: link.espnLeagueId, espnTeamId: link.espnTeamId, season: link.season, updatedAt: now } });
 }
+
+/** Records that the user opened this league's season page, which keeps it in the Sunday job (11.3). */
+export async function markSeasonViewed(db: Db, userId: string, leagueId: string, now = new Date()): Promise<void> {
+  await db
+    .update(espnSeasonLinks)
+    .set({ lastViewedAt: now })
+    .where(and(eq(espnSeasonLinks.userId, userId), eq(espnSeasonLinks.leagueId, leagueId)));
+}

@@ -55,6 +55,16 @@ describe("startCheckout", () => {
     });
   });
 
+  it("sends a buyer from the season page back there", async () => {
+    const id = await league(alice);
+    const stripe = fakeStripe();
+    await startCheckout(db, stripe.create, { ...options(alice, id), from: "season" });
+    expect(stripe.calls[0]).toMatchObject({
+      success_url: `https://draftroom.example/season/${id}?checkout=success`,
+      cancel_url: `https://draftroom.example/season/${id}?checkout=cancel`,
+    });
+  });
+
   it("won't sell a pass for someone else's, a deleted, or an unknown league", async () => {
     const stripe = fakeStripe();
     const bobs = await league(bob);

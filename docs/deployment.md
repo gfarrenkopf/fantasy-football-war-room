@@ -18,6 +18,7 @@ Following this from a fresh droplet should take under an hour.
 10. [Deploy on merge](#10-deploy-on-merge)
 11. [Monitoring](#11-monitoring)
 12. [Payments](#12-payments)
+13. [Season jobs: Sunday AI lineups and early-kickoff alerts](#13-season-jobs-sunday-ai-lineups-and-early-kickoff-alerts)
 
 ---
 
@@ -315,3 +316,32 @@ Stripe setup, and what checkout and the webhook do, are in [payments.md](payment
 4. To go live, repeat steps 1 and 2 in live mode. Live mode has its own endpoint, signing secret, key and price.
 
 Failed deliveries show on the endpoint's page, and Stripe retries them for three days. A `500` from the webhook is also logged as `[server-error]`, which sends an alert email (§11).
+
+## 13. Season jobs: Sunday AI lineups and early-kickoff alerts
+
+Two timers ask the running app to do in-season work. Both use `deploy/warroom-season-job.sh`, which calls `POST /api/internal/season/<job>` with `Authorization: Bearer $CRON_SECRET`. What each job does is in [in-season.md §6](in-season.md#6-free-and-paid).
+
+- **`warroom-season-sunday.timer`** fires on Sundays at **11:40 ET** (`America/New_York`, so daylight saving doesn't move it), after the inactives for the 1pm games are posted. It writes each entitled league's Sunday AI lineup and emails it. It needs an AI key too.
+- **`warroom-season-early.timer`** fires every 15 minutes. Almost every run does nothing. When a kickoff before the Sunday 1pm games is 60–75 minutes away, it emails the lineup changes involving that game's players. That covers Thursday nights, London mornings, and the late season's Friday and Saturday games. Kickoff times come from ESPN's schedule, so nothing about the weekday is configured here.
+
+Both need in-season to be on (`ESPN_CODE_KEY`) plus a shared secret. Emails need `AUTH_RESEND_KEY` and `EMAIL_FROM`; without them the Sunday lineups are still written.
+
+```sh
+openssl rand -base64 32                          # a new secret
+sudo nano /etc/warroom/.env                      # add CRON_SECRET=<that secret>
+sudo systemctl restart warroom
+sudo systemctl daemon-reload
+sudo systemctl enable --now warroom-season-sunday.timer warroom-season-early.timer
+systemctl list-timers 'warroom-season-*'         # the next runs, in UTC
+```
+
+Check them without spending anything: a dry run counts what a job would do, without calling the model or sending email. (The early job only does anything inside a kickoff's window, so outside one its dry run reports `"kickoff": null`.)
+
+```sh
+sudo -u warroom bash -c 'set -a; . /etc/warroom/.env; set +a; /srv/warroom/current/deploy/warroom-season-job.sh sunday --dry-run'
+sudo -u warroom bash -c 'set -a; . /etc/warroom/.env; set +a; /srv/warroom/current/deploy/warroom-season-job.sh early --dry-run'
+```
+
+Real runs are safe to repeat. Stored lineups aren't rewritten, and nobody gets the same email twice: one Sunday email per day, one alert per kickoff. The Sunday job logs a JSON summary (`journalctl -u warroom-season-sunday`), and the early job logs one as `[season-early]` in the app's journal whenever a kickoff was due. A league that fails is a `[server-error]` line in the app's journal, which the alert emails pick up (§11). A run that fails outright emails through `OnFailure=`.
+
+Neither timer catches up after downtime (no `Persistent=`): anything that arrives after kickoff is worth nothing, so a missed run is skipped.

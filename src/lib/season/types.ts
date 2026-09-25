@@ -75,6 +75,8 @@ export interface SeasonLeague {
   currentWeek: number;
   /** The last week the league plays, playoffs included. */
   finalWeek: number;
+  /** The first week of the fantasy playoffs, or null when ESPN doesn't say. */
+  playoffStartWeek: number | null;
   scoringItems: ScoringItem[];
   /** Starting slots, in lineup order. */
   starters: LineupSlotCount[];

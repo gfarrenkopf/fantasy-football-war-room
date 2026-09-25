@@ -45,7 +45,7 @@ export async function generateAiPlan(
  * Settles with `call`, or rejects with a "timeout" PlanModelError once `signal` aborts, even if the
  * adapter ignores the signal. A job must never hang past its deadline and hold its lease.
  */
-function withDeadline<T>(call: Promise<T>, signal: AbortSignal): Promise<T> {
+export function withDeadline<T>(call: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) return Promise.reject(new PlanModelError("timeout", "Plan request aborted before it started"));
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(new PlanModelError("timeout", "Plan request ran past its deadline"));

@@ -1,0 +1,1 @@
+ALTER TABLE "season_emails" ADD COLUMN "slot" text DEFAULT '' NOT NULL;

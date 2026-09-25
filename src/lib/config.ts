@@ -21,6 +21,8 @@ const googleClientId = readEnv("AUTH_GOOGLE_ID");
 const googleClientSecret = readEnv("AUTH_GOOGLE_SECRET");
 const resendApiKey = readEnv("AUTH_RESEND_KEY");
 const emailFrom = readEnv("EMAIL_FROM");
+/** Shared with the droplet's timers: authorizes the internal job routes (src/app/api/internal). */
+const cronSecret = readEnv("CRON_SECRET");
 const isProduction = process.env.NODE_ENV === "production";
 const anthropicApiKey = readEnv("ANTHROPIC_API_KEY");
 /** Which model provider writes the AI plan (see src/lib/ai/providers), and optionally which of its models. */
@@ -81,6 +83,7 @@ export const config = Object.freeze({
   googleClientSecret,
   resendApiKey,
   emailFrom,
+  cronSecret,
   isProduction,
   anthropicApiKey,
   aiProvider,
@@ -120,6 +123,12 @@ export const config = Object.freeze({
    * encrypted until the season ends or they disconnect, and War Room reads their leagues each week.
    */
   espnSeasonEnabled: cloudEnabled && espnCodeKey !== null,
+  /**
+   * The season jobs, started by timers on the droplet: the Sunday AI lineup (Epic 11, 11.3, which
+   * also needs AI) and the early-kickoff alert (11.4). Need in-season and the shared job secret;
+   * without Resend the Sunday job still writes lineups, and no alerts go out.
+   */
+  seasonJobEnabled: cloudEnabled && espnCodeKey !== null && Boolean(cronSecret),
 });
 
 export type Config = typeof config;

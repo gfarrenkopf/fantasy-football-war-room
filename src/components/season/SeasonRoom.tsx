@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignIn } from "@/components/landing/SignIn";
+import type { SeasonAiState } from "@/lib/ai/season/state";
 import type { PublicFlags } from "@/lib/config";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
+import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
 import { Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { TradePanel } from "./TradePanel";
@@ -23,7 +25,21 @@ type Props = {
   flags: PublicFlags;
   leagueId: string;
   leagueName?: string;
-} & ({ problem: SeasonProblem } | { view: SeasonView; fetchedAt: string; stale: boolean; projectionsMissing: boolean });
+} & (
+  | { problem: SeasonProblem }
+  | {
+      view: SeasonView;
+      fetchedAt: string;
+      stale: boolean;
+      projectionsMissing: boolean;
+      /** In-season AI (Epic 11); null when it's off or not for this account. */
+      ai: SeasonAiState | null;
+      /** Stripe just sent the user back here (`?checkout=`). */
+      checkout: CheckoutOutcome | null;
+      /** Whether the user gets the Sunday lineup email; null when there's no such email to offer. */
+      seasonEmails: boolean | null;
+    }
+);
 
 type Tab = "lineup" | "trade";
 
@@ -35,6 +51,8 @@ export function SeasonRoom(props: Props) {
   const [tab, setTab] = useState<Tab>("lineup");
   const title = "view" in props ? props.view.name : (props.leagueName ?? "Your season");
   const view = "view" in props ? props.view : null;
+  const ai = "view" in props ? props.ai : null;
+  const checkout = useCheckoutReturn(ai, "view" in props ? props.checkout : null);
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
   return (
@@ -69,15 +87,24 @@ export function SeasonRoom(props: Props) {
           <Problem flags={props.flags} problem={props.problem} />
         ) : (
           <>
+            {checkout && (
+              <p className={`${s.panel} ${s.note} ${s.banner}`} role="status">
+                {checkout}
+              </p>
+            )}
             {props.projectionsMissing && (
               <p className={`${s.panel} ${s.note} ${s.metaStale} ${s.banner}`} role="status">
                 ESPN&apos;s projections didn&apos;t load, so every player shows 0. Refresh in a minute.
               </p>
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-              {tab === "lineup" ? <LineupPanel view={props.view} /> : <TradePanel view={props.view} />}
+              {tab === "lineup" ? (
+                <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+              ) : (
+                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+              )}
             </div>
-            <Disconnect />
+            <Disconnect seasonEmails={props.seasonEmails} />
           </>
         )}
       </div>
@@ -149,7 +176,7 @@ function Problem({ flags, problem }: { flags: PublicFlags; problem: SeasonProble
 }
 
 /** Deletes the stored ESPN login (10.2). Every connected league stops updating until the user reconnects. */
-function Disconnect() {
+function Disconnect({ seasonEmails }: { seasonEmails: boolean | null }) {
   const [phase, setPhase] = useState<"idle" | "confirm" | "working" | "done" | "failed">("idle");
   async function disconnect() {
     setPhase("working");
@@ -180,6 +207,30 @@ function Disconnect() {
           {phase === "failed" && <span className={s.metaStale}> Couldn&apos;t disconnect. Try again.</span>}
         </p>
       )}
+      {seasonEmails !== null && <SeasonEmails initial={seasonEmails} />}
     </footer>
+  );
+}
+
+/** The Sunday job's email (11.3): on unless the user turns it off here or from the email. */
+function SeasonEmails({ initial }: { initial: boolean }) {
+  const [on, setOn] = useState(initial);
+  const [failed, setFailed] = useState(false);
+  async function toggle(next: boolean) {
+    setOn(next);
+    setFailed(false);
+    const res = await fetch("/api/season/emails", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: next }) }).catch(() => null);
+    if (!res?.ok) {
+      setOn(!next);
+      setFailed(true);
+    }
+  }
+  return (
+    <p>
+      <label className={s.check}>
+        <input type="checkbox" checked={on} onChange={(e) => toggle(e.target.checked)} /> Email me when my Sunday AI lineup is ready
+      </label>
+      {failed && <span className={s.metaStale}> Couldn&apos;t save that. Try again.</span>}
+    </p>
   );
 }

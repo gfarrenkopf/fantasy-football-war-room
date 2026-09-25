@@ -1,0 +1,27 @@
+# The early-kickoff lineup alert (docs/in-season.md §6), started every 15 minutes by
+# warroom-season-early.timer. Almost every run finds no early kickoff 60-75 minutes away and does
+# nothing; see deploy/warroom-season-job.sh. Needs CRON_SECRET in /etc/warroom/.env. Install:
+#
+#   sudo cp deploy/warroom-season-early.service deploy/warroom-season-early.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now warroom-season-early.timer
+#
+# Runs that sent alerts log a summary line in the app's journal (`journalctl -u warroom | grep season-early`).
+
+[Unit]
+Description=Fantasy War Room early-kickoff lineup alerts
+After=warroom.service
+Requires=warroom.service
+OnFailure=warroom-alert-failed@%n.service
+
+[Service]
+Type=oneshot
+User=warroom
+Group=warroom
+EnvironmentFile=/etc/warroom/.env
+ExecStart=/srv/warroom/current/deploy/warroom-season-job.sh early
+TimeoutStartSec=10min
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
