@@ -229,6 +229,31 @@
   border-color: var(--color-sky-line);
   color: var(--color-sky);
 }
+/*
+ * The door to the season page (APE-194): outlined in Signal Green, the season page's own voice and
+ * the product's "yours", led by the pick track's 7px mine square. Each room's door wears the color of
+ * the room it opens; the season page's way back is Terminal Sky.
+ */
+.btn.seasonDoor {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: color-mix(in srgb, var(--color-mine) 50%, var(--color-line));
+  background: color-mix(in srgb, var(--color-mine) 7%, var(--color-panel2));
+  color: var(--color-mine);
+  text-decoration: none;
+}
+.btn.seasonDoor:hover {
+  border-color: color-mix(in srgb, var(--color-mine) 70%, var(--color-line));
+  background: color-mix(in srgb, var(--color-mine) 14%, var(--color-panel2));
+}
+.doorMark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--color-mine);
+}
 
 /* ---------- player card ---------- */
 .card {

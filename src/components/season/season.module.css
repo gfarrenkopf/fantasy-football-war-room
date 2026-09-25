@@ -61,16 +61,43 @@
 .crumbs {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  margin-bottom: 2px;
 }
-.crumbs .brand {
+/*
+ * The way back to the draft room: an outlined chip in Terminal Sky, the draft room's own voice (its
+ * pick number, "THE DRAFT"). The draft room's door here is Signal Green; each door wears the color
+ * of the room it opens.
+ */
+.draftDoor {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid var(--color-sky-line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-sky) 6%, var(--color-panel));
+  color: var(--color-sky);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
 }
-.crumbs .brand svg {
-  width: 11px;
-  height: 11px;
+.draftDoor:hover {
+  background: color-mix(in srgb, var(--color-sky) 14%, var(--color-panel));
+}
+.draftDoor svg {
+  width: 12px;
+  height: 12px;
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.draftDoor:hover svg {
+  transform: translateX(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .draftDoor svg {
+    transition: none;
+  }
 }
 
 /* The title as a league menu: a native select laid invisibly over the heading text. */
@@ -1326,6 +1353,12 @@
 /* ------------------------------------------------------------------ phone: a designed state */
 
 @media (max-width: 767px) {
+  /* A hurried thumb's target: the way back is the header's one control above the title. */
+  .draftDoor {
+    min-height: 32px;
+    padding: 4px 11px 4px 9px;
+    font-size: 13px;
+  }
   .frame {
     padding: 12px 12px calc(84px + env(safe-area-inset-bottom));
   }

@@ -74,7 +74,7 @@ export function SeasonRoom(props: Props) {
               <a href="/draft" className={s.brand}>
                 Fantasy War Room
               </a>
-              <a href={`/draft?league=${encodeURIComponent(props.leagueId)}`} className={s.brand}>
+              <a href={`/draft?league=${encodeURIComponent(props.leagueId)}`} className={s.draftDoor}>
                 <ArrowLeft /> Draft room
               </a>
             </nav>
