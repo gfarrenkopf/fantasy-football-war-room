@@ -640,6 +640,66 @@
   background: color-mix(in srgb, var(--color-reach) 16%, transparent);
 }
 
+/* ESPN's outlook (APE-213): a quiet Terminal Sky tag that opens the note. Outlined, never filled. */
+.newsTag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--color-sky-line);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-sky) 6%, transparent);
+  color: var(--color-sky);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.newsIcon {
+  width: 12px;
+  height: 12px;
+}
+.newsTag:hover {
+  background: color-mix(in srgb, var(--color-sky) 12%, transparent);
+}
+
+/* The note floats above the app, so it takes the one lift the page allows. */
+.newsNote {
+  width: min(400px, calc(100vw - 32px));
+  max-height: min(70dvh, 520px);
+  margin: auto;
+  padding: 14px 16px;
+  overflow-y: auto;
+  border: 1px solid var(--color-line2);
+  border-radius: 8px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.45;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+}
+.newsNote::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.newsHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+}
+.newsWhen {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.newsBody {
+  margin: 0 0 12px;
+}
+
 .lock {
   flex-shrink: 0;
   width: 11px;
@@ -1501,6 +1561,21 @@
   }
   .factsSep {
     display: none;
+  }
+
+  /* The name keeps the room: the news tag drops its word and keeps a thumb-sized target. */
+  .newsLabel {
+    display: none;
+  }
+  .newsTag {
+    justify-content: center;
+    min-width: 26px;
+    min-height: 24px;
+    padding: 0;
+  }
+  .newsIcon {
+    width: 14px;
+    height: 14px;
   }
 
   .select {

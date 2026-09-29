@@ -49,6 +49,20 @@ function actualPoints(stats: unknown, season: number, week: number): number | nu
   return row ? Math.round(row.appliedTotal * 100) / 100 : null;
 }
 
+/** % rostered and % started across ESPN, rounded: a market signal, not a fact about this league. */
+function ownershipOf(raw: unknown): RosterEntry["ownership"] {
+  if (!isObject(raw) || typeof raw.percentOwned !== "number" || typeof raw.percentStarted !== "number") return null;
+  return { owned: Math.round(raw.percentOwned), started: Math.round(raw.percentStarted) };
+}
+
+/** ESPN's written outlook for this week (`outlooks.outlooksByWeek`), with the time of its last news. */
+function newsOf(player: Record<string, unknown>, week: number): RosterEntry["news"] {
+  const byWeek = isObject(player.outlooks) && isObject(player.outlooks.outlooksByWeek) ? player.outlooks.outlooksByWeek : {};
+  const note = byWeek[String(week)];
+  if (typeof note !== "string" || !note.trim()) return null;
+  return { note: note.trim(), at: isoOf(player.lastNewsDate) };
+}
+
 function parseEntry(raw: unknown, season: number, week: number): RosterEntry | null {
   if (!isObject(raw) || typeof raw.playerId !== "number" || typeof raw.lineupSlotId !== "number") return null;
   const pool = isObject(raw.playerPoolEntry) ? raw.playerPoolEntry : {};
@@ -67,6 +81,8 @@ function parseEntry(raw: unknown, season: number, week: number): RosterEntry | n
     locked: pool.lineupLocked === true,
     injuryStatus: injury,
     actual: actualPoints(player.stats, season, week),
+    ownership: ownershipOf(player.ownership),
+    news: newsOf(player, week),
   };
 }
 

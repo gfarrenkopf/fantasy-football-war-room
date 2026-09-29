@@ -56,6 +56,10 @@ export interface RosterEntry {
    * week. Null until the player's game starts.
    */
   actual: number | null;
+  /** Share of ESPN leagues that roster and start him, 0–100; null when ESPN didn't say. */
+  ownership: { owned: number; started: number } | null;
+  /** ESPN's outlook for him this week, and when ESPN last had news on him; null with no outlook. */
+  news: { note: string; at: string | null } | null;
 }
 
 export interface SeasonTeam {

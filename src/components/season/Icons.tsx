@@ -60,3 +60,10 @@ export const ChevronDown = ({ className }: IconProps) => (
     <path d="M6 9l6 6 6-6" />
   </svg>
 );
+
+export const Note = ({ className }: IconProps) => (
+  <svg {...base} className={className}>
+    <path d="M7 4h7l4 4v12H7z" />
+    <path d="M10 12h5M10 16h5" />
+  </svg>
+);

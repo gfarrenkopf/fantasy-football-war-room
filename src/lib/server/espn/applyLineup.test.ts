@@ -29,6 +29,8 @@ const entry = (playerId: number, name: string, pos: RosterEntry["pos"], slot: Li
   locked,
   injuryStatus: "ACTIVE",
   actual: null,
+  ownership: null,
+  news: null,
 });
 
 const ROSTER = [entry(1, "Qb", "QB", "QB"), entry(2, "Rb One", "RB", "RB"), entry(3, "Wr One", "WR", "WR"), entry(4, "Bench Rb", "RB", "BN"), entry(5, "Bench Wr", "WR", "BN"), entry(6, "Other Bench", "TE", "BN")];

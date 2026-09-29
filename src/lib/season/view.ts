@@ -50,7 +50,7 @@ export function buildSeasonView(
   league: SeasonLeague,
   myTeamId: number,
   projections: ReadonlyMap<number, PlayerProjections>,
-  games: Scoreboard = new Map(),
+  { games = new Map(), now = 0 }: { games?: Scoreboard; now?: number } = {},
 ): SeasonView {
   const toPlayer = (entry: RosterEntry): ViewPlayer => {
     const proj = projections.get(entry.playerId);
@@ -68,7 +68,15 @@ export function buildSeasonView(
       game: (entry.team && games.get(entry.team)) || null,
     };
   };
-  const teams = league.teams.map((t) => ({ id: t.id, name: t.name, abbrev: t.abbrev, roster: t.roster.map(toPlayer) }));
+  // ESPN writes an outlook for nearly everyone each week, so only a day-old or newer story earns the tag. Outlooks run
+  // to a paragraph each, so only the user's own players' are sent to the page.
+  const fresh = (news: RosterEntry["news"]) => !!news?.at && now - Date.parse(news.at) < NEWS_FRESH_MS;
+  const teams = league.teams.map((t) => ({
+    id: t.id,
+    name: t.name,
+    abbrev: t.abbrev,
+    roster: t.roster.map((entry) => toPlayer(t.id === myTeamId && fresh(entry.news) ? entry : { ...entry, news: null })),
+  }));
   const mine = teams.find((t) => t.id === myTeamId)?.roster ?? [];
   return {
     name: league.name,
@@ -85,6 +93,9 @@ export function buildSeasonView(
     pendingTrades: league.pendingTrades.filter((t) => t.proposerTeamId === myTeamId || t.partnerTeamId === myTeamId),
   };
 }
+
+/** How recent ESPN's last news on a player must be for his outlook to show: a day. */
+export const NEWS_FRESH_MS = 24 * 60 * 60 * 1000;
 
 /** Projections to two decimals: finer than any screen shows, and a smaller page. */
 const round = (n: number) => Math.round(n * 100) / 100;

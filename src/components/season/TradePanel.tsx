@@ -300,7 +300,7 @@ function RosterPicker({
             <li key={p.playerId}>
               <label className={s.pick} data-picked={on}>
                 <input type="checkbox" checked={on} onChange={() => onToggle(p.playerId)} />
-                <PlayerLine player={p} value="none" />
+                <PlayerLine player={p} value="none" ownership />
                 <span className={`${s.ros} tabular-nums`}>
                   <b>{p.ros.toFixed(0)}</b>pts
                 </span>

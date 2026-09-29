@@ -122,12 +122,12 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
                     <th scope="row" className={s.slot}>
                       {SLOT_LABEL[row.key]}
                     </th>
-                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} live /> : <span className={s.fine}>Empty</span>}</td>
+                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} live news /> : <span className={s.fine}>Empty</span>}</td>
                     <td className={s.arrow}>{row.changed && <ArrowRight />}</td>
                     <td>
                       {row.changed ? (
                         next ? (
-                          <PlayerLine player={next} tone="in" locked={row.locked} live />
+                          <PlayerLine player={next} tone="in" locked={row.locked} live news />
                         ) : (
                           <span className={s.fine}>Nobody available</span>
                         )
@@ -205,7 +205,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
               const started = hasStarted(p);
               return (
                 <li key={p.playerId} className={s.benchRow} data-moved={benched.has(p.playerId)}>
-                  <PlayerLine player={p} locked={p.locked} value="none" />
+                  <PlayerLine player={p} locked={p.locked} value="none" news ownership />
                   <span className="text-right">
                     {started ? (
                       <span className={`${s.benchPts} ${s.actual} tabular-nums`}>

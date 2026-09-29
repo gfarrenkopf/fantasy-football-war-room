@@ -1,7 +1,8 @@
+import { useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
 import type { ViewPlayer } from "@/lib/season/view";
-import { Check, Lock } from "./Icons";
+import { Check, Lock, Note } from "./Icons";
 import s from "./season.module.css";
 
 /** Shared pieces of the season page: the gain verdict and a player's line. */
@@ -81,6 +82,39 @@ export function GameStatus({ player }: { player: ViewPlayer }) {
   return null;
 }
 
+const newsTime = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+/**
+ * ESPN's outlook for a player this week (APE-213): a small "News" tag beside his name that opens the
+ * note in a popover. A tap, not a hover, so it works in the hand.
+ */
+function NewsNote({ player }: { player: ViewPlayer }) {
+  const id = useId();
+  if (!player.news) return null;
+  return (
+    <>
+      <button type="button" className={s.newsTag} popoverTarget={id} aria-label={`ESPN's news on ${player.name}`}>
+        <Note className={s.newsIcon} />
+        <span className={s.newsLabel}>News</span>
+      </button>
+      <div id={id} popover="auto" className={s.newsNote}>
+        <p className={s.newsHead}>
+          <b>{player.name}</b>
+          {player.news.at && (
+            <span className={s.newsWhen} suppressHydrationWarning>
+              ESPN · {newsTime(player.news.at)}
+            </span>
+          )}
+        </p>
+        <p className={s.newsBody}>{player.news.note}</p>
+        <button type="button" className={s.button} popoverTarget={id} popoverTargetAction="hide">
+          Close
+        </button>
+      </div>
+    </>
+  );
+}
+
 /** A player's name, injury tag and lock, over their position, team and projection. */
 export function PlayerLine({
   player,
@@ -88,6 +122,8 @@ export function PlayerLine({
   locked = false,
   value = "points",
   live = false,
+  news = false,
+  ownership = false,
 }: {
   player: ViewPlayer;
   tone?: "same" | "out" | "in";
@@ -96,6 +132,10 @@ export function PlayerLine({
   value?: "points" | "none";
   /** Show this week's game once it kicks off: points scored so far and where the game stands. */
   live?: boolean;
+  /** Offer ESPN's outlook for him this week, when there is one. */
+  news?: boolean;
+  /** Add how widely he's rostered and started across ESPN. */
+  ownership?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = player.points === 0 && player.projected;
@@ -110,6 +150,7 @@ export function PlayerLine({
             {tag}
           </span>
         )}
+        {news && <NewsNote player={player} />}
         {locked && (
           <>
             <Lock className={s.lock} />
@@ -138,6 +179,12 @@ export function PlayerLine({
               {!player.projected && " · no projection"}
             </>
           ))}
+        {ownership && player.ownership && (
+          <>
+            {" "}
+            · <span className="tabular-nums">{player.ownership.owned}%</span> own · <span className="tabular-nums">{player.ownership.started}%</span> start
+          </>
+        )}
         {status && (
           <span className={s.factsGame}>
             <span className={s.factsSep}> · </span>

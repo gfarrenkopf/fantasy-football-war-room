@@ -35,6 +35,8 @@ describe("parseSeasonLeague", () => {
       locked: false,
       injuryStatus: "ACTIVE",
       actual: null,
+      ownership: null,
+      news: null,
     });
     expect(roster.find((e) => e.pos === "DST")).toMatchObject({ slot: "DST", espnSlotId: 16 });
     expect(roster.filter((e) => e.slot === "BN")).toHaveLength(7);
@@ -64,6 +66,33 @@ describe("parseSeasonLeague", () => {
     };
     const parsed = parseSeasonLeague(raw, "1");
     expect(parsed.ok && parsed.league.teams[0].roster.map((e) => e.actual)).toEqual([12.35, null, null]);
+  });
+
+  it("reads ESPN's ownership and this week's outlook, and leaves out other weeks' outlooks", () => {
+    const entry = (playerId: number, player: Record<string, unknown>) => ({
+      playerId,
+      lineupSlotId: 2,
+      playerPoolEntry: { player: { fullName: "X", defaultPositionId: 2, proTeamId: 8, ...player } },
+    });
+    const raw = {
+      ...league,
+      teams: [
+        {
+          id: 9,
+          roster: {
+            entries: [
+              entry(1, { ownership: { percentOwned: 64.4, percentStarted: 40.6 }, outlooks: { outlooksByWeek: { "3": " Gets the start. " } }, lastNewsDate: 1790654254000 }),
+              entry(2, { outlooks: { outlooksByWeek: { "2": "Last week's." } } }),
+            ],
+          },
+        },
+      ],
+    };
+    const parsed = parseSeasonLeague(raw, "1");
+    if (!parsed.ok) throw new Error(parsed.error);
+    const [a, b] = parsed.league.teams[0].roster;
+    expect(a).toMatchObject({ ownership: { owned: 64, started: 41 }, news: { note: "Gets the start.", at: "2026-09-29T03:57:34.000Z" } });
+    expect(b).toMatchObject({ ownership: null, news: null });
   });
 
   it("maps our slots back to ESPN's ids for writes", () => {

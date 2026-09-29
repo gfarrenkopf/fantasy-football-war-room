@@ -34,5 +34,5 @@ export async function loadSeasonView(db: Db, key: Buffer, userId: string, league
     getEspnScoreboard({ season: season.season, week: season.currentWeek, ...fresh }),
   ]);
   projections = projected;
-  return { kind: "ok", view: buildSeasonView(season, load.espnTeamId, projections, games), fetchedAt: load.fetchedAt, stale: load.stale, projectionsMissing };
+  return { kind: "ok", view: buildSeasonView(season, load.espnTeamId, projections, { games, now: load.fetchedAt.getTime() }), fetchedAt: load.fetchedAt, stale: load.stale, projectionsMissing };
 }

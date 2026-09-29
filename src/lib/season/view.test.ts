@@ -29,11 +29,23 @@ describe("buildSeasonView", () => {
 
   it("puts each player's NFL game on him by team, and nothing on a team without one", () => {
     const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd" }]]);
-    const live = buildSeasonView(season, 1, byId, games);
+    const live = buildSeasonView(season, 1, byId, { games });
     const gibbs = live.teams[0].roster.find((p) => p.name === "Jahmyr Gibbs")!;
     expect(gibbs.game).toEqual({ state: "in", detail: "4:12 - 3rd" });
     expect(live.teams[0].roster.filter((p) => p.team !== "DET").every((p) => p.game === null)).toBe(true);
     expect(view.teams[0].roster.every((p) => p.game === null)).toBe(true);
+  });
+
+  it("keeps ESPN's outlook only for the user's players with news in the last day", () => {
+    const at = Date.parse("2026-09-29T12:00:00Z");
+    const news = (hoursAgo: number) => ({ note: "Note.", at: new Date(at - hoursAgo * 3600_000).toISOString() });
+    const withNews = {
+      ...season,
+      teams: season.teams.map((t, i) => ({ ...t, roster: t.roster.map((e, j) => ({ ...e, news: news(i === 0 && j === 0 ? 23 : i === 0 && j === 1 ? 25 : 1) })) })),
+    };
+    const v = buildSeasonView(withNews, 1, byId, { now: at });
+    expect(v.teams[0].roster.map((p) => p.news !== null).slice(0, 3)).toEqual([true, false, true]);
+    expect(v.teams[1].roster.every((p) => p.news === null)).toBe(true);
   });
 
   it("recommends the user's own lineup", () => {
