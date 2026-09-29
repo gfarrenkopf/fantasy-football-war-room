@@ -32,8 +32,8 @@ export interface Fresh {
 export interface GuardedWrite<Landed> {
   /** The NFL week the user staged for. */
   week: number;
-  /** The user's roster as they saw it when staging. */
-  snapshot: RosterSnapshot;
+  /** The user's roster as they saw it when staging; null for a write that doesn't depend on it (cancelling a claim). */
+  snapshot: RosterSnapshot | null;
   /** Why the write can't go against the fresh read, in words for the user; empty when it can. */
   check: (fresh: Fresh) => string[];
   transaction: (fresh: Fresh) => Pick<EspnTransaction, "type" | "items" | "executionType" | "relatedTransactionId" | "bidAmount">;
@@ -78,7 +78,7 @@ export async function guardedWrite<Landed>(db: Db, key: Buffer, userId: string, 
   if (!roster) return { kind: "problem", problem: "not-linked" };
   const fresh: Fresh = { league, teamId, roster };
 
-  const changes = rosterChanges(w.snapshot, roster);
+  const changes = w.snapshot ? rosterChanges(w.snapshot, roster) : [];
   if (changes.length) return { kind: "changed", changes };
   const problems = w.check(fresh);
   if (problems.length) return { kind: "refused", problems };

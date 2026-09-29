@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { SeasonView } from "@/lib/season/view";
 import type { Pickup } from "@/lib/season/waivers";
 import { AcquireReview } from "./AcquireReview";
+import { ClaimList } from "./ClaimList";
 import { External, Refresh } from "./Icons";
 import { PlayerLine, signed } from "./parts";
 import s from "./season.module.css";
@@ -29,7 +30,8 @@ function waiverNote(view: SeasonView): string | null {
 /**
  * The waiver wire (APE-212): available players who'd improve the user's best lineup for the rest of
  * the season, each with who to drop. Read from ESPN when the tab opens, since the page's own read
- * doesn't carry the pool. A free agent can be added from here, with a drop (13.3); claims happen on ESPN.
+ * doesn't carry the pool. A free agent can be added from here, with a drop (13.3), and a player on
+ * waivers claimed, with the user's pending claims listed to cancel (13.4). FAAB leagues claim on ESPN.
  */
 export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonView; leagueId: string; writeConsented: boolean }) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
@@ -62,6 +64,8 @@ export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonVi
         </h2>
         {note && <span className={s.panelNote}>{note}</span>}
       </div>
+
+      <ClaimList view={view} leagueId={leagueId} agreed={writeConsented} onNotice={setNotice} />
 
       {notice && (
         <p className={`${s.note} ${s.fine}`} role="status">
@@ -116,7 +120,7 @@ export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonVi
                     <span className="tabular-nums">{signed(delta)}</span> rest of season
                   </span>
                   {drop !== null && <span className={`${s.benchNote} block`}>Drop {names.get(drop) ?? "your weakest player"}</span>}
-                  {player.status === "FREEAGENT" && acting !== player.playerId && (
+                  {acting !== player.playerId && (player.status === "FREEAGENT" || view.waiver.budget === null) && (
                     <button
                       type="button"
                       className={`${s.button} ${s.pickupAct}`}
@@ -125,7 +129,7 @@ export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonVi
                         setNotice(null);
                       }}
                     >
-                      Add
+                      {player.status === "WAIVERS" ? "Claim" : "Add"}
                     </button>
                   )}
                 </span>
@@ -153,7 +157,7 @@ export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonVi
         ))}
 
       <p className={`${s.fine} ${s.waiverFoot}`}>
-        Ranked by what each adds to your best lineup for the rest of the season, from ESPN&apos;s projections. Free agents can be added here; claims happen on ESPN.
+        Ranked by what each adds to your best lineup for the rest of the season, from ESPN&apos;s projections. Add a free agent or claim a player on waivers from here.
         {load.kind === "ok" && (
           <>
             {" "}

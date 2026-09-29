@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acquireItems, acquireLanded, checkAcquire, needsDrop, rosterLimit } from "./acquire";
+import { acquireItems, acquireLanded, checkAcquire, claimPending, needsDrop, rosterLimit } from "./acquire";
 import type { ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
@@ -36,6 +36,16 @@ describe("checkAcquire", () => {
     expect(checkAcquire(FULL, THEM, { add: 99, drop: 77 }, LIMIT)).toContain("The player you're dropping isn't on your team any more.");
     expect(checkAcquire(FULL, THEM, { add: 50, drop: 4 }, LIMIT)).toEqual(["That player is on Their Team now."]);
     expect(checkAcquire(FULL, THEM, { add: 3, drop: 4 }, LIMIT)).toEqual(["That player is already on your team."]);
+  });
+});
+
+describe("claimPending", () => {
+  const claims = [{ id: "c1", teamId: 1, add: 99, drop: 4, bid: 0, processesAt: null }];
+  it("finds the claim by ESPN's id, or by who it adds when ESPN gave none", () => {
+    expect(claimPending(claims, 1, { id: "c1", add: 99 })).toBe(true);
+    expect(claimPending(claims, 1, { id: "c9", add: 99 })).toBe(false);
+    expect(claimPending(claims, 1, { id: null, add: 99 })).toBe(true);
+    expect(claimPending(claims, 2, { id: null, add: 99 })).toBe(false);
   });
 });
 

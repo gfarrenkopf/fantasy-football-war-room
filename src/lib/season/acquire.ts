@@ -1,5 +1,5 @@
 import type { ApplyEntry } from "./apply";
-import type { LineupSlotCount } from "./types";
+import type { LineupSlotCount, PendingClaim } from "./types";
 
 /**
  * Adding a player from the pool, with a drop to make room (Epic 13, 13.3): a free agent at once, or
@@ -49,6 +49,11 @@ export function checkAcquire(roster: readonly ApplyEntry[], teams: readonly { na
 
 export function acquireItems(teamId: number, { add, drop }: Acquire): EspnAcquireItem[] {
   return [{ playerId: add, type: "ADD", toTeamId: teamId }, ...(drop === null ? [] : [{ playerId: drop, type: "DROP" as const, fromTeamId: teamId }])];
+}
+
+/** Whether a claim is pending for the team: by the id ESPN gave it, or failing that, by who it adds. */
+export function claimPending(claims: readonly PendingClaim[], teamId: number, { id, add }: { id: string | null; add: number }): boolean {
+  return claims.some((c) => c.teamId === teamId && (id ? c.id === id : c.add === add));
 }
 
 /** What the roster shows after an add: whether the player arrived, and whether the drop left. */

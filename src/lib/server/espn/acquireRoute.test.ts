@@ -16,12 +16,13 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/db", () => ({ getDb: () => state.db }));
 vi.mock("@/lib/auth", () => ({ getSessionUser: async () => state.user }));
-vi.mock("@/lib/server/espn/acquire", () => ({
-  addFreeAgent: async () => {
+vi.mock("@/lib/server/espn/acquire", () => {
+  const run = async () => {
     state.calls++;
     return state.outcome;
-  },
-}));
+  };
+  return { addFreeAgent: run, claimWaiver: run, cancelClaim: run };
+});
 
 let db: Db;
 let close: () => Promise<void>;
@@ -88,6 +89,22 @@ describe("POST /api/leagues/:id/season/acquire", () => {
       expect((await POST(post(leagueId, bad), ctx(leagueId))).status).toBe(400);
     }
     expect(state.calls).toBe(0);
+  });
+
+  it("takes claims and cancels by claim id", async () => {
+    const POST = await route();
+    await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
+    state.outcome = { kind: "applied", landed: { pending: true } };
+    const claimed = await POST(post(leagueId, { kind: "claim" }), ctx(leagueId));
+    expect(await claimed.json()).toEqual({ pending: true });
+    expect((await POST(post(leagueId, { kind: "claim", add: null }), ctx(leagueId))).status).toBe(400);
+
+    state.outcome = { kind: "applied", landed: { cancelled: false } };
+    const cancel = new Request(`http://localhost/api/leagues/${leagueId}/season/acquire`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "cancel", week: 4, claimId: "c1" }) });
+    expect(await (await POST(cancel, ctx(leagueId))).json()).toEqual({ cancelled: false });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("claim cancel didn't land");
+    expect(state.calls).toBe(2);
   });
 
   it("answers refusals, and logs an add that didn't land", async () => {

@@ -1,7 +1,7 @@
 import { optimalLineup, type LineupPlan } from "./lineup";
 import type { GameState, Scoreboard } from "./scoreboard";
 import { restOfSeason, weeklyPoints } from "./scoring";
-import type { LineupSlotCount, MatchupSide, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
+import type { LineupSlotCount, MatchupSide, PendingClaim, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
 
 /**
  * Everything the season page shows, computed on the server from ESPN's league and projections and
@@ -52,6 +52,13 @@ export interface SeasonView {
   matchup: { me: MatchupSide; them: MatchupSide } | null;
   /** The user's place in waivers (APE-212): their rank, and FAAB left when the league bids. */
   waiver: { rank: number | null; budget: number | null; left: number | null };
+  /** The user's waiver claims pending on ESPN (13.4). */
+  claims: ViewClaim[];
+}
+
+/** A pending claim, with the incoming player named from ESPN's projections feed. */
+export interface ViewClaim extends Omit<PendingClaim, "add" | "teamId"> {
+  add: { playerId: number; name: string; pos: PlayerProjections["pos"] | null; team: string | null };
 }
 
 /** A roster entry scored for this league: weekly and rest-of-season projections, and his game. */
@@ -111,6 +118,12 @@ export function buildSeasonView(
     tradeDeadlinePassed: !!league.tradeDeadline && now > Date.parse(league.tradeDeadline),
     matchup: myMatchup(league, myTeamId),
     waiver: myWaiver(league, myTeamId),
+    claims: league.pendingClaims
+      .filter((c) => c.teamId === myTeamId)
+      .map(({ id, add, drop, bid, processesAt }) => {
+        const proj = projections.get(add);
+        return { id, drop, bid, processesAt, add: { playerId: add, name: proj?.name ?? `ESPN player ${add}`, pos: proj?.pos ?? null, team: proj?.team ?? null } };
+      }),
   };
 }
 

@@ -59,6 +59,7 @@ export function seasonView(mine: ViewPlayer[], theirs: ViewPlayer[] = []): Seaso
     ],
     lineup: optimalLineup(mine, STARTERS),
     pendingTrades: [],
+    claims: [],
     tradeDeadline: null,
     tradeDeadlinePassed: false,
     matchup: null,

@@ -55,6 +55,7 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
       { id: 2, name: "Theirs", abbrev: "TH", roster: [entry(50, "Their Rb", "RB", "RB")], standing: null },
     ],
     pendingTrades: [],
+    pendingClaims: [],
     tradeDeadline: null,
     matchups: [],
     waivers: { budget: null, teams: [] },

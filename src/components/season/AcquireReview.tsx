@@ -11,9 +11,10 @@ import s from "./season.module.css";
 import { WriteConsent } from "./WriteConsent";
 
 /**
- * Adding a free agent on ESPN from the Waivers tab (13.3): the user picks who to drop (War Room's
- * suggestion first), reviews, and confirms. The server re-reads ESPN, writes the add and the drop
- * in one transaction, and reads ESPN back. Nothing here writes on its own.
+ * Adding a player on ESPN from the Waivers tab: a free agent at once (13.3), or a claim on a player
+ * still on waivers (13.4), in leagues that don't bid FAAB. The user picks who to drop (War
+ * Room's suggestion first), reviews, and confirms. The server re-reads ESPN, writes the add and the
+ * drop in one transaction, and reads ESPN back. Nothing here writes on its own.
  */
 
 type Phase = { kind: "review" } | { kind: "sending" } | { kind: "failed"; error: string; details: string[] };
@@ -30,7 +31,7 @@ export function AcquireReview({
   leagueId: string;
   pickup: Pickup;
   agreed: boolean;
-  /** The add went through; `message` says what ESPN shows now. */
+  /** The add or claim went through; `message` says what ESPN shows now. */
   onDone: (message: string) => void;
   onCancel: () => void;
 }) {
@@ -43,6 +44,7 @@ export function AcquireReview({
   const [phase, setPhase] = useState<Phase>({ kind: "review" });
   const [agreed, setAgreed] = useState(agreedAtLoad);
   const [consenting, setConsenting] = useState(false);
+  const claim = pickup.player.status === "WAIVERS";
   const others = view.teams.filter((t) => t.id !== view.myTeamId);
   const problems = checkAcquire(roster, others, { add: pickup.player.playerId, drop }, limit);
   const name = (p: ViewPlayer) => `${p.name} · ${p.pos} · ${p.ros.toFixed(1)} rest of season`;
@@ -53,7 +55,7 @@ export function AcquireReview({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        kind: "add",
+        kind: claim ? "claim" : "add",
         week: view.currentWeek,
         snapshot: snapshotOf(roster),
         add: pickup.player.playerId,
@@ -71,11 +73,20 @@ export function AcquireReview({
       error?: string;
       added?: boolean;
       dropped?: boolean;
+      pending?: boolean;
       consent?: unknown;
       changed?: string[];
       problems?: string[];
       refused?: string[];
     };
+    if (res.ok && typeof body.pending === "boolean") {
+      router.refresh();
+      return onDone(
+        body.pending
+          ? `Claim placed for ${pickup.player.name}${pickup.player.waiverClears ? `. Waivers process ${new Date(pickup.player.waiverClears).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}` : ""}.`
+          : `ESPN doesn't show your claim for ${pickup.player.name}. Check ESPN. War Room has been alerted.`,
+      );
+    }
     if (res.ok && typeof body.added === "boolean") {
       router.refresh();
       const dropped = drop === null ? "" : body.dropped ? `, and ${roster.find((p) => p.playerId === drop)?.name ?? "your drop"} is gone` : ", but your drop is still on your team";
@@ -98,8 +109,8 @@ export function AcquireReview({
   return (
     <div className={`${s.confirm} ${s.pickupReview}`}>
       <p>
-        Add <b>{pickup.player.name}</b> on ESPN for week {view.currentWeek}
-        {drop === null ? "." : ", dropping:"}
+        {claim ? "Claim" : "Add"} <b>{pickup.player.name}</b> on ESPN{claim ? "" : ` for week ${view.currentWeek}`}
+        {drop === null ? "." : claim ? ", dropping if the claim succeeds:" : ", dropping:"}
       </p>
       <select className={s.select} value={drop ?? ""} disabled={sending} onChange={(e) => setDrop(e.target.value === "" ? null : Number(e.target.value))} aria-label="Player to drop">
         {!full && <option value="">No one: you have room</option>}
@@ -121,7 +132,7 @@ export function AcquireReview({
       {!agreed && <WriteConsent checked={consenting} onChange={setConsenting} />}
       <div className={s.confirmActions}>
         <button type="button" className={s.primary} onClick={send} disabled={sending || problems.length > 0 || (!agreed && !consenting)}>
-          {sending ? "Adding…" : "Add on ESPN"}
+          {sending ? (claim ? "Claiming…" : "Adding…") : claim ? "Claim on ESPN" : "Add on ESPN"}
         </button>
         <button type="button" className={s.textButton} onClick={onCancel} disabled={sending}>
           Cancel
