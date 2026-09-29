@@ -11,6 +11,11 @@ export interface GameState {
   state: "pre" | "in" | "post";
   /** ESPN's short status line: "4:12 - 3rd", "Halftime", "Final", "Final/OT". */
   detail: string;
+  /** The team they play (APE-211), and whether at home; null when ESPN didn't list both teams. */
+  opponent: string | null;
+  home: boolean;
+  /** Kickoff, as an ISO instant; null when ESPN didn't give one. */
+  kickoff: string | null;
 }
 
 /** Game state by team abbreviation, for one NFL week. */
@@ -27,14 +32,19 @@ export function parseScoreboard(raw: unknown): Scoreboard {
     if (!isObject(event) || !isObject(event.status) || !isObject(event.status.type)) continue;
     const { state, shortDetail } = event.status.type;
     if (typeof state !== "string" || !STATES.has(state)) continue;
-    const game: GameState = { state: state as GameState["state"], detail: typeof shortDetail === "string" ? shortDetail : "" };
+    const detail = typeof shortDetail === "string" ? shortDetail : "";
+    const at = typeof event.date === "string" && !Number.isNaN(Date.parse(event.date)) ? new Date(event.date).toISOString() : null;
     const competitions = Array.isArray(event.competitions) ? event.competitions : [];
     for (const competition of competitions) {
       const competitors = isObject(competition) && Array.isArray(competition.competitors) ? competition.competitors : [];
-      for (const c of competitors) {
-        const id = isObject(c) && isObject(c.team) ? Number(c.team.id) : NaN;
-        const team = PRO_TEAMS[id];
-        if (team) games.set(team, game);
+      const teams = competitors.map((c) => ({
+        team: isObject(c) && isObject(c.team) ? (PRO_TEAMS[Number(c.team.id)] ?? null) : null,
+        home: isObject(c) && c.homeAway === "home",
+      }));
+      for (const { team, home } of teams) {
+        if (!team) continue;
+        const opponent = teams.length === 2 ? (teams.find((t) => t.team !== team)?.team ?? null) : null;
+        games.set(team, { state: state as GameState["state"], detail, opponent, home, kickoff: at });
       }
     }
   }

@@ -2,7 +2,7 @@ import type { RosterSlotKey } from "@/lib/draft/types";
 import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
-import type { LineupSlot, LineupSlotCount, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam } from "./types";
+import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, Waivers } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -49,6 +49,20 @@ function actualPoints(stats: unknown, season: number, week: number): number | nu
   return row ? Math.round(row.appliedTotal * 100) / 100 : null;
 }
 
+/** % rostered and % started across ESPN, rounded: a market signal, not a fact about this league. */
+function ownershipOf(raw: unknown): RosterEntry["ownership"] {
+  if (!isObject(raw) || typeof raw.percentOwned !== "number" || typeof raw.percentStarted !== "number") return null;
+  return { owned: Math.round(raw.percentOwned), started: Math.round(raw.percentStarted) };
+}
+
+/** ESPN's written outlook for this week (`outlooks.outlooksByWeek`), with the time of its last news. */
+function newsOf(player: Record<string, unknown>, week: number): RosterEntry["news"] {
+  const byWeek = isObject(player.outlooks) && isObject(player.outlooks.outlooksByWeek) ? player.outlooks.outlooksByWeek : {};
+  const note = byWeek[String(week)];
+  if (typeof note !== "string" || !note.trim()) return null;
+  return { note: note.trim(), at: isoOf(player.lastNewsDate) };
+}
+
 function parseEntry(raw: unknown, season: number, week: number): RosterEntry | null {
   if (!isObject(raw) || typeof raw.playerId !== "number" || typeof raw.lineupSlotId !== "number") return null;
   const pool = isObject(raw.playerPoolEntry) ? raw.playerPoolEntry : {};
@@ -67,6 +81,8 @@ function parseEntry(raw: unknown, season: number, week: number): RosterEntry | n
     locked: pool.lineupLocked === true,
     injuryStatus: injury,
     actual: actualPoints(player.stats, season, week),
+    ownership: ownershipOf(player.ownership),
+    news: newsOf(player, week),
   };
 }
 
@@ -105,6 +121,91 @@ export function parsePendingTrades(raw: unknown): PendingTrade[] {
         processesAt: isoOf(tx.processDate),
       },
     ];
+  });
+}
+
+const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : 0);
+
+/** A team's overall record and seed (`mTeam`), or null when ESPN sent no record. */
+function parseStanding(team: Record<string, unknown>): Standing | null {
+  const overall = isObject(team.record) && isObject(team.record.overall) ? team.record.overall : null;
+  if (!overall) return null;
+  return {
+    wins: num(overall.wins),
+    losses: num(overall.losses),
+    ties: num(overall.ties),
+    pointsFor: Math.round(num(overall.pointsFor) * 100) / 100,
+    pointsAgainst: Math.round(num(overall.pointsAgainst) * 100) / 100,
+    seed: typeof team.playoffSeed === "number" && team.playoffSeed > 0 ? team.playoffSeed : null,
+  };
+}
+
+function parseSide(raw: unknown): MatchupSide | null {
+  if (!isObject(raw) || typeof raw.teamId !== "number") return null;
+  const pick = (live: unknown, settled: unknown) => Math.round(num(typeof live === "number" ? live : settled) * 100) / 100;
+  return {
+    teamId: raw.teamId,
+    points: pick(raw.totalPointsLive, raw.totalPoints),
+    projected: pick(raw.totalProjectedPointsLive, raw.totalProjectedPoints),
+    winProbability: typeof raw.winProbability === "number" && raw.winProbability >= 0 && raw.winProbability <= 1 ? raw.winProbability : null,
+  };
+}
+
+/** The league's waiver settings (`mSettings`) and each team's waiver rank and FAAB spent (`mTeam`). */
+function parseWaivers(settings: Record<string, unknown>, teams: unknown): Waivers {
+  const acq = isObject(settings.acquisitionSettings) ? settings.acquisitionSettings : {};
+  const budget = acq.isUsingAcquisitionBudget === true && typeof acq.acquisitionBudget === "number" ? acq.acquisitionBudget : null;
+  return {
+    budget,
+    teams: (Array.isArray(teams) ? teams : []).flatMap((t) =>
+      isObject(t) && typeof t.id === "number"
+        ? [
+            {
+              teamId: t.id,
+              rank: typeof t.waiverRank === "number" && t.waiverRank > 0 ? t.waiverRank : null,
+              spent: isObject(t.transactionCounter) ? num(t.transactionCounter.acquisitionBudgetSpent) : 0,
+            },
+          ]
+        : [],
+    ),
+  };
+}
+
+/**
+ * The league's available players (APE-212): a league-scoped `kona_player_info` read filtered to
+ * FREEAGENT and WAIVERS. Positions War Room doesn't play are left out.
+ */
+export function parseFreeAgents(raw: unknown): FreeAgent[] {
+  const players = isObject(raw) && Array.isArray(raw.players) ? raw.players : [];
+  return players.flatMap((entry): FreeAgent[] => {
+    if (!isObject(entry) || !isObject(entry.player) || typeof entry.id !== "number") return [];
+    const player = entry.player;
+    const pos = typeof player.defaultPositionId === "number" ? ESPN_POSITIONS[player.defaultPositionId] : undefined;
+    const status = entry.status === "FREEAGENT" || entry.status === "WAIVERS" ? entry.status : null;
+    if (!pos || !status) return [];
+    return [
+      {
+        playerId: entry.id,
+        name: typeof player.fullName === "string" ? player.fullName : `ESPN player ${entry.id}`,
+        pos,
+        team: typeof player.proTeamId === "number" ? (PRO_TEAMS[player.proTeamId] ?? null) : null,
+        injuryStatus: typeof player.injuryStatus === "string" ? player.injuryStatus : "ACTIVE",
+        status,
+        waiverClears: status === "WAIVERS" ? isoOf(entry.waiverProcessDate) : null,
+        ownership: ownershipOf(player.ownership),
+      },
+    ];
+  });
+}
+
+/** The current matchup period's fantasy matchups (`mMatchupScore`), home and away. */
+export function parseMatchups(raw: unknown): Matchup[] {
+  if (!isObject(raw) || !Array.isArray(raw.schedule) || !isObject(raw.status)) return [];
+  const period = raw.status.currentMatchupPeriod;
+  return raw.schedule.flatMap((m): Matchup[] => {
+    if (!isObject(m) || m.matchupPeriodId !== period) return [];
+    const home = parseSide(m.home);
+    return home ? [{ home, away: parseSide(m.away) }] : [];
   });
 }
 
@@ -155,7 +256,15 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
     if (!isObject(t) || typeof t.id !== "number") return [];
     const entries = isObject(t.roster) && Array.isArray(t.roster.entries) ? t.roster.entries : [];
     const name = typeof t.name === "string" && t.name ? t.name : [t.location, t.nickname].filter((x) => typeof x === "string").join(" ") || `Team ${t.id}`;
-    return [{ id: t.id, name, abbrev: typeof t.abbrev === "string" ? t.abbrev : "", roster: entries.flatMap((e) => parseEntry(e, season, currentWeek) ?? []) }];
+    return [
+      {
+        id: t.id,
+        name,
+        abbrev: typeof t.abbrev === "string" ? t.abbrev : "",
+        roster: entries.flatMap((e) => parseEntry(e, season, currentWeek) ?? []),
+        standing: parseStanding(t),
+      },
+    ];
   });
 
   return {
@@ -172,6 +281,9 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       benchSize,
       teams,
       pendingTrades: parsePendingTrades(raw),
+      tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
+      matchups: parseMatchups(raw),
+      waivers: parseWaivers(settings, raw.teams),
     },
   };
 }

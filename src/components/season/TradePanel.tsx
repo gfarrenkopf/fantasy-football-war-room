@@ -8,7 +8,7 @@ import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiTradeWriteupCard } from "./AiPanel";
 import { Check } from "./Icons";
-import { Gain, PlayerLine, signed } from "./parts";
+import { Gain, PlayerLine, recordText, signed } from "./parts";
 import s from "./season.module.css";
 
 const SLOT_LABEL: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
@@ -30,6 +30,7 @@ const BAD: Record<Emphasis, string> = {
 
 const byRos = (a: ViewPlayer, b: ViewPlayer) => b.ros - a.ros;
 const teamName = (view: SeasonView, id: number) => view.teams.find((t) => t.id === id)?.name ?? `Team ${id}`;
+const day = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : null);
 
 /** How the trade lands for the user, in words, on the gain ladder's steps. */
@@ -103,6 +104,12 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
 
   return (
     <div className={s.trades}>
+      {view.tradeDeadlinePassed && view.tradeDeadline && (
+        <p className={`${s.panel} ${s.note} ${s.deadlinePassed}`} role="status">
+          The trade deadline passed <span suppressHydrationWarning>{day(view.tradeDeadline)}</span>. Trades here are what-ifs now: ESPN won&apos;t process new
+          ones this season.
+        </p>
+      )}
       <section className={s.column} aria-labelledby="pending-title">
         <div className={s.columnHead}>
           <h2 id="pending-title" className={s.columnTitle}>
@@ -110,6 +117,11 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
           </h2>
           <span className={s.panelNote}>Accept or decline on ESPN</span>
         </div>
+        {view.tradeDeadline && !view.tradeDeadlinePassed && (
+          <p className={s.fine}>
+            Trade deadline <b suppressHydrationWarning>{day(view.tradeDeadline)}</b>
+          </p>
+        )}
         {view.pendingTrades.length ? (
           <ul className={s.pending}>
             {view.pendingTrades.map((pending) => (
@@ -153,6 +165,11 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
               </select>
             </label>
           </div>
+          {mine.standing && partner.standing && (
+            <p className={`${s.fine} ${s.standings}`}>
+              You <b>{recordText(mine.standing, view.teams.length)}</b> · {partner.name} <b>{recordText(partner.standing, view.teams.length)}</b>
+            </p>
+          )}
 
           <div className={s.verdict}>
             {verdict ? (
@@ -341,7 +358,7 @@ function RosterPicker({
             <li key={p.playerId}>
               <label className={s.pick} data-picked={on}>
                 <input type="checkbox" checked={on} onChange={() => onToggle(p.playerId)} />
-                <PlayerLine player={p} value="none" />
+                <PlayerLine player={p} value="none" ownership />
                 <span className={`${s.ros} tabular-nums`}>
                   <b>{p.ros.toFixed(0)}</b>pts
                 </span>

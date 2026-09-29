@@ -14,7 +14,7 @@ import { clip, injuryTag, isObject, refError } from "./shared";
  */
 
 /** Bump when the prompt or the input it's built from changes meaningfully. Recorded with each lineup. */
-export const LINEUP_PROMPT_VERSION = 1;
+export const LINEUP_PROMPT_VERSION = 2;
 
 /** Projected points this close count as a coin flip the model may call either way. */
 export const CLOSE_POINTS = 2;
@@ -36,6 +36,8 @@ export interface LineupInputPlayer {
   now: LineupSlot;
   /** No game this week (projected, but 0 this week). */
   bye: boolean;
+  /** This week's NFL opponent, "@DAL" away or "vs DAL" at home (APE-211); null when unknown. */
+  opponent: string | null;
 }
 
 export interface LineupInputSlot {
@@ -129,6 +131,7 @@ export function buildLineupInput(view: SeasonView): LineupInput {
       locked: p.locked,
       now: p.slot,
       bye: p.projected && p.team !== null && p.points === 0 && p.ros > 0,
+      opponent: p.game?.opponent ? `${p.game.home ? "vs" : "@"}${p.game.opponent}` : null,
     })),
     slots,
     engineTotal: plan.total,
@@ -147,7 +150,7 @@ How to decide:
 Output rules:
 - Answer with refs, the bracketed ids such as p4 and s2, not player names.
 - calls: one entry for every slot marked "decide", in order, with the player you start there and a one-sentence reason. Use only that slot's options.
-- A reason names players, never refs. Everything in it must come from the table: no outside news, matchups, weather, depth charts or team situations.
+- A reason names players, never refs. Everything in it must come from the table: no outside news, weather, depth charts or team situations. A player's NFL opponent is listed; say nothing about that opponent beyond its name.
 - intro: 1-3 sentences on the week: how many points the lineup projects against the one set on ESPN now, and the calls that matter most.`;
 
 const SLOT_WORD: Record<LineupSlot, string> = { ...Object.fromEntries(SLOT_DEFS.map((d) => [d.key, d.key === "BN" ? "bench" : d.label])), IR: "IR" } as Record<LineupSlot, string>;
@@ -157,10 +160,10 @@ export function buildLineupPrompt(input: LineupInput): { system: string; user: s
   const lines = [
     `${input.season}, week ${input.week}. The engine's lineup projects ${input.engineTotal.toFixed(1)} points; the one set on ESPN now projects ${input.currentTotal.toFixed(1)}.`,
     "",
-    "Roster: [ref] name, position team | projected points this week | rest of season | on ESPN now | flags",
+    "Roster: [ref] name, position team | opponent | projected points this week | rest of season | on ESPN now | flags",
     ...input.players.map((p) => {
       const flags = [p.injury, p.locked ? "game started, locked" : null, p.bye ? "bye week" : null].filter(Boolean).join(", ");
-      return [`[${p.ref}] ${p.name}, ${p.pos} ${p.team ?? "FA"}`, `${p.points.toFixed(1)} pts`, `ROS ${Math.round(p.ros)}`, `now ${SLOT_WORD[p.now]}`, flags || "-"].join(" | ");
+      return [`[${p.ref}] ${p.name}, ${p.pos} ${p.team ?? "FA"}`, p.opponent ?? "-", `${p.points.toFixed(1)} pts`, `ROS ${Math.round(p.ros)}`, `now ${SLOT_WORD[p.now]}`, flags || "-"].join(" | ");
     }),
     "",
     "Starting slots: [ref] slot | engine's pick | options | decide?",

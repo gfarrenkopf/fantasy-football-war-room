@@ -25,7 +25,7 @@ export type SeasonLoad =
 
 export type SeasonLoader = (db: Db, key: Buffer, userId: string, leagueId: string, options?: { refresh?: boolean }) => Promise<SeasonLoad>;
 
-const VIEWS = ["mSettings", "mStatus", "mRoster", "mTeam", "mPendingTransactions"] as const;
+const VIEWS = ["mSettings", "mStatus", "mRoster", "mTeam", "mPendingTransactions", "mMatchupScore"] as const;
 
 type SeasonCache = Map<string, { league: SeasonLeague; espnTeamId: number; fetchedAt: Date }>;
 
@@ -34,7 +34,7 @@ type SeasonCache = Map<string, { league: SeasonLeague; espnTeamId: number; fetch
  * as the new shape. In production a deploy restarts the process anyway; in development the cache
  * outlives hot reloads.
  */
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 8;
 
 export function createSeasonLoader({
   fetchImpl,

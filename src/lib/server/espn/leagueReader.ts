@@ -17,11 +17,13 @@ export interface EspnLeagueQuery {
   espnLeagueId: string;
   views: readonly string[];
   scoringPeriodId?: number;
+  /** ESPN's `X-Fantasy-Filter` header, for views that page through players (`kona_player_info`). */
+  filter?: unknown;
 }
 
 export async function readEspnLeague(
   login: EspnLogin,
-  { season, espnLeagueId, views, scoringPeriodId }: EspnLeagueQuery,
+  { season, espnLeagueId, views, scoringPeriodId, filter }: EspnLeagueQuery,
   // Generous: a league with every roster is a couple of megabytes (outlooks and stats for every
   // player), and ESPN has taken anywhere from 1 to 30 seconds to send it (2026-09-24).
   { fetchImpl = fetch, timeoutMs = 45_000 }: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
@@ -32,7 +34,11 @@ export async function readEspnLeague(
   let res: Response;
   try {
     res = await fetchImpl(url, {
-      headers: { Cookie: `espn_s2=${login.espnS2}; SWID=${login.swid}`, Accept: "application/json" },
+      headers: {
+        Cookie: `espn_s2=${login.espnS2}; SWID=${login.swid}`,
+        Accept: "application/json",
+        ...(filter === undefined ? {} : { "X-Fantasy-Filter": JSON.stringify(filter) }),
+      },
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {

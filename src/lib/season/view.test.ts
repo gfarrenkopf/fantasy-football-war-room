@@ -28,12 +28,44 @@ describe("buildSeasonView", () => {
   });
 
   it("puts each player's NFL game on him by team, and nothing on a team without one", () => {
-    const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd" }]]);
-    const live = buildSeasonView(season, 1, byId, games);
+    const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd", opponent: "NYJ", home: false, kickoff: null }]]);
+    const live = buildSeasonView(season, 1, byId, { games });
     const gibbs = live.teams[0].roster.find((p) => p.name === "Jahmyr Gibbs")!;
-    expect(gibbs.game).toEqual({ state: "in", detail: "4:12 - 3rd" });
+    expect(gibbs.game).toMatchObject({ state: "in", detail: "4:12 - 3rd", opponent: "NYJ" });
     expect(live.teams[0].roster.filter((p) => p.team !== "DET").every((p) => p.game === null)).toBe(true);
     expect(view.teams[0].roster.every((p) => p.game === null)).toBe(true);
+  });
+
+  it("keeps ESPN's outlook only for the user's players with news in the last day", () => {
+    const at = Date.parse("2026-09-29T12:00:00Z");
+    const news = (hoursAgo: number) => ({ note: "Note.", at: new Date(at - hoursAgo * 3600_000).toISOString() });
+    const withNews = {
+      ...season,
+      teams: season.teams.map((t, i) => ({ ...t, roster: t.roster.map((e, j) => ({ ...e, news: news(i === 0 && j === 0 ? 23 : i === 0 && j === 1 ? 25 : 1) })) })),
+    };
+    const v = buildSeasonView(withNews, 1, byId, { now: at });
+    expect(v.teams[0].roster.map((p) => p.news !== null).slice(0, 3)).toEqual([true, false, true]);
+    expect(v.teams[1].roster.every((p) => p.news === null)).toBe(true);
+  });
+
+  it("says whether the trade deadline had passed when ESPN was read", () => {
+    const withDeadline = { ...season, tradeDeadline: "2026-11-19T17:00:00.000Z" };
+    expect(buildSeasonView(withDeadline, 1, byId, { now: Date.parse("2026-11-19T16:59:00Z") }).tradeDeadlinePassed).toBe(false);
+    expect(buildSeasonView(withDeadline, 1, byId, { now: Date.parse("2026-11-19T17:01:00Z") }).tradeDeadlinePassed).toBe(true);
+    expect(buildSeasonView(season, 1, byId, { now: Date.parse("2027-01-01") }).tradeDeadlinePassed).toBe(false);
+  });
+
+  it("finds the user's matchup from either side, and none on a bye", () => {
+    const side = (teamId: number) => ({ teamId, points: 0, projected: 100 + teamId, winProbability: 0.5 });
+    const withMatchups = { ...season, matchups: [{ home: side(2), away: side(1) }, { home: side(3), away: null }] };
+    expect(buildSeasonView(withMatchups, 1, byId).matchup).toEqual({ me: side(1), them: side(2) });
+    expect(buildSeasonView(withMatchups, 3, byId).matchup).toBeNull();
+  });
+
+  it("gives the user's waiver rank, and FAAB left when the league bids", () => {
+    const waivers = { budget: 100, teams: [{ teamId: 1, rank: 3, spent: 40 }] };
+    expect(buildSeasonView({ ...season, waivers }, 1, byId).waiver).toEqual({ rank: 3, budget: 100, left: 60 });
+    expect(buildSeasonView({ ...season, waivers: { budget: null, teams: [] } }, 1, byId).waiver).toEqual({ rank: null, budget: null, left: null });
   });
 
   it("recommends the user's own lineup", () => {

@@ -8,7 +8,7 @@ import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup } from "./ApplyLineup";
 import { ArrowRight, Check, External, Swap } from "./Icons";
-import { Gain, GameStatus, hasStarted, PlayerLine, pts, signed } from "./parts";
+import { Gain, hasStarted, PlayerLine, pts, signed } from "./parts";
 import s from "./season.module.css";
 
 const SLOT_LABEL: Record<LineupSlot, string> = {
@@ -122,12 +122,12 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
                     <th scope="row" className={s.slot}>
                       {SLOT_LABEL[row.key]}
                     </th>
-                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} live /> : <span className={s.fine}>Empty</span>}</td>
+                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} live news /> : <span className={s.fine}>Empty</span>}</td>
                     <td className={s.arrow}>{row.changed && <ArrowRight />}</td>
                     <td>
                       {row.changed ? (
                         next ? (
-                          <PlayerLine player={next} tone="in" locked={row.locked} live />
+                          <PlayerLine player={next} tone="in" locked={row.locked} live news />
                         ) : (
                           <span className={s.fine}>Nobody available</span>
                         )
@@ -190,6 +190,8 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           </a>
         </section>
 
+        {view.matchup && <MatchupCard view={view} />}
+
         {ai && <AiLineupCard leagueId={leagueId} view={view} ai={ai} className={s.orderAi} />}
 
         <section className={`${s.panel} ${s.orderBench}`} aria-labelledby="bench-title">
@@ -201,11 +203,11 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           </div>
           <ul className={s.bench}>
             {bench.map((p) => {
-              // Once his game kicks off, a bench player shows what he's scored, over where the game stands.
+              // Once his game kicks off, a bench player shows what he's scored, over his projection.
               const started = hasStarted(p);
               return (
                 <li key={p.playerId} className={s.benchRow} data-moved={benched.has(p.playerId)}>
-                  <PlayerLine player={p} locked={p.locked} value="none" />
+                  <PlayerLine player={p} locked={p.locked} value="none" news ownership live />
                   <span className="text-right">
                     {started ? (
                       <span className={`${s.benchPts} ${s.actual} tabular-nums`}>
@@ -220,8 +222,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
                     ) : (
                       started && (
                         <span className={`${s.benchStatus} block`}>
-                          <GameStatus player={p} />
-                          {p.game && p.game.state !== "pre" && " · "}proj <span className="tabular-nums">{pts(p.points)}</span>
+                          proj <span className="tabular-nums">{pts(p.points)}</span>
                         </span>
                       )
                     )}
@@ -235,3 +236,46 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
     </div>
   );
 }
+
+/**
+ * This week's fantasy matchup (APE-211), in ESPN's own numbers: points so far once games start, and
+ * ESPN's projection for the lineups set on ESPN, which isn't War Room's lineup until the user moves it.
+ */
+function MatchupCard({ view }: { view: SeasonView }) {
+  const { me, them } = view.matchup!;
+  const opponent = view.teams.find((t) => t.id === them.teamId)?.name ?? "Your opponent";
+  const started = me.points > 0 || them.points > 0;
+  const side = (name: string, team: typeof me, mine: boolean) => (
+    <div className={s.side} data-mine={mine}>
+      <span className={s.sideName}>{name}</span>
+      <b className={`${s.sideScore} tabular-nums`}>{pts(started ? team.points : team.projected)}</b>
+      <span className={s.sideSub}>{started ? <>proj <span className="tabular-nums">{pts(team.projected)}</span></> : "projected"}</span>
+    </div>
+  );
+  return (
+    <section className={`${s.panel} ${s.orderMatchup}`} aria-labelledby="matchup-title">
+      <div className={s.panelHead}>
+        <h2 id="matchup-title" className={s.panelTitle}>
+          Week {view.currentWeek} matchup
+        </h2>
+        <span className={s.panelNote}>ESPN&apos;s numbers</span>
+      </div>
+      <div className={s.matchup}>
+        {side("You", me, true)}
+        <span className={s.matchupVs} aria-hidden>
+          vs
+        </span>
+        {side(opponent, them, false)}
+      </div>
+      <p className={`${s.fine} ${s.matchupFoot}`}>
+        {me.winProbability !== null && (
+          <>
+            ESPN gives you a <b className="tabular-nums">{Math.round(me.winProbability * 100)}%</b> chance to win.{" "}
+          </>
+        )}
+        Projections are for the lineups set on ESPN now.
+      </p>
+    </section>
+  );
+}
+

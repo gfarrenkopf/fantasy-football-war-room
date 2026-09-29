@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { parseScoreboard } from "./scoreboard";
 
 const event = (state: string, shortDetail: string, teamIds: (number | string)[]) => ({
+  date: "2026-10-04T17:00Z",
   status: { type: { state, shortDetail } },
-  competitions: [{ competitors: teamIds.map((id) => ({ team: { id: String(id) } })) }],
+  competitions: [{ competitors: teamIds.map((id, i) => ({ homeAway: i === 0 ? "home" : "away", team: { id: String(id) } })) }],
 });
 
 describe("parseScoreboard", () => {
@@ -11,10 +12,10 @@ describe("parseScoreboard", () => {
     const games = parseScoreboard({
       events: [event("pre", "10/4 - 1:00 PM EDT", [2, 17]), event("in", "4:12 - 3rd", [9, 1]), event("post", "Final/OT", [8, 20])],
     });
-    expect(games.get("BUF")).toEqual({ state: "pre", detail: "10/4 - 1:00 PM EDT" });
-    expect(games.get("GB")).toEqual({ state: "in", detail: "4:12 - 3rd" });
-    expect(games.get("ATL")).toBe(games.get("GB"));
-    expect(games.get("DET")).toEqual({ state: "post", detail: "Final/OT" });
+    expect(games.get("BUF")).toEqual({ state: "pre", detail: "10/4 - 1:00 PM EDT", opponent: "NE", home: true, kickoff: "2026-10-04T17:00:00.000Z" });
+    expect(games.get("GB")).toMatchObject({ state: "in", detail: "4:12 - 3rd", opponent: "ATL", home: true });
+    expect(games.get("ATL")).toMatchObject({ state: "in", opponent: "GB", home: false });
+    expect(games.get("DET")).toMatchObject({ state: "post", detail: "Final/OT" });
   });
 
   it("leaves out malformed events, unknown states and teams War Room doesn't know", () => {

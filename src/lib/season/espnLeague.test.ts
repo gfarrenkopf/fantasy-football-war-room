@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import league from "./__fixtures__/espn-league-2026.json";
-import { ESPN_SLOT_ID, ownTeamId, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
+import { ESPN_SLOT_ID, ownTeamId, parseFreeAgents, parseMatchups, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
 
 describe("parseSeasonLeague", () => {
   const parsed = parseSeasonLeague(league, "110222051");
@@ -35,6 +35,8 @@ describe("parseSeasonLeague", () => {
       locked: false,
       injuryStatus: "ACTIVE",
       actual: null,
+      ownership: null,
+      news: null,
     });
     expect(roster.find((e) => e.pos === "DST")).toMatchObject({ slot: "DST", espnSlotId: 16 });
     expect(roster.filter((e) => e.slot === "BN")).toHaveLength(7);
@@ -64,6 +66,69 @@ describe("parseSeasonLeague", () => {
     };
     const parsed = parseSeasonLeague(raw, "1");
     expect(parsed.ok && parsed.league.teams[0].roster.map((e) => e.actual)).toEqual([12.35, null, null]);
+  });
+
+  it("reads ESPN's ownership and this week's outlook, and leaves out other weeks' outlooks", () => {
+    const entry = (playerId: number, player: Record<string, unknown>) => ({
+      playerId,
+      lineupSlotId: 2,
+      playerPoolEntry: { player: { fullName: "X", defaultPositionId: 2, proTeamId: 8, ...player } },
+    });
+    const raw = {
+      ...league,
+      teams: [
+        {
+          id: 9,
+          roster: {
+            entries: [
+              entry(1, { ownership: { percentOwned: 64.4, percentStarted: 40.6 }, outlooks: { outlooksByWeek: { "3": " Gets the start. " } }, lastNewsDate: 1790654254000 }),
+              entry(2, { outlooks: { outlooksByWeek: { "2": "Last week's." } } }),
+            ],
+          },
+        },
+      ],
+    };
+    const parsed = parseSeasonLeague(raw, "1");
+    if (!parsed.ok) throw new Error(parsed.error);
+    const [a, b] = parsed.league.teams[0].roster;
+    expect(a).toMatchObject({ ownership: { owned: 64, started: 41 }, news: { note: "Gets the start.", at: "2026-09-29T03:57:34.000Z" } });
+    expect(b).toMatchObject({ ownership: null, news: null });
+  });
+
+  it("reads each team's record and seed, and the trade deadline", () => {
+    const raw = {
+      ...league,
+      settings: { ...league.settings, tradeSettings: { deadlineDate: 1796230800000 } },
+      teams: [
+        { id: 9, playoffSeed: 2, record: { overall: { wins: 3, losses: 1, ties: 0, pointsFor: 480.456, pointsAgainst: 401.2 } }, roster: { entries: [] } },
+        { id: 10, roster: { entries: [] } },
+      ],
+    };
+    const parsed = parseSeasonLeague(raw, "1");
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.league.teams.map((t) => t.standing)).toEqual([{ wins: 3, losses: 1, ties: 0, pointsFor: 480.46, pointsAgainst: 401.2, seed: 2 }, null]);
+    expect(parsed.league.tradeDeadline).toBe("2026-12-02T17:00:00.000Z");
+  });
+
+  it("reads the league's FAAB budget and each team's waiver rank and spend", () => {
+    const raw = {
+      ...league,
+      settings: { ...league.settings, acquisitionSettings: { isUsingAcquisitionBudget: true, acquisitionBudget: 100 } },
+      teams: [
+        { id: 9, waiverRank: 4, transactionCounter: { acquisitionBudgetSpent: 23 }, roster: { entries: [] } },
+        { id: 10, roster: { entries: [] } },
+      ],
+    };
+    const parsed = parseSeasonLeague(raw, "1");
+    expect(parsed.ok && parsed.league.waivers).toEqual({
+      budget: 100,
+      teams: [
+        { teamId: 9, rank: 4, spent: 23 },
+        { teamId: 10, rank: null, spent: 0 },
+      ],
+    });
+    const noBids = parseSeasonLeague({ ...raw, settings: { ...raw.settings, acquisitionSettings: { isUsingAcquisitionBudget: false, acquisitionBudget: 100 } } }, "1");
+    expect(noBids.ok && noBids.league.waivers.budget).toBeNull();
   });
 
   it("maps our slots back to ESPN's ids for writes", () => {
@@ -143,5 +208,49 @@ describe("parsePendingTrades", () => {
   it("leaves out waiver claims, finished trades, and anything that isn't a list", () => {
     expect(parsePendingTrades({ pendingTransactions: pending.pendingTransactions.slice(2) })).toEqual([]);
     expect(parsePendingTrades({})).toEqual([]);
+  });
+});
+
+describe("parseMatchups", () => {
+  const side = (teamId: number, over = {}) => ({ teamId, totalPoints: 0, totalPointsLive: 12.345, totalProjectedPoints: 120, totalProjectedPointsLive: 118.5, winProbability: 0.49, ...over });
+  const raw = {
+    status: { currentMatchupPeriod: 4 },
+    schedule: [
+      { matchupPeriodId: 3, home: side(1), away: side(2) },
+      { matchupPeriodId: 4, home: side(1), away: side(2, { winProbability: 0.51, totalPointsLive: undefined, totalPoints: 7 }) },
+      { matchupPeriodId: 4, home: side(3) },
+      { matchupPeriodId: 4, home: null },
+    ],
+  };
+
+  it("reads this period's matchups with ESPN's live points, projections and odds, and a bye's lone side", () => {
+    expect(parseMatchups(raw)).toEqual([
+      {
+        home: { teamId: 1, points: 12.35, projected: 118.5, winProbability: 0.49 },
+        away: { teamId: 2, points: 7, projected: 118.5, winProbability: 0.51 },
+      },
+      { home: { teamId: 3, points: 12.35, projected: 118.5, winProbability: 0.49 }, away: null },
+    ]);
+  });
+
+  it("is empty without a schedule", () => {
+    expect(parseMatchups({ status: {} })).toEqual([]);
+    expect(parseMatchups(null)).toEqual([]);
+  });
+});
+
+describe("parseFreeAgents", () => {
+  it("reads available players, when a waiver claim clears, and leaves out what War Room doesn't play", () => {
+    const player = (id: number, status: string, defaultPositionId = 2, extra = {}) => ({
+      id,
+      status,
+      waiverProcessDate: 1790751600000,
+      player: { fullName: `P${id}`, defaultPositionId, proTeamId: 8, injuryStatus: "QUESTIONABLE", ownership: { percentOwned: 12.4, percentStarted: 3.2 }, ...extra },
+    });
+    expect(parseFreeAgents({ players: [player(1, "WAIVERS"), player(2, "FREEAGENT", 3), player(3, "ONTEAM"), player(4, "FREEAGENT", 11), null] })).toEqual([
+      { playerId: 1, name: "P1", pos: "RB", team: "DET", injuryStatus: "QUESTIONABLE", status: "WAIVERS", waiverClears: "2026-09-30T07:00:00.000Z", ownership: { owned: 12, started: 3 } },
+      { playerId: 2, name: "P2", pos: "WR", team: "DET", injuryStatus: "QUESTIONABLE", status: "FREEAGENT", waiverClears: null, ownership: { owned: 12, started: 3 } },
+    ]);
+    expect(parseFreeAgents({})).toEqual([]);
   });
 });

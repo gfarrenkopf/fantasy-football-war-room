@@ -1,12 +1,26 @@
+import { useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
+import type { Standing } from "@/lib/season/types";
 import type { ViewPlayer } from "@/lib/season/view";
-import { Check, Lock } from "./Icons";
+import { Check, Lock, Note } from "./Icons";
 import s from "./season.module.css";
 
 /** Shared pieces of the season page: the gain verdict and a player's line. */
 
 export const pts = (n: number) => n.toFixed(1);
+
+const ordinal = (n: number) => {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
+};
+
+/** A team's record and seed, as a manager says it: "3–1, 2nd of 10". */
+export function recordText(standing: Standing, teams: number): string {
+  const record = `${standing.wins}–${standing.losses}${standing.ties ? `–${standing.ties}` : ""}`;
+  return standing.seed ? `${record}, ${ordinal(standing.seed)} of ${teams}` : record;
+}
 export const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
 
 /** ESPN's injury designations as the short tags ESPN itself shows. */
@@ -62,23 +76,68 @@ export function Gain({
 /** Whether the player's game this week has kicked off, going by ESPN's scoreboard or his points. */
 export const hasStarted = (player: ViewPlayer) => player.actual !== null || player.game?.state === "in" || player.game?.state === "post";
 
+const kickoffTime = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+
 /**
- * Where the player's game stands (APE-196): the clock in Terminal Sky behind a still dot while it's
- * on, a muted "Final" once it's over. Nothing before kickoff, or when the scoreboard didn't load.
+ * The player's NFL game this week: who it's against (APE-211) and where it stands (APE-196). Before
+ * kickoff, the opponent and kickoff in muted ink; while it's on, the clock in Terminal Sky behind a
+ * still dot; once it's over, a muted "Final". Nothing when the scoreboard didn't load.
  */
 export function GameStatus({ player }: { player: ViewPlayer }) {
   const game = player.game;
-  if (game?.state === "in") {
+  if (!game) return null;
+  const opponent = game.opponent && `${game.home ? "vs" : "@"} ${game.opponent}`;
+  if (game.state === "in") {
     return (
       <span className={s.live}>
         <span className={s.liveDot} aria-hidden />
         <span className="sr-only">Playing now: </span>
+        {opponent && `${opponent} · `}
         {game.detail || "Live"}
       </span>
     );
   }
-  if (game?.state === "post") return <span className={s.final}>{game.detail || "Final"}</span>;
-  return null;
+  if (game.state === "post") return <span className={s.final}>{[opponent, game.detail || "Final"].filter(Boolean).join(" · ")}</span>;
+  return (
+    <span className={s.pregame}>
+      {opponent}
+      {opponent && game.kickoff && " · "}
+      {game.kickoff && <span suppressHydrationWarning>{kickoffTime(game.kickoff)}</span>}
+    </span>
+  );
+}
+
+const newsTime = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+/**
+ * ESPN's outlook for a player this week (APE-213): a small "News" tag beside his name that opens the
+ * note in a popover. A tap, not a hover, so it works in the hand.
+ */
+function NewsNote({ player }: { player: ViewPlayer }) {
+  const id = useId();
+  if (!player.news) return null;
+  return (
+    <>
+      <button type="button" className={s.newsTag} popoverTarget={id} aria-label={`ESPN's news on ${player.name}`}>
+        <Note className={s.newsIcon} />
+        <span className={s.newsLabel}>News</span>
+      </button>
+      <div id={id} popover="auto" className={s.newsNote}>
+        <p className={s.newsHead}>
+          <b>{player.name}</b>
+          {player.news.at && (
+            <span className={s.newsWhen} suppressHydrationWarning>
+              ESPN · {newsTime(player.news.at)}
+            </span>
+          )}
+        </p>
+        <p className={s.newsBody}>{player.news.note}</p>
+        <button type="button" className={s.button} popoverTarget={id} popoverTargetAction="hide">
+          Close
+        </button>
+      </div>
+    </>
+  );
 }
 
 /** A player's name, injury tag and lock, over their position, team and projection. */
@@ -88,6 +147,8 @@ export function PlayerLine({
   locked = false,
   value = "points",
   live = false,
+  news = false,
+  ownership = false,
 }: {
   player: ViewPlayer;
   tone?: "same" | "out" | "in";
@@ -96,11 +157,15 @@ export function PlayerLine({
   value?: "points" | "none";
   /** Show this week's game once it kicks off: points scored so far and where the game stands. */
   live?: boolean;
+  /** Offer ESPN's outlook for him this week, when there is one. */
+  news?: boolean;
+  /** Add how widely he's rostered and started across ESPN. */
+  ownership?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = player.points === 0 && player.projected;
   const started = live && hasStarted(player);
-  const status = started && player.game && player.game.state !== "pre";
+  const status = live && player.game !== null;
   return (
     <span className={s.player} data-tone={tone}>
       <span className={s.playerLine}>
@@ -110,6 +175,7 @@ export function PlayerLine({
             {tag}
           </span>
         )}
+        {news && <NewsNote player={player} />}
         {locked && (
           <>
             <Lock className={s.lock} />
@@ -138,6 +204,12 @@ export function PlayerLine({
               {!player.projected && " · no projection"}
             </>
           ))}
+        {ownership && player.ownership && (
+          <>
+            {" "}
+            · <span className="tabular-nums">{player.ownership.owned}%</span> own · <span className="tabular-nums">{player.ownership.started}%</span> start
+          </>
+        )}
         {status && (
           <span className={s.factsGame}>
             <span className={s.factsSep}> · </span>

@@ -56,6 +56,21 @@ export interface RosterEntry {
    * week. Null until the player's game starts.
    */
   actual: number | null;
+  /** Share of ESPN leagues that roster and start him, 0–100; null when ESPN didn't say. */
+  ownership: { owned: number; started: number } | null;
+  /** ESPN's outlook for him this week, and when ESPN last had news on him; null with no outlook. */
+  news: { note: string; at: string | null } | null;
+}
+
+/** A team's place in the league (`mTeam`): its overall record and ESPN's current playoff seed. */
+export interface Standing {
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  /** 1 is first; null when ESPN doesn't say. */
+  seed: number | null;
 }
 
 export interface SeasonTeam {
@@ -63,12 +78,30 @@ export interface SeasonTeam {
   name: string;
   abbrev: string;
   roster: RosterEntry[];
+  standing: Standing | null;
 }
 
 /** A starting slot of the league's lineup, and how many of it there are. */
 export interface LineupSlotCount {
   key: Exclude<RosterSlotKey, "BN">;
   count: number;
+}
+
+/** One team's side of a fantasy matchup this week (`mMatchupScore`), in ESPN's own numbers. */
+export interface MatchupSide {
+  teamId: number;
+  /** Points scored so far this matchup period. */
+  points: number;
+  /** ESPN's projection for the team's lineup as set on ESPN, live-adjusted once games start. */
+  projected: number;
+  /** ESPN's win probability, 0–1; null when ESPN doesn't give one. */
+  winProbability: number | null;
+}
+
+/** A fantasy matchup in the current matchup period; `away` is null for a bye. */
+export interface Matchup {
+  home: MatchupSide;
+  away: MatchupSide | null;
 }
 
 /** An ESPN league as the in-season engine needs it, read from `mSettings`, `mStatus`, `mRoster` and `mTeam`. */
@@ -89,6 +122,31 @@ export interface SeasonLeague {
   teams: SeasonTeam[];
   /** Trades waiting on ESPN that the user can see: their own offers, in both directions. */
   pendingTrades: PendingTrade[];
+  /** The league's trade deadline (`tradeSettings.deadlineDate`), as an ISO instant; null for none. */
+  tradeDeadline: string | null;
+  /** This matchup period's fantasy matchups (APE-211). Empty when ESPN sent no schedule. */
+  matchups: Matchup[];
+  /** How the league runs waivers (APE-212), and each team's place in them. */
+  waivers: Waivers;
+}
+
+export interface Waivers {
+  /** The season's FAAB budget per team; null when the league doesn't bid. */
+  budget: number | null;
+  teams: { teamId: number; rank: number | null; spent: number }[];
+}
+
+/** A player nobody in the league rosters (`kona_player_info`, FREEAGENT or WAIVERS). */
+export interface FreeAgent {
+  playerId: number;
+  name: string;
+  pos: Position;
+  team: string | null;
+  injuryStatus: InjuryStatus;
+  /** On waivers until `waiverClears`; a free agent can be added now. */
+  status: "FREEAGENT" | "WAIVERS";
+  waiverClears: string | null;
+  ownership: { owned: number; started: number } | null;
 }
 
 /** A trade pending on ESPN (`mPendingTransactions`), between two teams. */

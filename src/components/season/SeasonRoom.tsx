@@ -10,7 +10,9 @@ import type { SeasonView } from "@/lib/season/view";
 import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
 import { ArrowLeft, ChevronDown, Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
+import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
+import { WaiverPanel } from "./WaiverPanel";
 import s from "./season.module.css";
 
 /** Why the page can't show a league, from the server's SeasonLoad. */
@@ -46,7 +48,7 @@ type Props = {
     }
 );
 
-type Tab = "lineup" | "trade";
+type Tab = "lineup" | "trade" | "waivers";
 
 export interface SeasonLeagueLink {
   id: string;
@@ -94,6 +96,9 @@ export function SeasonRoom(props: Props) {
                   </span>
                 )}
               </TabButton>
+              <TabButton id="waivers" tab={tab} onSelect={setTab}>
+                Waivers
+              </TabButton>
             </div>
           )}
         </header>
@@ -115,8 +120,10 @@ export function SeasonRoom(props: Props) {
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
-              ) : (
+              ) : tab === "trade" ? (
                 <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+              ) : (
+                <WaiverPanel view={props.view} leagueId={props.leagueId} />
               )}
             </div>
             <Disconnect seasonEmails={props.seasonEmails} />
@@ -172,9 +179,16 @@ function Freshness({ view, fetchedAt, stale, leagueId }: { view: SeasonView; fet
     () => new Date(fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
     () => "",
   );
+  const standing = view.teams.find((t) => t.id === view.myTeamId)?.standing;
   return (
     <p className={s.meta}>
       <span>Week {view.currentWeek}</span>
+      {standing && (
+        <span className={s.metaStanding}>
+          <b>{recordText(standing, view.teams.length)}</b> · <span className="tabular-nums">{pts(standing.pointsFor)}</span> for,{" "}
+          <span className="tabular-nums">{pts(standing.pointsAgainst)}</span> against
+        </span>
+      )}
       <span className={stale ? s.metaStale : undefined}>
         {stale ? "ESPN isn't answering; showing your last sync" : "Synced with ESPN"}
         {time && ` at ${time}`}

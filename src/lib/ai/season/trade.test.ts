@@ -24,6 +24,7 @@ describe("buildTradeInput", () => {
     expect(input.players.find((p) => p.ref === ref(myRb))).toMatchObject({ side: "you", moving: true, byes: [6], playoffs: 12 });
     expect(input.players.find((p) => p.ref === ref(theirWr))).toMatchObject({ side: "them", moving: true, injury: "questionable" });
     expect(input.players.filter((p) => p.moving)).toHaveLength(2);
+    expect(input.you.standing).toEqual({ record: "3-1", pointsFor: 480.5, seed: 2 });
   });
 
   it("builds a prompt with the trade and both rosters", () => {
@@ -31,6 +32,7 @@ describe("buildTradeInput", () => {
     expect(user).toContain(`you send My Back [${ref(myRb)}]; you get Their Wideout [${ref(theirWr)}]`);
     expect(user).toContain("Playoffs: weeks 7-7.");
     expect(user).toContain("## Their roster");
+    expect(user).toContain("standing: 0-4, 350 points for, seed 10");
   });
 });
 

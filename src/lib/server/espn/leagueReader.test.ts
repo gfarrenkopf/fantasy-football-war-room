@@ -26,6 +26,16 @@ function slowBody(ms: number, body = "{}") {
 }
 
 describe("readEspnLeague", () => {
+  it("sends a player filter as ESPN's X-Fantasy-Filter header, and none without one", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response("{}", { status: 200 }));
+    await readEspnLeague(LOGIN, { ...query, views: ["kona_player_info"], scoringPeriodId: 4, filter: { players: { limit: 5 } } }, { fetchImpl });
+    await readEspnLeague(LOGIN, query, { fetchImpl });
+    const headers = fetchImpl.mock.calls.map(([, init]) => init?.headers as Record<string, string>);
+    expect(String(fetchImpl.mock.calls[0][0])).toContain("?view=kona_player_info&scoringPeriodId=4");
+    expect(headers[0]["X-Fantasy-Filter"]).toBe('{"players":{"limit":5}}');
+    expect(headers[1]).not.toHaveProperty("X-Fantasy-Filter");
+  });
+
   it("reads a slow body within the timeout", async () => {
     expect(await readEspnLeague(LOGIN, query, { fetchImpl: slowBody(50, '{"id":1}'), timeoutMs: 1000 })).toEqual({ ok: true, data: { id: 1 } });
   });
