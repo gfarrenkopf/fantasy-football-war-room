@@ -1,7 +1,7 @@
 import { optimalLineup, type LineupPlan } from "./lineup";
 import type { GameState, Scoreboard } from "./scoreboard";
 import { restOfSeason, weeklyPoints } from "./scoring";
-import type { LineupSlotCount, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague } from "./types";
+import type { LineupSlotCount, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
 
 /**
  * Everything the season page shows, computed on the server from ESPN's league and projections and
@@ -27,6 +27,7 @@ export interface ViewTeam {
   name: string;
   abbrev: string;
   roster: ViewPlayer[];
+  standing: Standing | null;
 }
 
 export interface SeasonView {
@@ -44,6 +45,9 @@ export interface SeasonView {
   lineup: LineupPlan;
   /** Trades pending on ESPN that involve the user's team. */
   pendingTrades: PendingTrade[];
+  /** The league's trade deadline, as an ISO instant, and whether it had passed when ESPN was read. */
+  tradeDeadline: string | null;
+  tradeDeadlinePassed: boolean;
 }
 
 export function buildSeasonView(
@@ -75,6 +79,7 @@ export function buildSeasonView(
     id: t.id,
     name: t.name,
     abbrev: t.abbrev,
+    standing: t.standing,
     roster: t.roster.map((entry) => toPlayer(t.id === myTeamId && fresh(entry.news) ? entry : { ...entry, news: null })),
   }));
   const mine = teams.find((t) => t.id === myTeamId)?.roster ?? [];
@@ -91,6 +96,8 @@ export function buildSeasonView(
     teams,
     lineup: optimalLineup(mine, league.starters),
     pendingTrades: league.pendingTrades.filter((t) => t.proposerTeamId === myTeamId || t.partnerTeamId === myTeamId),
+    tradeDeadline: league.tradeDeadline,
+    tradeDeadlinePassed: !!league.tradeDeadline && now > Date.parse(league.tradeDeadline),
   };
 }
 

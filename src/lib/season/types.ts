@@ -62,11 +62,23 @@ export interface RosterEntry {
   news: { note: string; at: string | null } | null;
 }
 
+/** A team's place in the league (`mTeam`): its overall record and ESPN's current playoff seed. */
+export interface Standing {
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  /** 1 is first; null when ESPN doesn't say. */
+  seed: number | null;
+}
+
 export interface SeasonTeam {
   id: number;
   name: string;
   abbrev: string;
   roster: RosterEntry[];
+  standing: Standing | null;
 }
 
 /** A starting slot of the league's lineup, and how many of it there are. */
@@ -93,6 +105,8 @@ export interface SeasonLeague {
   teams: SeasonTeam[];
   /** Trades waiting on ESPN that the user can see: their own offers, in both directions. */
   pendingTrades: PendingTrade[];
+  /** The league's trade deadline (`tradeSettings.deadlineDate`), as an ISO instant; null for none. */
+  tradeDeadline: string | null;
 }
 
 /** A trade pending on ESPN (`mPendingTransactions`), between two teams. */

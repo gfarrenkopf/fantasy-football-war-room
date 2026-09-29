@@ -95,6 +95,21 @@ describe("parseSeasonLeague", () => {
     expect(b).toMatchObject({ ownership: null, news: null });
   });
 
+  it("reads each team's record and seed, and the trade deadline", () => {
+    const raw = {
+      ...league,
+      settings: { ...league.settings, tradeSettings: { deadlineDate: 1796230800000 } },
+      teams: [
+        { id: 9, playoffSeed: 2, record: { overall: { wins: 3, losses: 1, ties: 0, pointsFor: 480.456, pointsAgainst: 401.2 } }, roster: { entries: [] } },
+        { id: 10, roster: { entries: [] } },
+      ],
+    };
+    const parsed = parseSeasonLeague(raw, "1");
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.league.teams.map((t) => t.standing)).toEqual([{ wins: 3, losses: 1, ties: 0, pointsFor: 480.46, pointsAgainst: 401.2, seed: 2 }, null]);
+    expect(parsed.league.tradeDeadline).toBe("2026-12-02T17:00:00.000Z");
+  });
+
   it("maps our slots back to ESPN's ids for writes", () => {
     expect(ESPN_SLOT_ID).toMatchObject({ QB: 0, RB: 2, WR: 4, TE: 6, FLEX: 23, SUPERFLEX: 7, DST: 16, K: 17, BN: 20, IR: 21 });
   });

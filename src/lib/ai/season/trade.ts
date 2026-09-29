@@ -12,7 +12,7 @@ import { clip, injuryTag, isObject, refError } from "./shared";
  */
 
 /** Bump when the prompt or the input it's built from changes meaningfully. Recorded with each write-up. */
-export const TRADE_PROMPT_VERSION = 1;
+export const TRADE_PROMPT_VERSION = 2;
 
 export type TradeLean = "accept" | "decline" | "counter";
 const LEANS: readonly TradeLean[] = ["accept", "decline", "counter"];
@@ -44,6 +44,8 @@ export interface TradeInputSide {
   slots: { key: string; before: number; after: number }[];
   /** Refs of players they'd have to cut to fit the roster. */
   drops: string[];
+  /** Their record, points for and seed (APE-214); null when ESPN sent no standings. */
+  standing: { record: string; pointsFor: number; seed: number | null } | null;
 }
 
 export interface TradeInput {
@@ -52,6 +54,7 @@ export interface TradeInput {
   finalWeek: number;
   playoffStartWeek: number | null;
   weeks: number;
+  teams: number;
   you: TradeInputSide;
   them: TradeInputSide;
   players: TradeInputPlayer[];
@@ -85,8 +88,13 @@ export function buildTradeInput(view: SeasonView, trade: Trade, verdict: TradeVe
     for (let w = Math.max(view.playoffStartWeek, view.currentWeek); w <= view.finalWeek; w++) sum += p.weekly[w] ?? 0;
     return Math.round(sum * 10) / 10;
   };
-  const side = (name: string, v: TradeVerdict["a"]): TradeInputSide => ({
+  const side = ({ name, standing }: (typeof view.teams)[number], v: TradeVerdict["a"]): TradeInputSide => ({
     name,
+    standing: standing && {
+      record: `${standing.wins}-${standing.losses}${standing.ties ? `-${standing.ties}` : ""}`,
+      pointsFor: round(standing.pointsFor),
+      seed: standing.seed,
+    },
     before: round(v.before),
     after: round(v.after),
     delta: round(v.delta),
@@ -100,8 +108,9 @@ export function buildTradeInput(view: SeasonView, trade: Trade, verdict: TradeVe
     finalWeek: view.finalWeek,
     playoffStartWeek: view.playoffStartWeek,
     weeks: verdict.weeks,
-    you: side(mine.name, verdict.a),
-    them: side(theirs.name, verdict.b),
+    teams: view.teams.length,
+    you: side(mine, verdict.a),
+    them: side(theirs, verdict.b),
     players: all.map(({ p, side }) => ({
       ref: refOf.get(p.playerId)!,
       playerId: p.playerId,
@@ -126,6 +135,7 @@ What matters, in order:
 - The engine's change in rest-of-season lineup points for the manager ("you"). A trade that fills a positional hole shows up as a big gain in that slot; a 2-for-1 that only moves bench depth shows up as little.
 - The fantasy playoffs: players' projected points in the playoff weeks, if given. A regular-season gain that costs playoff points is worth less.
 - Byes: moving players whose byes cluster with the manager's starters.
+- Standings, if given: a contender near the top should weigh this season's points, especially the playoff weeks; a team near the bottom can trade points now for a stronger playoff roster only if it can still reach the playoffs.
 - The other team's side, because a trade they'd refuse helps nobody.
 
 Output rules:
@@ -140,6 +150,7 @@ function sideLines(label: string, s: TradeInputSide): string[] {
   const slots = s.slots.map((x) => `${SLOT_DEFS.find((d) => d.key === x.key)?.label ?? x.key} ${x.before} → ${x.after}`).join(", ");
   return [
     `${label} (${s.name}): best-lineup points ${s.before} → ${s.after} (${s.delta >= 0 ? "+" : ""}${s.delta}, ${s.perWeek >= 0 ? "+" : ""}${s.perWeek} a week)`,
+    ...(s.standing ? [`  standing: ${s.standing.record}, ${s.standing.pointsFor} points for${s.standing.seed ? `, seed ${s.standing.seed}` : ""}`] : []),
     `  slots per week: ${slots || "no change"}`,
     ...(s.drops.length ? [`  would cut to fit the roster: ${s.drops.join(", ")}`] : []),
   ];
@@ -157,7 +168,7 @@ export function buildTradePrompt(input: TradeInput): { system: string; user: str
     ].join(" | ");
   const trade = (side: "you" | "them") => input.players.filter((p) => p.side === side && p.moving).map((p) => `${p.name} [${p.ref}]`).join(", ") || "nobody";
   const lines = [
-    `${input.season}, week ${input.week}; ${input.weeks} weeks left through week ${input.finalWeek}. ${playoffs}`,
+    `${input.season}, week ${input.week}; ${input.weeks} weeks left through week ${input.finalWeek}. ${playoffs} ${input.teams} teams.`,
     "",
     `The trade: you send ${trade("you")}; you get ${trade("them")}.`,
     "",

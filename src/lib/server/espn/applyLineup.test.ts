@@ -51,10 +51,11 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
     ],
     benchSize: 3,
     teams: [
-      { id: 1, name: "Mine", abbrev: "ME", roster },
-      { id: 2, name: "Theirs", abbrev: "TH", roster: [entry(50, "Their Rb", "RB", "RB")] },
+      { id: 1, name: "Mine", abbrev: "ME", roster, standing: null },
+      { id: 2, name: "Theirs", abbrev: "TH", roster: [entry(50, "Their Rb", "RB", "RB")], standing: null },
     ],
     pendingTrades: [],
+    tradeDeadline: null,
   };
 }
 

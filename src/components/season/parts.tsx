@@ -1,6 +1,7 @@
 import { useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
+import type { Standing } from "@/lib/season/types";
 import type { ViewPlayer } from "@/lib/season/view";
 import { Check, Lock, Note } from "./Icons";
 import s from "./season.module.css";
@@ -8,6 +9,18 @@ import s from "./season.module.css";
 /** Shared pieces of the season page: the gain verdict and a player's line. */
 
 export const pts = (n: number) => n.toFixed(1);
+
+const ordinal = (n: number) => {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
+};
+
+/** A team's record and seed, as a manager says it: "3–1, 2nd of 10". */
+export function recordText(standing: Standing, teams: number): string {
+  const record = `${standing.wins}–${standing.losses}${standing.ties ? `–${standing.ties}` : ""}`;
+  return standing.seed ? `${record}, ${ordinal(standing.seed)} of ${teams}` : record;
+}
 export const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
 
 /** ESPN's injury designations as the short tags ESPN itself shows. */

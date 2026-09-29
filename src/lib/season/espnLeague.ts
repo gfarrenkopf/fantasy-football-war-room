@@ -2,7 +2,7 @@ import type { RosterSlotKey } from "@/lib/draft/types";
 import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
-import type { LineupSlot, LineupSlotCount, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam } from "./types";
+import type { LineupSlot, LineupSlotCount, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -124,6 +124,22 @@ export function parsePendingTrades(raw: unknown): PendingTrade[] {
   });
 }
 
+const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : 0);
+
+/** A team's overall record and seed (`mTeam`), or null when ESPN sent no record. */
+function parseStanding(team: Record<string, unknown>): Standing | null {
+  const overall = isObject(team.record) && isObject(team.record.overall) ? team.record.overall : null;
+  if (!overall) return null;
+  return {
+    wins: num(overall.wins),
+    losses: num(overall.losses),
+    ties: num(overall.ties),
+    pointsFor: Math.round(num(overall.pointsFor) * 100) / 100,
+    pointsAgainst: Math.round(num(overall.pointsAgainst) * 100) / 100,
+    seed: typeof team.playoffSeed === "number" && team.playoffSeed > 0 ? team.playoffSeed : null,
+  };
+}
+
 /**
  * The first week of the fantasy playoffs: the first scoring period of the matchup period after the
  * regular season's last. Null when ESPN doesn't say, or the playoffs are already underway.
@@ -171,7 +187,15 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
     if (!isObject(t) || typeof t.id !== "number") return [];
     const entries = isObject(t.roster) && Array.isArray(t.roster.entries) ? t.roster.entries : [];
     const name = typeof t.name === "string" && t.name ? t.name : [t.location, t.nickname].filter((x) => typeof x === "string").join(" ") || `Team ${t.id}`;
-    return [{ id: t.id, name, abbrev: typeof t.abbrev === "string" ? t.abbrev : "", roster: entries.flatMap((e) => parseEntry(e, season, currentWeek) ?? []) }];
+    return [
+      {
+        id: t.id,
+        name,
+        abbrev: typeof t.abbrev === "string" ? t.abbrev : "",
+        roster: entries.flatMap((e) => parseEntry(e, season, currentWeek) ?? []),
+        standing: parseStanding(t),
+      },
+    ];
   });
 
   return {
@@ -188,6 +212,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       benchSize,
       teams,
       pendingTrades: parsePendingTrades(raw),
+      tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
     },
   };
 }

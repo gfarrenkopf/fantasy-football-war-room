@@ -54,10 +54,12 @@ export function seasonView(mine: ViewPlayer[], theirs: ViewPlayer[] = []): Seaso
     benchSize: 3,
     myTeamId: 1,
     teams: [
-      { id: 1, name: "Mine", abbrev: "ME", roster: mine },
-      { id: 2, name: "Theirs", abbrev: "TH", roster: theirs },
+      { id: 1, name: "Mine", abbrev: "ME", roster: mine, standing: { wins: 3, losses: 1, ties: 0, pointsFor: 480.5, pointsAgainst: 401.2, seed: 2 } },
+      { id: 2, name: "Theirs", abbrev: "TH", roster: theirs, standing: { wins: 0, losses: 4, ties: 0, pointsFor: 350, pointsAgainst: 470.8, seed: 10 } },
     ],
     lineup: optimalLineup(mine, STARTERS),
     pendingTrades: [],
+    tradeDeadline: null,
+    tradeDeadlinePassed: false,
   };
 }

@@ -48,6 +48,13 @@ describe("buildSeasonView", () => {
     expect(v.teams[1].roster.every((p) => p.news === null)).toBe(true);
   });
 
+  it("says whether the trade deadline had passed when ESPN was read", () => {
+    const withDeadline = { ...season, tradeDeadline: "2026-11-19T17:00:00.000Z" };
+    expect(buildSeasonView(withDeadline, 1, byId, { now: Date.parse("2026-11-19T16:59:00Z") }).tradeDeadlinePassed).toBe(false);
+    expect(buildSeasonView(withDeadline, 1, byId, { now: Date.parse("2026-11-19T17:01:00Z") }).tradeDeadlinePassed).toBe(true);
+    expect(buildSeasonView(season, 1, byId, { now: Date.parse("2027-01-01") }).tradeDeadlinePassed).toBe(false);
+  });
+
   it("recommends the user's own lineup", () => {
     expect(view.lineup.starters.every((s) => s.playerId !== null)).toBe(true);
     const mine = new Set(view.teams[0].roster.map((p) => p.playerId));

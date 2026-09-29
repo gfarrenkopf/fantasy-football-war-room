@@ -10,6 +10,7 @@ import type { SeasonView } from "@/lib/season/view";
 import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
 import { ArrowLeft, ChevronDown, Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
+import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
 import s from "./season.module.css";
 
@@ -172,9 +173,16 @@ function Freshness({ view, fetchedAt, stale, leagueId }: { view: SeasonView; fet
     () => new Date(fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
     () => "",
   );
+  const standing = view.teams.find((t) => t.id === view.myTeamId)?.standing;
   return (
     <p className={s.meta}>
       <span>Week {view.currentWeek}</span>
+      {standing && (
+        <span className={s.metaStanding}>
+          <b>{recordText(standing, view.teams.length)}</b> · <span className="tabular-nums">{pts(standing.pointsFor)}</span> for,{" "}
+          <span className="tabular-nums">{pts(standing.pointsAgainst)}</span> against
+        </span>
+      )}
       <span className={stale ? s.metaStale : undefined}>
         {stale ? "ESPN isn't answering; showing your last sync" : "Synced with ESPN"}
         {time && ` at ${time}`}

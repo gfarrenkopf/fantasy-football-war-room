@@ -157,6 +157,12 @@
   font-size: 12px;
 }
 
+/* The user's record (APE-214): the one piece of the league the page carries in its header. */
+.metaStanding b {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
 .metaStale {
   color: var(--color-warn-ink);
 }
@@ -1101,6 +1107,21 @@
 .buttonGhost:hover {
   color: var(--color-text);
   background: var(--color-hover);
+}
+
+/* The trade deadline has passed: every trade on this tab is a what-if now. It spans both columns. */
+.deadlinePassed {
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--color-warn) 45%, var(--color-line));
+  color: var(--color-warn-ink);
+}
+
+.standings {
+  margin: -4px 0 0;
+}
+.standings b {
+  color: var(--color-text);
+  font-weight: 600;
 }
 
 /* The builder */
