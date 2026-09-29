@@ -194,7 +194,8 @@
   flex-shrink: 0;
 }
 
-/* The in-page segmented control (the phone's send/get switch): the tabs' look, never pinned. */
+/* The in-page segmented control (the phone's send/get switch): the tabs' look. It pins only inside
+   the trade builder's bar at the top, never in the thumb zone. */
 .segment {
   gap: 2px;
   padding: 3px;
@@ -1127,6 +1128,13 @@
   margin: 0;
 }
 
+/* An offer open in the builder hands its verdict over, and says where it went. */
+.offerOpen {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-line);
+}
+
 .offerFoot {
   display: flex;
   align-items: center;
@@ -1212,10 +1220,21 @@
   color-scheme: dark;
 }
 
-.verdictSticky {
-  position: sticky;
-  top: 8px;
-  z-index: 2;
+/* The full verdict pins only where the rosters scroll in their own boxes beside it. */
+@media (min-width: 1024px) {
+  .verdict {
+    position: sticky;
+    top: 8px;
+    z-index: 2;
+  }
+}
+
+/* Off a phone the bar is no box at all: its switch is hidden and its one-line verdict with it. */
+.pickBar {
+  display: contents;
+}
+.pickBarVerdict {
+  display: none;
 }
 
 .slotChanges {
@@ -1525,10 +1544,16 @@
 }
 
 .aiReasons {
+  display: grid;
+  gap: 4px;
   margin: 0;
   padding-left: 18px;
+  list-style: disc;
   color: var(--color-text);
   line-height: 1.45;
+}
+.aiReasons li::marker {
+  color: var(--color-dim);
 }
 
 .aiCounter {
@@ -1722,8 +1747,58 @@
   .pick {
     min-height: 48px;
   }
-  .verdictSticky {
-    top: 6px;
+
+  /* Pinned while the user ticks players: the verdict in one line over the send/get switch, on
+     opaque ground edge to edge so no row shows through or above it. */
+  .pickBar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: grid;
+    gap: 6px;
+    margin: 0 -12px;
+    padding: 8px 12px;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .pickBarVerdict {
+    --tone: var(--gain);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .pickBarVerdict[data-sign="loss"] {
+    --tone: var(--loss);
+  }
+  .pickBarNumber {
+    flex-shrink: 0;
+    color: var(--tone);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .pickBarVerdict[data-level="trim"] .pickBarNumber {
+    color: color-mix(in srgb, var(--tone) 70%, var(--color-muted));
+  }
+  .pickBarVerdict[data-level="rest"] .pickBarNumber {
+    align-self: center;
+    width: 18px;
+    height: 18px;
+    color: var(--color-mine);
+  }
+  .pickBarHeadline {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pickBarVerdict:not([data-level]) .pickBarHeadline {
+    color: var(--color-muted);
+    font-weight: 600;
   }
 }
 
