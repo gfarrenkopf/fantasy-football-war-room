@@ -12,6 +12,7 @@ import { ArrowLeft, ChevronDown, Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
+import { WaiverPanel } from "./WaiverPanel";
 import s from "./season.module.css";
 
 /** Why the page can't show a league, from the server's SeasonLoad. */
@@ -47,7 +48,7 @@ type Props = {
     }
 );
 
-type Tab = "lineup" | "trade";
+type Tab = "lineup" | "trade" | "waivers";
 
 export interface SeasonLeagueLink {
   id: string;
@@ -95,6 +96,9 @@ export function SeasonRoom(props: Props) {
                   </span>
                 )}
               </TabButton>
+              <TabButton id="waivers" tab={tab} onSelect={setTab}>
+                Waivers
+              </TabButton>
             </div>
           )}
         </header>
@@ -116,8 +120,10 @@ export function SeasonRoom(props: Props) {
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
-              ) : (
+              ) : tab === "trade" ? (
                 <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+              ) : (
+                <WaiverPanel view={props.view} leagueId={props.leagueId} />
               )}
             </div>
             <Disconnect seasonEmails={props.seasonEmails} />

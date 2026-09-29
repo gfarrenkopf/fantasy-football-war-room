@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import league from "./__fixtures__/espn-league-2026.json";
-import { ESPN_SLOT_ID, ownTeamId, parseMatchups, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
+import { ESPN_SLOT_ID, ownTeamId, parseFreeAgents, parseMatchups, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
 
 describe("parseSeasonLeague", () => {
   const parsed = parseSeasonLeague(league, "110222051");
@@ -110,6 +110,27 @@ describe("parseSeasonLeague", () => {
     expect(parsed.league.tradeDeadline).toBe("2026-12-02T17:00:00.000Z");
   });
 
+  it("reads the league's FAAB budget and each team's waiver rank and spend", () => {
+    const raw = {
+      ...league,
+      settings: { ...league.settings, acquisitionSettings: { isUsingAcquisitionBudget: true, acquisitionBudget: 100 } },
+      teams: [
+        { id: 9, waiverRank: 4, transactionCounter: { acquisitionBudgetSpent: 23 }, roster: { entries: [] } },
+        { id: 10, roster: { entries: [] } },
+      ],
+    };
+    const parsed = parseSeasonLeague(raw, "1");
+    expect(parsed.ok && parsed.league.waivers).toEqual({
+      budget: 100,
+      teams: [
+        { teamId: 9, rank: 4, spent: 23 },
+        { teamId: 10, rank: null, spent: 0 },
+      ],
+    });
+    const noBids = parseSeasonLeague({ ...raw, settings: { ...raw.settings, acquisitionSettings: { isUsingAcquisitionBudget: false, acquisitionBudget: 100 } } }, "1");
+    expect(noBids.ok && noBids.league.waivers.budget).toBeNull();
+  });
+
   it("maps our slots back to ESPN's ids for writes", () => {
     expect(ESPN_SLOT_ID).toMatchObject({ QB: 0, RB: 2, WR: 4, TE: 6, FLEX: 23, SUPERFLEX: 7, DST: 16, K: 17, BN: 20, IR: 21 });
   });
@@ -215,5 +236,21 @@ describe("parseMatchups", () => {
   it("is empty without a schedule", () => {
     expect(parseMatchups({ status: {} })).toEqual([]);
     expect(parseMatchups(null)).toEqual([]);
+  });
+});
+
+describe("parseFreeAgents", () => {
+  it("reads available players, when a waiver claim clears, and leaves out what War Room doesn't play", () => {
+    const player = (id: number, status: string, defaultPositionId = 2, extra = {}) => ({
+      id,
+      status,
+      waiverProcessDate: 1790751600000,
+      player: { fullName: `P${id}`, defaultPositionId, proTeamId: 8, injuryStatus: "QUESTIONABLE", ownership: { percentOwned: 12.4, percentStarted: 3.2 }, ...extra },
+    });
+    expect(parseFreeAgents({ players: [player(1, "WAIVERS"), player(2, "FREEAGENT", 3), player(3, "ONTEAM"), player(4, "FREEAGENT", 11), null] })).toEqual([
+      { playerId: 1, name: "P1", pos: "RB", team: "DET", injuryStatus: "QUESTIONABLE", status: "WAIVERS", waiverClears: "2026-09-30T07:00:00.000Z", ownership: { owned: 12, started: 3 } },
+      { playerId: 2, name: "P2", pos: "WR", team: "DET", injuryStatus: "QUESTIONABLE", status: "FREEAGENT", waiverClears: null, ownership: { owned: 12, started: 3 } },
+    ]);
+    expect(parseFreeAgents({})).toEqual([]);
   });
 });

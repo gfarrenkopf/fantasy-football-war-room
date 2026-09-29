@@ -50,6 +50,30 @@ export interface SeasonView {
   tradeDeadlinePassed: boolean;
   /** The user's fantasy matchup this week, their side first; null on a bye or when ESPN didn't say. */
   matchup: { me: MatchupSide; them: MatchupSide } | null;
+  /** The user's place in waivers (APE-212): their rank, and FAAB left when the league bids. */
+  waiver: { rank: number | null; budget: number | null; left: number | null };
+}
+
+/** A roster entry scored for this league: weekly and rest-of-season projections, and his game. */
+export function scorePlayer(
+  league: Pick<SeasonLeague, "currentWeek" | "finalWeek" | "scoringItems">,
+  entry: RosterEntry,
+  proj: PlayerProjections | undefined,
+  games: Scoreboard = new Map(),
+): ViewPlayer {
+  const scored = proj ? weeklyPoints(proj, league.scoringItems) : new Map<number, number>();
+  const weekly: Record<number, number> = {};
+  for (let week = league.currentWeek; week <= league.finalWeek; week++) weekly[week] = round(scored.get(week) ?? 0);
+  return {
+    ...entry,
+    // ESPN's player feed can be fresher than the roster's on injuries.
+    injuryStatus: proj?.injuryStatus ?? entry.injuryStatus,
+    weekly,
+    points: weekly[league.currentWeek] ?? 0,
+    ros: round(restOfSeason(scored, league.currentWeek, league.finalWeek)),
+    projected: !!proj,
+    game: (entry.team && games.get(entry.team)) || null,
+  };
 }
 
 export function buildSeasonView(
@@ -58,22 +82,7 @@ export function buildSeasonView(
   projections: ReadonlyMap<number, PlayerProjections>,
   { games = new Map(), now = 0 }: { games?: Scoreboard; now?: number } = {},
 ): SeasonView {
-  const toPlayer = (entry: RosterEntry): ViewPlayer => {
-    const proj = projections.get(entry.playerId);
-    const scored = proj ? weeklyPoints(proj, league.scoringItems) : new Map<number, number>();
-    const weekly: Record<number, number> = {};
-    for (let week = league.currentWeek; week <= league.finalWeek; week++) weekly[week] = round(scored.get(week) ?? 0);
-    return {
-      ...entry,
-      // ESPN's player feed can be fresher than the roster's on injuries.
-      injuryStatus: proj?.injuryStatus ?? entry.injuryStatus,
-      weekly,
-      points: weekly[league.currentWeek] ?? 0,
-      ros: round(restOfSeason(scored, league.currentWeek, league.finalWeek)),
-      projected: !!proj,
-      game: (entry.team && games.get(entry.team)) || null,
-    };
-  };
+  const toPlayer = (entry: RosterEntry) => scorePlayer(league, entry, projections.get(entry.playerId), games);
   // ESPN writes an outlook for nearly everyone each week, so only a day-old or newer story earns the tag. Outlooks run
   // to a paragraph each, so only the user's own players' are sent to the page.
   const fresh = (news: RosterEntry["news"]) => !!news?.at && now - Date.parse(news.at) < NEWS_FRESH_MS;
@@ -101,7 +110,14 @@ export function buildSeasonView(
     tradeDeadline: league.tradeDeadline,
     tradeDeadlinePassed: !!league.tradeDeadline && now > Date.parse(league.tradeDeadline),
     matchup: myMatchup(league, myTeamId),
+    waiver: myWaiver(league, myTeamId),
   };
+}
+
+function myWaiver(league: SeasonLeague, myTeamId: number): SeasonView["waiver"] {
+  const mine = league.waivers.teams.find((t) => t.teamId === myTeamId);
+  const { budget } = league.waivers;
+  return { rank: mine?.rank ?? null, budget, left: budget === null ? null : Math.max(0, budget - (mine?.spent ?? 0)) };
 }
 
 function myMatchup(league: SeasonLeague, myTeamId: number): SeasonView["matchup"] {

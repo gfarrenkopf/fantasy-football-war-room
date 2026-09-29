@@ -191,6 +191,11 @@ Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/S
 - **`mMatchupScore` carries the week's matchup totals** without a `scoringPeriodId` (2026-09-29, about 180 KB more on the season read). `schedule[]` entries for `status.currentMatchupPeriod` have `home` / `away` with `teamId`, `totalPoints` / `totalPointsLive`, `totalProjectedPoints` / `totalProjectedPointsLive` (ESPN's projection for the lineup set on ESPN) and `winProbability` (0–1). A bye has no `away`.
 - **The public scoreboard names both teams.** Each competitor has `homeAway`, and the event has `date` (kickoff, ISO).
 
+### Free agents (APE-212)
+
+- **The league-scoped `kona_player_info` lists available players** with an `X-Fantasy-Filter` such as `{"players":{"filterStatus":{"value":["FREEAGENT","WAIVERS"]},"filterSlotIds":{"value":[0,2,4,6,16,17]},"limit":100,"sortPercOwned":{"sortAsc":false,"sortPriority":1}}}` and cookies (2026-09-29: 50 players ≈ 565 KB with stats). Each entry has `id`, `status` (`FREEAGENT` or `WAIVERS`), `waiverProcessDate` (epoch ms) and `player` (`fullName`, `defaultPositionId`, `proTeamId`, `injuryStatus`, `ownership`).
+- **Waiver settings** are in `mSettings` `acquisitionSettings` (`acquisitionType`, `isUsingAcquisitionBudget`, `acquisitionBudget`, `waiverProcessDays`, `waiverProcessHour`). Each team's `waiverRank` and `transactionCounter.acquisitionBudgetSpent` are in `mTeam`.
+
 ### Lineup writes
 
 `POST https://lm-api-writes.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{leagueId}/transactions/`, with cookies:

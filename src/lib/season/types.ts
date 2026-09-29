@@ -126,6 +126,27 @@ export interface SeasonLeague {
   tradeDeadline: string | null;
   /** This matchup period's fantasy matchups (APE-211). Empty when ESPN sent no schedule. */
   matchups: Matchup[];
+  /** How the league runs waivers (APE-212), and each team's place in them. */
+  waivers: Waivers;
+}
+
+export interface Waivers {
+  /** The season's FAAB budget per team; null when the league doesn't bid. */
+  budget: number | null;
+  teams: { teamId: number; rank: number | null; spent: number }[];
+}
+
+/** A player nobody in the league rosters (`kona_player_info`, FREEAGENT or WAIVERS). */
+export interface FreeAgent {
+  playerId: number;
+  name: string;
+  pos: Position;
+  team: string | null;
+  injuryStatus: InjuryStatus;
+  /** On waivers until `waiverClears`; a free agent can be added now. */
+  status: "FREEAGENT" | "WAIVERS";
+  waiverClears: string | null;
+  ownership: { owned: number; started: number } | null;
 }
 
 /** A trade pending on ESPN (`mPendingTransactions`), between two teams. */

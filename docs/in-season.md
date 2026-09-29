@@ -56,11 +56,20 @@ The trade verdict is a **roster delta**, not a sum of player values. For each te
 
 Launch is build-a-trade: pick a partner and players from both sides. Importing pending ESPN offers comes next, and trade suggestions come in a later epic.
 
+### Waiver pickups (APE-212)
+
+The Waivers tab ranks available players the way trades are scored. It adds each player to the user's roster, cuts the weakest player by rest-of-season points, and measures the change in the best starting lineup's points over every remaining week (`src/lib/season/waivers.ts`). A player who would only sit on the bench scores nothing.
+
+- **The pool** is the 100 most-rostered FREEAGENT / WAIVERS players at the positions War Room plays. It comes from a league-scoped `kona_player_info` read with an `X-Fantasy-Filter`, made with the user's login when the tab opens (`GET /api/leagues/:id/season/waivers`), and cached for ten minutes. Projections come from the same public source as rosters.
+- **The top ten** gains of at least 0.05 points a week are shown, each with who to drop, and whether the player is a free agent or on waivers and when he clears.
+- **The user's waiver priority** (`mTeam` `waiverRank`) is shown, or FAAB left in a league that bids (`acquisitionSettings.acquisitionBudget` minus `transactionCounter.acquisitionBudgetSpent`).
+- Advice only: claims happen on ESPN.
+
 ## 6. Free and paid
 
 | | Free | Trial / season pass |
 |---|---|---|
-| Optimal lineup, trade verdict | Always | Always |
+| Optimal lineup, trade verdict, waiver pickups | Always | Always |
 | AI lineup | No | Mid-week, plus Sunday morning after inactives |
 | AI trade write-up | No | Unlimited |
 

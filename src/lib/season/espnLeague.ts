@@ -2,7 +2,7 @@ import type { RosterSlotKey } from "@/lib/draft/types";
 import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
-import type { LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing } from "./types";
+import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, Waivers } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -151,6 +151,53 @@ function parseSide(raw: unknown): MatchupSide | null {
   };
 }
 
+/** The league's waiver settings (`mSettings`) and each team's waiver rank and FAAB spent (`mTeam`). */
+function parseWaivers(settings: Record<string, unknown>, teams: unknown): Waivers {
+  const acq = isObject(settings.acquisitionSettings) ? settings.acquisitionSettings : {};
+  const budget = acq.isUsingAcquisitionBudget === true && typeof acq.acquisitionBudget === "number" ? acq.acquisitionBudget : null;
+  return {
+    budget,
+    teams: (Array.isArray(teams) ? teams : []).flatMap((t) =>
+      isObject(t) && typeof t.id === "number"
+        ? [
+            {
+              teamId: t.id,
+              rank: typeof t.waiverRank === "number" && t.waiverRank > 0 ? t.waiverRank : null,
+              spent: isObject(t.transactionCounter) ? num(t.transactionCounter.acquisitionBudgetSpent) : 0,
+            },
+          ]
+        : [],
+    ),
+  };
+}
+
+/**
+ * The league's available players (APE-212): a league-scoped `kona_player_info` read filtered to
+ * FREEAGENT and WAIVERS. Positions War Room doesn't play are left out.
+ */
+export function parseFreeAgents(raw: unknown): FreeAgent[] {
+  const players = isObject(raw) && Array.isArray(raw.players) ? raw.players : [];
+  return players.flatMap((entry): FreeAgent[] => {
+    if (!isObject(entry) || !isObject(entry.player) || typeof entry.id !== "number") return [];
+    const player = entry.player;
+    const pos = typeof player.defaultPositionId === "number" ? ESPN_POSITIONS[player.defaultPositionId] : undefined;
+    const status = entry.status === "FREEAGENT" || entry.status === "WAIVERS" ? entry.status : null;
+    if (!pos || !status) return [];
+    return [
+      {
+        playerId: entry.id,
+        name: typeof player.fullName === "string" ? player.fullName : `ESPN player ${entry.id}`,
+        pos,
+        team: typeof player.proTeamId === "number" ? (PRO_TEAMS[player.proTeamId] ?? null) : null,
+        injuryStatus: typeof player.injuryStatus === "string" ? player.injuryStatus : "ACTIVE",
+        status,
+        waiverClears: status === "WAIVERS" ? isoOf(entry.waiverProcessDate) : null,
+        ownership: ownershipOf(player.ownership),
+      },
+    ];
+  });
+}
+
 /** The current matchup period's fantasy matchups (`mMatchupScore`), home and away. */
 export function parseMatchups(raw: unknown): Matchup[] {
   if (!isObject(raw) || !Array.isArray(raw.schedule) || !isObject(raw.status)) return [];
@@ -236,6 +283,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       pendingTrades: parsePendingTrades(raw),
       tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
       matchups: parseMatchups(raw),
+      waivers: parseWaivers(settings, raw.teams),
     },
   };
 }

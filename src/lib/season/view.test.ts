@@ -62,6 +62,12 @@ describe("buildSeasonView", () => {
     expect(buildSeasonView(withMatchups, 3, byId).matchup).toBeNull();
   });
 
+  it("gives the user's waiver rank, and FAAB left when the league bids", () => {
+    const waivers = { budget: 100, teams: [{ teamId: 1, rank: 3, spent: 40 }] };
+    expect(buildSeasonView({ ...season, waivers }, 1, byId).waiver).toEqual({ rank: 3, budget: 100, left: 60 });
+    expect(buildSeasonView({ ...season, waivers: { budget: null, teams: [] } }, 1, byId).waiver).toEqual({ rank: null, budget: null, left: null });
+  });
+
   it("recommends the user's own lineup", () => {
     expect(view.lineup.starters.every((s) => s.playerId !== null)).toBe(true);
     const mine = new Set(view.teams[0].roster.map((p) => p.playerId));
