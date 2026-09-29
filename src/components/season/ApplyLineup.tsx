@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ESPN_WRITE_DISCLOSURE, ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { canPlay, checkMoves, groupMoves, label, movesToStaged, seatsFromRoster, snapshotOf, starterSeats } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { Check } from "./Icons";
 import s from "./season.module.css";
+import { WriteConsent } from "./WriteConsent";
 
 /**
  * Managing the lineup on ESPN from War Room (12.1). The user stages a lineup (War Room's, ESPN's
@@ -241,18 +242,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
               <p>
                 Apply {picked.length === 1 ? "this change" : `these ${picked.length} changes`} to your team on ESPN for week {view.currentWeek}?
               </p>
-              {!agreed && (
-                <div className={s.consent}>
-                  <ul>
-                    {ESPN_WRITE_DISCLOSURE.map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
-                  <label className={s.check}>
-                    <input type="checkbox" checked={consenting} onChange={(e) => setConsenting(e.target.checked)} /> I agree
-                  </label>
-                </div>
-              )}
+              {!agreed && <WriteConsent checked={consenting} onChange={setConsenting} />}
               <div className={s.confirmActions}>
                 <button type="button" className={s.primary} onClick={apply} disabled={phase.kind === "sending" || (!agreed && !consenting)}>
                   {phase.kind === "sending" ? "Setting your lineup…" : "Apply to ESPN"}

@@ -63,7 +63,8 @@ The Waivers tab ranks available players the way trades are scored. It adds each 
 - **The pool** is the 100 most-rostered FREEAGENT / WAIVERS players at the positions War Room plays. It comes from a league-scoped `kona_player_info` read with an `X-Fantasy-Filter`, made with the user's login when the tab opens (`GET /api/leagues/:id/season/waivers`), and cached for ten minutes. Projections come from the same public source as rosters.
 - **The top ten** gains of at least 0.05 points a week are shown, each with who to drop, and whether the player is a free agent or on waivers and when he clears.
 - **The user's waiver priority** (`mTeam` `waiverRank`) is shown, or FAAB left in a league that bids (`acquisitionSettings.acquisitionBudget` minus `transactionCounter.acquisitionBudgetSpent`).
-- Advice only: claims happen on ESPN.
+- **Adding a free agent (13.3):** a free agent's row has **Add**. The user picks who to drop (War Room's suggestion first, or no one when the roster has room), reviews, and confirms. `POST /api/leagues/:id/season/acquire { kind: "add", week, snapshot, add, drop }` (`src/lib/server/espn/acquire.ts`) sends one `FREEAGENT` transaction through the same guardrails as lineup writes (§7). The pure checks (`src/lib/season/acquire.ts`) cover the roster limit (starting slots plus bench, IR not counted), a locked or missing drop, and a player another team has picked up since the pool was read. Whether the player is still a free agent is ESPN's call: it refuses one on waivers, and the whole transaction with him. The pool's cache is dropped after an add.
+- Claims on players still on waivers happen on ESPN.
 
 ## 6. Free and paid
 

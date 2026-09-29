@@ -1,4 +1,5 @@
 import "server-only";
+import type { EspnAcquireItem } from "@/lib/season/acquire";
 import type { EspnLineupItem } from "@/lib/season/apply";
 import type { EspnLogin } from "./logins";
 
@@ -18,8 +19,7 @@ export type EspnTransactionType = "ROSTER" | "FREEAGENT" | "WAIVER" | "TRADE_PRO
 /** One item of a transaction. `ADD` / `DROP` / `TRADE` move players between teams; team 0 is the pool. */
 export type EspnItem =
   | EspnLineupItem
-  | { playerId: number; type: "ADD"; toTeamId: number }
-  | { playerId: number; type: "DROP"; fromTeamId: number }
+  | EspnAcquireItem
   | { playerId: number; type: "TRADE"; fromTeamId: number; toTeamId: number };
 
 export type EspnWrite =

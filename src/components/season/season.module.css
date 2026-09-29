@@ -1358,6 +1358,13 @@
   font-size: 15px;
   font-weight: 800;
 }
+.pickupAct {
+  margin-top: 6px;
+}
+.pickupReview {
+  grid-column: 1 / -1;
+  padding-bottom: 6px;
+}
 .waiverProblem {
   display: grid;
   justify-items: start;
