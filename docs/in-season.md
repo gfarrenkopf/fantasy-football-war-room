@@ -111,14 +111,14 @@ The Sunday job comes too late for players whose games kick off first: they're lo
 Advice is the default. Applying a lineup to ESPN is an option (Epic 12, 12.1), in the lineup tab's move list. The user stages a lineup (War Room's, ESPN's own, or either edited by hand with a picker per starting slot), and War Room sends the moves as **one** transaction, which ESPN applies atomically. After an apply the editor starts again from ESPN's new lineup, so the user can keep managing their team from War Room.
 
 - **Pure checks** (`src/lib/season/apply.ts`), run in the browser while staging and again on the server: every move is the user's own player, where ESPN has them, unlocked, into a slot they're eligible for, and the result fits the league's starting slots and bench. Players on IR are left alone.
-- **Route:** `POST /api/leagues/:id/season/apply { week, snapshot, moves, consentVersion? }` (`src/lib/server/espn/applyLineup.ts`, `lineupWriter.ts`). The team is the user's own, from their season link; the request never names one.
+- **Route:** `POST /api/leagues/:id/season/apply { week, snapshot, moves, consentVersion? }` (`src/lib/server/espn/applyLineup.ts`). Every write to ESPN, lineup or otherwise, goes through `guardedWrite.ts` (the guardrails below) and `transactionWriter.ts` (one `transactions/` POST). The team is the user's own, from their season link; the request never names one.
 
 Guardrails:
 
 1. The user reviews every move and confirms. Nothing is applied automatically: the Sunday job and the AI never write.
 2. Re-read the roster (skipping the cache) right before writing. Abort if ESPN has moved on a week, if anything on the roster changed since staging (`snapshot`), or if the checks fail against the fresh roster (a player now locked). ESPN doesn't check `fromLineupSlotId`, and it has no dry run, so this check is ours to make.
 3. Re-read after writing, even when the write timed out, and show which moves landed. ESPN refusing, a failed write, a move that didn't land, and a write that couldn't be checked all log `[server-error]`.
-4. A separate, versioned consent line (`ESPN_LINEUP_WRITE_VERSION` in `src/lib/espn/disclosure.ts`, stored in `user_prefs.lineup_write_consent`), asked the first time the user applies.
+4. A separate, versioned consent line (`ESPN_WRITE_VERSION` in `src/lib/espn/disclosure.ts`, stored in `user_prefs.lineup_write_consent`), asked the first time the user confirms a change. Version 2 (Epic 13) covers the whole team: lineup, IR, adds and drops, waiver claims and trades. Users who agreed to version 1 are asked once more.
 
 ## 8. Open questions
 

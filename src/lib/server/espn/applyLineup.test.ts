@@ -6,7 +6,7 @@ import { ESPN_SLOT_ID } from "@/lib/season/espnLeague";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { LineupSlot, RosterEntry, SeasonLeague } from "@/lib/season/types";
 import { applyLineup, type ApplyDeps } from "./applyLineup";
-import type { EspnLineupWrite, EspnWrite } from "./lineupWriter";
+import type { EspnTransaction, EspnWrite } from "./transactionWriter";
 import type { SeasonLoad } from "./seasonData";
 
 vi.mock("server-only", () => ({}));
@@ -64,8 +64,8 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
 const ok = (lg: SeasonLeague): SeasonLoad => ({ kind: "ok", league: lg, espnTeamId: 1, fetchedAt: new Date(), stale: false });
 
 /** A fake ESPN: reads return `reads` in turn, writes are recorded and answered with `answer`. */
-function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true }) {
-  const writes: EspnLineupWrite[] = [];
+function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true, id: "tx" }) {
+  const writes: EspnTransaction[] = [];
   const refreshes: boolean[] = [];
   const deps: ApplyDeps = {
     load: async (_db, _key, _user, _league, options) => {
@@ -103,6 +103,7 @@ describe("applyLineup", () => {
         espnLeagueId: "704343562",
         teamId: 1,
         week: 4,
+        type: "ROSTER",
         items: [
           { playerId: 2, type: "LINEUP", fromLineupSlotId: 2, toLineupSlotId: 20 },
           { playerId: 4, type: "LINEUP", fromLineupSlotId: 20, toLineupSlotId: 2 },

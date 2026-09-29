@@ -4,13 +4,13 @@ import { after, connection } from "next/server";
 import { SeasonRoom, type SeasonProblem } from "@/components/season/SeasonRoom";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
-import { ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
 import { backfillEspnDraft } from "@/lib/server/espn/draftImport";
 import { listSeasonLinks, markSeasonViewed } from "@/lib/server/espn/seasonLinks";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
-import { lineupWriteConsent, wantsSeasonEmails } from "@/lib/server/seasonPrefs";
+import { wantsSeasonEmails, writeConsent } from "@/lib/server/seasonPrefs";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
 
@@ -49,11 +49,11 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   const load = await loadSeasonView(db, key, user.userId, leagueId, { refresh });
   if (load.kind !== "ok") return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} />;
   const { view } = load;
-  const [ai, emails, writeConsent] = await Promise.all([
+  const [ai, emails, consented] = await Promise.all([
     seasonAiState(db, user, league, view),
     // Only offered when the Sunday job can send email at all.
     config.seasonJobEnabled && config.emailAuthEnabled ? wantsSeasonEmails(db, user.userId) : null,
-    lineupWriteConsent(db, user.userId),
+    writeConsent(db, user.userId),
     markSeasonViewed(db, user.userId, leagueId),
   ]);
 
@@ -70,7 +70,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       ai={ai}
       checkout={checkout}
       seasonEmails={emails}
-      writeConsented={(writeConsent ?? 0) >= ESPN_LINEUP_WRITE_VERSION}
+      writeConsented={(consented ?? 0) >= ESPN_WRITE_VERSION}
     />
   );
 }

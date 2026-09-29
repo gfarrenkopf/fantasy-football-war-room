@@ -162,7 +162,7 @@ export function landedMoves(moves: readonly LineupMove[], after: readonly ApplyE
 }
 
 /**
- * ESPN's refusal (`409`, `details[].type`) in plain words. Unknown types fall back to ESPN's own message.
+ * ESPN's refusal of any roster transaction (`409`, `details[].type`) in plain words. Unknown types fall back to ESPN's own message.
  */
 export function espnRefusal(type: string, message: string): string {
   switch (type) {
@@ -174,6 +174,12 @@ export function espnRefusal(type: string, message: string): string {
       return `ESPN says a player's game has started, so they can't move this week: ${message}`;
     case "TRAN_ROSTER_SAME_SLOT":
       return `ESPN says a player is already in that slot, so your lineup has changed since this page loaded: ${message}`;
+    case "TRAN_ROSTER_INELIGIBLE_IR_NOT_INJURED":
+      return `ESPN only puts injured players on IR: ${message}`;
+    case "TRAN_ROSTER_LIMIT_EXCEEDED_ONE":
+      return `ESPN says your roster would be over its limit, so drop a player too: ${message}`;
+    case "TRAN_PLAYER_NOT_FREEAGENT":
+      return `ESPN says the player isn't a free agent any more: ${message}`;
     default:
       return message ? `ESPN refused the change: ${message}` : `ESPN refused the change (${type}).`;
   }

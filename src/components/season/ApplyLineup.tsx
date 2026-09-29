@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ESPN_LINEUP_WRITE_DISCLOSURE, ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_WRITE_DISCLOSURE, ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { canPlay, checkMoves, groupMoves, label, movesToStaged, seatsFromRoster, snapshotOf, starterSeats } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
@@ -107,7 +107,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/season/apply`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ week: view.currentWeek, snapshot: snapshotOf(roster), moves: chosen, ...(agreed ? {} : { consentVersion: ESPN_LINEUP_WRITE_VERSION }) }),
+      body: JSON.stringify({ week: view.currentWeek, snapshot: snapshotOf(roster), moves: chosen, ...(agreed ? {} : { consentVersion: ESPN_WRITE_VERSION }) }),
     }).catch(() => null);
     if (!res) return setPhase({ kind: "failed", error: "Can't reach War Room right now. Nothing was sent to ESPN.", details: [] });
     const body = (await res.json().catch(() => ({}))) as {
@@ -244,7 +244,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
               {!agreed && (
                 <div className={s.consent}>
                   <ul>
-                    {ESPN_LINEUP_WRITE_DISCLOSURE.map((line) => (
+                    {ESPN_WRITE_DISCLOSURE.map((line) => (
                       <li key={line}>{line}</li>
                     ))}
                   </ul>

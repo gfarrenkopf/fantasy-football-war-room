@@ -1,5 +1,5 @@
 import { config } from "@/lib/config";
-import { ESPN_LINEUP_WRITE_DISCLOSURE, ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_WRITE_DISCLOSURE, ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { espnRefusal } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
@@ -9,7 +9,7 @@ import { applyLineup, type ApplyRequest } from "@/lib/server/espn/applyLineup";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { error, json, readJson } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
-import { agreeToLineupWrites, lineupWriteConsent } from "@/lib/server/seasonPrefs";
+import { agreeToWrites, writeConsent } from "@/lib/server/seasonPrefs";
 
 type Ctx = RouteContext<"/api/leagues/[id]/season/apply">;
 
@@ -59,9 +59,9 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
 
   try {
     if (!(await findLeague(db, userId, id))) return error(404, "League not found");
-    if (((await lineupWriteConsent(db, userId)) ?? 0) < ESPN_LINEUP_WRITE_VERSION) {
-      if (body.consentVersion !== ESPN_LINEUP_WRITE_VERSION) return json(409, { error: "Agree to War Room changing your ESPN lineup first", consent: { version: ESPN_LINEUP_WRITE_VERSION, lines: ESPN_LINEUP_WRITE_DISCLOSURE } });
-      await agreeToLineupWrites(db, userId, ESPN_LINEUP_WRITE_VERSION);
+    if (((await writeConsent(db, userId)) ?? 0) < ESPN_WRITE_VERSION) {
+      if (body.consentVersion !== ESPN_WRITE_VERSION) return json(409, { error: "Agree to War Room changing your team on ESPN first", consent: { version: ESPN_WRITE_VERSION, lines: ESPN_WRITE_DISCLOSURE } });
+      await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
     }
 
     const out = await applyLineup(db, config.espnCodeKey, userId, id, body);

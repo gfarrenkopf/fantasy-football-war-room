@@ -176,6 +176,8 @@ describe("espnRefusal", () => {
       "ESPN says a slot would be over its limit: Too many players in the RB slot (maximum 2)",
     );
     expect(espnRefusal("TRAN_LINEUP_LOCKED", "Lineup transaction could not be completed, Drake London is locked")).toContain("game has started");
+    expect(espnRefusal("TRAN_ROSTER_INELIGIBLE_IR_NOT_INJURED", "X is not eligible for the IL/IR slot, player is not injured.")).toContain("only puts injured players on IR");
+    expect(espnRefusal("TRAN_ROSTER_LIMIT_EXCEEDED_ONE", "Too many players on roster (maximum 16).")).toContain("drop a player");
     expect(espnRefusal("TRAN_SOMETHING_NEW", "Player is locked.")).toBe("ESPN refused the change: Player is locked.");
     expect(espnRefusal("TRAN_SOMETHING_NEW", "")).toBe("ESPN refused the change (TRAN_SOMETHING_NEW).");
   });
