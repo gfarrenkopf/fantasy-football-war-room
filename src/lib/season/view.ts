@@ -1,4 +1,5 @@
 import { optimalLineup, type LineupPlan } from "./lineup";
+import type { GameState, Scoreboard } from "./scoreboard";
 import { restOfSeason, weeklyPoints } from "./scoring";
 import type { LineupSlotCount, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague } from "./types";
 
@@ -17,6 +18,8 @@ export interface ViewPlayer extends RosterEntry {
   ros: number;
   /** Whether ESPN projected the player at all. An unprojected player shows as 0, with a note. */
   projected: boolean;
+  /** His NFL game this week, or null for a bye, a free agent, or a scoreboard that didn't load. */
+  game: GameState | null;
 }
 
 export interface ViewTeam {
@@ -43,7 +46,12 @@ export interface SeasonView {
   pendingTrades: PendingTrade[];
 }
 
-export function buildSeasonView(league: SeasonLeague, myTeamId: number, projections: ReadonlyMap<number, PlayerProjections>): SeasonView {
+export function buildSeasonView(
+  league: SeasonLeague,
+  myTeamId: number,
+  projections: ReadonlyMap<number, PlayerProjections>,
+  games: Scoreboard = new Map(),
+): SeasonView {
   const toPlayer = (entry: RosterEntry): ViewPlayer => {
     const proj = projections.get(entry.playerId);
     const scored = proj ? weeklyPoints(proj, league.scoringItems) : new Map<number, number>();
@@ -57,6 +65,7 @@ export function buildSeasonView(league: SeasonLeague, myTeamId: number, projecti
       points: weekly[league.currentWeek] ?? 0,
       ros: round(restOfSeason(scored, league.currentWeek, league.finalWeek)),
       projected: !!proj,
+      game: (entry.team && games.get(entry.team)) || null,
     };
   };
   const teams = league.teams.map((t) => ({ id: t.id, name: t.name, abbrev: t.abbrev, roster: t.roster.map(toPlayer) }));

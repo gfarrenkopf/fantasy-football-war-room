@@ -31,6 +31,8 @@ export function player(name: string, pos: Position, pts: number | number[], over
     points: byWeek[0],
     ros: byWeek.reduce((a, b) => a + b, 0),
     projected: true,
+    actual: null,
+    game: null,
     ...over,
   };
 }

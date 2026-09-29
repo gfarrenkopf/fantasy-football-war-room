@@ -34,9 +34,36 @@ describe("parseSeasonLeague", () => {
       espnSlotId: 2,
       locked: false,
       injuryStatus: "ACTIVE",
+      actual: null,
     });
     expect(roster.find((e) => e.pos === "DST")).toMatchObject({ slot: "DST", espnSlotId: 16 });
     expect(roster.filter((e) => e.slot === "BN")).toHaveLength(7);
+  });
+
+  it("reads this week's league-scored points once a player's game starts, and nothing else", () => {
+    const row = (over: Record<string, number>) => ({ statSourceId: 0, statSplitTypeId: 1, seasonId: 2026, scoringPeriodId: 3, appliedTotal: 12.345, ...over });
+    const entry = (playerId: number, stats: unknown[]) => ({
+      playerId,
+      lineupSlotId: 2,
+      playerPoolEntry: { player: { fullName: "X", defaultPositionId: 2, proTeamId: 8, stats } },
+    });
+    const raw = {
+      ...league,
+      teams: [
+        {
+          id: 9,
+          roster: {
+            entries: [
+              entry(1, [row({})]),
+              entry(2, [row({ scoringPeriodId: 2 }), row({ seasonId: 2025 }), row({ statSourceId: 1 }), row({ statSplitTypeId: 0 })]),
+              entry(3, []),
+            ],
+          },
+        },
+      ],
+    };
+    const parsed = parseSeasonLeague(raw, "1");
+    expect(parsed.ok && parsed.league.teams[0].roster.map((e) => e.actual)).toEqual([12.35, null, null]);
   });
 
   it("maps our slots back to ESPN's ids for writes", () => {

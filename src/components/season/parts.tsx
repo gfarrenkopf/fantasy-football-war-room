@@ -59,21 +59,48 @@ export function Gain({
   );
 }
 
+/** Whether the player's game this week has kicked off, going by ESPN's scoreboard or his points. */
+export const hasStarted = (player: ViewPlayer) => player.actual !== null || player.game?.state === "in" || player.game?.state === "post";
+
+/**
+ * Where the player's game stands (APE-196): the clock in Terminal Sky behind a still dot while it's
+ * on, a muted "Final" once it's over. Nothing before kickoff, or when the scoreboard didn't load.
+ */
+export function GameStatus({ player }: { player: ViewPlayer }) {
+  const game = player.game;
+  if (game?.state === "in") {
+    return (
+      <span className={s.live}>
+        <span className={s.liveDot} aria-hidden />
+        <span className="sr-only">Playing now: </span>
+        {game.detail || "Live"}
+      </span>
+    );
+  }
+  if (game?.state === "post") return <span className={s.final}>{game.detail || "Final"}</span>;
+  return null;
+}
+
 /** A player's name, injury tag and lock, over their position, team and projection. */
 export function PlayerLine({
   player,
   tone = "same",
   locked = false,
   value = "points",
+  live = false,
 }: {
   player: ViewPlayer;
   tone?: "same" | "out" | "in";
   locked?: boolean;
   /** Which projection the second line shows: this week's, or the rest of the season's. */
   value?: "points" | "none";
+  /** Show this week's game once it kicks off: points scored so far and where the game stands. */
+  live?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = player.points === 0 && player.projected;
+  const started = live && hasStarted(player);
+  const status = started && player.game && player.game.state !== "pre";
   return (
     <span className={s.player} data-tone={tone}>
       <span className={s.playerLine}>
@@ -95,13 +122,27 @@ export function PlayerLine({
           {player.pos === "DST" ? "D/ST" : player.pos}
         </span>{" "}
         · {player.team ?? "FA"}
-        {value === "points" && (
-          <>
-            {" "}
-            · <span className={`${s.pts} tabular-nums`}>{pts(player.points)}</span>
-            {bye && " · bye"}
-            {!player.projected && " · no projection"}
-          </>
+        {value === "points" &&
+          (started ? (
+            <span className={s.factsPoints}>
+              <span className={s.factsSep}> · </span>
+              <span className={`${s.actual} tabular-nums`}>{pts(player.actual ?? 0)}</span>
+              <span className="sr-only"> points so far,</span> {player.game?.state === "in" ? "of" : "· proj"}{" "}
+              <span className="tabular-nums">{pts(player.points)}</span>
+            </span>
+          ) : (
+            <>
+              {" "}
+              · <span className={`${s.pts} tabular-nums`}>{pts(player.points)}</span>
+              {bye && " · bye"}
+              {!player.projected && " · no projection"}
+            </>
+          ))}
+        {status && (
+          <span className={s.factsGame}>
+            <span className={s.factsSep}> · </span>
+            <GameStatus player={player} />
+          </span>
         )}
       </span>
     </span>

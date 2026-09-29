@@ -40,7 +40,16 @@ export const ESPN_SLOT_ID: Readonly<Record<RosterSlotKey | "IR", number>> = {
   IR,
 };
 
-function parseEntry(raw: unknown): RosterEntry | null {
+/** The player's league-scored actual points for one NFL week: the stat row ESPN keys by game. */
+function actualPoints(stats: unknown, season: number, week: number): number | null {
+  if (!Array.isArray(stats)) return null;
+  const row = stats.find(
+    (s) => isObject(s) && s.statSourceId === 0 && s.statSplitTypeId === 1 && s.seasonId === season && s.scoringPeriodId === week && typeof s.appliedTotal === "number",
+  );
+  return row ? Math.round(row.appliedTotal * 100) / 100 : null;
+}
+
+function parseEntry(raw: unknown, season: number, week: number): RosterEntry | null {
   if (!isObject(raw) || typeof raw.playerId !== "number" || typeof raw.lineupSlotId !== "number") return null;
   const pool = isObject(raw.playerPoolEntry) ? raw.playerPoolEntry : {};
   const player = isObject(pool.player) ? pool.player : {};
@@ -57,6 +66,7 @@ function parseEntry(raw: unknown): RosterEntry | null {
     espnSlotId: raw.lineupSlotId,
     locked: pool.lineupLocked === true,
     injuryStatus: injury,
+    actual: actualPoints(player.stats, season, week),
   };
 }
 
@@ -145,7 +155,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
     if (!isObject(t) || typeof t.id !== "number") return [];
     const entries = isObject(t.roster) && Array.isArray(t.roster.entries) ? t.roster.entries : [];
     const name = typeof t.name === "string" && t.name ? t.name : [t.location, t.nickname].filter((x) => typeof x === "string").join(" ") || `Team ${t.id}`;
-    return [{ id: t.id, name, abbrev: typeof t.abbrev === "string" ? t.abbrev : "", roster: entries.flatMap((e) => parseEntry(e) ?? []) }];
+    return [{ id: t.id, name, abbrev: typeof t.abbrev === "string" ? t.abbrev : "", roster: entries.flatMap((e) => parseEntry(e, season, currentWeek) ?? []) }];
   });
 
   return {

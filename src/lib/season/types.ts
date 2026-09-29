@@ -51,6 +51,11 @@ export interface RosterEntry {
   /** The player's game has started this week: ESPN won't move them until next week. */
   locked: boolean;
   injuryStatus: InjuryStatus;
+  /**
+   * Points scored this week so far, by this league's scoring: ESPN's actual row for the current
+   * week. Null until the player's game starts.
+   */
+  actual: number | null;
 }
 
 export interface SeasonTeam {

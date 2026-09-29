@@ -3,6 +3,7 @@ import type { Db } from "@/lib/db/types";
 import type { PlayerProjections } from "@/lib/season/types";
 import { buildSeasonView, type SeasonView } from "@/lib/season/view";
 import { getEspnProjections } from "./projections";
+import { getEspnScoreboard } from "./scoreboard";
 import { loadSeason, type SeasonLoad } from "./seasonData";
 
 export type SeasonViewLoad =
@@ -22,11 +23,16 @@ export async function loadSeasonView(db: Db, key: Buffer, userId: string, league
   // Only the projections fetch is allowed to fail: without it every player shows 0, with a note.
   let projections = new Map<number, PlayerProjections>();
   let projectionsMissing = false;
-  try {
-    projections = await getEspnProjections({ season: season.season, playerIds: ids, fromWeek: season.currentWeek, toWeek: season.finalWeek, ...(refresh ? { maxAgeMs: 0 } : {}) });
-  } catch (err) {
-    console.warn(`[espn-season] projections unavailable: ${(err as Error).message}`);
-    projectionsMissing = true;
-  }
-  return { kind: "ok", view: buildSeasonView(season, load.espnTeamId, projections), fetchedAt: load.fetchedAt, stale: load.stale, projectionsMissing };
+  const fresh = refresh ? { maxAgeMs: 0 } : {};
+  // The scoreboard never fails: without it, live points show without a game status.
+  const [projected, games] = await Promise.all([
+    getEspnProjections({ season: season.season, playerIds: ids, fromWeek: season.currentWeek, toWeek: season.finalWeek, ...fresh }).catch((err: Error) => {
+      console.warn(`[espn-season] projections unavailable: ${err.message}`);
+      projectionsMissing = true;
+      return projections;
+    }),
+    getEspnScoreboard({ season: season.season, week: season.currentWeek, ...fresh }),
+  ]);
+  projections = projected;
+  return { kind: "ok", view: buildSeasonView(season, load.espnTeamId, projections, games), fetchedAt: load.fetchedAt, stale: load.stale, projectionsMissing };
 }

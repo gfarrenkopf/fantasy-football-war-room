@@ -8,7 +8,7 @@ import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup } from "./ApplyLineup";
 import { ArrowRight, Check, External, Swap } from "./Icons";
-import { Gain, PlayerLine, pts, signed } from "./parts";
+import { Gain, GameStatus, hasStarted, PlayerLine, pts, signed } from "./parts";
 import s from "./season.module.css";
 
 const SLOT_LABEL: Record<LineupSlot, string> = {
@@ -122,12 +122,12 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
                     <th scope="row" className={s.slot}>
                       {SLOT_LABEL[row.key]}
                     </th>
-                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} /> : <span className={s.fine}>Empty</span>}</td>
+                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} live /> : <span className={s.fine}>Empty</span>}</td>
                     <td className={s.arrow}>{row.changed && <ArrowRight />}</td>
                     <td>
                       {row.changed ? (
                         next ? (
-                          <PlayerLine player={next} tone="in" locked={row.locked} />
+                          <PlayerLine player={next} tone="in" locked={row.locked} live />
                         ) : (
                           <span className={s.fine}>Nobody available</span>
                         )
@@ -200,15 +200,35 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
             <span className={s.panelNote}>{bench.length} players</span>
           </div>
           <ul className={s.bench}>
-            {bench.map((p) => (
-              <li key={p.playerId} className={s.benchRow} data-moved={benched.has(p.playerId)}>
-                <PlayerLine player={p} locked={p.locked} value="none" />
-                <span className="text-right">
-                  <span className={`${s.benchPts} tabular-nums`}>{pts(p.points)}</span>
-                  {benched.has(p.playerId) && <span className={`${s.benchNote} block`}>To the bench</span>}
-                </span>
-              </li>
-            ))}
+            {bench.map((p) => {
+              // Once his game kicks off, a bench player shows what he's scored, over where the game stands.
+              const started = hasStarted(p);
+              return (
+                <li key={p.playerId} className={s.benchRow} data-moved={benched.has(p.playerId)}>
+                  <PlayerLine player={p} locked={p.locked} value="none" />
+                  <span className="text-right">
+                    {started ? (
+                      <span className={`${s.benchPts} ${s.actual} tabular-nums`}>
+                        {pts(p.actual ?? 0)}
+                        <span className="sr-only"> points so far</span>
+                      </span>
+                    ) : (
+                      <span className={`${s.benchPts} tabular-nums`}>{pts(p.points)}</span>
+                    )}
+                    {benched.has(p.playerId) ? (
+                      <span className={`${s.benchNote} block`}>To the bench</span>
+                    ) : (
+                      started && (
+                        <span className={`${s.benchStatus} block`}>
+                          <GameStatus player={p} />
+                          {p.game && p.game.state !== "pre" && " · "}proj <span className="tabular-nums">{pts(p.points)}</span>
+                        </span>
+                      )
+                    )}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </section>
       </div>
