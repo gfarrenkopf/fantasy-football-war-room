@@ -76,23 +76,35 @@ export function Gain({
 /** Whether the player's game this week has kicked off, going by ESPN's scoreboard or his points. */
 export const hasStarted = (player: ViewPlayer) => player.actual !== null || player.game?.state === "in" || player.game?.state === "post";
 
+const kickoffTime = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+
 /**
- * Where the player's game stands (APE-196): the clock in Terminal Sky behind a still dot while it's
- * on, a muted "Final" once it's over. Nothing before kickoff, or when the scoreboard didn't load.
+ * The player's NFL game this week: who it's against (APE-211) and where it stands (APE-196). Before
+ * kickoff, the opponent and kickoff in muted ink; while it's on, the clock in Terminal Sky behind a
+ * still dot; once it's over, a muted "Final". Nothing when the scoreboard didn't load.
  */
 export function GameStatus({ player }: { player: ViewPlayer }) {
   const game = player.game;
-  if (game?.state === "in") {
+  if (!game) return null;
+  const opponent = game.opponent && `${game.home ? "vs" : "@"} ${game.opponent}`;
+  if (game.state === "in") {
     return (
       <span className={s.live}>
         <span className={s.liveDot} aria-hidden />
         <span className="sr-only">Playing now: </span>
+        {opponent && `${opponent} · `}
         {game.detail || "Live"}
       </span>
     );
   }
-  if (game?.state === "post") return <span className={s.final}>{game.detail || "Final"}</span>;
-  return null;
+  if (game.state === "post") return <span className={s.final}>{[opponent, game.detail || "Final"].filter(Boolean).join(" · ")}</span>;
+  return (
+    <span className={s.pregame}>
+      {opponent}
+      {opponent && game.kickoff && " · "}
+      {game.kickoff && <span suppressHydrationWarning>{kickoffTime(game.kickoff)}</span>}
+    </span>
+  );
 }
 
 const newsTime = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -153,7 +165,7 @@ export function PlayerLine({
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = player.points === 0 && player.projected;
   const started = live && hasStarted(player);
-  const status = started && player.game && player.game.state !== "pre";
+  const status = live && player.game !== null;
   return (
     <span className={s.player} data-tone={tone}>
       <span className={s.playerLine}>

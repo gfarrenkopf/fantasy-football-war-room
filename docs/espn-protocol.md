@@ -186,6 +186,11 @@ Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/S
 - **Game state is public.** `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={season}&seasontype=2&week={week}` needs no cookies (about 290 KB for a week). Each event has `status.type.state` (`pre`, `in` or `post`) and `status.type.shortDetail` ("Final", "Halftime", "4:12 - 3rd", or a kickoff time). Event ids are the same game ids as the stat rows and `proTeamSchedules_wl`. `competitions[0].competitors[].team.id` is the same pro-team id as `proTeamId` (GB 9, ATL 1, BUF 2, DET 8).
 - **`proTeamSchedules_wl` has a `statsOfficial` flag per game.** It was still `false` the day after the game, so it isn't a signal that the game is final.
 
+### Matchups (APE-211)
+
+- **`mMatchupScore` carries the week's matchup totals** without a `scoringPeriodId` (2026-09-29, about 180 KB more on the season read). `schedule[]` entries for `status.currentMatchupPeriod` have `home` / `away` with `teamId`, `totalPoints` / `totalPointsLive`, `totalProjectedPoints` / `totalProjectedPointsLive` (ESPN's projection for the lineup set on ESPN) and `winProbability` (0–1). A bye has no `away`.
+- **The public scoreboard names both teams.** Each competitor has `homeAway`, and the event has `date` (kickoff, ISO).
+
 ### Lineup writes
 
 `POST https://lm-api-writes.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{leagueId}/transactions/`, with cookies:

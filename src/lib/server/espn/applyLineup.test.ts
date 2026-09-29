@@ -56,6 +56,7 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
     ],
     pendingTrades: [],
     tradeDeadline: null,
+    matchups: [],
   };
 }
 

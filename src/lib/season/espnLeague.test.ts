@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import league from "./__fixtures__/espn-league-2026.json";
-import { ESPN_SLOT_ID, ownTeamId, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
+import { ESPN_SLOT_ID, ownTeamId, parseMatchups, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
 
 describe("parseSeasonLeague", () => {
   const parsed = parseSeasonLeague(league, "110222051");
@@ -187,5 +187,33 @@ describe("parsePendingTrades", () => {
   it("leaves out waiver claims, finished trades, and anything that isn't a list", () => {
     expect(parsePendingTrades({ pendingTransactions: pending.pendingTransactions.slice(2) })).toEqual([]);
     expect(parsePendingTrades({})).toEqual([]);
+  });
+});
+
+describe("parseMatchups", () => {
+  const side = (teamId: number, over = {}) => ({ teamId, totalPoints: 0, totalPointsLive: 12.345, totalProjectedPoints: 120, totalProjectedPointsLive: 118.5, winProbability: 0.49, ...over });
+  const raw = {
+    status: { currentMatchupPeriod: 4 },
+    schedule: [
+      { matchupPeriodId: 3, home: side(1), away: side(2) },
+      { matchupPeriodId: 4, home: side(1), away: side(2, { winProbability: 0.51, totalPointsLive: undefined, totalPoints: 7 }) },
+      { matchupPeriodId: 4, home: side(3) },
+      { matchupPeriodId: 4, home: null },
+    ],
+  };
+
+  it("reads this period's matchups with ESPN's live points, projections and odds, and a bye's lone side", () => {
+    expect(parseMatchups(raw)).toEqual([
+      {
+        home: { teamId: 1, points: 12.35, projected: 118.5, winProbability: 0.49 },
+        away: { teamId: 2, points: 7, projected: 118.5, winProbability: 0.51 },
+      },
+      { home: { teamId: 3, points: 12.35, projected: 118.5, winProbability: 0.49 }, away: null },
+    ]);
+  });
+
+  it("is empty without a schedule", () => {
+    expect(parseMatchups({ status: {} })).toEqual([]);
+    expect(parseMatchups(null)).toEqual([]);
   });
 });

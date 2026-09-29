@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PlanModelError } from "@/lib/ai/provider";
 import { createFakePlanModel } from "@/lib/ai/providers/fake";
+import { LINEUP_PROMPT_VERSION } from "@/lib/ai/season/lineup";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
 import { aiGenerations } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
@@ -44,7 +45,7 @@ describe("writeAiLineup", () => {
 
     expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual(["lineup-midweek"]);
     expect(Object.keys(await findAiLineups(db, leagueId, 2026, 5))).toEqual(["lineup-midweek"]);
-    expect(await generations()).toEqual([expect.objectContaining({ purpose: "season-lineup", outcome: "ready", promptVersion: 1, inputTokens: 1_000, outputTokens: 200 })]);
+    expect(await generations()).toEqual([expect.objectContaining({ purpose: "season-lineup", outcome: "ready", promptVersion: LINEUP_PROMPT_VERSION, inputTokens: 1_000, outputTokens: 200 })]);
   });
 
   it("answers used when the allowance went without a stored lineup", async () => {

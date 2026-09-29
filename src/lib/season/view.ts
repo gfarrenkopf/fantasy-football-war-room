@@ -1,7 +1,7 @@
 import { optimalLineup, type LineupPlan } from "./lineup";
 import type { GameState, Scoreboard } from "./scoreboard";
 import { restOfSeason, weeklyPoints } from "./scoring";
-import type { LineupSlotCount, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
+import type { LineupSlotCount, MatchupSide, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
 
 /**
  * Everything the season page shows, computed on the server from ESPN's league and projections and
@@ -48,6 +48,8 @@ export interface SeasonView {
   /** The league's trade deadline, as an ISO instant, and whether it had passed when ESPN was read. */
   tradeDeadline: string | null;
   tradeDeadlinePassed: boolean;
+  /** The user's fantasy matchup this week, their side first; null on a bye or when ESPN didn't say. */
+  matchup: { me: MatchupSide; them: MatchupSide } | null;
 }
 
 export function buildSeasonView(
@@ -98,7 +100,17 @@ export function buildSeasonView(
     pendingTrades: league.pendingTrades.filter((t) => t.proposerTeamId === myTeamId || t.partnerTeamId === myTeamId),
     tradeDeadline: league.tradeDeadline,
     tradeDeadlinePassed: !!league.tradeDeadline && now > Date.parse(league.tradeDeadline),
+    matchup: myMatchup(league, myTeamId),
   };
+}
+
+function myMatchup(league: SeasonLeague, myTeamId: number): SeasonView["matchup"] {
+  for (const { home, away } of league.matchups) {
+    if (!away) continue;
+    if (home.teamId === myTeamId) return { me: home, them: away };
+    if (away.teamId === myTeamId) return { me: away, them: home };
+  }
+  return null;
 }
 
 /** How recent ESPN's last news on a player must be for his outlook to show: a day. */

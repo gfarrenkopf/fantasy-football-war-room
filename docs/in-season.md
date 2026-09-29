@@ -33,6 +33,7 @@ ESPN's own projections, behind a `ProjectionSource` interface so a paid source (
 - Injury status comes from roster entries and `kona_player_info`.
 - **News and ownership** come from the same roster read (APE-213). The page shows ESPN's written outlook for the week (`outlooks.outlooksByWeek[week]`) only for the user's own players whose `lastNewsDate` is under a day old. ESPN writes an outlook for nearly everyone, so without that filter every player would carry the tag. `ownership.percentOwned` / `percentStarted` show on the bench and in the trade builder.
 - **Standings and the trade deadline** (APE-214): each team's `record.overall` and `playoffSeed` come from `mTeam`, and the deadline from `mSettings` `tradeSettings.deadlineDate`, all already in the page's read. The AI trade write-up gets both teams' records, points for and seeds (prompt version 2).
+- **This week's matchup** (APE-211) comes from `mMatchupScore` in the page's read: both sides' points, ESPN's projection for the lineups set on ESPN, and ESPN's win probability. Each player's NFL opponent and kickoff come from the same public scoreboard as game state.
 - **Points scored this week** come from the roster read itself. Each player's actual row for the current week (`statSourceId 0`, `statSplitTypeId 1`) carries `appliedTotal` in the league's own scoring. **Where each game stands** (not started, under way, or final, with ESPN's clock line) comes from ESPN's public NFL scoreboard, cached for a minute. If the scoreboard fails, the points still show, without a game status. The page updates on load and on Refresh; it doesn't poll (APE-196).
 
 ## 3. Connecting a league
@@ -75,7 +76,7 @@ Both extend the draft plan's pipeline (`src/lib/ai/`): the same provider seam, s
 - **AI trade write-up** (`src/lib/ai/season/trade.ts`): the input is the trade verdict for both teams, recomputed on the server, plus both rosters with rest-of-season points, playoff-week points (from `playoffStartWeek`, parsed from ESPN's schedule) and remaining byes. The output is an accept/decline/counter lean, a summary, 2–4 reasons, and a counter-offer by ref when one is obvious. A counter with players on the wrong side is dropped.
 - **Stored, never re-billed** (`season_ai_outputs`): lineups per league, week and kind; write-ups per league, week and trade. A lineup that fails gives the week's allowance back. Either way the free result still shows.
 - **Routes:** `POST /api/leagues/:id/season/lineup` writes this week's mid-week lineup, and `POST /api/leagues/:id/season/trade { partner, gives, gets }` a write-up. Both answer 402 past the trial without a pass, and 503 when the model fails.
-- ESPN's league reads carry no NFL opponent, so the AI sees no matchups yet. It's told not to guess them.
+- The AI lineup sees each player's NFL opponent, from the scoreboard (APE-211, prompt version 2). It's told to say nothing about that opponent beyond its name.
 
 ### The Sunday job (11.3)
 

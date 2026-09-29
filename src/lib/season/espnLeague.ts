@@ -2,7 +2,7 @@ import type { RosterSlotKey } from "@/lib/draft/types";
 import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
-import type { LineupSlot, LineupSlotCount, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing } from "./types";
+import type { LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -140,6 +140,28 @@ function parseStanding(team: Record<string, unknown>): Standing | null {
   };
 }
 
+function parseSide(raw: unknown): MatchupSide | null {
+  if (!isObject(raw) || typeof raw.teamId !== "number") return null;
+  const pick = (live: unknown, settled: unknown) => Math.round(num(typeof live === "number" ? live : settled) * 100) / 100;
+  return {
+    teamId: raw.teamId,
+    points: pick(raw.totalPointsLive, raw.totalPoints),
+    projected: pick(raw.totalProjectedPointsLive, raw.totalProjectedPoints),
+    winProbability: typeof raw.winProbability === "number" && raw.winProbability >= 0 && raw.winProbability <= 1 ? raw.winProbability : null,
+  };
+}
+
+/** The current matchup period's fantasy matchups (`mMatchupScore`), home and away. */
+export function parseMatchups(raw: unknown): Matchup[] {
+  if (!isObject(raw) || !Array.isArray(raw.schedule) || !isObject(raw.status)) return [];
+  const period = raw.status.currentMatchupPeriod;
+  return raw.schedule.flatMap((m): Matchup[] => {
+    if (!isObject(m) || m.matchupPeriodId !== period) return [];
+    const home = parseSide(m.home);
+    return home ? [{ home, away: parseSide(m.away) }] : [];
+  });
+}
+
 /**
  * The first week of the fantasy playoffs: the first scoring period of the matchup period after the
  * regular season's last. Null when ESPN doesn't say, or the playoffs are already underway.
@@ -213,6 +235,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       teams,
       pendingTrades: parsePendingTrades(raw),
       tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
+      matchups: parseMatchups(raw),
     },
   };
 }

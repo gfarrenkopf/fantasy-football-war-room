@@ -28,10 +28,10 @@ describe("buildSeasonView", () => {
   });
 
   it("puts each player's NFL game on him by team, and nothing on a team without one", () => {
-    const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd" }]]);
+    const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd", opponent: "NYJ", home: false, kickoff: null }]]);
     const live = buildSeasonView(season, 1, byId, { games });
     const gibbs = live.teams[0].roster.find((p) => p.name === "Jahmyr Gibbs")!;
-    expect(gibbs.game).toEqual({ state: "in", detail: "4:12 - 3rd" });
+    expect(gibbs.game).toMatchObject({ state: "in", detail: "4:12 - 3rd", opponent: "NYJ" });
     expect(live.teams[0].roster.filter((p) => p.team !== "DET").every((p) => p.game === null)).toBe(true);
     expect(view.teams[0].roster.every((p) => p.game === null)).toBe(true);
   });
@@ -53,6 +53,13 @@ describe("buildSeasonView", () => {
     expect(buildSeasonView(withDeadline, 1, byId, { now: Date.parse("2026-11-19T16:59:00Z") }).tradeDeadlinePassed).toBe(false);
     expect(buildSeasonView(withDeadline, 1, byId, { now: Date.parse("2026-11-19T17:01:00Z") }).tradeDeadlinePassed).toBe(true);
     expect(buildSeasonView(season, 1, byId, { now: Date.parse("2027-01-01") }).tradeDeadlinePassed).toBe(false);
+  });
+
+  it("finds the user's matchup from either side, and none on a bye", () => {
+    const side = (teamId: number) => ({ teamId, points: 0, projected: 100 + teamId, winProbability: 0.5 });
+    const withMatchups = { ...season, matchups: [{ home: side(2), away: side(1) }, { home: side(3), away: null }] };
+    expect(buildSeasonView(withMatchups, 1, byId).matchup).toEqual({ me: side(1), them: side(2) });
+    expect(buildSeasonView(withMatchups, 3, byId).matchup).toBeNull();
   });
 
   it("recommends the user's own lineup", () => {

@@ -12,7 +12,7 @@ const wrC = at("WR", player("Wideout C", "WR", 14));
 const wrD = at("WR", player("Wideout D", "WR", 11));
 const te = at("TE", player("Tight End", "TE", 8));
 const flex = at("FLEX", player("Flex Wideout", "WR", 10));
-const gibbs = player("Gibbs", "RB", 11, { injuryStatus: "QUESTIONABLE" });
+const gibbs = player("Gibbs", "RB", 11, { injuryStatus: "QUESTIONABLE", game: { state: "pre", detail: "", opponent: "NYJ", home: false, kickoff: null } });
 const out = player("Out Back", "RB", 13, { injuryStatus: "OUT" });
 const view = seasonView([qb, rbA, rbB, wrC, wrD, te, flex, gibbs, out]);
 const input = buildLineupInput(view);
@@ -31,7 +31,8 @@ describe("buildLineupInput", () => {
   it("builds a prompt that lists the decisions", () => {
     const { user } = buildLineupPrompt(input);
     expect(user).toContain(`Return calls for: ${slot("WR", 1).ref}, ${slot("FLEX").ref}.`);
-    expect(user).toContain("Gibbs, RB DET | 11.0 pts");
+    expect(user).toContain("Gibbs, RB DET | @NYJ | 11.0 pts");
+    expect(user).toContain("Flex Wideout, WR DET | - | 10.0 pts");
   });
 });
 

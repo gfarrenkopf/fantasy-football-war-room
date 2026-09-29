@@ -61,5 +61,6 @@ export function seasonView(mine: ViewPlayer[], theirs: ViewPlayer[] = []): Seaso
     pendingTrades: [],
     tradeDeadline: null,
     tradeDeadlinePassed: false,
+    matchup: null,
   };
 }

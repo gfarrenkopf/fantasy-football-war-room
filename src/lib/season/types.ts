@@ -87,6 +87,23 @@ export interface LineupSlotCount {
   count: number;
 }
 
+/** One team's side of a fantasy matchup this week (`mMatchupScore`), in ESPN's own numbers. */
+export interface MatchupSide {
+  teamId: number;
+  /** Points scored so far this matchup period. */
+  points: number;
+  /** ESPN's projection for the team's lineup as set on ESPN, live-adjusted once games start. */
+  projected: number;
+  /** ESPN's win probability, 0–1; null when ESPN doesn't give one. */
+  winProbability: number | null;
+}
+
+/** A fantasy matchup in the current matchup period; `away` is null for a bye. */
+export interface Matchup {
+  home: MatchupSide;
+  away: MatchupSide | null;
+}
+
 /** An ESPN league as the in-season engine needs it, read from `mSettings`, `mStatus`, `mRoster` and `mTeam`. */
 export interface SeasonLeague {
   espnLeagueId: string;
@@ -107,6 +124,8 @@ export interface SeasonLeague {
   pendingTrades: PendingTrade[];
   /** The league's trade deadline (`tradeSettings.deadlineDate`), as an ISO instant; null for none. */
   tradeDeadline: string | null;
+  /** This matchup period's fantasy matchups (APE-211). Empty when ESPN sent no schedule. */
+  matchups: Matchup[];
 }
 
 /** A trade pending on ESPN (`mPendingTransactions`), between two teams. */
