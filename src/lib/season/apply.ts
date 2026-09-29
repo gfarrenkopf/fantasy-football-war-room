@@ -60,6 +60,30 @@ export function movesToStaged(roster: readonly ApplyEntry[], seats: readonly Sta
 }
 
 /**
+ * The moves in the groups the user sees as one change: a player who takes a seat is tied to the
+ * player who held it on ESPN, so a bench swap (Higgins out, Love in at WR) or a chain through FLEX is
+ * made or left out whole. `before` is `seatsFromRoster()`, `after` the staged lineup. Groups keep the
+ * order of their first move.
+ */
+export function groupMoves(moves: readonly LineupMove[], before: readonly (number | null)[], after: readonly (number | null)[]): LineupMove[][] {
+  const parent = new Map<number, number>();
+  const root = (id: number): number => {
+    const up = parent.get(id) ?? id;
+    if (up === id) return id;
+    const top = root(up);
+    parent.set(id, top);
+    return top;
+  };
+  before.forEach((out, i) => {
+    const into = after[i];
+    if (out !== null && into !== null && into !== undefined && out !== into) parent.set(root(out), root(into));
+  });
+  const groups = new Map<number, LineupMove[]>();
+  for (const m of moves) groups.set(root(m.playerId), [...(groups.get(root(m.playerId)) ?? []), m]);
+  return [...groups.values()];
+}
+
+/**
  * Why these moves can't be sent to ESPN, in words for the user; empty when they can. The moves
  * must be the user's own players, where the roster says they are, unlocked, into slots they're
  * eligible for, and must leave a lineup that fits the league's slots and bench.

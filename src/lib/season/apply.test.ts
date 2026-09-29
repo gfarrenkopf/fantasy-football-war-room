@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkMoves, espnRefusal, landedMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
+import { checkMoves, espnRefusal, groupMoves, landedMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
 
@@ -43,6 +43,37 @@ describe("movesToStaged", () => {
     const t = team();
     const staged = [t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.wr.playerId, null];
     expect(movesToStaged(t.roster, starterSeats(STARTERS), staged)).toEqual([{ playerId: t.flex.playerId, from: "FLEX", to: "BN" }]);
+  });
+});
+
+describe("groupMoves", () => {
+  it("ties each player to the one whose seat they take, and leaves unrelated moves apart", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS); // QB RB RB WR FLEX
+    const before = seatsFromRoster(t.roster, seats);
+    const staged = [t.qb.playerId, t.rb2.playerId, t.benchRb.playerId, t.wr.playerId, t.benchWr.playerId];
+    const moves = movesToStaged(t.roster, seats, staged);
+    const [rbSwap, flexSwap] = groupMoves(moves, before, staged);
+    expect(rbSwap.map((m) => m.playerId)).toEqual([t.rb1.playerId, t.benchRb.playerId]);
+    expect(flexSwap.map((m) => m.playerId)).toEqual([t.flex.playerId, t.benchWr.playerId]);
+  });
+
+  it("keeps a chain through FLEX in one group", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const before = seatsFromRoster(t.roster, seats);
+    // The WR slides to FLEX, the FLEX goes to the bench, and the bench WR takes the WR seat.
+    const staged = [t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.benchWr.playerId, t.wr.playerId];
+    const moves = movesToStaged(t.roster, seats, staged);
+    expect(groupMoves(moves, before, staged)).toEqual([moves]);
+  });
+
+  it("stands a player alone when their seat is left empty", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const before = seatsFromRoster(t.roster, seats);
+    const staged = [t.qb.playerId, t.rb1.playerId, t.rb2.playerId, null, t.flex.playerId];
+    expect(groupMoves(movesToStaged(t.roster, seats, staged), before, staged)).toEqual([[{ playerId: t.wr.playerId, from: "WR", to: "BN" }]]);
   });
 });
 
