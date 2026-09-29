@@ -7,6 +7,7 @@ import { evaluateTrade, tradeFromPending, type Trade, type TradeVerdict } from "
 import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiTradeWriteupCard } from "./AiPanel";
+import { Check } from "./Icons";
 import { Gain, PlayerLine, signed } from "./parts";
 import s from "./season.module.css";
 
@@ -31,20 +32,26 @@ const byRos = (a: ViewPlayer, b: ViewPlayer) => b.ros - a.ros;
 const teamName = (view: SeasonView, id: number) => view.teams.find((t) => t.id === id)?.name ?? `Team ${id}`;
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : null);
 
+/** How the trade lands for the user, in words, on the gain ladder's steps. */
+function tradeHeadline(verdict: TradeVerdict) {
+  const you = verdict.a.perWeek;
+  const level = tradeEmphasis(you);
+  const headline = you >= 0 ? GOOD[level] : BAD[level];
+  return level !== "rest" && you > 0 && verdict.b.perWeek > 0.05 ? `${headline}, and for them` : headline;
+}
+
 /** The verdict for the user, told on the same scale as the lineup's gain. */
 function TradeGain({ verdict, partner, compact, inline }: { verdict: TradeVerdict; partner: string; compact?: boolean; inline?: boolean }) {
   const you = verdict.a.perWeek;
   const them = verdict.b.perWeek;
-  const level = tradeEmphasis(you);
-  const headline = you >= 0 ? GOOD[level] : BAD[level];
   return (
     <Gain
       compact={compact}
       inline={inline}
-      level={level}
+      level={tradeEmphasis(you)}
       value={you}
       unit="a week"
-      headline={level !== "rest" && you > 0 && them > 0.05 ? `${headline}, and for them` : headline}
+      headline={tradeHeadline(verdict)}
       detail={
         <>
           {partner} <span className="tabular-nums">{signed(them)}</span> a week · you <span className="tabular-nums">{signed(verdict.a.delta)}</span> over the{" "}
@@ -147,7 +154,7 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
             </label>
           </div>
 
-          <div className={s.verdictSticky}>
+          <div className={s.verdict}>
             {verdict ? (
               <>
                 <TradeGain verdict={verdict} partner={partner.name} compact />
@@ -172,13 +179,17 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
             )}
           </div>
 
-          <div className={`${s.segment} ${s.pickerToggle}`} role="tablist" aria-label="Which roster">
-            <button type="button" role="tab" className={s.tab} aria-selected={side === "send"} onClick={() => setSide("send")}>
-              You send {gives.length > 0 && <span className={s.badge}>{gives.length}</span>}
-            </button>
-            <button type="button" role="tab" className={s.tab} aria-selected={side === "get"} onClick={() => setSide("get")}>
-              You get {gets.length > 0 && <span className={s.badge}>{gets.length}</span>}
-            </button>
+          {/* On a phone: pinned while the user ticks players, so the verdict and the switch stay in reach. */}
+          <div className={s.pickBar}>
+            <PickBarVerdict verdict={verdict} />
+            <div className={`${s.segment} ${s.pickerToggle}`} role="tablist" aria-label="Which roster">
+              <button type="button" role="tab" className={s.tab} aria-selected={side === "send"} onClick={() => setSide("send")}>
+                You send {gives.length > 0 && <span className={s.badge}>{gives.length}</span>}
+              </button>
+              <button type="button" role="tab" className={s.tab} aria-selected={side === "get"} onClick={() => setSide("get")}>
+                You get {gets.length > 0 && <span className={s.badge}>{gets.length}</span>}
+              </button>
+            </div>
           </div>
 
           <div className={s.pickers}>
@@ -233,7 +244,12 @@ function Offer({
         <dt>You send</dt>
         <dd>{list(trade.gives) || "Nothing"}</dd>
       </dl>
-      {verdict ? (
+      {verdict && active ? (
+        // Open in the builder, which grades it; a second verdict here would only repeat it.
+        <p className={`${s.offerOpen} ${s.fine}`}>
+          {pending.status === "accepted" ? "Graded in the builder." : "Graded in the builder. Change either side to make it a counter."}
+        </p>
+      ) : verdict ? (
         <>
           <TradeGain verdict={verdict} partner={partner} compact inline />
           <div className={s.offerFoot}>
@@ -247,6 +263,31 @@ function Offer({
         <p className={s.fine}>Can&apos;t grade this one: a player in it is no longer on those rosters.</p>
       )}
     </li>
+  );
+}
+
+/** The verdict in one line, for the phone's pinned bar. The full verdict above already announces it. */
+function PickBarVerdict({ verdict }: { verdict: TradeVerdict | null }) {
+  if (!verdict) {
+    return (
+      <p className={s.pickBarVerdict} aria-hidden>
+        <span className={s.pickBarHeadline}>Pick players to trade</span>
+      </p>
+    );
+  }
+  const you = verdict.a.perWeek;
+  const level = tradeEmphasis(you);
+  return (
+    <p className={s.pickBarVerdict} data-level={level} data-sign={you < 0 ? "loss" : "gain"} aria-hidden>
+      {level === "rest" ? (
+        <Check className={s.pickBarNumber} />
+      ) : (
+        <span className={s.pickBarNumber}>
+          <span className="tabular-nums">{signed(you)}</span> <span className={s.gainUnit}>a week</span>
+        </span>
+      )}
+      <span className={s.pickBarHeadline}>{tradeHeadline(verdict)}</span>
+    </p>
   );
 }
 
