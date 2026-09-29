@@ -27,6 +27,15 @@ describe("buildSeasonView", () => {
     expect(other).toMatchObject({ projected: false, points: 0, ros: 0 });
   });
 
+  it("puts each player's NFL game on him by team, and nothing on a team without one", () => {
+    const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd" }]]);
+    const live = buildSeasonView(season, 1, byId, games);
+    const gibbs = live.teams[0].roster.find((p) => p.name === "Jahmyr Gibbs")!;
+    expect(gibbs.game).toEqual({ state: "in", detail: "4:12 - 3rd" });
+    expect(live.teams[0].roster.filter((p) => p.team !== "DET").every((p) => p.game === null)).toBe(true);
+    expect(view.teams[0].roster.every((p) => p.game === null)).toBe(true);
+  });
+
   it("recommends the user's own lineup", () => {
     expect(view.lineup.starters.every((s) => s.playerId !== null)).toBe(true);
     const mine = new Set(view.teams[0].roster.map((p) => p.playerId));

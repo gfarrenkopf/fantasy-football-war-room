@@ -180,6 +180,12 @@ Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/S
 - **Split 2 (`12{season}`) is unexplained.** It's close to, but not equal to, the season projection (Gibbs: 386.3 against 380.6), and it doesn't match actuals plus the remaining weekly projections. Don't use it.
 - **Public queries also return last season's weekly actuals**, keyed by game ids with the prior season's prefix. Filter on `seasonId`.
 
+### Points scored and game state (APE-196)
+
+- **Weekly actuals are in `mRoster`.** `player.stats[]` rows with `statSourceId 0`, `statSplitTypeId 1` are one NFL game each, keyed by game id (`externalId`, e.g. `401872932`), with `scoringPeriodId` and an `appliedTotal` scored in the league's own scoring. A row appears once the player's game has stats. Whether the current week's row updates live during a game is still to be confirmed with a probe during a live game.
+- **Game state is public.** `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={season}&seasontype=2&week={week}` needs no cookies (about 290 KB for a week). Each event has `status.type.state` (`pre`, `in` or `post`) and `status.type.shortDetail` ("Final", "Halftime", "4:12 - 3rd", or a kickoff time). Event ids are the same game ids as the stat rows and `proTeamSchedules_wl`. `competitions[0].competitors[].team.id` is the same pro-team id as `proTeamId` (GB 9, ATL 1, BUF 2, DET 8).
+- **`proTeamSchedules_wl` has a `statsOfficial` flag per game.** It was still `false` the day after the game, so it isn't a signal that the game is final.
+
 ### Lineup writes
 
 `POST https://lm-api-writes.fantasy.espn.com/apis/v3/games/ffl/seasons/{season}/segments/0/leagues/{leagueId}/transactions/`, with cookies:

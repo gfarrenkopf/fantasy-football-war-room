@@ -31,6 +31,7 @@ ESPN's own projections, behind a `ProjectionSource` interface so a paid source (
 - **League scoring is computed, not fetched.** The public rows carry raw stats. Σ stat × `scoringItems.points` (with `pointsOverrides` by lineup slot) reproduces ESPN's league-scored `appliedTotal` exactly.
 - **Rest of season (ROS)** is the sum of weekly projections from the current week through the league's `finalScoringPeriod`, with bye weeks projected as 0 by ESPN. ESPN's split-2 season row is unexplained and not used.
 - Injury status comes from roster entries and `kona_player_info`.
+- **Points scored this week** come from the roster read itself. Each player's actual row for the current week (`statSourceId 0`, `statSplitTypeId 1`) carries `appliedTotal` in the league's own scoring. **Where each game stands** (not started, under way, or final, with ESPN's clock line) comes from ESPN's public NFL scoreboard, cached for a minute. If the scoreboard fails, the points still show, without a game status. The page updates on load and on Refresh; it doesn't poll (APE-196).
 
 ## 3. Connecting a league
 

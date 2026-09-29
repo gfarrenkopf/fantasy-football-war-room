@@ -598,6 +598,32 @@
   font-weight: 600;
 }
 
+/*
+ * In-game points (APE-196): once a game kicks off, what the player has scored leads in text ink and
+ * his projection steps back. The clock is Terminal Sky behind a still dot, never animated: the
+ * page's urgency glow is spent elsewhere. A finished game settles to a muted "Final".
+ */
+.actual {
+  color: var(--color-text);
+  font-weight: 700;
+}
+.live {
+  color: var(--color-sky);
+  font-weight: 600;
+}
+.liveDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--color-sky);
+  vertical-align: 1px;
+}
+.final {
+  color: var(--color-muted);
+}
+
 .tag {
   flex-shrink: 0;
   padding: 0 5px;
@@ -862,6 +888,17 @@
   color: var(--color-muted);
   font-size: 12.5px;
   font-weight: 600;
+}
+
+.benchPts.actual {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.benchStatus {
+  color: var(--color-muted);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .benchNote {
@@ -1479,6 +1516,15 @@
     padding-right: 10px !important;
   }
   .keepLabel {
+    display: none;
+  }
+
+  /* A started player's line would clip at this width: his points and his game take a line each. */
+  .factsPoints,
+  .factsGame {
+    display: block;
+  }
+  .factsSep {
     display: none;
   }
 
