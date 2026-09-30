@@ -116,7 +116,6 @@ describe("checkMoves", () => {
     expect(checkMoves(t.roster, [{ playerId: t.benchRb.playerId, from: "BN", to: "QB" }], STARTERS, 3)).toContain("Bench Rb can't play QB.");
     expect(checkMoves(t.roster, [{ playerId: t.benchRb.playerId, from: "BN", to: "RB" }], STARTERS, 3)).toEqual(["That's 3 players at RB; the league starts 2."]);
     expect(checkMoves(t.roster, [{ playerId: t.benchRb.playerId, from: "RB", to: "BN" }], STARTERS, 3)).toEqual(["Bench Rb is at the bench on ESPN, not RB."]);
-    expect(checkMoves(t.roster, [{ playerId: t.ir.playerId, from: "IR", to: "BN" }], STARTERS, 3)).toEqual(["War Room doesn't move players on or off IR. Do that on ESPN."]);
     expect(checkMoves(t.roster, [{ playerId: 999_999, from: "BN", to: "RB" }], STARTERS, 3)).toEqual(["Player 999999 isn't on your team."]);
     const twice = [
       { playerId: t.rb1.playerId, from: "RB" as const, to: "BN" as const },
@@ -131,6 +130,38 @@ describe("checkMoves", () => {
     expect(checkMoves(t.roster, [{ playerId: t.benchWr.playerId, from: "BN", to: "SUPERFLEX" }], STARTERS, 3)).toEqual(["This league has no OP slot."]);
     expect(checkMoves(t.roster, [{ playerId: t.flex.playerId, from: "FLEX", to: "BN" }], STARTERS, 2)).toEqual(["That leaves 3 players on a 2-player bench."]);
     expect(checkMoves(t.roster, [{ playerId: t.flex.playerId, from: "FLEX", to: "BN" }], STARTERS, 3)).toEqual([]);
+  });
+});
+
+describe("IR (13.2)", () => {
+  it("activates onto a bench with room, and refuses a full one", () => {
+    const t = team();
+    expect(checkMoves(t.roster, [{ playerId: t.ir.playerId, from: "IR", to: "BN" }], STARTERS, 3, 1)).toEqual([]);
+    expect(checkMoves(t.roster, [{ playerId: t.ir.playerId, from: "IR", to: "BN" }], STARTERS, 2, 1)).toEqual(["That leaves 3 players on a 2-player bench."]);
+  });
+
+  it("puts only players out or on injured reserve on IR, up to the league's IR spots", () => {
+    const t = team();
+    const out = { ...t.benchRb, injuryStatus: "OUT" };
+    const roster = t.roster.map((p) => (p.playerId === out.playerId ? out : p));
+    const toIr = [{ playerId: out.playerId, from: "BN" as const, to: "IR" as const }];
+    expect(checkMoves(roster, toIr, STARTERS, 3, 2)).toEqual([]);
+    expect(checkMoves(roster, toIr, STARTERS, 3, 1)).toEqual(["That's 2 players on IR; the league has 1 IR spot."]);
+    expect(checkMoves(t.roster, [{ playerId: t.benchWr.playerId, from: "BN", to: "IR" }], STARTERS, 3, 2)).toEqual([
+      "Bench Wr isn't hurt enough for IR: ESPN only takes players who are out or on injured reserve.",
+    ]);
+  });
+
+  it("stages IR moves when told who should be on IR", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const staged = seatsFromRoster(t.roster, seats);
+    // Without `ir`, IR is left alone; with it, the IR player comes off to the bench and a bench player goes on.
+    expect(movesToStaged(t.roster, seats, staged)).toEqual([]);
+    expect(movesToStaged(t.roster, seats, staged, [t.benchRb.playerId])).toEqual([
+      { playerId: t.benchRb.playerId, from: "BN", to: "IR" },
+      { playerId: t.ir.playerId, from: "IR", to: "BN" },
+    ]);
   });
 });
 

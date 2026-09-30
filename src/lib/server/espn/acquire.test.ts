@@ -48,6 +48,7 @@ function league(roster: RosterEntry[], theirs: RosterEntry[] = [], more: Partial
     scoringItems: [],
     starters: [{ key: "RB", count: 1 }],
     benchSize: 2,
+    irSlots: 1,
     teams: [
       { id: 1, name: "Mine", abbrev: "ME", roster, standing: null },
       { id: 2, name: "Theirs", abbrev: "TH", roster: theirs, standing: null },

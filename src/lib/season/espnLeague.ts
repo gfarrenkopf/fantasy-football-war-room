@@ -266,6 +266,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
   if (!counts) return { ok: false, error: "ESPN didn't say what this league's roster looks like." };
   const starting = new Map<LineupSlotCount["key"], number>();
   let benchSize = 0;
+  const irSlots = typeof counts[String(IR)] === "number" && (counts[String(IR)] as number) > 0 ? (counts[String(IR)] as number) : 0;
   for (const [id, n] of Object.entries(counts)) {
     if (typeof n !== "number" || n <= 0 || Number(id) === IR) continue;
     if (Number(id) === BENCH) {
@@ -305,6 +306,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       scoringItems: parseScoringItems(isObject(settings.scoringSettings) ? settings.scoringSettings.scoringItems : undefined),
       starters,
       benchSize,
+      irSlots,
       teams,
       pendingTrades: parsePendingTrades(raw),
       pendingClaims: parsePendingClaims(raw),

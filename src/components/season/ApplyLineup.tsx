@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
-import { canPlay, checkMoves, groupMoves, label, movesToStaged, seatsFromRoster, snapshotOf, starterSeats } from "@/lib/season/apply";
+import { canPlay, checkMoves, groupMoves, irEligible, label, movesToStaged, seatsFromRoster, snapshotOf, starterSeats } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { Check } from "./Icons";
@@ -42,9 +42,12 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
   const seats = useMemo(() => starterSeats(view.starters), [view.starters]);
   const recommended = useMemo(() => view.lineup.starters.map((f) => f.playerId), [view.lineup]);
   const onEspn = useMemo(() => seatsFromRoster(roster, seats), [roster, seats]);
+  const onIr = useMemo(() => roster.filter((p) => p.slot === "IR").map((p) => p.playerId), [roster]);
   // First visit: offer War Room's lineup. Once ESPN's lineup changes under us (after an apply, or a
   // refresh), start again from what ESPN has, so moves already made don't show as still to make.
   const [staged, setStaged] = useState<(number | null)[]>(recommended);
+  /** Who should be on IR (13.2). */
+  const [ir, setIr] = useState<number[]>(onIr);
   const [seenRoster, setSeenRoster] = useState(() => rosterKey(roster));
   const [editing, setEditing] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -54,18 +57,21 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
   const [keepStaged, setKeepStaged] = useState(false);
   if (rosterKey(roster) !== seenRoster) {
     setSeenRoster(rosterKey(roster));
-    if (!keepStaged) setStaged(onEspn);
+    if (!keepStaged) {
+      setStaged(onEspn);
+      setIr(onIr);
+    }
     setKeepStaged(false);
   }
   const [agreed, setAgreed] = useState(agreedAtLoad);
   const [consenting, setConsenting] = useState(false);
 
-  const moves = movesToStaged(roster, seats, staged);
+  const moves = movesToStaged(roster, seats, staged, ir);
   const changes = groupMoves(moves, onEspn, staged);
   const picked = changes.filter((g) => !skipped.has(changeKey(g)));
   const chosen = picked.flat();
   const count = picked.length === 1 ? "1 change" : `${picked.length} changes`;
-  const problems = chosen.length ? checkMoves(roster, chosen, view.starters, view.benchSize) : [];
+  const problems = chosen.length ? checkMoves(roster, chosen, view.starters, view.benchSize, view.irSlots) : [];
   const same = (a: readonly (number | null)[]) => staged.every((id, i) => id === a[i]);
   const source = same(recommended) ? "War Room's lineup" : "your edits";
   const name = (id: number) => byId.get(id)?.name ?? `Player ${id}`;
@@ -87,6 +93,14 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     setLanded(null);
   }
 
+  function toggleIr(id: number, on: boolean) {
+    setIr((prev) => (on ? [...prev, id] : prev.filter((x) => x !== id)));
+    // A player going on IR gives up their seat.
+    if (on) setStaged((prev) => prev.map((x) => (x === id ? null : x)));
+    setPhase({ kind: "idle" });
+    setLanded(null);
+  }
+
   function toggle(group: LineupMove[], on: boolean) {
     setSkipped((prev) => {
       const next = new Set(prev);
@@ -99,6 +113,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
 
   function startFrom(lineup: (number | null)[]) {
     setStaged(lineup);
+    setIr(onIr);
     setPhase({ kind: "idle" });
     setLanded(null);
   }
@@ -180,7 +195,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
           {seats.map((key, i) => {
             const current = staged[i];
             const lockedHere = current !== null && byId.get(current)?.locked;
-            const options = roster.filter((p) => p.slot !== "IR" && canPlay(p.pos, key) && (!p.locked || p.playerId === current));
+            const options = roster.filter((p) => !ir.includes(p.playerId) && canPlay(p.pos, key) && (!p.locked || p.playerId === current));
             return (
               <label key={`${key}-${i}`} className={s.seat}>
                 <span className={s.seatKey}>{seatName(key)}</span>
@@ -196,6 +211,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
               </label>
             );
           })}
+          {view.irSlots > 0 && <IrPicker roster={roster} ir={ir} irSlots={view.irSlots} onToggle={toggleIr} />}
           <div className={s.seatSources}>
             {!same(onEspn) && (
               <button type="button" className={s.textButton} onClick={() => startFrom(onEspn)}>
@@ -297,5 +313,27 @@ function Results({ moves, line }: { moves: Landed; line: (m: LineupMove) => Reac
       </ul>
       {missed.length > 0 && <p className={s.aiError}>Check these on ESPN. War Room has been alerted.</p>}
     </div>
+  );
+}
+
+/** Who's on IR, and who could go there: players ESPN lists as out or on injured reserve (13.2). */
+function IrPicker({ roster, ir, irSlots, onToggle }: { roster: readonly ViewPlayer[]; ir: readonly number[]; irSlots: number; onToggle: (id: number, on: boolean) => void }) {
+  const candidates = roster.filter((p) => p.slot === "IR" || (irEligible(p) && !p.locked));
+  return (
+    <fieldset className={s.irPicker}>
+      <legend className={s.seatKey}>
+        IR · {ir.length} of {irSlots}
+      </legend>
+      {candidates.length ? (
+        candidates.map((p) => (
+          <label key={p.playerId} className={s.check}>
+            <input type="checkbox" checked={ir.includes(p.playerId)} disabled={p.locked} onChange={(e) => onToggle(p.playerId, e.target.checked)} />
+            {p.name} <span className={s.fine}>· {p.injuryStatus === "INJURY_RESERVE" ? "injured reserve" : p.injuryStatus.toLowerCase()}</span>
+          </label>
+        ))
+      ) : (
+        <p className={s.fine}>No one on your team is out or on injured reserve.</p>
+      )}
+    </fieldset>
   );
 }

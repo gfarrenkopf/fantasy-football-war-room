@@ -50,6 +50,7 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
       { key: "WR", count: 1 },
     ],
     benchSize: 3,
+    irSlots: 1,
     teams: [
       { id: 1, name: "Mine", abbrev: "ME", roster, standing: null },
       { id: 2, name: "Theirs", abbrev: "TH", roster: [entry(50, "Their Rb", "RB", "RB")], standing: null },

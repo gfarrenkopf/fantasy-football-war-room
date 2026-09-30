@@ -13,7 +13,16 @@ import type { LineupSlot, LineupSlotCount, RosterEntry } from "./types";
 type StarterKey = LineupSlotCount["key"];
 
 /** What the checks need of a roster entry. */
-export type ApplyEntry = Pick<RosterEntry, "playerId" | "name" | "pos" | "slot" | "espnSlotId" | "locked">;
+export type ApplyEntry = Pick<RosterEntry, "playerId" | "name" | "pos" | "slot" | "espnSlotId" | "locked"> & Partial<Pick<RosterEntry, "injuryStatus">>;
+
+/**
+ * The injury statuses ESPN lets onto IR (13.2). ESPN refuses anyone it doesn't mark injured
+ * (`TRAN_ROSTER_INELIGIBLE_IR_NOT_INJURED`), and marks injured exactly the players it lists as OUT
+ * or on injured reserve (docs/espn-protocol.md §8).
+ */
+export const IR_STATUSES: ReadonlySet<string> = new Set(["OUT", "INJURY_RESERVE"]);
+
+export const irEligible = (p: Pick<ApplyEntry, "injuryStatus">) => IR_STATUSES.has(p.injuryStatus ?? "");
 
 /** One `LINEUP` item of ESPN's `ROSTER` transaction. */
 export interface EspnLineupItem {
@@ -43,17 +52,19 @@ export function seatsFromRoster(roster: readonly ApplyEntry[], seats: readonly S
 
 /**
  * The moves that turn the roster as ESPN has it into a staged lineup: `staged` names who sits in
- * each seat of `starterSeats()`, or null to leave it empty. A starter not staged anywhere goes to the
- * bench; IR is left alone. A player staged in a seat of the slot they already hold doesn't move.
+ * each seat of `starterSeats()`, or null to leave it empty, and `ir` who should be on IR (13.2).
+ * A player not staged anywhere goes to the bench; without `ir`, IR is left alone. A player staged in
+ * a seat of the slot they already hold doesn't move.
  */
-export function movesToStaged(roster: readonly ApplyEntry[], seats: readonly StarterKey[], staged: readonly (number | null)[]): LineupMove[] {
+export function movesToStaged(roster: readonly ApplyEntry[], seats: readonly StarterKey[], staged: readonly (number | null)[], ir?: readonly number[]): LineupMove[] {
   const target = new Map<number, LineupSlot>();
   seats.forEach((key, i) => {
     const id = staged[i];
     if (id !== null && id !== undefined) target.set(id, key);
   });
+  for (const id of ir ?? []) target.set(id, "IR");
   return roster.flatMap((p) => {
-    if (p.slot === "IR") return [];
+    if (p.slot === "IR" && !ir) return [];
     const to = target.get(p.playerId) ?? "BN";
     return to === p.slot ? [] : [{ playerId: p.playerId, from: p.slot, to }];
   });
@@ -86,9 +97,10 @@ export function groupMoves(moves: readonly LineupMove[], before: readonly (numbe
 /**
  * Why these moves can't be sent to ESPN, in words for the user; empty when they can. The moves
  * must be the user's own players, where the roster says they are, unlocked, into slots they're
- * eligible for, and must leave a lineup that fits the league's slots and bench.
+ * eligible for (IR only for the injured), and must leave a lineup that fits the league's slots,
+ * bench and IR.
  */
-export function checkMoves(roster: readonly ApplyEntry[], moves: readonly LineupMove[], starters: readonly LineupSlotCount[], benchSize: number): string[] {
+export function checkMoves(roster: readonly ApplyEntry[], moves: readonly LineupMove[], starters: readonly LineupSlotCount[], benchSize: number, irSlots = 0): string[] {
   if (!moves.length) return ["There's nothing to change."];
   const byId = new Map(roster.map((p) => [p.playerId, p]));
   const problems: string[] = [];
@@ -105,8 +117,9 @@ export function checkMoves(roster: readonly ApplyEntry[], moves: readonly Lineup
     seen.add(p.playerId);
     if (p.slot !== move.from) problems.push(`${p.name} is at ${label(p.slot)} on ESPN, not ${label(move.from)}.`);
     else if (move.to === move.from) problems.push(`${p.name} is already at ${label(move.to)}.`);
-    if (move.from === "IR" || move.to === "IR") problems.push(`War Room doesn't move players on or off IR. Do that on ESPN.`);
-    else if (!canPlay(p.pos, move.to)) problems.push(`${p.name} can't play ${label(move.to)}.`);
+    if (move.to === "IR") {
+      if (!irEligible(p)) problems.push(`${p.name} isn't hurt enough for IR: ESPN only takes players who are out or on injured reserve.`);
+    } else if (!canPlay(p.pos, move.to)) problems.push(`${p.name} can't play ${label(move.to)}.`);
     if (p.locked) problems.push(`${p.name}'s game has started, so ESPN won't move them this week.`);
     slotOf.set(p.playerId, move.to);
   }
@@ -124,6 +137,9 @@ export function checkMoves(roster: readonly ApplyEntry[], moves: readonly Lineup
   const benchNow = roster.filter((p) => p.slot === "BN").length;
   const benchNext = count.get("BN") ?? 0;
   if (benchNext > Math.max(benchSize, benchNow)) problems.push(`That leaves ${benchNext} players on a ${benchSize}-player bench.`);
+  const irNow = roster.filter((p) => p.slot === "IR").length;
+  const irNext = count.get("IR") ?? 0;
+  if (irNext > irNow && irNext > irSlots) problems.push(irSlots ? `That's ${irNext} players on IR; the league has ${irSlots} IR ${irSlots === 1 ? "spot" : "spots"}.` : "This league has no IR spots.");
   return [...new Set(problems)];
 }
 

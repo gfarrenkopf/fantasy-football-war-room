@@ -121,6 +121,8 @@ export interface SeasonLeague {
   /** Starting slots, in lineup order. */
   starters: LineupSlotCount[];
   benchSize: number;
+  /** IR spots (`lineupSlotCounts["21"]`); 0 when the league has none. */
+  irSlots: number;
   teams: SeasonTeam[];
   /** Trades waiting on ESPN that the user can see: their own offers, in both directions. */
   pendingTrades: PendingTrade[];

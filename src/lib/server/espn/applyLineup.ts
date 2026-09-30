@@ -38,7 +38,7 @@ export async function applyLineup(db: Db, key: Buffer, userId: string, leagueId:
     {
       week: request.week,
       snapshot: request.snapshot,
-      check: ({ league, roster }) => checkMoves(roster, request.moves, league.starters, league.benchSize),
+      check: ({ league, roster }) => checkMoves(roster, request.moves, league.starters, league.benchSize, league.irSlots),
       transaction: ({ roster }) => ({ type: "ROSTER", items: toEspnItems(roster, request.moves) }),
       landed: ({ roster }) => landedMoves(request.moves, roster),
       anyLanded: (moves) => moves.some((m) => m.landed),

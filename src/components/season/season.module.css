@@ -957,6 +957,19 @@
   font-weight: 600;
 }
 
+.irPicker {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-row-line);
+}
+.irPicker legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
 .confirm {
   display: grid;
   gap: 8px;

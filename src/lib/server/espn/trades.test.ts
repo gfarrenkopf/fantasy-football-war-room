@@ -60,6 +60,7 @@ function league(pendingTrades: PendingTrade[] = []): SeasonLeague {
     scoringItems: [],
     starters: [{ key: "RB", count: 1 }],
     benchSize: 2,
+    irSlots: 1,
     teams: [
       { id: 1, name: "Mine", abbrev: "ME", roster: MINE, standing: null },
       { id: 2, name: "Theirs", abbrev: "TH", roster: THEIRS, standing: null },
