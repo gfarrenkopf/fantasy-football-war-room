@@ -56,6 +56,8 @@ The trade verdict is a **roster delta**, not a sum of player values. For each te
 
 Launch is build-a-trade: pick a partner and players from both sides. Importing pending ESPN offers comes next, and trade suggestions come in a later epic.
 
+**Trading on ESPN (13.5).** Pending offers to the user have **Accept** and **Decline**, and the user's own have **Withdraw**. The builder's trade can be sent as an offer (**Offer this on ESPN**), with the verdict's drops as `DROP` items when the user would be over the roster limit. `POST /api/leagues/:id/season/trades` (`src/lib/server/espn/trades.ts`) goes through the same guardrails as lineup writes (§7). The pure checks (`src/lib/season/tradeWrite.ts`) cover the deadline, players already in a trade (`tradeLocked`), players who've moved since the page loaded, the user's roster limit, and that only the team an offer was made to answers it. An accepted trade stays in Pending, marked Accepted, through the league's review. ESPN's own page asks for the password again before an accept; its API doesn't, so War Room accepts with the stored login.
+
 ### Waiver pickups (APE-212)
 
 The Waivers tab ranks available players the way trades are scored. It adds each player to the user's roster, cuts the weakest player by rest-of-season points, and measures the change in the best starting lineup's points over every remaining week (`src/lib/season/waivers.ts`). A player who would only sit on the bench scores nothing.

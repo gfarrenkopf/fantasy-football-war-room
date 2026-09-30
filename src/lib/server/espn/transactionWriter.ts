@@ -1,6 +1,7 @@
 import "server-only";
 import type { EspnAcquireItem } from "@/lib/season/acquire";
 import type { EspnLineupItem } from "@/lib/season/apply";
+import type { EspnTradeItem } from "@/lib/season/tradeWrite";
 import type { EspnLogin } from "./logins";
 
 /**
@@ -14,13 +15,13 @@ import type { EspnLogin } from "./logins";
  */
 
 /** A transaction's `type`. `ROSTER` carries lineup moves, IR included. */
-export type EspnTransactionType = "ROSTER" | "FREEAGENT" | "WAIVER" | "TRADE_PROPOSAL";
+export type EspnTransactionType = "ROSTER" | "FREEAGENT" | "WAIVER" | "TRADE_PROPOSAL" | "TRADE_ACCEPT" | "TRADE_DECLINE";
 
 /** One item of a transaction. `ADD` / `DROP` / `TRADE` move players between teams; team 0 is the pool. */
 export type EspnItem =
   | EspnLineupItem
   | EspnAcquireItem
-  | { playerId: number; type: "TRADE"; fromTeamId: number; toTeamId: number };
+  | EspnTradeItem;
 
 export type EspnWrite =
   /** `id` is the stored transaction's, when ESPN sent one: a claim or proposal is cancelled by it. */
@@ -38,7 +39,8 @@ export interface EspnTransaction {
   /** The NFL week the transaction is for (ESPN's `scoringPeriodId`). */
   week: number;
   type: EspnTransactionType;
-  items: readonly EspnItem[];
+  /** Absent for an answer to a trade, which names it by `relatedTransactionId` alone. */
+  items?: readonly EspnItem[];
   /** CANCEL withdraws the pending claim or proposal named by `relatedTransactionId`, with no items. */
   executionType?: "EXECUTE" | "CANCEL";
   relatedTransactionId?: string;
@@ -60,7 +62,7 @@ export async function writeEspnTransaction(
     memberId: login.swid,
     scoringPeriodId: week,
     executionType,
-    items,
+    ...(items === undefined ? {} : { items }),
     ...(relatedTransactionId === undefined ? {} : { relatedTransactionId }),
     ...(bidAmount === undefined ? {} : { bidAmount }),
   };

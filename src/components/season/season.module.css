@@ -1142,6 +1142,11 @@
   gap: 12px;
   margin-top: 10px;
 }
+.offerActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
 .offerFoot .button {
   flex-shrink: 0;
   white-space: nowrap;

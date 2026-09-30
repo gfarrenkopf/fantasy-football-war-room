@@ -79,6 +79,7 @@ function parseEntry(raw: unknown, season: number, week: number): RosterEntry | n
     slot,
     espnSlotId: raw.lineupSlotId,
     locked: pool.lineupLocked === true,
+    ...(pool.tradeLocked === true ? { tradeLocked: true } : {}),
     injuryStatus: injury,
     actual: actualPoints(player.stats, season, week),
     ownership: ownershipOf(player.ownership),

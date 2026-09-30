@@ -50,6 +50,8 @@ export interface RosterEntry {
   espnSlotId: number;
   /** The player's game has started this week: ESPN won't move them until next week. */
   locked: boolean;
+  /** In a trade under review, or otherwise barred from trading by ESPN (`tradeLocked`). Absent means free to trade. */
+  tradeLocked?: boolean;
   injuryStatus: InjuryStatus;
   /**
    * Points scored this week so far, by this league's scoring: ESPN's actual row for the current

@@ -121,7 +121,7 @@ export function SeasonRoom(props: Props) {
               {tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : tab === "trade" ? (
-                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : (
                 <WaiverPanel view={props.view} leagueId={props.leagueId} writeConsented={props.writeConsented} />
               )}
