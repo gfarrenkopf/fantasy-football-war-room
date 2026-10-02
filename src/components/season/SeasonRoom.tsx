@@ -43,7 +43,7 @@ type Props = {
       checkout: CheckoutOutcome | null;
       /** Whether the user gets the Sunday lineup email; null when there's no such email to offer. */
       seasonEmails: boolean | null;
-      /** Whether the user has agreed to War Room setting their ESPN lineup (12.1), so Apply needn't ask. */
+      /** Whether the user has agreed to War Room changing their ESPN team (12.1, Epic 13), so confirming needn't ask. */
       writeConsented: boolean;
     }
 );
@@ -121,9 +121,9 @@ export function SeasonRoom(props: Props) {
               {tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : tab === "trade" ? (
-                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} />
+                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : (
-                <WaiverPanel view={props.view} leagueId={props.leagueId} />
+                <WaiverPanel view={props.view} leagueId={props.leagueId} writeConsented={props.writeConsented} />
               )}
             </div>
             <Disconnect seasonEmails={props.seasonEmails} />

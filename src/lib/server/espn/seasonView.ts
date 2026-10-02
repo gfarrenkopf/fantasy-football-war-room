@@ -19,7 +19,8 @@ export async function loadSeasonView(db: Db, key: Buffer, userId: string, league
   if (load.kind !== "ok") return load;
 
   const { league: season } = load;
-  const ids = season.teams.flatMap((t) => t.roster.map((e) => e.playerId));
+  // Claimed players aren't on a roster, but the page names them.
+  const ids = [...season.teams.flatMap((t) => t.roster.map((e) => e.playerId)), ...season.pendingClaims.map((c) => c.add)];
   // Only the projections fetch is allowed to fail: without it every player shows 0, with a note.
   let projections = new Map<number, PlayerProjections>();
   let projectionsMissing = false;

@@ -2,17 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ESPN_LINEUP_WRITE_DISCLOSURE, ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
-import { canPlay, checkMoves, label, movesToStaged, seatsFromRoster, snapshotOf, starterSeats } from "@/lib/season/apply";
+import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
+import { canPlay, checkMoves, groupMoves, irEligible, label, movesToStaged, seatsFromRoster, snapshotOf, starterSeats } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { Check } from "./Icons";
 import s from "./season.module.css";
+import { WriteConsent } from "./WriteConsent";
 
 /**
  * Managing the lineup on ESPN from War Room (12.1). The user stages a lineup (War Room's, ESPN's
- * own, or either edited by hand), reviews every move, and confirms; the server re-reads ESPN, writes
- * the moves in one transaction, and reads ESPN back to show which landed. After that the user can
+ * own, or either edited by hand), picks which of its changes to make (a swap is one change), reviews them, and confirms; the
+ * server re-reads ESPN, writes the chosen moves in one transaction, and reads ESPN back to show which
+ * landed. Moves left out stay staged for later. After that the user can
  * keep editing and applying, as often as they like. Nothing here ever writes on its own.
  */
 
@@ -30,6 +32,9 @@ const rosterKey = (roster: readonly { playerId: number; slot: string }[]) => ros
 const SLOT_NAME: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
 const seatName = (key: string) => SLOT_NAME[key] ?? key;
 
+/** A change by what its moves do, so one the user left out stays left out until the staged lineup changes it. */
+const changeKey = (group: readonly LineupMove[]) => group.map((m) => `${m.playerId}:${m.to}`).join(",");
+
 export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: SeasonView; leagueId: string; agreed: boolean }) {
   const router = useRouter();
   const roster = useMemo(() => view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [], [view]);
@@ -37,22 +42,36 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
   const seats = useMemo(() => starterSeats(view.starters), [view.starters]);
   const recommended = useMemo(() => view.lineup.starters.map((f) => f.playerId), [view.lineup]);
   const onEspn = useMemo(() => seatsFromRoster(roster, seats), [roster, seats]);
+  const onIr = useMemo(() => roster.filter((p) => p.slot === "IR").map((p) => p.playerId), [roster]);
   // First visit: offer War Room's lineup. Once ESPN's lineup changes under us (after an apply, or a
   // refresh), start again from what ESPN has, so moves already made don't show as still to make.
   const [staged, setStaged] = useState<(number | null)[]>(recommended);
+  /** Who should be on IR (13.2). */
+  const [ir, setIr] = useState<number[]>(onIr);
   const [seenRoster, setSeenRoster] = useState(() => rosterKey(roster));
   const [editing, setEditing] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [landed, setLanded] = useState<Landed | null>(null);
+  const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());
+  // After an apply that left moves out, keep the staged lineup so those moves are still on offer.
+  const [keepStaged, setKeepStaged] = useState(false);
   if (rosterKey(roster) !== seenRoster) {
     setSeenRoster(rosterKey(roster));
-    setStaged(onEspn);
+    if (!keepStaged) {
+      setStaged(onEspn);
+      setIr(onIr);
+    }
+    setKeepStaged(false);
   }
   const [agreed, setAgreed] = useState(agreedAtLoad);
   const [consenting, setConsenting] = useState(false);
 
-  const moves = movesToStaged(roster, seats, staged);
-  const problems = moves.length ? checkMoves(roster, moves, view.starters, view.benchSize) : [];
+  const moves = movesToStaged(roster, seats, staged, ir);
+  const changes = groupMoves(moves, onEspn, staged);
+  const picked = changes.filter((g) => !skipped.has(changeKey(g)));
+  const chosen = picked.flat();
+  const count = picked.length === 1 ? "1 change" : `${picked.length} changes`;
+  const problems = chosen.length ? checkMoves(roster, chosen, view.starters, view.benchSize, view.irSlots) : [];
   const same = (a: readonly (number | null)[]) => staged.every((id, i) => id === a[i]);
   const source = same(recommended) ? "War Room's lineup" : "your edits";
   const name = (id: number) => byId.get(id)?.name ?? `Player ${id}`;
@@ -74,8 +93,27 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     setLanded(null);
   }
 
+  function toggleIr(id: number, on: boolean) {
+    setIr((prev) => (on ? [...prev, id] : prev.filter((x) => x !== id)));
+    // A player going on IR gives up their seat.
+    if (on) setStaged((prev) => prev.map((x) => (x === id ? null : x)));
+    setPhase({ kind: "idle" });
+    setLanded(null);
+  }
+
+  function toggle(group: LineupMove[], on: boolean) {
+    setSkipped((prev) => {
+      const next = new Set(prev);
+      if (on) next.delete(changeKey(group));
+      else next.add(changeKey(group));
+      return next;
+    });
+    setPhase({ kind: "idle" });
+  }
+
   function startFrom(lineup: (number | null)[]) {
     setStaged(lineup);
+    setIr(onIr);
     setPhase({ kind: "idle" });
     setLanded(null);
   }
@@ -85,7 +123,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/season/apply`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ week: view.currentWeek, snapshot: snapshotOf(roster), moves, ...(agreed ? {} : { consentVersion: ESPN_LINEUP_WRITE_VERSION }) }),
+      body: JSON.stringify({ week: view.currentWeek, snapshot: snapshotOf(roster), moves: chosen, ...(agreed ? {} : { consentVersion: ESPN_WRITE_VERSION }) }),
     }).catch(() => null);
     if (!res) return setPhase({ kind: "failed", error: "Can't reach War Room right now. Nothing was sent to ESPN.", details: [] });
     const body = (await res.json().catch(() => ({}))) as {
@@ -100,6 +138,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     if (res.ok && body.moves) {
       setAgreed(true);
       setLanded(body.moves);
+      setKeepStaged(chosen.length < moves.length);
       setPhase({ kind: "idle" });
       router.refresh();
       return;
@@ -120,6 +159,26 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
     </>
   );
 
+  // A straight bench swap reads as one: "WR: Higgins → Love". Anything else lists its moves.
+  const changeLine = (group: LineupMove[]) => {
+    const [a, b] = group;
+    const out = group.length === 2 ? group.find((m) => m.to === "BN") : undefined;
+    const into = out && (out === a ? b : a);
+    if (out && into && into.from === "BN" && into.to === out.from) {
+      return (
+        <>
+          {label(out.from)}: <b>{name(out.playerId)}</b> → <b>{name(into.playerId)}</b>
+        </>
+      );
+    }
+    return group.map((m, i) => (
+      <span key={m.playerId}>
+        {i > 0 && ", "}
+        {moveLine(m)}
+      </span>
+    ));
+  };
+
   return (
     <div className={s.apply}>
       {landed && <Results moves={landed} line={moveLine} />}
@@ -136,7 +195,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
           {seats.map((key, i) => {
             const current = staged[i];
             const lockedHere = current !== null && byId.get(current)?.locked;
-            const options = roster.filter((p) => p.slot !== "IR" && canPlay(p.pos, key) && (!p.locked || p.playerId === current));
+            const options = roster.filter((p) => !ir.includes(p.playerId) && canPlay(p.pos, key) && (!p.locked || p.playerId === current));
             return (
               <label key={`${key}-${i}`} className={s.seat}>
                 <span className={s.seatKey}>{seatName(key)}</span>
@@ -152,6 +211,7 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
               </label>
             );
           })}
+          {view.irSlots > 0 && <IrPicker roster={roster} ir={ir} irSlots={view.irSlots} onToggle={toggleIr} />}
           <div className={s.seatSources}>
             {!same(onEspn) && (
               <button type="button" className={s.textButton} onClick={() => startFrom(onEspn)}>
@@ -172,12 +232,17 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
       ) : (
         <>
           <p className={s.fine}>
-            {moves.length === 1 ? "1 move" : `${moves.length} moves`}
-            , from {source}:
+            {changes.length === 1 ? "1 change" : `${changes.length} changes`}
+            , from {source}{changes.length > 1 ? ". Untick any you don't want to make yet:" : ":"}
           </p>
           <ul className={s.applyList}>
-            {moves.map((m) => (
-              <li key={m.playerId}>{moveLine(m)}</li>
+            {changes.map((group) => (
+              <li key={changeKey(group)}>
+                <label className={s.check}>
+                  <input type="checkbox" checked={!skipped.has(changeKey(group))} disabled={phase.kind === "sending"} onChange={(e) => toggle(group, e.target.checked)} />
+                  <span>{changeLine(group)}</span>
+                </label>
+              </li>
             ))}
           </ul>
           {problems.length > 0 && (
@@ -191,20 +256,9 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
           {phase.kind === "review" || phase.kind === "sending" ? (
             <div className={s.confirm}>
               <p>
-                Apply {moves.length === 1 ? "this move" : `these ${moves.length} moves`} to your team on ESPN for week {view.currentWeek}?
+                Apply {picked.length === 1 ? "this change" : `these ${picked.length} changes`} to your team on ESPN for week {view.currentWeek}?
               </p>
-              {!agreed && (
-                <div className={s.consent}>
-                  <ul>
-                    {ESPN_LINEUP_WRITE_DISCLOSURE.map((line) => (
-                      <li key={line}>{line}</li>
-                    ))}
-                  </ul>
-                  <label className={s.check}>
-                    <input type="checkbox" checked={consenting} onChange={(e) => setConsenting(e.target.checked)} /> I agree
-                  </label>
-                </div>
-              )}
+              {!agreed && <WriteConsent checked={consenting} onChange={setConsenting} />}
               <div className={s.confirmActions}>
                 <button type="button" className={s.primary} onClick={apply} disabled={phase.kind === "sending" || (!agreed && !consenting)}>
                   {phase.kind === "sending" ? "Setting your lineup…" : "Apply to ESPN"}
@@ -215,8 +269,8 @@ export function ApplyLineup({ view, leagueId, agreed: agreedAtLoad }: { view: Se
               </div>
             </div>
           ) : (
-            <button type="button" className={s.primary} disabled={problems.length > 0} onClick={() => setPhase({ kind: "review" })}>
-              Review {moves.length === 1 ? "1 move" : `${moves.length} moves`}
+            <button type="button" className={s.primary} disabled={chosen.length === 0 || problems.length > 0} onClick={() => setPhase({ kind: "review" })}>
+              {picked.length === 0 ? "No changes chosen" : `Review ${count}`}
             </button>
           )}
         </>
@@ -259,5 +313,27 @@ function Results({ moves, line }: { moves: Landed; line: (m: LineupMove) => Reac
       </ul>
       {missed.length > 0 && <p className={s.aiError}>Check these on ESPN. War Room has been alerted.</p>}
     </div>
+  );
+}
+
+/** Who's on IR, and who could go there: players ESPN lists as out or on injured reserve (13.2). */
+function IrPicker({ roster, ir, irSlots, onToggle }: { roster: readonly ViewPlayer[]; ir: readonly number[]; irSlots: number; onToggle: (id: number, on: boolean) => void }) {
+  const candidates = roster.filter((p) => p.slot === "IR" || (irEligible(p) && !p.locked));
+  return (
+    <fieldset className={s.irPicker}>
+      <legend className={s.seatKey}>
+        IR · {ir.length} of {irSlots}
+      </legend>
+      {candidates.length ? (
+        candidates.map((p) => (
+          <label key={p.playerId} className={s.check}>
+            <input type="checkbox" checked={ir.includes(p.playerId)} disabled={p.locked} onChange={(e) => onToggle(p.playerId, e.target.checked)} />
+            {p.name} <span className={s.fine}>· {p.injuryStatus === "INJURY_RESERVE" ? "injured reserve" : p.injuryStatus.toLowerCase()}</span>
+          </label>
+        ))
+      ) : (
+        <p className={s.fine}>No one on your team is out or on injured reserve.</p>
+      )}
+    </fieldset>
   );
 }

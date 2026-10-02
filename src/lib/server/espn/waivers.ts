@@ -42,6 +42,11 @@ type Cache = Map<string, { agents: FreeAgent[]; fetchedAt: number }>;
 const TTL_MS = 10 * 60 * 1000;
 const g = globalThis as { __espnWaiverCache?: Cache };
 
+/** Drops the cached pool for a league, after the user has added a player from it. */
+export function forgetWaivers(userId: string, leagueId: string) {
+  for (const key of g.__espnWaiverCache?.keys() ?? []) if (key.startsWith(`${userId}:${leagueId}:`)) g.__espnWaiverCache!.delete(key);
+}
+
 export async function loadWaivers(db: Db, key: Buffer, userId: string, leagueId: string, { refresh = false }: { refresh?: boolean } = {}): Promise<WaiverLoad> {
   // The view first: it reads ESPN when the cache is cold, and the league read after it is then a hit.
   const viewLoad = await loadSeasonView(db, key, userId, leagueId);

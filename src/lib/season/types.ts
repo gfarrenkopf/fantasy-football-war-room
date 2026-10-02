@@ -50,6 +50,8 @@ export interface RosterEntry {
   espnSlotId: number;
   /** The player's game has started this week: ESPN won't move them until next week. */
   locked: boolean;
+  /** In a trade under review, or otherwise barred from trading by ESPN (`tradeLocked`). Absent means free to trade. */
+  tradeLocked?: boolean;
   injuryStatus: InjuryStatus;
   /**
    * Points scored this week so far, by this league's scoring: ESPN's actual row for the current
@@ -119,9 +121,13 @@ export interface SeasonLeague {
   /** Starting slots, in lineup order. */
   starters: LineupSlotCount[];
   benchSize: number;
+  /** IR spots (`lineupSlotCounts["21"]`); 0 when the league has none. */
+  irSlots: number;
   teams: SeasonTeam[];
   /** Trades waiting on ESPN that the user can see: their own offers, in both directions. */
   pendingTrades: PendingTrade[];
+  /** Waiver claims pending on ESPN (Epic 13). ESPN only shows the reader their own. */
+  pendingClaims: PendingClaim[];
   /** The league's trade deadline (`tradeSettings.deadlineDate`), as an ISO instant; null for none. */
   tradeDeadline: string | null;
   /** This matchup period's fantasy matchups (APE-211). Empty when ESPN sent no schedule. */
@@ -134,6 +140,19 @@ export interface Waivers {
   /** The season's FAAB budget per team; null when the league doesn't bid. */
   budget: number | null;
   teams: { teamId: number; rank: number | null; spent: number }[];
+}
+
+/** A waiver claim pending on ESPN (`mPendingTransactions`, type WAIVER): who comes in, who goes out if it succeeds. */
+export interface PendingClaim {
+  id: string;
+  teamId: number;
+  add: number;
+  /** Dropped only if the claim succeeds; null when the roster had room. */
+  drop: number | null;
+  /** The FAAB bid; 0 in a league that doesn't bid. */
+  bid: number;
+  /** When waivers process, as an ISO instant, when ESPN gave it. */
+  processesAt: string | null;
 }
 
 /** A player nobody in the league rosters (`kona_player_info`, FREEAGENT or WAIVERS). */

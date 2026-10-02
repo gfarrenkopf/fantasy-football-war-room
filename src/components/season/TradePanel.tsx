@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { tradeEmphasis, type Emphasis } from "@/lib/season/emphasis";
+import { snapshotOf } from "@/lib/season/apply";
 import { evaluateTrade, tradeFromPending, type Trade, type TradeVerdict } from "@/lib/season/trade";
 import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
@@ -10,6 +11,7 @@ import { AiTradeWriteupCard } from "./AiPanel";
 import { Check } from "./Icons";
 import { Gain, PlayerLine, recordText, signed } from "./parts";
 import s from "./season.module.css";
+import { TradeWrite } from "./TradeWrite";
 
 const SLOT_LABEL: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
 
@@ -68,13 +70,15 @@ function TradeGain({ verdict, partner, compact, inline }: { verdict: TradeVerdic
  * or a counter. Every verdict compares both starting lineups for the rest of the season; nothing
  * here is sent to ESPN.
  */
-export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null }) {
+export function TradePanel({ view, leagueId, ai, writeConsented }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null; writeConsented: boolean }) {
   const others = view.teams.filter((t) => t.id !== view.myTeamId);
   const [partnerId, setPartnerId] = useState(others[0]?.id ?? 0);
   const [gives, setGives] = useState<number[]>([]);
   const [gets, setGets] = useState<number[]>([]);
   const [loaded, setLoaded] = useState<string | null>(null);
   const [side, setSide] = useState<"send" | "get">("send");
+  const [proposing, setProposing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const mine = view.teams.find((t) => t.id === view.myTeamId);
   const partner = others.find((t) => t.id === partnerId);
 
@@ -85,8 +89,10 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
   const verdict = evaluateTrade(view.teams, view, trade);
   const tradeId = `${partner.id}:${[...gives].sort().join(",")}:${[...gets].sort().join(",")}`;
   const names = new Map(view.teams.flatMap((t) => t.roster.map((p) => [p.playerId, p.name] as const)));
+  const list = (ids: readonly number[]) => ids.map((id) => names.get(id) ?? `ESPN player ${id}`).join(", ");
   const toggle = (list: number[], set: (next: number[]) => void, id: number) => {
     setLoaded(null);
+    setProposing(false);
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   };
   const open = (pending: PendingTrade, trade: Trade) => {
@@ -97,6 +103,7 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
     document.getElementById("builder-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const clear = () => {
+    setProposing(false);
     setGives([]);
     setGets([]);
     setLoaded(null);
@@ -115,8 +122,13 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
           <h2 id="pending-title" className={s.columnTitle}>
             Pending on ESPN
           </h2>
-          <span className={s.panelNote}>Accept or decline on ESPN</span>
+          <span className={s.panelNote}>Answer here or on ESPN</span>
         </div>
+        {notice && (
+          <p className={s.fine} role="status">
+            {notice}
+          </p>
+        )}
         {view.tradeDeadline && !view.tradeDeadlinePassed && (
           <p className={s.fine}>
             Trade deadline <b suppressHydrationWarning>{day(view.tradeDeadline)}</b>
@@ -125,7 +137,17 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
         {view.pendingTrades.length ? (
           <ul className={s.pending}>
             {view.pendingTrades.map((pending) => (
-              <Offer key={pending.id} view={view} pending={pending} names={names} active={loaded === pending.id} onOpen={open} />
+              <Offer
+                key={pending.id}
+                view={view}
+                leagueId={leagueId}
+                agreed={writeConsented}
+                pending={pending}
+                names={names}
+                active={loaded === pending.id}
+                onOpen={open}
+                onNotice={setNotice}
+              />
             ))}
           </ul>
         ) : (
@@ -176,6 +198,37 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
               <>
                 <TradeGain verdict={verdict} partner={partner.name} compact />
                 <SlotChanges verdict={verdict} partner={partner.name} names={names} />
+                {!view.tradeDeadlinePassed &&
+                  (proposing ? (
+                    <TradeWrite
+                      leagueId={leagueId}
+                      agreed={writeConsented}
+                      body={{ kind: "propose", week: view.currentWeek, snapshot: snapshotOf(mine.roster), partner: partner.id, gives, gets, drops: verdict.a.drops }}
+                      question={
+                        <>
+                          Offer {partner.name} this trade on ESPN? You send <b>{list(gives) || "nothing"}</b> and get <b>{list(gets) || "nothing"}</b>
+                          {verdict.a.drops.length > 0 && (
+                            <>
+                              , and drop <b>{list(verdict.a.drops)}</b> to make room if they accept
+                            </>
+                          )}
+                          .
+                        </>
+                      }
+                      confirm="Offer on ESPN"
+                      sending="Sending the offer…"
+                      onCancel={() => setProposing(false)}
+                      onDone={(landed) => {
+                        setProposing(false);
+                        setNotice(landed ? `Offer sent to ${partner.name}. It's in Pending on ESPN.` : "ESPN doesn't show your offer. Check ESPN. War Room has been alerted.");
+                        clear();
+                      }}
+                    />
+                  ) : (
+                    <button type="button" className={s.button} onClick={() => setProposing(true)}>
+                      Offer this on ESPN
+                    </button>
+                  ))}
                 {ai && (
                   <AiTradeWriteupCard
                     key={tradeId}
@@ -221,17 +274,24 @@ export function TradePanel({ view, leagueId, ai }: { view: SeasonView; leagueId:
 
 function Offer({
   view,
+  leagueId,
+  agreed,
   pending,
   names,
   active,
   onOpen,
+  onNotice,
 }: {
   view: SeasonView;
+  leagueId: string;
+  agreed: boolean;
   pending: PendingTrade;
   names: Map<number, string>;
   active: boolean;
   onOpen: (pending: PendingTrade, trade: Trade) => void;
+  onNotice: (message: string) => void;
 }) {
+  const [acting, setActing] = useState<"accept" | "decline" | "withdraw" | null>(null);
   const trade = tradeFromPending(pending, view.myTeamId);
   if (!trade) return null;
   const partner = teamName(view, trade.teamB);
@@ -279,6 +339,52 @@ function Offer({
       ) : (
         <p className={s.fine}>Can&apos;t grade this one: a player in it is no longer on those rosters.</p>
       )}
+      {pending.status === "proposed" &&
+        (acting ? (
+          <TradeWrite
+            leagueId={leagueId}
+            agreed={agreed}
+            body={{ kind: acting, week: view.currentWeek, tradeId: pending.id, ...(acting === "accept" ? { snapshot: snapshotOf(view.teams.find((t) => t.id === view.myTeamId)?.roster ?? []) } : {}) }}
+            question={
+              acting === "accept" ? (
+                <>
+                  Accept on ESPN? You get <b>{list(trade.gets) || "nothing"}</b> and send <b>{list(trade.gives) || "nothing"}</b>. It goes through after the league&apos;s review.
+                </>
+              ) : acting === "decline" ? (
+                <>Decline {partner}&apos;s offer on ESPN?</>
+              ) : (
+                <>Withdraw your offer to {partner} on ESPN?</>
+              )
+            }
+            confirm={acting === "accept" ? "Accept on ESPN" : acting === "decline" ? "Decline on ESPN" : "Withdraw on ESPN"}
+            sending={acting === "accept" ? "Accepting…" : acting === "decline" ? "Declining…" : "Withdrawing…"}
+            onCancel={() => setActing(null)}
+            onDone={(landed) => {
+              const past = acting === "accept" ? "accepted. It's in the league's review" : acting === "decline" ? "declined" : "withdrawn";
+              onNotice(landed ? `Offer ${past}.` : "ESPN doesn't show that change. Check ESPN. War Room has been alerted.");
+              setActing(null);
+            }}
+          />
+        ) : (
+          <div className={s.offerActions}>
+            {kind === "mine" ? (
+              <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={() => setActing("withdraw")}>
+                Withdraw
+              </button>
+            ) : (
+              <>
+                {!view.tradeDeadlinePassed && (
+                  <button type="button" className={s.button} onClick={() => setActing("accept")}>
+                    Accept
+                  </button>
+                )}
+                <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={() => setActing("decline")}>
+                  Decline
+                </button>
+              </>
+            )}
+          </div>
+        ))}
     </li>
   );
 }

@@ -2,7 +2,7 @@ import type { RosterSlotKey } from "@/lib/draft/types";
 import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
-import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, Waivers } from "./types";
+import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingClaim, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, Waivers } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -79,6 +79,7 @@ function parseEntry(raw: unknown, season: number, week: number): RosterEntry | n
     slot,
     espnSlotId: raw.lineupSlotId,
     locked: pool.lineupLocked === true,
+    ...(pool.tradeLocked === true ? { tradeLocked: true } : {}),
     injuryStatus: injury,
     actual: actualPoints(player.stats, season, week),
     ownership: ownershipOf(player.ownership),
@@ -118,6 +119,31 @@ export function parsePendingTrades(raw: unknown): PendingTrade[] {
         moves,
         proposedAt: isoOf(tx.proposedDate),
         expiresAt: isoOf(tx.expirationDate),
+        processesAt: isoOf(tx.processDate),
+      },
+    ];
+  });
+}
+
+/**
+ * `mPendingTransactions` as waiver claims (Epic 13): pending `WAIVER` transactions with one `ADD`
+ * and at most one `DROP`. ESPN only returns the reader's own claims.
+ */
+export function parsePendingClaims(raw: unknown): PendingClaim[] {
+  const list = isObject(raw) && Array.isArray(raw.pendingTransactions) ? raw.pendingTransactions : [];
+  return list.flatMap((tx): PendingClaim[] => {
+    if (!isObject(tx) || tx.type !== "WAIVER" || tx.status !== "PENDING" || typeof tx.id !== "string" || typeof tx.teamId !== "number" || !Array.isArray(tx.items)) return [];
+    const items = tx.items.filter(isObject);
+    const adds = items.filter((i) => i.type === "ADD" && typeof i.playerId === "number");
+    const drops = items.filter((i) => i.type === "DROP" && typeof i.playerId === "number");
+    if (adds.length !== 1 || drops.length > 1) return [];
+    return [
+      {
+        id: tx.id,
+        teamId: tx.teamId,
+        add: adds[0].playerId as number,
+        drop: drops.length ? (drops[0].playerId as number) : null,
+        bid: typeof tx.bidAmount === "number" ? tx.bidAmount : 0,
         processesAt: isoOf(tx.processDate),
       },
     ];
@@ -240,6 +266,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
   if (!counts) return { ok: false, error: "ESPN didn't say what this league's roster looks like." };
   const starting = new Map<LineupSlotCount["key"], number>();
   let benchSize = 0;
+  const irSlots = typeof counts[String(IR)] === "number" && (counts[String(IR)] as number) > 0 ? (counts[String(IR)] as number) : 0;
   for (const [id, n] of Object.entries(counts)) {
     if (typeof n !== "number" || n <= 0 || Number(id) === IR) continue;
     if (Number(id) === BENCH) {
@@ -279,8 +306,10 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       scoringItems: parseScoringItems(isObject(settings.scoringSettings) ? settings.scoringSettings.scoringItems : undefined),
       starters,
       benchSize,
+      irSlots,
       teams,
       pendingTrades: parsePendingTrades(raw),
+      pendingClaims: parsePendingClaims(raw),
       tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
       matchups: parseMatchups(raw),
       waivers: parseWaivers(settings, raw.teams),

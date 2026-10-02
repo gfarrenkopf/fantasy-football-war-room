@@ -56,6 +56,8 @@ The trade verdict is a **roster delta**, not a sum of player values. For each te
 
 Launch is build-a-trade: pick a partner and players from both sides. Importing pending ESPN offers comes next, and trade suggestions come in a later epic.
 
+**Trading on ESPN (13.5).** Pending offers to the user have **Accept** and **Decline**, and the user's own have **Withdraw**. The builder's trade can be sent as an offer (**Offer this on ESPN**), with the verdict's drops as `DROP` items when the user would be over the roster limit. `POST /api/leagues/:id/season/trades` (`src/lib/server/espn/trades.ts`) goes through the same guardrails as lineup writes (§7). The pure checks (`src/lib/season/tradeWrite.ts`) cover the deadline, players already in a trade (`tradeLocked`), players who've moved since the page loaded, the user's roster limit, and that only the team an offer was made to answers it. An accepted trade stays in Pending, marked Accepted, through the league's review. ESPN's own page asks for the password again before an accept; its API doesn't, so War Room accepts with the stored login.
+
 ### Waiver pickups (APE-212)
 
 The Waivers tab ranks available players the way trades are scored. It adds each player to the user's roster, cuts the weakest player by rest-of-season points, and measures the change in the best starting lineup's points over every remaining week (`src/lib/season/waivers.ts`). A player who would only sit on the bench scores nothing.
@@ -63,7 +65,8 @@ The Waivers tab ranks available players the way trades are scored. It adds each 
 - **The pool** is the 100 most-rostered FREEAGENT / WAIVERS players at the positions War Room plays. It comes from a league-scoped `kona_player_info` read with an `X-Fantasy-Filter`, made with the user's login when the tab opens (`GET /api/leagues/:id/season/waivers`), and cached for ten minutes. Projections come from the same public source as rosters.
 - **The top ten** gains of at least 0.05 points a week are shown, each with who to drop, and whether the player is a free agent or on waivers and when he clears.
 - **The user's waiver priority** (`mTeam` `waiverRank`) is shown, or FAAB left in a league that bids (`acquisitionSettings.acquisitionBudget` minus `transactionCounter.acquisitionBudgetSpent`).
-- Advice only: claims happen on ESPN.
+- **Adding a free agent (13.3):** a free agent's row has **Add**. The user picks who to drop (War Room's suggestion first, or no one when the roster has room), reviews, and confirms. `POST /api/leagues/:id/season/acquire { kind: "add", week, snapshot, add, drop }` (`src/lib/server/espn/acquire.ts`) sends one `FREEAGENT` transaction through the same guardrails as lineup writes (§7). The pure checks (`src/lib/season/acquire.ts`) cover the roster limit (starting slots plus bench, IR not counted), a locked or missing drop, and a player another team has picked up since the pool was read. Whether the player is still a free agent is ESPN's call: it refuses one on waivers, and the whole transaction with him. The pool's cache is dropped after an add.
+- **Waiver claims (13.4):** a player still on waivers has **Claim**, with the same drop picker. `{ kind: "claim", … }` on the same route sends one `WAIVER` transaction. The drop only happens if the claim succeeds. The claim has landed when the re-read shows it pending. The user's pending claims (`mPendingTransactions`, parsed by `parsePendingClaims()`; ESPN only shows the reader their own) are listed at the top of the tab, named from the projections feed, each with **Cancel** (`{ kind: "cancel", week, claimId }`, a `CANCEL` of the claim). Leagues that bid FAAB aren't supported yet: there the tab shows no **Claim**, and the server refuses one. Claims happen on ESPN.
 
 ## 6. Free and paid
 
@@ -110,15 +113,15 @@ The Sunday job comes too late for players whose games kick off first: they're lo
 
 Advice is the default. Applying a lineup to ESPN is an option (Epic 12, 12.1), in the lineup tab's move list. The user stages a lineup (War Room's, ESPN's own, or either edited by hand with a picker per starting slot), and War Room sends the moves as **one** transaction, which ESPN applies atomically. After an apply the editor starts again from ESPN's new lineup, so the user can keep managing their team from War Room.
 
-- **Pure checks** (`src/lib/season/apply.ts`), run in the browser while staging and again on the server: every move is the user's own player, where ESPN has them, unlocked, into a slot they're eligible for, and the result fits the league's starting slots and bench. Players on IR are left alone.
-- **Route:** `POST /api/leagues/:id/season/apply { week, snapshot, moves, consentVersion? }` (`src/lib/server/espn/applyLineup.ts`, `lineupWriter.ts`). The team is the user's own, from their season link; the request never names one.
+- **Pure checks** (`src/lib/season/apply.ts`), run in the browser while staging and again on the server: every move is the user's own player, where ESPN has them, unlocked, into a slot they're eligible for, and the result fits the league's starting slots, bench and IR spots. **IR (13.2):** the editor lists who's on IR and who could go there. Only players ESPN lists as `OUT` or `INJURY_RESERVE` may go on (`IR_STATUSES`; ESPN refuses anyone it doesn't mark injured), up to the league's IR spots (`lineupSlotCounts["21"]`). A player coming off IR needs room on the bench or a seat. IR moves ride in the same `ROSTER` transaction as the rest of the lineup.
+- **Route:** `POST /api/leagues/:id/season/apply { week, snapshot, moves, consentVersion? }` (`src/lib/server/espn/applyLineup.ts`). Every write to ESPN, lineup or otherwise, goes through `guardedWrite.ts` (the guardrails below) and `transactionWriter.ts` (one `transactions/` POST). The team is the user's own, from their season link; the request never names one.
 
 Guardrails:
 
 1. The user reviews every move and confirms. Nothing is applied automatically: the Sunday job and the AI never write.
 2. Re-read the roster (skipping the cache) right before writing. Abort if ESPN has moved on a week, if anything on the roster changed since staging (`snapshot`), or if the checks fail against the fresh roster (a player now locked). ESPN doesn't check `fromLineupSlotId`, and it has no dry run, so this check is ours to make.
 3. Re-read after writing, even when the write timed out, and show which moves landed. ESPN refusing, a failed write, a move that didn't land, and a write that couldn't be checked all log `[server-error]`.
-4. A separate, versioned consent line (`ESPN_LINEUP_WRITE_VERSION` in `src/lib/espn/disclosure.ts`, stored in `user_prefs.lineup_write_consent`), asked the first time the user applies.
+4. A separate, versioned consent line (`ESPN_WRITE_VERSION` in `src/lib/espn/disclosure.ts`, stored in `user_prefs.lineup_write_consent`), asked the first time the user confirms a change. Version 2 (Epic 13) covers the whole team: lineup, IR, adds and drops, waiver claims and trades. Users who agreed to version 1 are asked once more.
 
 ## 8. Open questions
 

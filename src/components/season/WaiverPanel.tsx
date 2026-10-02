@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { SeasonView } from "@/lib/season/view";
 import type { Pickup } from "@/lib/season/waivers";
+import { AcquireReview } from "./AcquireReview";
+import { ClaimList } from "./ClaimList";
 import { External, Refresh } from "./Icons";
 import { PlayerLine, signed } from "./parts";
 import s from "./season.module.css";
@@ -28,10 +30,14 @@ function waiverNote(view: SeasonView): string | null {
 /**
  * The waiver wire (APE-212): available players who'd improve the user's best lineup for the rest of
  * the season, each with who to drop. Read from ESPN when the tab opens, since the page's own read
- * doesn't carry the pool. Advice only: adds happen on ESPN.
+ * doesn't carry the pool. A free agent can be added from here, with a drop (13.3), and a player on
+ * waivers claimed, with the user's pending claims listed to cancel (13.4). FAAB leagues claim on ESPN.
  */
-export function WaiverPanel({ view, leagueId }: { view: SeasonView; leagueId: string }) {
+export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonView; leagueId: string; writeConsented: boolean }) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
+  /** The pickup being reviewed, by player id. */
+  const [acting, setActing] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const names = new Map(view.teams.flatMap((t) => t.roster.map((p) => [p.playerId, p.name] as const)));
   const note = waiverNote(view);
 
@@ -59,6 +65,14 @@ export function WaiverPanel({ view, leagueId }: { view: SeasonView; leagueId: st
         {note && <span className={s.panelNote}>{note}</span>}
       </div>
 
+      <ClaimList view={view} leagueId={leagueId} agreed={writeConsented} onNotice={setNotice} />
+
+      {notice && (
+        <p className={`${s.note} ${s.fine}`} role="status">
+          {notice}
+        </p>
+      )}
+
       {load.kind === "loading" && (
         <p className={`${s.note} ${s.fine}`} role="status">
           Reading ESPN&apos;s waiver wire…
@@ -77,7 +91,7 @@ export function WaiverPanel({ view, leagueId }: { view: SeasonView; leagueId: st
       {load.kind === "ok" &&
         (load.pickups.length ? (
           <ol className={s.bench}>
-            {load.pickups.map(({ player, perWeek, delta, drop }) => (
+            {load.pickups.map(({ player, perWeek, delta, drop }, i) => (
               <li key={player.playerId} className={s.benchRow}>
                 <span className={s.pickupWho}>
                   <PlayerLine player={player} value="none" ownership live />
@@ -106,7 +120,33 @@ export function WaiverPanel({ view, leagueId }: { view: SeasonView; leagueId: st
                     <span className="tabular-nums">{signed(delta)}</span> rest of season
                   </span>
                   {drop !== null && <span className={`${s.benchNote} block`}>Drop {names.get(drop) ?? "your weakest player"}</span>}
+                  {acting !== player.playerId && (player.status === "FREEAGENT" || view.waiver.budget === null) && (
+                    <button
+                      type="button"
+                      className={`${s.button} ${s.pickupAct}`}
+                      onClick={() => {
+                        setActing(player.playerId);
+                        setNotice(null);
+                      }}
+                    >
+                      {player.status === "WAIVERS" ? "Claim" : "Add"}
+                    </button>
+                  )}
                 </span>
+                {acting === player.playerId && (
+                  <AcquireReview
+                    view={view}
+                    leagueId={leagueId}
+                    pickup={load.pickups[i]}
+                    agreed={writeConsented}
+                    onCancel={() => setActing(null)}
+                    onDone={(message) => {
+                      setActing(null);
+                      setNotice(message);
+                      void read(true);
+                    }}
+                  />
+                )}
               </li>
             ))}
           </ol>
@@ -117,7 +157,7 @@ export function WaiverPanel({ view, leagueId }: { view: SeasonView; leagueId: st
         ))}
 
       <p className={`${s.fine} ${s.waiverFoot}`}>
-        Ranked by what each adds to your best lineup for the rest of the season, from ESPN&apos;s projections. Claims happen on ESPN.
+        Ranked by what each adds to your best lineup for the rest of the season, from ESPN&apos;s projections. Add a free agent or claim a player on waivers from here.
         {load.kind === "ok" && (
           <>
             {" "}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkMoves, espnRefusal, landedMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
+import { checkMoves, espnRefusal, groupMoves, landedMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
 
@@ -46,6 +46,37 @@ describe("movesToStaged", () => {
   });
 });
 
+describe("groupMoves", () => {
+  it("ties each player to the one whose seat they take, and leaves unrelated moves apart", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS); // QB RB RB WR FLEX
+    const before = seatsFromRoster(t.roster, seats);
+    const staged = [t.qb.playerId, t.rb2.playerId, t.benchRb.playerId, t.wr.playerId, t.benchWr.playerId];
+    const moves = movesToStaged(t.roster, seats, staged);
+    const [rbSwap, flexSwap] = groupMoves(moves, before, staged);
+    expect(rbSwap.map((m) => m.playerId)).toEqual([t.rb1.playerId, t.benchRb.playerId]);
+    expect(flexSwap.map((m) => m.playerId)).toEqual([t.flex.playerId, t.benchWr.playerId]);
+  });
+
+  it("keeps a chain through FLEX in one group", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const before = seatsFromRoster(t.roster, seats);
+    // The WR slides to FLEX, the FLEX goes to the bench, and the bench WR takes the WR seat.
+    const staged = [t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.benchWr.playerId, t.wr.playerId];
+    const moves = movesToStaged(t.roster, seats, staged);
+    expect(groupMoves(moves, before, staged)).toEqual([moves]);
+  });
+
+  it("stands a player alone when their seat is left empty", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const before = seatsFromRoster(t.roster, seats);
+    const staged = [t.qb.playerId, t.rb1.playerId, t.rb2.playerId, null, t.flex.playerId];
+    expect(groupMoves(movesToStaged(t.roster, seats, staged), before, staged)).toEqual([[{ playerId: t.wr.playerId, from: "WR", to: "BN" }]]);
+  });
+});
+
 describe("seatsFromRoster", () => {
   it("seats ESPN's starters in order, leaves empty slots null, and stages no moves", () => {
     const t = team();
@@ -85,7 +116,6 @@ describe("checkMoves", () => {
     expect(checkMoves(t.roster, [{ playerId: t.benchRb.playerId, from: "BN", to: "QB" }], STARTERS, 3)).toContain("Bench Rb can't play QB.");
     expect(checkMoves(t.roster, [{ playerId: t.benchRb.playerId, from: "BN", to: "RB" }], STARTERS, 3)).toEqual(["That's 3 players at RB; the league starts 2."]);
     expect(checkMoves(t.roster, [{ playerId: t.benchRb.playerId, from: "RB", to: "BN" }], STARTERS, 3)).toEqual(["Bench Rb is at the bench on ESPN, not RB."]);
-    expect(checkMoves(t.roster, [{ playerId: t.ir.playerId, from: "IR", to: "BN" }], STARTERS, 3)).toEqual(["War Room doesn't move players on or off IR. Do that on ESPN."]);
     expect(checkMoves(t.roster, [{ playerId: 999_999, from: "BN", to: "RB" }], STARTERS, 3)).toEqual(["Player 999999 isn't on your team."]);
     const twice = [
       { playerId: t.rb1.playerId, from: "RB" as const, to: "BN" as const },
@@ -100,6 +130,38 @@ describe("checkMoves", () => {
     expect(checkMoves(t.roster, [{ playerId: t.benchWr.playerId, from: "BN", to: "SUPERFLEX" }], STARTERS, 3)).toEqual(["This league has no OP slot."]);
     expect(checkMoves(t.roster, [{ playerId: t.flex.playerId, from: "FLEX", to: "BN" }], STARTERS, 2)).toEqual(["That leaves 3 players on a 2-player bench."]);
     expect(checkMoves(t.roster, [{ playerId: t.flex.playerId, from: "FLEX", to: "BN" }], STARTERS, 3)).toEqual([]);
+  });
+});
+
+describe("IR (13.2)", () => {
+  it("activates onto a bench with room, and refuses a full one", () => {
+    const t = team();
+    expect(checkMoves(t.roster, [{ playerId: t.ir.playerId, from: "IR", to: "BN" }], STARTERS, 3, 1)).toEqual([]);
+    expect(checkMoves(t.roster, [{ playerId: t.ir.playerId, from: "IR", to: "BN" }], STARTERS, 2, 1)).toEqual(["That leaves 3 players on a 2-player bench."]);
+  });
+
+  it("puts only players out or on injured reserve on IR, up to the league's IR spots", () => {
+    const t = team();
+    const out = { ...t.benchRb, injuryStatus: "OUT" };
+    const roster = t.roster.map((p) => (p.playerId === out.playerId ? out : p));
+    const toIr = [{ playerId: out.playerId, from: "BN" as const, to: "IR" as const }];
+    expect(checkMoves(roster, toIr, STARTERS, 3, 2)).toEqual([]);
+    expect(checkMoves(roster, toIr, STARTERS, 3, 1)).toEqual(["That's 2 players on IR; the league has 1 IR spot."]);
+    expect(checkMoves(t.roster, [{ playerId: t.benchWr.playerId, from: "BN", to: "IR" }], STARTERS, 3, 2)).toEqual([
+      "Bench Wr isn't hurt enough for IR: ESPN only takes players who are out or on injured reserve.",
+    ]);
+  });
+
+  it("stages IR moves when told who should be on IR", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const staged = seatsFromRoster(t.roster, seats);
+    // Without `ir`, IR is left alone; with it, the IR player comes off to the bench and a bench player goes on.
+    expect(movesToStaged(t.roster, seats, staged)).toEqual([]);
+    expect(movesToStaged(t.roster, seats, staged, [t.benchRb.playerId])).toEqual([
+      { playerId: t.benchRb.playerId, from: "BN", to: "IR" },
+      { playerId: t.ir.playerId, from: "IR", to: "BN" },
+    ]);
   });
 });
 
@@ -145,6 +207,8 @@ describe("espnRefusal", () => {
       "ESPN says a slot would be over its limit: Too many players in the RB slot (maximum 2)",
     );
     expect(espnRefusal("TRAN_LINEUP_LOCKED", "Lineup transaction could not be completed, Drake London is locked")).toContain("game has started");
+    expect(espnRefusal("TRAN_ROSTER_INELIGIBLE_IR_NOT_INJURED", "X is not eligible for the IL/IR slot, player is not injured.")).toContain("only puts injured players on IR");
+    expect(espnRefusal("TRAN_ROSTER_LIMIT_EXCEEDED_ONE", "Too many players on roster (maximum 16).")).toContain("drop a player");
     expect(espnRefusal("TRAN_SOMETHING_NEW", "Player is locked.")).toBe("ESPN refused the change: Player is locked.");
     expect(espnRefusal("TRAN_SOMETHING_NEW", "")).toBe("ESPN refused the change (TRAN_SOMETHING_NEW).");
   });

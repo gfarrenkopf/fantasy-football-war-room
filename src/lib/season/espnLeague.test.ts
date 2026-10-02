@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import league from "./__fixtures__/espn-league-2026.json";
-import { ESPN_SLOT_ID, ownTeamId, parseFreeAgents, parseMatchups, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
+import { ESPN_SLOT_ID, ownTeamId, parseFreeAgents, parseMatchups, parsePendingClaims, parsePendingTrades, parseSeasonLeague } from "./espnLeague";
 
 describe("parseSeasonLeague", () => {
   const parsed = parseSeasonLeague(league, "110222051");
@@ -159,6 +159,34 @@ describe("ownTeamId", () => {
     expect(ownTeamId(doc, "{154E132F-8C13-4AC0-9DAC-20C2C5625594}")).toBe(2);
     expect(ownTeamId(doc, "{BBBB}")).toBeNull();
     expect(ownTeamId(null, "{BBBB}")).toBeNull();
+  });
+});
+
+describe("parsePendingClaims", () => {
+  // The shape recorded on the test league, 2026-09-29 (docs/espn-protocol.md §8).
+  const claim = (over: Record<string, unknown> = {}) => ({
+    bidAmount: 0,
+    executionType: "EXECUTE",
+    id: "c1",
+    isPending: true,
+    items: [
+      { fromLineupSlotId: -1, fromTeamId: 0, playerId: 4361529, toLineupSlotId: -1, toTeamId: 1, type: "ADD" },
+      { fromLineupSlotId: 20, fromTeamId: 1, playerId: 4567750, toLineupSlotId: -1, toTeamId: 0, type: "DROP" },
+    ],
+    processDate: 1790751600000,
+    status: "PENDING",
+    teamId: 1,
+    type: "WAIVER",
+    ...over,
+  });
+
+  it("reads pending WAIVER claims and leaves trades and settled claims out", () => {
+    const raw = { pendingTransactions: [claim(), claim({ id: "c2", status: "CANCELED" }), { ...claim({ id: "t1" }), type: "TRADE_PROPOSAL" }, claim({ id: "c3", bidAmount: 12, items: [claim().items[0]] })] };
+    expect(parsePendingClaims(raw)).toEqual([
+      { id: "c1", teamId: 1, add: 4361529, drop: 4567750, bid: 0, processesAt: "2026-09-30T07:00:00.000Z" },
+      { id: "c3", teamId: 1, add: 4361529, drop: null, bid: 12, processesAt: "2026-09-30T07:00:00.000Z" },
+    ]);
+    expect(parsePendingClaims({})).toEqual([]);
   });
 });
 

@@ -52,6 +52,7 @@ export function seasonView(mine: ViewPlayer[], theirs: ViewPlayer[] = []): Seaso
     playoffStartWeek: 7,
     starters: STARTERS,
     benchSize: 3,
+    irSlots: 1,
     myTeamId: 1,
     teams: [
       { id: 1, name: "Mine", abbrev: "ME", roster: mine, standing: { wins: 3, losses: 1, ties: 0, pointsFor: 480.5, pointsAgainst: 401.2, seed: 2 } },
@@ -59,6 +60,7 @@ export function seasonView(mine: ViewPlayer[], theirs: ViewPlayer[] = []): Seaso
     ],
     lineup: optimalLineup(mine, STARTERS),
     pendingTrades: [],
+    claims: [],
     tradeDeadline: null,
     tradeDeadlinePassed: false,
     matchup: null,

@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
-import { ESPN_LINEUP_WRITE_VERSION } from "@/lib/espn/disclosure";
-import { lineupWriteConsent } from "../seasonPrefs";
+import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
+import { agreeToWrites, writeConsent } from "../seasonPrefs";
 import { createTestLeague } from "../testLeagues";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { ApplyOutcome } from "./applyLineup";
@@ -73,17 +73,26 @@ describe("POST /api/leagues/:id/season/apply", () => {
     const POST = await route();
     const first = await POST(post(leagueId), ctx(leagueId));
     expect(first.status).toBe(409);
-    expect(await first.json()).toMatchObject({ consent: { version: ESPN_LINEUP_WRITE_VERSION, lines: expect.arrayContaining([expect.stringContaining("when you press Apply")]) } });
+    expect(await first.json()).toMatchObject({ consent: { version: ESPN_WRITE_VERSION, lines: expect.arrayContaining([expect.stringContaining("when you confirm a change")]) } });
     expect(state.calls).toBe(0);
 
-    const agreed = await POST(post(leagueId, { consentVersion: ESPN_LINEUP_WRITE_VERSION }), ctx(leagueId));
+    const agreed = await POST(post(leagueId, { consentVersion: ESPN_WRITE_VERSION }), ctx(leagueId));
     expect(agreed.status).toBe(200);
     expect(await agreed.json()).toEqual({ moves: MOVES.map((m) => ({ ...m, landed: true })) });
-    expect(await lineupWriteConsent(db, userId)).toBe(ESPN_LINEUP_WRITE_VERSION);
+    expect(await writeConsent(db, userId)).toBe(ESPN_WRITE_VERSION);
 
     expect((await POST(post(leagueId), ctx(leagueId))).status).toBe(200);
     expect(state.calls).toBe(2);
     expect(errors).toEqual([]);
+  });
+
+  it("asks again when the user agreed to an older consent", async () => {
+    const POST = await route();
+    await agreeToWrites(db, userId, ESPN_WRITE_VERSION - 1);
+    const res = await POST(post(leagueId), ctx(leagueId));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ consent: { version: ESPN_WRITE_VERSION } });
+    expect(state.calls).toBe(0);
   });
 
   it("refuses bad bodies, other users' leagues and cross-origin posts", async () => {
@@ -98,7 +107,7 @@ describe("POST /api/leagues/:id/season/apply", () => {
 
   it("answers aborts with what changed, and logs ESPN refusals and moves that didn't land", async () => {
     const POST = await route();
-    const send = () => POST(post(leagueId, { consentVersion: ESPN_LINEUP_WRITE_VERSION }), ctx(leagueId));
+    const send = () => POST(post(leagueId, { consentVersion: ESPN_WRITE_VERSION }), ctx(leagueId));
 
     state.outcome = { kind: "changed", changes: ["Rb One moved from RB to the bench."] } satisfies ApplyOutcome;
     const changed = await send();
