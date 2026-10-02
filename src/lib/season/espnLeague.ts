@@ -246,6 +246,12 @@ function parsePlayoffStart(schedule: unknown, finalWeek: number): number | null 
   return first <= finalWeek ? first : null;
 }
 
+/** The draft's pick order as team ids, slot 1 first; empty when ESPN doesn't say or says something odd. */
+function parseDraftOrder(draft: unknown): number[] {
+  const order = isObject(draft) ? draft.pickOrder : undefined;
+  return Array.isArray(order) && order.every((id) => typeof id === "number") ? order : [];
+}
+
 /**
  * ESPN's league document as a SeasonLeague, or why it can't be one. Players at positions War Room
  * doesn't play (IDP, say) are left off rosters; a lineup slot War Room can't represent is an error,
@@ -310,6 +316,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       teams,
       pendingTrades: parsePendingTrades(raw),
       pendingClaims: parsePendingClaims(raw),
+      draftOrder: parseDraftOrder(settings.draftSettings),
       tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
       matchups: parseMatchups(raw),
       waivers: parseWaivers(settings, raw.teams),

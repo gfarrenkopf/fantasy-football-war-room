@@ -128,6 +128,8 @@ export interface SeasonLeague {
   pendingTrades: PendingTrade[];
   /** Waiver claims pending on ESPN (Epic 13). ESPN only shows the reader their own. */
   pendingClaims: PendingClaim[];
+  /** Team ids in draft slot order (`draftSettings.pickOrder`): slot 1 first. Empty when ESPN doesn't say. */
+  draftOrder: number[];
   /** The league's trade deadline (`tradeSettings.deadlineDate`), as an ISO instant; null for none. */
   tradeDeadline: string | null;
   /** This matchup period's fantasy matchups (APE-211). Empty when ESPN sent no schedule. */

@@ -21,6 +21,10 @@ describe("parseSeasonLeague", () => {
     expect(season.scoringItems.length).toBeGreaterThan(40);
   });
 
+  it("reads the draft's pick order as team ids, slot 1 first", () => {
+    expect(season.draftOrder).toEqual([1, 3, 4, 2]);
+  });
+
   it("reads every team's roster with slots, locks and injuries", () => {
     expect(season.teams.map((t) => t.id)).toEqual([1, 2, 3, 4]);
     const roster = season.teams[0].roster;

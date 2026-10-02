@@ -67,6 +67,7 @@ function league(pendingTrades: PendingTrade[] = []): SeasonLeague {
     ],
     pendingTrades,
     pendingClaims: [],
+    draftOrder: [],
     tradeDeadline: "2026-11-25T17:00:00.000Z",
     matchups: [],
     waivers: { budget: null, teams: [] },

@@ -70,7 +70,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
     );
     mode = (
       <>
-        <b>Draft over</b>use Undo to correct
+        <b>In the books</b>Undo corrects a pick
       </>
     );
   } else if (onClock) {

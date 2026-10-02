@@ -26,6 +26,7 @@ import { OpeningNight } from "./OpeningNight";
 import { useWelcomeHold, Welcome } from "./Welcome";
 import { FlagsProvider } from "./Flags";
 import { SeasonLinksProvider } from "./SeasonLinks";
+import { DraftBook } from "./DraftBook";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
 import { Header } from "./Header";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
@@ -285,6 +286,8 @@ function WarRoomView() {
       {prefs.mockOn && <MockBar onReport={() => void openReport()} reportMocks={REPORT_MOCKS} />}
       {!hydrated ? (
         <div className={s.loading}>Loading your draft…</div>
+      ) : prefs.view === "focus" && model.done && !prefs.mockOn ? (
+        <DraftBook />
       ) : prefs.view === "focus" ? (
         <FocusView arrival={arrival} planOdds={planOdds} planStale={planStale} onOpenAiPlan={() => setDrawer("ai")} />
       ) : (
