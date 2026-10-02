@@ -204,16 +204,16 @@ export function PlayerLine({
               {!player.projected && " · no projection"}
             </>
           ))}
-        {ownership && player.ownership && (
-          <>
-            {" "}
-            · <span className="tabular-nums">{player.ownership.owned}%</span> own · <span className="tabular-nums">{player.ownership.started}%</span> start
-          </>
-        )}
         {status && (
           <span className={s.factsGame}>
             <span className={s.factsSep}> · </span>
             <GameStatus player={player} />
+          </span>
+        )}
+        {ownership && player.ownership && (
+          <span className={s.factsOwn}>
+            <span className={s.factsSep}> · </span>
+            <span className="tabular-nums">{player.ownership.owned}%</span> own · <span className="tabular-nums">{player.ownership.started}%</span> start
           </span>
         )}
       </span>

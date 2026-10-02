@@ -1834,9 +1834,11 @@
     display: none;
   }
 
-  /* A started player's line would clip at this width: his points and his game take a line each. */
+  /* A started player's line would clip at this width: his points, his game and how widely he's
+     rostered take a line each. */
   .factsPoints,
-  .factsGame {
+  .factsGame,
+  .factsOwn {
     display: block;
   }
   .factsSep {
