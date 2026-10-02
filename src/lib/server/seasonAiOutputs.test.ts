@@ -2,18 +2,26 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PlanModelError } from "@/lib/ai/provider";
 import { createFakePlanModel } from "@/lib/ai/providers/fake";
 import { LINEUP_PROMPT_VERSION } from "@/lib/ai/season/lineup";
+import { TRADE_IDEAS_PROMPT_VERSION } from "@/lib/ai/season/tradeIdeas";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
 import { aiGenerations } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { claimSeasonAiUse, usedSeasonAi } from "./seasonAi";
-import { findAiLineups, findTradeWriteup, writeAiLineup, writeTradeWriteup } from "./seasonAiOutputs";
+import { findAiLineups, findTradeIdeas, findTradeWriteup, writeAiLineup, writeTradeIdeas, writeTradeWriteup } from "./seasonAiOutputs";
 import { createTestLeague } from "./testLeagues";
 
 const mine = [at("QB", player("QB", "QB", 20)), at("RB", player("RB1", "RB", 15)), at("RB", player("RB2", "RB", 12)), at("WR", player("WR1", "WR", 14)), at("WR", player("WR2", "WR", 11)), at("TE", player("TE", "TE", 8)), at("FLEX", player("Flex", "WR", 10)), player("Bench", "RB", 3)];
 const theirs = [at("QB", player("Their QB", "QB", 18)), at("WR", player("Their WR", "WR", 13)), player("Their Bench", "RB", 7)];
 const view = seasonView(mine, theirs);
 const trade = { teamA: 1, gives: [mine[7].playerId], teamB: 2, gets: [theirs[2].playerId] };
+
+/** Opposite holes: the user is deep at RB and thin at WR, the partner the reverse, so trades help both. */
+const ideasView = seasonView(
+  [player("QB A", "QB", 20), player("RB A", "RB", 18), player("RB B", "RB", 16), player("RB C", "RB", 12), player("RB D", "RB", 10), player("WR A", "WR", 14), player("WR B", "WR", 4), player("TE A", "TE", 8)],
+  [player("QB B", "QB", 18), player("RB E", "RB", 15), player("RB F", "RB", 3), player("WR C", "WR", 17), player("WR D", "WR", 15), player("WR E", "WR", 12), player("WR F", "WR", 9), player("TE B", "TE", 7)],
+);
+const ideasJson = { safe: { pick: "s1", why: "Fills your WR hole.", pitch: "A back for a wideout?" }, bold: { pick: "", why: "", pitch: "" } };
 
 const lineupJson = { intro: "Start the studs.", calls: [] };
 const writeupJson = { lean: "accept", summary: "Small upgrade.", reasons: ["Bench for bench."], counter: { give: [], get: [], note: "" } };
@@ -96,5 +104,61 @@ describe("writeTradeWriteup", () => {
     });
     expect(await writeTradeWriteup(db, model, { userId, leagueId, view, trade })).toEqual({ status: "failed", kind: "timeout" });
     expect(await findTradeWriteup(db, leagueId, view, trade)).toBeNull();
+  });
+});
+
+describe("writeTradeIdeas", () => {
+  it("finds and writes once a week, stores the set, and logs the cost", async () => {
+    const model = createFakePlanModel(() => ({ json: ideasJson, usage }));
+    const first = await writeTradeIdeas(db, model, { userId, leagueId, view: ideasView });
+    expect(first).toMatchObject({ status: "ok", cached: false, output: { ideas: [{ kind: "safe", partner: 2, why: "Fills your WR hole." }], missing: ["bold"] } });
+    expect(await writeTradeIdeas(db, model, { userId, leagueId, view: ideasView })).toMatchObject({ status: "ok", cached: true });
+    expect(model.calls).toHaveLength(1);
+    expect(model.calls[0].user).toContain("## Candidates");
+
+    expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual(["trade-ideas"]);
+    expect(await findTradeIdeas(db, leagueId, 2026, 5)).toMatchObject({ output: { missing: ["bold"] } });
+    expect(await generations()).toEqual([expect.objectContaining({ purpose: "season-trade-ideas", outcome: "ready", promptVersion: TRADE_IDEAS_PROMPT_VERSION })]);
+  });
+
+  it("keeps trade ideas out of the AI lineups", async () => {
+    const model = createFakePlanModel(() => ({ json: ideasJson, usage }));
+    await writeTradeIdeas(db, model, { userId, leagueId, view: ideasView });
+    expect(await findAiLineups(db, leagueId, 2026, 5)).toEqual({});
+  });
+
+  it("uses nothing and asks no model when no trade clears the bar", async () => {
+    const model = createFakePlanModel(() => ({ json: ideasJson, usage }));
+    const lopsided = seasonView([player("QB", "QB", 30), player("RB", "RB", 25), player("RB", "RB", 25), player("WR", "WR", 25), player("WR", "WR", 25), player("TE", "TE", 20)], [player("QB", "QB", 5), player("RB", "RB", 5), player("WR", "WR", 5)]);
+    expect(await writeTradeIdeas(db, model, { userId, leagueId, view: lopsided })).toEqual({ status: "none" });
+    expect(model.calls).toHaveLength(0);
+    expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual([]);
+    expect(await generations()).toEqual([]);
+  });
+
+  it("answers deadline after the trade deadline, unless a set was stored before it", async () => {
+    const model = createFakePlanModel(() => ({ json: ideasJson, usage }));
+    expect(await writeTradeIdeas(db, model, { userId, leagueId, view: { ...ideasView, tradeDeadlinePassed: true } })).toEqual({ status: "deadline" });
+    await writeTradeIdeas(db, model, { userId, leagueId, view: ideasView });
+    expect(await writeTradeIdeas(db, model, { userId, leagueId, view: { ...ideasView, tradeDeadlinePassed: true } })).toMatchObject({ status: "ok", cached: true });
+  });
+
+  it("answers used when the allowance went without a stored set", async () => {
+    await claimSeasonAiUse(db, { leagueId, season: 2026, week: 5, kind: "trade-ideas" });
+    const model = createFakePlanModel(() => ({ json: ideasJson, usage }));
+    expect(await writeTradeIdeas(db, model, { userId, leagueId, view: ideasView })).toEqual({ status: "used" });
+    expect(model.calls).toHaveLength(0);
+  });
+
+  it("gives the allowance back when the model fails or picks a trade that wasn't offered", async () => {
+    const down = createFakePlanModel(() => {
+      throw new PlanModelError("unavailable", "down");
+    });
+    expect(await writeTradeIdeas(db, down, { userId, leagueId, view: ideasView })).toEqual({ status: "failed", kind: "unavailable" });
+    const invented = createFakePlanModel(() => ({ json: { ...ideasJson, safe: { ...ideasJson.safe, pick: "s9" } }, usage }));
+    expect(await writeTradeIdeas(db, invented, { userId, leagueId, view: ideasView })).toEqual({ status: "failed", kind: "invalid_output" });
+    expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual([]);
+    expect(await findTradeIdeas(db, leagueId, 2026, 5)).toBeNull();
+    expect((await generations()).map((g) => g.outcome).sort()).toEqual(["invalid_output", "unavailable"]);
   });
 });

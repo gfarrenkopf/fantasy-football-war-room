@@ -28,7 +28,9 @@ vi.mock("@/lib/ai/providers", () => ({
       state.calls.push(request);
       const json = request.user.includes("The trade:")
         ? { lean: "accept", summary: "Take it.", reasons: [], counter: { give: [], get: [], note: "" } }
-        : { intro: "Set it and forget it.", calls: [] };
+        : request.user.includes("## Candidates")
+          ? { safe: { pick: "s1", why: "Fills your WR hole.", pitch: "A back for a wideout?" }, bold: { pick: "", why: "", pitch: "" } }
+          : { intro: "Set it and forget it.", calls: [] };
       return { json, usage: { inputTokens: 500, outputTokens: 100 } };
     },
   }),
@@ -45,6 +47,11 @@ afterAll(() => close());
 const mine = [at("QB", player("QB", "QB", 20)), at("RB", player("RB1", "RB", 15)), at("RB", player("RB2", "RB", 12)), player("Bench", "RB", 4)];
 const theirs = [at("QB", player("Their QB", "QB", 18)), player("Their Bench", "WR", 6)];
 const view = seasonView(mine, theirs); // week 5
+/** Opposite holes, so the search finds trades that help both sides. */
+const ideasView = seasonView(
+  [player("QB A", "QB", 20), player("RB A", "RB", 18), player("RB B", "RB", 16), player("RB C", "RB", 12), player("RB D", "RB", 10), player("WR A", "WR", 14), player("WR B", "WR", 4), player("TE A", "TE", 8)],
+  [player("QB B", "QB", 18), player("RB E", "RB", 15), player("RB F", "RB", 3), player("WR C", "WR", 17), player("WR D", "WR", 15), player("WR E", "WR", 12), player("WR F", "WR", 9), player("TE B", "TE", 7)],
+);
 
 async function routes() {
   const vars = {
@@ -62,11 +69,13 @@ async function routes() {
   vi.spyOn(console, "warn").mockImplementation(() => {});
   const lineup = await import("@/app/api/leagues/[id]/season/lineup/route");
   const trade = await import("@/app/api/leagues/[id]/season/trade/route");
-  return { lineup: lineup.POST, trade: trade.POST };
+  const ideas = await import("@/app/api/leagues/[id]/season/trade-ideas/route");
+  return { lineup: lineup.POST, trade: trade.POST, ideas: ideas.POST };
 }
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 const lineupPost = (id: string) => new Request(`http://localhost/api/leagues/${id}/season/lineup`, { method: "POST" });
+const ideasPost = (id: string) => new Request(`http://localhost/api/leagues/${id}/season/trade-ideas`, { method: "POST" });
 const tradePost = (id: string, body: unknown) =>
   new Request(`http://localhost/api/leagues/${id}/season/trade`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
@@ -127,5 +136,46 @@ describe("in-season AI routes", () => {
     const other = await createTestLeague(db, await createTestUser(db));
     expect((await lineup(lineupPost(other), ctx(other))).status).toBe(404);
     expect(state.calls).toHaveLength(0);
+  });
+
+  it("finds this week's trade ideas in the trial, starts the trial, and serves the same set again for free", async () => {
+    const { ideas } = await routes();
+    state.view = ideasView;
+    const first = await ideas(ideasPost(leagueId), ctx(leagueId));
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({ ideas: { ideas: [{ kind: "safe", why: "Fills your WR hole." }], missing: ["bold"] } });
+    expect(await trialStartWeek(db, userId, 2026)).toBe(5);
+    expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual(["trade-ideas"]);
+
+    expect((await ideas(ideasPost(leagueId), ctx(leagueId))).status).toBe(200);
+    expect(state.calls).toHaveLength(1);
+  });
+
+  it("answers none without starting the trial when no trade clears the bar", async () => {
+    const { ideas } = await routes();
+    const res = await ideas(ideasPost(leagueId), ctx(leagueId));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ideas: null, none: true });
+    expect(await trialStartWeek(db, userId, 2026)).toBeNull();
+    expect(state.calls).toHaveLength(0);
+  });
+
+  it("refuses trade ideas after the deadline, and paywalls them after the trial", async () => {
+    const { ideas } = await routes();
+    state.view = { ...ideasView, tradeDeadlinePassed: true };
+    const late = await ideas(ideasPost(leagueId), ctx(leagueId));
+    expect(late.status).toBe(409);
+    expect(await late.json()).toMatchObject({ deadline: true });
+
+    await startTrial(db, userId, 2026, 1);
+    state.view = { ...ideasView, currentWeek: 6 };
+    expect((await ideas(ideasPost(leagueId), ctx(leagueId))).status).toBe(402);
+    expect(state.calls).toHaveLength(0);
+  });
+
+  it("won't find trade ideas for someone else's league", async () => {
+    const { ideas } = await routes();
+    const other = await createTestLeague(db, await createTestUser(db));
+    expect((await ideas(ideasPost(other), ctx(other))).status).toBe(404);
   });
 });

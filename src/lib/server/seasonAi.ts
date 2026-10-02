@@ -4,14 +4,14 @@ import type { Db } from "@/lib/db/types";
 import { hasEntitlement, SEASON_PASS } from "./entitlements";
 
 /**
- * Who gets in-season AI (Epic 11, 11.1): the AI lineup and the AI trade write-up. The optimal lineup
- * and the trade verdict are free and never come through here.
+ * Who gets in-season AI (Epic 11, 11.1): the AI lineup, the AI trade write-up, and trade ideas
+ * (APE-222). The optimal lineup and the trade verdict are free and never come through here.
  *
  * - Every account gets TRIAL_WEEKS NFL weeks free, counted from the week of its first AI use that
  *   season (not from week 1, so late arrivals get a trial too). A week is ESPN's `scoringPeriodId`.
  * - After that, a league needs a season pass: the same pass as the draft plan, for that season.
- * - Each league gets one mid-week AI lineup and one Sunday AI lineup per week (SeasonAiUseKind).
- *   Trade write-ups are unlimited.
+ * - Each league gets one mid-week AI lineup, one Sunday AI lineup and one set of trade ideas per
+ *   week (SeasonAiUseKind). Trade write-ups are unlimited.
  */
 
 export const TRIAL_WEEKS = 5;

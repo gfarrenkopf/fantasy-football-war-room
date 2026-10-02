@@ -54,9 +54,30 @@ The **optimal lineup** is the best legal starting lineup for the current week fr
 
 The trade verdict is a **roster delta**, not a sum of player values. For each team, it takes the best legal starting lineup's ROS points before and after the trade and reports the change, broken down by slot. This scores 2-for-1 consolidation and positional holes correctly. Uneven trades assume the lowest-value bench player is dropped.
 
-Launch is build-a-trade: pick a partner and players from both sides. Importing pending ESPN offers comes next, and trade suggestions come in a later epic.
+Launch is build-a-trade: pick a partner and players from both sides. Pending ESPN offers are imported and graded too (10.9), and trade ideas (below) suggest trades to offer.
 
 **Trading on ESPN (13.5).** Pending offers to the user have **Accept** and **Decline**, and the user's own have **Withdraw**. The builder's trade can be sent as an offer (**Offer this on ESPN**), with the verdict's drops as `DROP` items when the user would be over the roster limit. `POST /api/leagues/:id/season/trades` (`src/lib/server/espn/trades.ts`) goes through the same guardrails as lineup writes (§7). The pure checks (`src/lib/season/tradeWrite.ts`) cover the deadline, players already in a trade (`tradeLocked`), players who've moved since the page loaded, the user's roster limit, and that only the team an offer was made to answers it. An accepted trade stays in Pending, marked Accepted, through the league's review. ESPN's own page asks for the password again before an accept; its API doesn't, so War Room accepts with the stored login.
+
+### Trade ideas (APE-222)
+
+Paid (§6): two trades a week the user could offer, found by searching every roster in the league. The engine picks the trades and their numbers; the AI picks one of each kind from the engine's shortlist and writes them up.
+
+- **The search** (`src/lib/season/tradeIdeas.ts`) is pure and grades the way the verdict does: each team's best starting lineup over the rest of the season, before and after, with the same roster cut. Every 1-for-1 to 2-for-2 is millions of trades in a 16-team league, so it narrows first:
+  1. The user's 10 best players by rest-of-season points are on offer.
+  2. Against each partner, each player is valued alone: what he adds to the receiving lineup less what losing him costs the sender.
+  3. The best six on each side go into every 1-for-1 to 2-for-2 combination, and each combination is graded exactly.
+  - Lineups are solved greedily (`lineupTotal()`). That's exact here, because each flex slot takes a superset of the narrower slots' positions, and a test checks it against the assignment solver. Every solve counts against a budget of 20,000 (`DEFAULT_LIMITS`), and the search stops there. A seeded 16-team league takes about 9,500 solves, roughly 0.3 s.
+- **Two kinds:**
+  - **Safe:** the user gains at least 0.05 a week and the partner loses nothing.
+  - **Bold:** the partner loses less than 0.5 a week, and the user gains more than with any safe idea.
+  - Each kind keeps up to four, at most two per partner. A trade that only pads a simpler one with the same partner, for about the same result, is dropped.
+- **Excluded players:** anyone `tradeLocked`, on IR, or already in a pending trade, and unprojected players the user would get. There's no search after the deadline.
+- **The AI write-up** (`src/lib/ai/season/tradeIdeas.ts`, prompt version 1) gets the shortlist with both sides' grades, the user's roster and the players they'd get. It picks one id per kind and writes a "why" for the user and a short note to the partner. The note is copied by hand: ESPN's `TRADE_PROPOSAL` has no message field. A pick that isn't a candidate rejects the response, so the model can't invent a trade or change its numbers.
+- **On the page,** the ideas sit above Pending on the Trades tab. Each one is graded again live (`ideaStatus()`):
+  - **Stale:** a player has left that roster.
+  - **Blocked:** a player is now in another trade.
+  - **Offered:** the user already sent it.
+  - **Load into builder** opens an idea in the builder. **Offer on ESPN** sends it through the same propose path as the builder (13.5).
 
 ### Waiver pickups (APE-212)
 
@@ -75,6 +96,7 @@ The Waivers tab ranks available players the way trades are scored. It adds each 
 | Optimal lineup, trade verdict, waiver pickups | Always | Always |
 | AI lineup | No | Mid-week, plus Sunday morning after inactives |
 | AI trade write-up | No | Unlimited |
+| Trade ideas (APE-222) | No | Two a week (one search) |
 
 - **Trial:** 5 NFL weeks per account, counted from first use, with week boundaries from ESPN's `scoringPeriodId`. Enforcement is described in [payments.md §5](payments.md#in-season-ai).
 - **Season pass:** the same per-league, per-season pass as the draft plan. Existing passes include in-season.
@@ -82,12 +104,16 @@ The Waivers tab ranks available players the way trades are scored. It adds each 
 
 ### The AI outputs (11.2)
 
-Both extend the draft plan's pipeline (`src/lib/ai/`): the same provider seam, structured output against a JSON schema, validation that never trusts the model, and a row in `ai_generations` for every call (`purpose` is `season-lineup` or `season-trade`, so `npm run ai:costs` splits them). The model explains the engine's numbers and answers with refs; everything it says must come from the tables it was given.
+Both extend the draft plan's pipeline (`src/lib/ai/`): the same provider seam, structured output against a JSON schema, validation that never trusts the model, and a row in `ai_generations` for every call (`purpose` is `season-lineup`, `season-trade` or `season-trade-ideas`, so `npm run ai:costs` splits them). The model explains the engine's numbers and answers with refs; everything it says must come from the tables it was given.
 
 - **AI lineup** (`src/lib/ai/season/lineup.ts`): the input is the optimal lineup, each slot's **close calls** (bench players within `CLOSE_POINTS`, 2 projected points, of the starter, never one ruled out or locked), injury designations, byes and lock state. The model writes a reason for every slot that's a close call or a move on ESPN, and may start any of a close call's options. Everywhere else the engine's pick stands. A ref that isn't in the input rejects the response; a start outside the options, or a player started twice, falls back to the engine's pick.
 - **AI trade write-up** (`src/lib/ai/season/trade.ts`): the input is the trade verdict for both teams, recomputed on the server, plus both rosters with rest-of-season points, playoff-week points (from `playoffStartWeek`, parsed from ESPN's schedule) and remaining byes. The output is an accept/decline/counter lean, a summary, 2–4 reasons, and a counter-offer by ref when one is obvious. A counter with players on the wrong side is dropped.
-- **Stored, never re-billed** (`season_ai_outputs`): lineups per league, week and kind; write-ups per league, week and trade. A lineup that fails gives the week's allowance back. Either way the free result still shows.
-- **Routes:** `POST /api/leagues/:id/season/lineup` writes this week's mid-week lineup, and `POST /api/leagues/:id/season/trade { partner, gives, gets }` a write-up. Both answer 402 past the trial without a pass, and 503 when the model fails.
+- **Stored, never re-billed** (`season_ai_outputs`): lineups and trade ideas per league, week and kind; write-ups per league, week and trade. A lineup or set of trade ideas that fails gives the week's allowance back. Either way the free result still shows.
+- **Routes:**
+  - `POST /api/leagues/:id/season/lineup` writes this week's mid-week lineup.
+  - `POST /api/leagues/:id/season/trade { partner, gives, gets }` writes a trade write-up.
+  - `POST /api/leagues/:id/season/trade-ideas` finds this week's trade ideas. When no trade clears the bar it answers `{ ideas: null, none: true }`, which uses nothing and doesn't start the trial. After the deadline it answers 409 `{ deadline: true }`.
+  - All three answer 402 past the trial without a pass, and 503 when the model fails.
 - The AI lineup sees each player's NFL opponent, from the scoreboard (APE-211, prompt version 2). It's told to say nothing about that opponent beyond its name.
 
 ### The Sunday job (11.3)

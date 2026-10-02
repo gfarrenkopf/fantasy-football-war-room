@@ -9,7 +9,7 @@ import { loadSeasonView } from "@/lib/server/espn/seasonView";
 import { error, json } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
 import { startTrial, TRIAL_WEEKS, usedSeasonAi, type SeasonAiAccess } from "@/lib/server/seasonAi";
-import { findAiLineups } from "@/lib/server/seasonAiOutputs";
+import { findAiLineups, findTradeIdeas } from "@/lib/server/seasonAiOutputs";
 import { getPlanModel, seasonAiAccess } from ".";
 
 /** In-season AI for the season page and its routes (11.2), with the configuration filled in. */
@@ -29,8 +29,12 @@ export async function seasonAiState(db: Db, who: Who, league: { id: string; seas
   if (!getPlanModel()) return null;
   const access = await seasonAiAccess(db, { ...who, leagueId: league.id, leagueSeason: league.season, season: view.season, week: view.currentWeek });
   if (access.kind === "not-allowed") return null;
-  const [lineups, used] = await Promise.all([findAiLineups(db, league.id, view.season, view.currentWeek), usedSeasonAi(db, league.id, view.season, view.currentWeek)]);
-  return { access: accessView(access), lineups, midweekUsed: used.includes("lineup-midweek") };
+  const [lineups, tradeIdeas, used] = await Promise.all([
+    findAiLineups(db, league.id, view.season, view.currentWeek),
+    findTradeIdeas(db, league.id, view.season, view.currentWeek),
+    usedSeasonAi(db, league.id, view.season, view.currentWeek),
+  ]);
+  return { access: accessView(access), lineups, tradeIdeas, midweekUsed: used.includes("lineup-midweek") };
 }
 
 export interface SeasonAiRequest {
