@@ -533,6 +533,22 @@ A league's week after the draft (Epic 10): the lineup War Room recommends, and t
 
 **The waiver wire (APE-212).** A third tab, Waivers, joins Lineup and Trades in the header control and the phone's thumb bar. Each of the three is still a 44px target. Pickups are one panel of rows in the bench's grammar. The player's line carries his position, team, ownership and game, with his waiver status underneath: "Free agent: add now" in value ink, or "On waivers · clears Wed 3:00 AM" muted. On the right, the gain per week in value ink at 15px/800, the rest-of-season total muted, and "Drop …" in reach ink. The list is read when the tab opens, and it says so while it loads.
 
+**Trade ideas (APE-222).** The Trades tab's left column leads with "Trade ideas", above Pending on ESPN. Before the week's search it's a single panel holding one line of what the ideas are and the outlined sky primary "Find trades". While it searches, an aria-live line says it may take up to a minute. Each idea is a card in the offer grammar:
+- a kind tag: "Win-win" in value ink on a 12% value wash, or "Bold swing" in text ink with a 1px `line2` outline and no fill, so no position hue carries meaning;
+- You get / You send;
+- the inline gain ladder, graded live;
+- the AI's "why", above a hairline;
+- the note to the partner, quoted in muted italics behind a 2px `line2` rule, with "Copy note" as a text button;
+- "Load into builder" (ghost) and "Offer on ESPN".
+
+The card's states:
+- **Loaded into the builder:** it hands its verdict over, as an offer does.
+- **Stale:** a player in it has moved. The card turns dashed, its text drops to 60% and the actions go.
+- **Blocked or Offered:** a fine line says why, and the Offer action is disabled or hidden.
+- **Moved:** when the live grade has moved half a point a week or more since the idea was found, a fine line gives both numbers.
+
+On a phone the column stacks ideas → pending → builder, and the card's actions share the row as 44px targets.
+
 **The Doors Rule (APE-194).** The two rooms link to each other, and each door wears the color of the room it opens. The draft room's **Season** button is outlined in Signal Green (50% `mine` border, a 7% wash, `mine` text), led by the pick track's 7px mine square. It's the season page's voice and the product's "yours". The season page's **Draft room** chip, beside the brand, is outlined in Terminal Sky (`sky-line` border, a 6% sky wash, `sky` text, 11.5px/600, 32px tall on a phone). The arrow leans 2px toward the draft room on hover. Both stay outlined: a door is wayfinding, never a filled primary. When the user follows more than one ESPN league, the season title becomes a menu of them: a native select laid invisibly over the heading, marked by a muted chevron.
 
 ## Do's and Don'ts

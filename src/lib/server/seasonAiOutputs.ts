@@ -4,18 +4,20 @@ import { costUsd } from "@/lib/ai/pricing";
 import { PlanModelError, type ModelUsage, type PlanModel, type PlanModelErrorKind } from "@/lib/ai/provider";
 import { buildLineupInput, generateAiLineup, LINEUP_PROMPT_VERSION, type AiLineup } from "@/lib/ai/season/lineup";
 import { espnStartersOf } from "@/lib/ai/season/lineupStatus";
-import type { StoredAiOutput } from "@/lib/ai/season/state";
+import type { SeasonAiLineupKind, StoredAiOutput } from "@/lib/ai/season/state";
 import { buildTradeInput, generateTradeWriteup, TRADE_PROMPT_VERSION, type AiTradeWriteup } from "@/lib/ai/season/trade";
-import { aiGenerations, seasonAiOutputs, type GenerationPurpose, type SeasonAiOutputKind, type SeasonAiUseKind } from "@/lib/db/schema";
+import { buildTradeIdeasInput, generateTradeIdeas, TRADE_IDEAS_PROMPT_VERSION, type AiTradeIdeas } from "@/lib/ai/season/tradeIdeas";
+import { aiGenerations, seasonAiOutputs, type GenerationPurpose, type SeasonAiOutputKind } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
 import { evaluateTrade, type Trade } from "@/lib/season/trade";
+import { findTradeIdeas as searchTradeIdeas } from "@/lib/season/tradeIdeas";
 import type { SeasonView } from "@/lib/season/view";
 import { claimSeasonAiUse, releaseSeasonAiUse } from "./seasonAi";
 
 /**
  * Writing and keeping in-season AI outputs (11.2). Each is stored, so a reload shows the same lineup
- * or write-up without paying for another: lineups per league, week and kind, trade write-ups per
- * league, week and trade. Every model call is logged in `ai_generations`, failures included.
+ * or write-up without paying for another: lineups and trade ideas per league, week and kind, trade
+ * write-ups per league, week and trade. Every model call is logged in `ai_generations`, failures included.
  * Access (seasonAi.ts) is the caller's job.
  */
 
@@ -26,8 +28,12 @@ export type StoredOutput<T> = StoredAiOutput<T>;
 
 export type WriteResult<T> =
   | ({ status: "ok"; cached: boolean } & StoredOutput<T>)
-  /** This week's allowance of that lineup is already used. */
+  /** This week's allowance of that lineup, or of trade ideas, is already used. */
   | { status: "used" }
+  /** No trade clears the bar for trade ideas this week. Nothing was used or stored. */
+  | { status: "none" }
+  /** The trade deadline has passed and no trade ideas were stored before it. */
+  | { status: "deadline" }
   /** The trade isn't between two teams in the league, or moves nobody. */
   | { status: "invalid-trade" }
   /** The model failed; nothing was stored, and a lineup's allowance was given back. */
@@ -49,13 +55,15 @@ async function findOutput<T>(db: Db, w: Where): Promise<StoredOutput<T> | null> 
   return row ? { output: row.output as T, createdAt: row.createdAt.toISOString() } : null;
 }
 
+const LINEUP_KINDS: readonly string[] = ["lineup-midweek", "lineup-sunday"] satisfies SeasonAiLineupKind[];
+
 /** This week's stored AI lineups for a league, by kind. */
-export async function findAiLineups(db: Db, leagueId: string, season: number, week: number): Promise<Partial<Record<SeasonAiUseKind, StoredOutput<AiLineup>>>> {
+export async function findAiLineups(db: Db, leagueId: string, season: number, week: number): Promise<Partial<Record<SeasonAiLineupKind, StoredOutput<AiLineup>>>> {
   const rows = await db
     .select({ kind: seasonAiOutputs.kind, output: seasonAiOutputs.output, createdAt: seasonAiOutputs.createdAt })
     .from(seasonAiOutputs)
     .where(and(eq(seasonAiOutputs.leagueId, leagueId), eq(seasonAiOutputs.season, season), eq(seasonAiOutputs.week, week), eq(seasonAiOutputs.key, "")));
-  return Object.fromEntries(rows.filter((r) => r.kind !== "trade").map((r) => [r.kind, { output: r.output as AiLineup, createdAt: r.createdAt.toISOString() }]));
+  return Object.fromEntries(rows.filter((r) => LINEUP_KINDS.includes(r.kind)).map((r) => [r.kind, { output: r.output as AiLineup, createdAt: r.createdAt.toISOString() }]));
 }
 
 /** Which trade this is, whichever order its players were picked in. */
@@ -65,6 +73,11 @@ export function tradeKey(trade: Trade): string {
     .update(JSON.stringify([TRADE_PROMPT_VERSION, trade.teamA, ids(trade.gives), trade.teamB, ids(trade.gets)]))
     .digest("hex")
     .slice(0, 32);
+}
+
+/** This week's trade ideas for a league, if they've been found (APE-222). */
+export function findTradeIdeas(db: Db, leagueId: string, season: number, week: number): Promise<StoredOutput<AiTradeIdeas> | null> {
+  return findOutput(db, { leagueId, season, week, kind: "trade-ideas" });
 }
 
 /** The stored write-up for this trade this week, if there is one. */
@@ -133,7 +146,7 @@ async function logGeneration(c: Call, entry: { startedAt: number; outcome: PlanM
 export async function writeAiLineup(
   db: Db,
   model: PlanModel,
-  { userId, leagueId, view, kind }: { userId: string; leagueId: string; view: SeasonView; kind: SeasonAiUseKind },
+  { userId, leagueId, view, kind }: { userId: string; leagueId: string; view: SeasonView; kind: SeasonAiLineupKind },
 ): Promise<WriteResult<AiLineup>> {
   const where = { leagueId, season: view.season, week: view.currentWeek, kind };
   const stored = await findOutput<AiLineup>(db, where);
@@ -188,4 +201,42 @@ export async function writeTradeWriteup(
   await db.insert(seasonAiOutputs).values({ ...where, output: writeup, issues, provider, model: modelId, promptVersion: TRADE_PROMPT_VERSION }).onConflictDoNothing();
   const saved = (await findOutput<AiTradeWriteup>(db, where))!;
   return { status: "ok", cached: false, ...saved };
+}
+
+/**
+ * This week's trade ideas for the user (APE-222): the stored set, or a new one, which uses the week's
+ * allowance. The search runs first and costs nothing, so a week where no trade clears the bar uses
+ * nothing and can be searched again after waivers. A failed call gives the allowance back: a set
+ * without its write-up would spend the week on less than was promised.
+ */
+export async function writeTradeIdeas(db: Db, model: PlanModel, { userId, leagueId, view }: { userId: string; leagueId: string; view: SeasonView }): Promise<WriteResult<AiTradeIdeas>> {
+  const where = { leagueId, season: view.season, week: view.currentWeek, kind: "trade-ideas" as const };
+  const stored = await findOutput<AiTradeIdeas>(db, where);
+  if (stored) return { status: "ok", cached: true, ...stored };
+  if (view.tradeDeadlinePassed) return { status: "deadline" };
+
+  const search = searchTradeIdeas(view);
+  if (!search.safe.length && !search.bold.length) return { status: "none" };
+  if (!(await claimSeasonAiUse(db, where))) {
+    // A second tap while the first is writing: it holds the allowance, and may have finished.
+    const raced = await findOutput<AiTradeIdeas>(db, where);
+    return raced ? { status: "ok", cached: true, ...raced } : { status: "used" };
+  }
+  try {
+    const input = buildTradeIdeasInput(view, search);
+    const result = await logged({ db, model, userId, leagueId, purpose: "season-trade-ideas", promptVersion: TRADE_IDEAS_PROMPT_VERSION }, (signal) =>
+      generateTradeIdeas(model, input, { signal }),
+    );
+    if (!result.ok) {
+      await releaseSeasonAiUse(db, where);
+      return { status: "failed", kind: result.kind };
+    }
+    const { ideas, issues, provider, model: modelId } = result.value;
+    await db.insert(seasonAiOutputs).values({ ...where, output: ideas, issues, provider, model: modelId, promptVersion: TRADE_IDEAS_PROMPT_VERSION }).onConflictDoNothing();
+    const saved = (await findOutput<AiTradeIdeas>(db, where))!;
+    return { status: "ok", cached: false, ...saved };
+  } catch (error) {
+    await releaseSeasonAiUse(db, where).catch(() => {});
+    throw error;
+  }
 }

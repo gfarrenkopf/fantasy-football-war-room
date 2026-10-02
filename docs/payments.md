@@ -84,11 +84,11 @@ The paywall shows in the AI game plan tab with the live turn plan underneath. Af
 
 ### In-season AI
 
-The AI lineup and the AI trade write-up on the season page ([in-season.md §6](in-season.md#6-free-and-paid)). It's enforced on the server in `seasonAiAccess()` (`src/lib/server/seasonAi.ts`):
+The AI lineup, the AI trade write-up and trade ideas on the season page ([in-season.md §6](in-season.md#6-free-and-paid)). It's enforced on the server in `seasonAiAccess()` (`src/lib/server/seasonAi.ts`):
 
 - **Trial:** every account gets 5 NFL weeks (`TRIAL_WEEKS`) free, counted from the week of its first in-season AI use, in any league. A week is ESPN's `scoringPeriodId`. The start week is stored per account and season in `season_ai_trials`, so linking another league doesn't restart it.
 - **After the trial,** in-season AI needs a pass on that league for the season being played. A second league without one shows the paywall, even if the first is paid for.
-- **Allowances per league and week:** one mid-week AI lineup and one Sunday AI lineup, recorded in `season_ai_uses`. A new `scoringPeriodId` starts with both unused. AI trade write-ups are unlimited.
+- **Allowances per league and week:** one mid-week AI lineup, one Sunday AI lineup and one set of trade ideas (APE-222), recorded in `season_ai_uses`. A new `scoringPeriodId` starts with all unused. A trade-ideas search that finds nothing, or whose AI call fails, uses nothing. AI trade write-ups are unlimited.
 - Payments off and `AI_ALLOWLIST` work as for the game plan: with payments off the allowlist decides and there's no trial, and with payments on an allowlisted account skips the paywall.
 
 Checkout from the season page uses `POST /api/leagues/:id/checkout?from=season`, which sends the buyer back to `/season/:id?checkout=…` instead of the war room.

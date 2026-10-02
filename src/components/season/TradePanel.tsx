@@ -2,68 +2,24 @@
 
 import { useState } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
-import { tradeEmphasis, type Emphasis } from "@/lib/season/emphasis";
+import { tradeEmphasis } from "@/lib/season/emphasis";
 import { snapshotOf } from "@/lib/season/apply";
 import { evaluateTrade, tradeFromPending, type Trade, type TradeVerdict } from "@/lib/season/trade";
 import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiTradeWriteupCard } from "./AiPanel";
 import { Check } from "./Icons";
-import { Gain, PlayerLine, recordText, signed } from "./parts";
+import { PlayerLine, recordText, signed } from "./parts";
 import s from "./season.module.css";
+import { TradeGain, teamName, tradeHeadline } from "./TradeGain";
+import { TradeIdeas } from "./TradeIdeas";
 import { TradeWrite } from "./TradeWrite";
 
 const SLOT_LABEL: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
 
-const GOOD: Record<Emphasis, string> = {
-  rest: "About even for you",
-  trim: "Slightly better for you",
-  gain: "Better for you",
-  swing: "A strong trade for you",
-  must: "A steal for you",
-};
-const BAD: Record<Emphasis, string> = {
-  rest: "About even for you",
-  trim: "Slightly worse for you",
-  gain: "Costs you",
-  swing: "Costs you a lot",
-  must: "Lopsided against you",
-};
-
 const byRos = (a: ViewPlayer, b: ViewPlayer) => b.ros - a.ros;
-const teamName = (view: SeasonView, id: number) => view.teams.find((t) => t.id === id)?.name ?? `Team ${id}`;
 const day = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : null);
-
-/** How the trade lands for the user, in words, on the gain ladder's steps. */
-function tradeHeadline(verdict: TradeVerdict) {
-  const you = verdict.a.perWeek;
-  const level = tradeEmphasis(you);
-  const headline = you >= 0 ? GOOD[level] : BAD[level];
-  return level !== "rest" && you > 0 && verdict.b.perWeek > 0.05 ? `${headline}, and for them` : headline;
-}
-
-/** The verdict for the user, told on the same scale as the lineup's gain. */
-function TradeGain({ verdict, partner, compact, inline }: { verdict: TradeVerdict; partner: string; compact?: boolean; inline?: boolean }) {
-  const you = verdict.a.perWeek;
-  const them = verdict.b.perWeek;
-  return (
-    <Gain
-      compact={compact}
-      inline={inline}
-      level={tradeEmphasis(you)}
-      value={you}
-      unit="a week"
-      headline={tradeHeadline(verdict)}
-      detail={
-        <>
-          {partner} <span className="tabular-nums">{signed(them)}</span> a week · you <span className="tabular-nums">{signed(verdict.a.delta)}</span> over the{" "}
-          {verdict.weeks} weeks left
-        </>
-      }
-    />
-  );
-}
 
 /**
  * Trades (10.6, 10.9): the user's offers pending on ESPN, each graded, and a builder for a what-if
@@ -95,11 +51,13 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
     setProposing(false);
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   };
-  const open = (pending: PendingTrade, trade: Trade) => {
+  /** Opens a trade in the builder: an offer pending on ESPN (by its id) or a trade idea. */
+  const load = (trade: Trade, id: string) => {
+    setProposing(false);
     setPartnerId(trade.teamB);
     setGives([...trade.gives]);
     setGets([...trade.gets]);
-    setLoaded(pending.id);
+    setLoaded(id);
     document.getElementById("builder-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const clear = () => {
@@ -117,48 +75,51 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
           ones this season.
         </p>
       )}
-      <section className={s.column} aria-labelledby="pending-title">
-        <div className={s.columnHead}>
-          <h2 id="pending-title" className={s.columnTitle}>
-            Pending on ESPN
-          </h2>
-          <span className={s.panelNote}>Answer here or on ESPN</span>
-        </div>
-        {notice && (
-          <p className={s.fine} role="status">
-            {notice}
-          </p>
-        )}
-        {view.tradeDeadline && !view.tradeDeadlinePassed && (
-          <p className={s.fine}>
-            Trade deadline <b suppressHydrationWarning>{day(view.tradeDeadline)}</b>
-          </p>
-        )}
-        {view.pendingTrades.length ? (
-          <ul className={s.pending}>
-            {view.pendingTrades.map((pending) => (
-              <Offer
-                key={pending.id}
-                view={view}
-                leagueId={leagueId}
-                agreed={writeConsented}
-                pending={pending}
-                names={names}
-                active={loaded === pending.id}
-                onOpen={open}
-                onNotice={setNotice}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className={`${s.panel} ${s.note} ${s.fine}`}>No trade offers waiting on ESPN. Build one to see how it would land for both teams.</p>
-        )}
-      </section>
+      <div className={s.tradeSide}>
+        {ai && <TradeIdeas view={view} leagueId={leagueId} ai={ai} writeConsented={writeConsented} loadedId={loaded} onLoad={load} onNotice={setNotice} />}
+        <section className={s.column} aria-labelledby="pending-title">
+          <div className={s.columnHead}>
+            <h2 id="pending-title" className={s.columnTitle}>
+              Pending on ESPN
+            </h2>
+            <span className={s.panelNote}>Answer here or on ESPN</span>
+          </div>
+          {notice && (
+            <p className={s.fine} role="status">
+              {notice}
+            </p>
+          )}
+          {view.tradeDeadline && !view.tradeDeadlinePassed && (
+            <p className={s.fine}>
+              Trade deadline <b suppressHydrationWarning>{day(view.tradeDeadline)}</b>
+            </p>
+          )}
+          {view.pendingTrades.length ? (
+            <ul className={s.pending}>
+              {view.pendingTrades.map((pending) => (
+                <Offer
+                  key={pending.id}
+                  view={view}
+                  leagueId={leagueId}
+                  agreed={writeConsented}
+                  pending={pending}
+                  names={names}
+                  active={loaded === pending.id}
+                  onOpen={(pending, trade) => load(trade, pending.id)}
+                  onNotice={setNotice}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className={`${s.panel} ${s.note} ${s.fine}`}>No trade offers waiting on ESPN. Build one to see how it would land for both teams.</p>
+          )}
+        </section>
+      </div>
 
       <section className={s.column} aria-labelledby="builder-title">
         <div className={s.columnHead}>
           <h2 id="builder-title" className={s.columnTitle}>
-            {loaded ? "Tweak it into a counter" : "Check a trade"}
+            {loaded?.startsWith("idea:") ? "Tweak this idea" : loaded ? "Tweak it into a counter" : "Check a trade"}
           </h2>
           {(gives.length > 0 || gets.length > 0) && (
             <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={clear}>

@@ -57,7 +57,7 @@ export interface TradeVerdict {
 }
 
 /** Best-lineup points for each remaining week, and per slot key. */
-function seasonLineup(roster: readonly ViewPlayer[], league: TradeLeague): { total: number; bySlot: Map<string, number> } {
+export function seasonLineup(roster: readonly ViewPlayer[], league: TradeLeague): { total: number; bySlot: Map<string, number> } {
   const bySlot = new Map<string, number>();
   let total = 0;
   for (let week = league.currentWeek; week <= league.finalWeek; week++) {
@@ -72,7 +72,7 @@ function seasonLineup(roster: readonly ViewPlayer[], league: TradeLeague): { tot
 }
 
 /** The roster after sending `out` and receiving `in`, cut to fit, and who was cut. */
-function afterTrade(roster: readonly ViewPlayer[], out: ReadonlySet<number>, incoming: readonly ViewPlayer[], league: TradeLeague) {
+export function afterTrade(roster: readonly ViewPlayer[], out: ReadonlySet<number>, incoming: readonly ViewPlayer[], league: TradeLeague) {
   const kept = [...roster.filter((p) => !out.has(p.playerId)), ...incoming];
   const capacity = league.starters.reduce((n, s) => n + s.count, 0) + league.benchSize;
   // IR doesn't count against the roster.

@@ -1,6 +1,6 @@
 import { SLOT_DEFS } from "@/lib/draft/league";
 import type { Trade, TradeVerdict } from "@/lib/season/trade";
-import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import type { SeasonView, ViewPlayer, ViewTeam } from "@/lib/season/view";
 import { withDeadline } from "../generatePlan";
 import { PlanModelError, type JsonSchema, type ModelEffort, type ModelUsage, type PlanModel } from "../provider";
 import { clip, injuryTag, isObject, refError } from "./shared";
@@ -68,7 +68,8 @@ export interface AiTradeWriteup {
   counter: { give: number[]; get: number[]; note: string } | null;
 }
 
-const byes = (p: ViewPlayer) =>
+/** The remaining weeks a player with a team is projected 0: his byes. */
+export const byes = (p: ViewPlayer) =>
   p.projected && p.team !== null && p.ros > 0
     ? Object.entries(p.weekly)
         .filter(([, pts]) => pts === 0)
@@ -82,24 +83,14 @@ export function buildTradeInput(view: SeasonView, trade: Trade, verdict: TradeVe
   const moving = new Set([...trade.gives, ...trade.gets]);
   const all = [...mine.roster.map((p) => ({ p, side: "you" as const })), ...theirs.roster.map((p) => ({ p, side: "them" as const }))];
   const refOf = new Map(all.map(({ p }, i) => [p.playerId, `p${i + 1}`]));
-  const playoffs = (p: ViewPlayer) => {
-    if (view.playoffStartWeek === null) return null;
-    let sum = 0;
-    for (let w = Math.max(view.playoffStartWeek, view.currentWeek); w <= view.finalWeek; w++) sum += p.weekly[w] ?? 0;
-    return Math.round(sum * 10) / 10;
-  };
   const side = ({ name, standing }: (typeof view.teams)[number], v: TradeVerdict["a"]): TradeInputSide => ({
     name,
-    standing: standing && {
-      record: `${standing.wins}-${standing.losses}${standing.ties ? `-${standing.ties}` : ""}`,
-      pointsFor: round(standing.pointsFor),
-      seed: standing.seed,
-    },
+    standing: standingOf(standing),
     before: round(v.before),
     after: round(v.after),
     delta: round(v.delta),
     perWeek: round(v.perWeek),
-    slots: v.bySlot.filter((s) => Math.abs(s.after - s.before) >= 0.5).map((s) => ({ key: s.key, before: round(s.before), after: round(s.after) })),
+    slots: changedSlots(v),
     drops: v.drops.map((id) => refOf.get(id)!),
   });
   return {
@@ -120,14 +111,39 @@ export function buildTradeInput(view: SeasonView, trade: Trade, verdict: TradeVe
       side,
       moving: moving.has(p.playerId),
       ros: round(p.ros),
-      playoffs: playoffs(p),
+      playoffs: playoffPoints(view, p),
       byes: byes(p),
       injury: injuryTag(p.injuryStatus),
     })),
   };
 }
 
-const round = (n: number) => Math.round(n * 10) / 10;
+export const round = (n: number) => Math.round(n * 10) / 10;
+
+/** Rest-of-season points in the fantasy playoffs; null when the playoff weeks aren't known. */
+export function playoffPoints(view: SeasonView, p: ViewPlayer): number | null {
+  if (view.playoffStartWeek === null) return null;
+  let sum = 0;
+  for (let w = Math.max(view.playoffStartWeek, view.currentWeek); w <= view.finalWeek; w++) sum += p.weekly[w] ?? 0;
+  return round(sum);
+}
+
+export function standingOf(standing: ViewTeam["standing"]): TradeInputSide["standing"] {
+  return (
+    standing && {
+      record: `${standing.wins}-${standing.losses}${standing.ties ? `-${standing.ties}` : ""}`,
+      pointsFor: round(standing.pointsFor),
+      seed: standing.seed,
+    }
+  );
+}
+
+/** Starting slots whose weekly points change by at least half a point. */
+export const changedSlots = (v: TradeVerdict["a"]) =>
+  v.bySlot.filter((s) => Math.abs(s.after - s.before) >= 0.5).map((s) => ({ key: s.key, before: round(s.before), after: round(s.after) }));
+
+/** A slot change as the prompt shows it: "FLEX (RB/WR/TE) 9.5 → 12". */
+export const slotText = (x: { key: string; before: number; after: number }) => `${SLOT_DEFS.find((d) => d.key === x.key)?.label ?? x.key} ${x.before} → ${x.after}`;
 
 export const TRADE_SYSTEM_PROMPT = `You are a fantasy football analyst advising one manager on a trade offer. A trade engine has already measured the trade: for each team, the best legal starting lineup's projected points for every remaining week, before and after the trade. That measurement is the core of your advice; explain it, don't redo it.
 
@@ -147,7 +163,7 @@ Output rules:
 - Everything must come from the tables: no outside news, injuries, depth charts, schedules or team situations beyond what's listed.`;
 
 function sideLines(label: string, s: TradeInputSide): string[] {
-  const slots = s.slots.map((x) => `${SLOT_DEFS.find((d) => d.key === x.key)?.label ?? x.key} ${x.before} → ${x.after}`).join(", ");
+  const slots = s.slots.map(slotText).join(", ");
   return [
     `${label} (${s.name}): best-lineup points ${s.before} → ${s.after} (${s.delta >= 0 ? "+" : ""}${s.delta}, ${s.perWeek >= 0 ? "+" : ""}${s.perWeek} a week)`,
     ...(s.standing ? [`  standing: ${s.standing.record}, ${s.standing.pointsFor} points for${s.standing.seed ? `, seed ${s.standing.seed}` : ""}`] : []),

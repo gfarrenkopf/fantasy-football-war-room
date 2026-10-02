@@ -21,7 +21,7 @@ const SLOT_LABEL: Record<LineupSlot, string> = { QB: "QB", RB: "RB", WR: "WR", T
 
 type Post<T> = { ok: true; body: T } | { ok: false; status: number; error: string };
 
-async function post<T>(url: string, body?: unknown): Promise<Post<T>> {
+export async function post<T>(url: string, body?: unknown): Promise<Post<T>> {
   const res = await fetch(url, { method: "POST", ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) }).catch(() => null);
   if (!res) return { ok: false, status: 0, error: "Can't reach War Room right now. Try again in a moment." };
   const json = (await res.json().catch(() => ({}))) as T & { error?: string };
@@ -29,7 +29,7 @@ async function post<T>(url: string, body?: unknown): Promise<Post<T>> {
 }
 
 /** "Trial week 2 of 5", or nothing once paid. */
-function TrialNote({ ai }: { ai: SeasonAiState }) {
+export function TrialNote({ ai }: { ai: SeasonAiState }) {
   if (ai.access.kind !== "trial") return null;
   return (
     <span className={s.panelNote}>
@@ -55,7 +55,7 @@ export function Paywall({ leagueId, what }: { leagueId: string; what: string }) 
   return (
     <div className={s.paywall}>
       <p>
-        Your free weeks of {what} are over. A season pass for this league brings back the AI lineup twice a week and trade write-ups through the playoffs.
+        Your free weeks of {what} are over. A season pass for this league brings back the AI lineup twice a week, two trade ideas a week, and trade write-ups through the playoffs.
         The recommended lineup and trade verdicts stay free.
       </p>
       <button type="button" className={s.primary} onClick={buy} disabled={phase === "opening"}>

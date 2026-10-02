@@ -3,6 +3,7 @@ import type { AiPlan } from "@/lib/ai/planSchema";
 import type { AiLineup } from "@/lib/ai/season/lineup";
 import type { SeasonAiUseKind } from "@/lib/ai/season/state";
 import type { AiTradeWriteup } from "@/lib/ai/season/trade";
+import type { AiTradeIdeas } from "@/lib/ai/season/tradeIdeas";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
@@ -177,8 +178,8 @@ export const aiPlans = pgTable(
 /** How a model call for a plan ended: saved, outrun by a newer job, or a failure kind. */
 export type GenerationOutcome = "ready" | "superseded" | PlanModelErrorKind | "internal";
 
-/** What a model call was for: the draft plan (Epic 5), or in-season AI (Epic 11). */
-export type GenerationPurpose = "plan" | "season-lineup" | "season-trade";
+/** What a model call was for: the draft plan (Epic 5), or in-season AI (Epic 11, APE-222). */
+export type GenerationPurpose = "plan" | "season-lineup" | "season-trade" | "season-trade-ideas";
 
 /**
  * Every model call made for an AI plan, with its token usage and cost, for checking unit economics
@@ -374,13 +375,13 @@ export const seasonAiUses = pgTable(
   (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind] })],
 );
 
-/** What a stored in-season AI output is: a weekly lineup (SeasonAiUseKind), or a trade write-up. */
+/** What a stored in-season AI output is: a weekly lineup or the week's trade ideas (SeasonAiUseKind), or a trade write-up. */
 export type SeasonAiOutputKind = SeasonAiUseKind | "trade";
 
 /**
- * In-season AI outputs (11.2), kept so reloading the page never pays for another. Lineups are one
- * per league, week and kind; trade write-ups one per league, week and trade (`key`, a hash of the
- * trade), since the verdict they explain changes week to week.
+ * In-season AI outputs (11.2), kept so reloading the page never pays for another. Lineups and trade
+ * ideas are one per league, week and kind; trade write-ups one per league, week and trade (`key`, a
+ * hash of the trade), since the verdict they explain changes week to week.
  */
 export const seasonAiOutputs = pgTable(
   "season_ai_outputs",
@@ -391,9 +392,9 @@ export const seasonAiOutputs = pgTable(
     season: integer("season").notNull(),
     week: integer("week").notNull(),
     kind: text("kind").$type<SeasonAiOutputKind>().notNull(),
-    /** The trade's hash for a write-up; empty for a lineup. */
+    /** The trade's hash for a write-up; empty for a lineup or trade ideas. */
     key: text("key").notNull().default(""),
-    output: jsonb("output").$type<AiLineup | AiTradeWriteup>().notNull(),
+    output: jsonb("output").$type<AiLineup | AiTradeWriteup | AiTradeIdeas>().notNull(),
     issues: jsonb("issues").$type<string[]>().notNull(),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
