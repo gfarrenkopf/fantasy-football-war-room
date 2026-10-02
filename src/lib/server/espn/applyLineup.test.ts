@@ -57,6 +57,7 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
     ],
     pendingTrades: [],
     pendingClaims: [],
+    draftOrder: [],
     tradeDeadline: null,
     matchups: [],
     waivers: { budget: null, teams: [] },

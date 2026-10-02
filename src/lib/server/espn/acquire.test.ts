@@ -55,6 +55,7 @@ function league(roster: RosterEntry[], theirs: RosterEntry[] = [], more: Partial
     ],
     pendingTrades: [],
     pendingClaims: [],
+    draftOrder: [],
     tradeDeadline: null,
     matchups: [],
     waivers: { budget: null, teams: [] },
