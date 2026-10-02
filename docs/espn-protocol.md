@@ -166,7 +166,7 @@ Same base as §2.
 | `mStatus` | `scoringPeriodId` (the current NFL week); `status.{firstScoringPeriod, finalScoringPeriod, currentMatchupPeriod, latestScoringPeriod}` |
 | `mSettings` | `scoringSettings.scoringItems[].{statId, points, pointsOverrides}`, where `pointsOverrides` is keyed by lineup slot id (e.g. D/ST points-allowed tiers under `"16"`); `rosterSettings.{lineupSlotCounts, lineupLocktimeType}` (`INDIVIDUAL_GAME`); `scheduleSettings.{matchupPeriodCount, matchupPeriods, playoffTeamCount, playoffMatchupPeriodLengthByRound}` (a two-week final shows as `"16": [16, 17]`); `tradeSettings.deadlineDate` |
 | `mRoster` + `mTeam` | `teams[].roster.entries[]`: `playerId`, `lineupSlotId`, `injuryStatus`, `acquisitionType`, `pendingTransactionIds`, and `playerPoolEntry.{lineupLocked, rosterLocked, tradeLocked, player.eligibleSlots, player.stats}` |
-| `mPendingTransactions` | Pending trades and claims. Empty in the test league, so the shape is still unrecorded. |
+| `mPendingTransactions` | `pendingTransactions[]`: the reader's own pending waiver claims and the trades that involve them. Shapes are under "Roster transactions" below. |
 
 Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/ST, 17 K, 20 bench, 21 IR, 23 FLEX, 7 OP (superflex).
 
@@ -217,4 +217,52 @@ Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/S
 - **There is no dry run.** `executionType: "VALIDATE"` returns `400 Invalid Input.`
 - **A locked player can't move (2026-09-24, during Thursday night's game).** A swap of a locked starter with a bench player was refused whole with `TRAN_LINEUP_LOCKED`, and neither player moved. The roster read's `playerPoolEntry.lineupLocked` was `true` for exactly the players in that game, so checking it before writing catches this first.
 - **Six items in one transaction land together** (12.1 acceptance, three swaps on the test league), and a re-read straight after the write shows them.
+
+### Roster transactions (Epic 13, 13.0)
+
+From probes on 2026-09-29 (NFL week 4) against test league 704343562: team 1 from Node with the operator's cookies, and team 2 through ESPN's own pages. Every roster change goes to the same `transactions/` endpoint as lineup writes, with the same envelope (`isLeagueManager`, `teamId`, `memberId`, `scoringPeriodId`, `executionType`). Only `type` and `items` change. A 200 answers with the stored transaction: its `id`, `status` (`PENDING`, `EXECUTED`, `CANCELED`), `isPending`, and each item filled out with `fromLineupSlotId` / `toLineupSlotId` (`-1` off the roster) and `fromTeamId` / `toTeamId` (`0` for the pool).
+
+**League rules** come from `mSettings`:
+
+- **Roster size** is the sum of `rosterSettings.lineupSlotCounts` without IR (`"21"`). ESPN enforces it ("Too many players on roster (maximum 16)."). `lineupSlotCounts["21"]` is the IR slot count.
+- **Limits:** `rosterSettings.positionLimits` holds per-position caps, where `-1` means none. `acquisitionSettings.acquisitionLimit` and `matchupAcquisitionLimit` hold acquisition caps (`-1` for none).
+- `rosterSettings.isUsingUndroppableList`: ESPN's page greys out Drop for some players.
+- `acquisitionSettings.acquisitionType` is `WAIVERS_TRADITIONAL` in the test league. `isUsingAcquisitionBudget` says whether the league bids FAAB, with `minimumBid`.
+- `tradeSettings.{deadlineDate, revisionHours, vetoVotesRequired}`.
+- Each team's `transactionCounter` counts `acquisitions`, `drops`, `trades`, `moveToIR` and `moveToActive`.
+
+**IR** is a `ROSTER` / `LINEUP` move to slot 21, like any lineup move.
+
+- Every player's `eligibleSlots` includes 21, so eligibility comes from injury status, not from slots.
+- A `QUESTIONABLE` player is refused with `TRAN_ROSTER_INELIGIBLE_IR_NOT_INJURED` ("… is not eligible for the IL/IR slot, player is not injured.").
+- Players ESPN marks `injured: true` carry `injuryStatus` `OUT` or `INJURY_RESERVE`.
+- Confirmed live on the test league after waivers processed (Epic 13 acceptance): a landed IR move, and activation with a full bench.
+
+**Free-agent add / drop:** `type: "FREEAGENT"`, with items `{ playerId, type: "ADD", toTeamId }` and `{ playerId, type: "DROP", fromTeamId }`.
+
+- A player still on waivers is refused with `TRAN_PLAYER_NOT_FREEAGENT` ("… is not a free agent").
+- In `WAIVERS_TRADITIONAL`, the whole pool sits on waivers until the league's process time after a week's games. On 2026-09-29 every available player showed `status: "WAIVERS"` with `waiverProcessDate` 2026-09-30 07:00 UTC. So an instant add is only possible between that time and the next week's lock.
+- Confirmed live on the test league (Epic 13 acceptance): a landed add, and dropping a player whose game had started.
+
+**Waiver claim:** `type: "WAIVER"`, with the same `ADD` / `DROP` items and `bidAmount` (`null` without FAAB).
+
+- The drop is conditional: it only happens if the claim succeeds.
+- A claim that would overfill the roster is refused up front with `TRAN_ROSTER_LIMIT_EXCEEDED_ONE`. Its `resolution` says "You must drop at least 1 player…".
+- A placed claim is `status: "PENDING"` with a `processDate`, and ESPN's page shows it with the team's waiver priority. The dropped player's roster entry lists the claim's id in `pendingTransactionIds`.
+- **Cancel** by sending the same `type` with `executionType: "CANCEL"`, `relatedTransactionId: <claim id>` and `items: []`. The answer is `status: "CANCELED"`, and the claim leaves `mPendingTransactions`.
+- *Still to probe:* reordering claims (`subOrder`). A FAAB bid is shelved with FAAB support (APE-221); the test league doesn't bid.
+
+**Trades:**
+
+- **Propose:** `type: "TRADE_PROPOSAL"`, one `{ playerId, type: "TRADE", fromTeamId, toTeamId }` item per player. The proposer may add `DROP` items for their own team.
+  - The answer carries `expirationDate`, 48 hours after proposing in the test league, and `teamActions: { "<proposer>": "ACCEPTED" }`.
+  - Only the proposer's roster size is checked when proposing. A 1-for-2 without a drop is refused with `TRAN_ROSTER_LIMIT_EXCEEDED_ONE`, but a 2-for-1 that overfills the partner is accepted as a proposal.
+- **Withdraw:** `type: "TRADE_PROPOSAL"`, `executionType: "CANCEL"`, `relatedTransactionId`, `items: []`. The answer is `status: "CANCELED"`.
+- **Accept** (recorded from ESPN's page, team 2 accepting team 1's offer): `type: "TRADE_ACCEPT"`, `relatedTransactionId: <proposal id>`, and no `items` at all.
+  - ESPN's page asks for the account password again ("Enter your password to continue") before it sends the accept. The API doesn't: team 1 accepted a proposal from Node with its stored cookies, days old, and got a 200.
+  - After an accept, the proposal keeps its id but becomes `type: "TRADE_ACCEPT"`, `status: "PENDING"`, with `teamActions` showing both teams `ACCEPTED`, an `acceptedDate`, and a `processDate` `revisionHours` (24) later: the league's review period. Every player in it shows `tradeLocked: true` and lists the trade in `pendingTransactionIds`.
+- **Decline:** `type: "TRADE_DECLINE"`, `relatedTransactionId`, no `items`. The answer is `status: "EXECUTED"`, and the proposal leaves `mPendingTransactions`.
+- *Still to probe:*
+  - how the partner drops to make room when accepting an uneven trade;
+  - vetoes during review (`vetoVotesRequired` is 1 in the test league).
 
