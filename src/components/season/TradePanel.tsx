@@ -159,56 +159,62 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
               <>
                 <TradeGain verdict={verdict} partner={partner.name} compact />
                 <SlotChanges verdict={verdict} partner={partner.name} names={names} />
-                {!view.tradeDeadlinePassed &&
-                  (proposing ? (
-                    <TradeWrite
-                      leagueId={leagueId}
-                      agreed={writeConsented}
-                      body={{ kind: "propose", week: view.currentWeek, snapshot: snapshotOf(mine.roster), partner: partner.id, gives, gets, drops: verdict.a.drops }}
-                      question={
-                        <>
-                          Offer {partner.name} this trade on ESPN? You send <b>{list(gives) || "nothing"}</b> and get <b>{list(gets) || "nothing"}</b>
-                          {verdict.a.drops.length > 0 && (
-                            <>
-                              , and drop <b>{list(verdict.a.drops)}</b> to make room if they accept
-                            </>
-                          )}
-                          .
-                        </>
-                      }
-                      confirm="Offer on ESPN"
-                      sending="Sending the offer…"
-                      onCancel={() => setProposing(false)}
-                      onDone={(landed) => {
-                        setProposing(false);
-                        setNotice(landed ? `Offer sent to ${partner.name}. It's in Pending on ESPN.` : "ESPN doesn't show your offer. Check ESPN. War Room has been alerted.");
-                        clear();
-                      }}
-                    />
-                  ) : (
-                    <button type="button" className={s.button} onClick={() => setProposing(true)}>
-                      Offer this on ESPN
-                    </button>
-                  ))}
-                {ai && (
-                  <AiTradeWriteupCard
-                    key={tradeId}
-                    leagueId={leagueId}
-                    view={view}
-                    ai={ai}
-                    trade={trade}
-                    onCounter={(counter) => {
-                      setGives([...counter.gives]);
-                      setGets([...counter.gets]);
-                      setLoaded(null);
-                    }}
-                  />
-                )}
               </>
             ) : (
               <p className={`${s.fine} ${s.panel} ${s.note}`}>Pick who you&apos;d send and who you&apos;d get. The verdict compares both starting lineups for the rest of the season.</p>
             )}
           </div>
+
+          {/* What to do with it scrolls with the page: only the verdict above stays pinned. */}
+          {verdict && (
+            <div className={s.verdictActions}>
+              {!view.tradeDeadlinePassed &&
+                (proposing ? (
+                  <TradeWrite
+                    leagueId={leagueId}
+                    agreed={writeConsented}
+                    body={{ kind: "propose", week: view.currentWeek, snapshot: snapshotOf(mine.roster), partner: partner.id, gives, gets, drops: verdict.a.drops }}
+                    question={
+                      <>
+                        Offer {partner.name} this trade on ESPN? You send <b>{list(gives) || "nothing"}</b> and get <b>{list(gets) || "nothing"}</b>
+                        {verdict.a.drops.length > 0 && (
+                          <>
+                            , and drop <b>{list(verdict.a.drops)}</b> to make room if they accept
+                          </>
+                        )}
+                        .
+                      </>
+                    }
+                    confirm="Offer on ESPN"
+                    sending="Sending the offer…"
+                    onCancel={() => setProposing(false)}
+                    onDone={(landed) => {
+                      setProposing(false);
+                      setNotice(landed ? `Offer sent to ${partner.name}. It's in Pending on ESPN.` : "ESPN doesn't show your offer. Check ESPN. War Room has been alerted.");
+                      clear();
+                    }}
+                  />
+                ) : (
+                  <button type="button" className={s.button} onClick={() => setProposing(true)}>
+                    Offer this on ESPN
+                  </button>
+                ))}
+              {ai && (
+                <AiTradeWriteupCard
+                  key={tradeId}
+                  leagueId={leagueId}
+                  view={view}
+                  ai={ai}
+                  trade={trade}
+                  onCounter={(counter) => {
+                    setGives([...counter.gives]);
+                    setGets([...counter.gets]);
+                    setLoaded(null);
+                  }}
+                />
+              )}
+            </div>
+          )}
 
           {/* On a phone: pinned while the user ticks players, so the verdict and the switch stay in reach. */}
           <div className={s.pickBar}>

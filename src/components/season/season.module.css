@@ -1325,12 +1325,27 @@
   color-scheme: dark;
 }
 
-/* The full verdict pins only where the rosters scroll in their own boxes beside it. */
+/* The offer button and the AI write-up under the verdict. The button keeps its own width. */
+.verdictActions {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.verdictActions > button {
+  justify-self: start;
+}
+
+/* The verdict (number and slot changes) pins only where the rosters scroll in their own boxes
+   beside it, on opaque ground edge to edge so no row shows through, above or below it. The
+   actions under it scroll away, so the pinned block stays short. */
 @media (min-width: 1024px) {
   .verdict {
     position: sticky;
-    top: 8px;
+    top: 0;
     z-index: 2;
+    margin-block: -8px;
+    padding-block: 8px;
+    background: var(--color-bg);
   }
 }
 
