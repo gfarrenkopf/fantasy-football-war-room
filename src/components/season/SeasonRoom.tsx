@@ -5,6 +5,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import type { PublicFlags } from "@/lib/config";
+import type { ProjectionAccuracy } from "@/lib/season/accuracy";
+import { matchupLive, type GameDayPhase } from "@/lib/season/gameday";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
 import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
@@ -12,6 +14,8 @@ import { ArrowLeft, ChevronDown, Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
+import { GameDayPanel } from "./GameDayPanel";
+import { useLivePolling } from "./useLivePolling";
 import { WaiverPanel } from "./WaiverPanel";
 import s from "./season.module.css";
 
@@ -45,6 +49,10 @@ type Props = {
       seasonEmails: boolean | null;
       /** Whether the user has agreed to War Room changing their ESPN team (12.1, Epic 13), so confirming needn't ask. */
       writeConsented: boolean;
+      /** Game day (APE-227), worked out on the server when ESPN was read. */
+      phase: GameDayPhase;
+      /** ESPN's pre-game projections against the scores (APE-229); null off game day. */
+      accuracy: ProjectionAccuracy | null;
     }
 );
 
@@ -65,6 +73,10 @@ export function SeasonRoom(props: Props) {
   const view = "view" in props ? props.view : null;
   const ai = "view" in props ? props.ai : null;
   const checkout = useCheckoutReturn(ai, "view" in props ? props.checkout : null);
+  const phase = "view" in props ? props.phase : "lineup";
+  // On game day the first tab is the scoreboard; the lineup tools are a tap away for players still to play.
+  const [tools, setTools] = useState(false);
+  useLivePolling(!!view && matchupLive(view));
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
   return (
@@ -86,7 +98,7 @@ export function SeasonRoom(props: Props) {
           {view && (
             <div className={s.tabs} role="tablist" aria-label="Season tools">
               <TabButton id="lineup" tab={tab} onSelect={setTab}>
-                Lineup
+                {phase === "lineup" ? "Lineup" : "Game day"}
               </TabButton>
               <TabButton id="trade" tab={tab} onSelect={setTab}>
                 Trades
@@ -118,8 +130,17 @@ export function SeasonRoom(props: Props) {
               </p>
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-              {tab === "lineup" ? (
-                <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
+              {tab === "lineup" && props.phase !== "lineup" && !tools ? (
+                <GameDayPanel leagueId={props.leagueId} view={props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTools(true)} />
+              ) : tab === "lineup" ? (
+                <>
+                  {props.phase !== "lineup" && (
+                    <button type="button" className={`${s.button} ${s.backToGame}`} onClick={() => setTools(false)}>
+                      Back to game day
+                    </button>
+                  )}
+                  <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
+                </>
               ) : tab === "trade" ? (
                 <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : (

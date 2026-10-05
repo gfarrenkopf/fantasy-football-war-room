@@ -53,6 +53,18 @@ describe("the season loader", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
+  it("reads ESPN again once the cached copy is older than the caller allows", async () => {
+    const { userId, leagueId } = await connectedLeague();
+    const { load, fetchImpl, advance } = setup();
+    await load(db, KEY, userId, leagueId);
+    advance(400);
+    await load(db, KEY, userId, leagueId, { maxAgeMs: 500 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    advance(200);
+    await load(db, KEY, userId, leagueId, { maxAgeMs: 500 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("marks the login disconnected when ESPN refuses it", async () => {
     const { userId, leagueId } = await connectedLeague();
     const { load } = setup(() => new Response("{}", { status: 401 }));

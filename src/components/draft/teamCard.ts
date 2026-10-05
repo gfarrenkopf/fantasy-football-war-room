@@ -29,7 +29,7 @@ export interface TeamCardMeta {
 }
 
 /** Any CSS color (hex, rgb, oklch, …) at an opacity, resolved through a 1×1 canvas so every browser can paint it. */
-function alpha(color: string, a: number): string {
+export function alpha(color: string, a: number): string {
   const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   if (!probe) return color;
   probe.fillStyle = color;
@@ -40,7 +40,7 @@ function alpha(color: string, a: number): string {
 
 const label = (pos: Position) => (pos === "DST" ? "D/ST" : pos);
 
-function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
+export function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
   if (ctx.measureText(text).width <= max) return text;
   let t = text;
   while (t.length > 1 && ctx.measureText(`${t}…`).width > max) t = t.slice(0, -1);
@@ -196,11 +196,11 @@ function ordinalOf(n: number) {
 }
 
 /** Shares the poster through the OS sheet where files can be shared (phones), otherwise downloads it. */
-export async function saveTeamCard(blob: Blob, filename: string): Promise<"shared" | "saved" | "cancelled"> {
+export async function saveTeamCard(blob: Blob, filename: string, title = "My draft"): Promise<"shared" | "saved" | "cancelled"> {
   const file = new File([blob], filename, { type: "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: "My draft" });
+      await navigator.share({ files: [file], title });
       return "shared";
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return "cancelled";

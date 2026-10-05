@@ -3,26 +3,12 @@
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
 import { compareLineups, isRuledOut, type LineupRow } from "@/lib/season/lineup";
-import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup } from "./ApplyLineup";
 import { ArrowRight, Check, External, Swap } from "./Icons";
-import { Gain, hasStarted, PlayerLine, pts, signed } from "./parts";
+import { Gain, hasStarted, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
-
-const SLOT_LABEL: Record<LineupSlot, string> = {
-  QB: "QB",
-  RB: "RB",
-  WR: "WR",
-  TE: "TE",
-  FLEX: "FLEX",
-  SUPERFLEX: "OP",
-  DST: "D/ST",
-  K: "K",
-  BN: "Bench",
-  IR: "IR",
-};
 
 const HEADLINE: Record<Emphasis, string> = {
   rest: "Your ESPN lineup is already the best one",

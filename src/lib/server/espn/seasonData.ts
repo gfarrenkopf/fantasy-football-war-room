@@ -23,7 +23,8 @@ export type SeasonLoad =
   /** ESPN answered with something War Room can't use. */
   | { kind: "invalid"; error: string };
 
-export type SeasonLoader = (db: Db, key: Buffer, userId: string, leagueId: string, options?: { refresh?: boolean }) => Promise<SeasonLoad>;
+/** `refresh` always reads ESPN; `maxAgeMs` reads it when the cached copy is older than that (APE-227: fresher during games). */
+export type SeasonLoader = (db: Db, key: Buffer, userId: string, leagueId: string, options?: { refresh?: boolean; maxAgeMs?: number }) => Promise<SeasonLoad>;
 
 const VIEWS = ["mSettings", "mStatus", "mRoster", "mTeam", "mPendingTransactions", "mMatchupScore"] as const;
 
@@ -43,13 +44,13 @@ export function createSeasonLoader({
   cache = new Map(),
 }: { fetchImpl?: typeof fetch; now?: () => Date; ttlMs?: number; cache?: SeasonCache } = {}): SeasonLoader {
 
-  return async (db, key, userId, leagueId, { refresh = false } = {}) => {
+  return async (db, key, userId, leagueId, { refresh = false, maxAgeMs = ttlMs } = {}) => {
     const link = await findSeasonLink(db, userId, leagueId);
     if (!link) return { kind: "not-linked" };
 
     const cacheKey = `v${CACHE_VERSION}:${userId}:${leagueId}:${link.espnLeagueId}:${link.season}`;
     const hit = cache.get(cacheKey);
-    if (hit && !refresh && now().getTime() - hit.fetchedAt.getTime() < ttlMs) return { kind: "ok", ...hit, espnTeamId: link.espnTeamId, stale: false };
+    if (hit && !refresh && now().getTime() - hit.fetchedAt.getTime() < maxAgeMs) return { kind: "ok", ...hit, espnTeamId: link.espnTeamId, stale: false };
 
     const login = await loadLogin(db, key, userId, now());
     if (!login) return (await loginStatus(db, userId, now()))?.status === "disconnected" ? { kind: "disconnected" } : { kind: "no-login" };
