@@ -980,12 +980,177 @@
   filter: brightness(1.08);
 }
 
+/*
+ * How the week swung (APE-243): a margin bridge. ESPN's call and the final are dots; each player
+ * between them is a bar on one shared scale, from the margin before him to the margin after, in
+ * Signal Green when he pushed it the user's way and soft red when he pulled it back. A hairline marks
+ * zero, so the bar that crosses it is where the week turned. On a win the bars draw in order, once;
+ * a loss stays still, like the rest of its card.
+ */
+.swing {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-row-line);
+}
+.swingHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.swingTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.swingNote {
+  color: var(--color-dim);
+  font-size: 11.5px;
+}
+.moment > .swing p {
+  margin: 0;
+}
+.swingVerdict {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.swingTrack {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.swingRow {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) 3.6rem;
+  align-items: center;
+  gap: 12px;
+  min-height: 30px;
+}
+.swingLabel {
+  display: grid;
+  min-width: 0;
+}
+.swingName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.swingRow[data-kind] .swingName {
+  color: var(--color-muted);
+}
+.swingFacts {
+  color: var(--color-dim);
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+.swingBar {
+  position: relative;
+  height: 10px;
+}
+/* Zero, drawn through every row so the rows read as one chart. */
+.swingBar::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  bottom: -10px;
+  left: var(--zero);
+  width: 1px;
+  background: var(--color-line2);
+}
+.swingFill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--tone);
+}
+.swingRow[data-tone="up"] {
+  --tone: var(--color-mine);
+}
+.swingRow[data-tone="down"] {
+  --tone: var(--color-reach-ink);
+}
+.swingDot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: var(--color-panel);
+  box-shadow: 0 0 0 2px var(--color-muted);
+}
+.swingRow[data-kind="final"] .swingDot {
+  background: var(--color-text);
+  box-shadow: 0 0 0 2px var(--color-text);
+}
+.moment[data-result="win"] .swingRow[data-kind="final"] .swingDot {
+  background: var(--color-mine);
+  box-shadow: 0 0 0 2px var(--color-mine);
+}
+.swingValue {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.swingDelta {
+  color: var(--tone);
+}
+.swingBench {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.swingBench b {
+  color: var(--color-text);
+}
+
+/* A win's bars draw from where the margin stood, one after another, as the card arrives. */
+.moment[data-result="win"] .swingFill {
+  transform-origin: left;
+  animation: swing-draw 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 110ms + 200ms);
+}
+.moment[data-result="win"] .swingRow[data-tone="down"] .swingFill {
+  transform-origin: right;
+}
+@keyframes swing-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moment[data-result="win"] .swingFill {
+    animation: none;
+  }
+}
+
 @media (max-width: 767px) {
   .momentTitle {
     font-size: 54px;
   }
   .momentScore {
     font-size: 30px;
+  }
+  /* The name and the number share a line; the bar runs the full width under them. */
+  .swingRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 4px;
+    padding: 4px 0;
+  }
+  .swingBar {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }
 

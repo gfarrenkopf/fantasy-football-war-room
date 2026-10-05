@@ -4,11 +4,13 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { stage } from "@/components/draft/stageFont";
 import type { ProjectionAccuracy } from "@/lib/season/accuracy";
 import { weekRecap } from "@/lib/season/recap";
+import { weekSwing } from "@/lib/season/swing";
 import type { SeasonView } from "@/lib/season/view";
 import { hasPlayedMoment, markMomentPlayed, momentKey } from "@/lib/storage/moments";
 import { pts, signed } from "./parts";
 import s from "./season.module.css";
 import { saveWinCard } from "./winCard";
+import { WeekSwing } from "./WeekSwing";
 import { WinNight } from "./WinNight";
 
 /**
@@ -35,9 +37,11 @@ const startedThisVisit = new Set<string>();
  * the first time the page is opened on a device, and leaves this panel behind: the result in the
  * stage face on a green wash, the final, the star, and the show to watch again or the win card to
  * save. A loss is a quiet grey panel with no motion: the score, the margin, and one bright spot.
+ * Either way, how the week swung follows (APE-243).
  */
 export function MatchupMoment({ leagueId, view, accuracy }: { leagueId: string; view: SeasonView; accuracy: ProjectionAccuracy | null }) {
   const recap = weekRecap(view, accuracy)!;
+  const swing = weekSwing(view, accuracy);
   const key = momentKey(leagueId, view.season, view.currentWeek);
   const played = useSyncExternalStore(
     noSubscribe,
@@ -105,6 +109,7 @@ export function MatchupMoment({ leagueId, view, accuracy }: { leagueId: string; 
             )}
           </p>
         )}
+        {swing && <WeekSwing swing={swing} result={recap.result} />}
         {win && (
           <div className={s.momentActions}>
             <button type="button" className={`${s.button} ${s.momentReplay}`} onClick={() => setReplay(true)}>
