@@ -2,6 +2,7 @@ import type { Db } from "@/lib/db/types";
 import { earlyMoves, kickoffLabel, renderEarlyEmail } from "@/lib/season/email";
 import { dueKickoff, type Schedule } from "@/lib/season/schedule";
 import type { SeasonViewLoad } from "./espn/seasonView";
+import { recordProjections } from "./seasonProjections";
 import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobMail } from "./seasonJobs";
 
 /**
@@ -55,6 +56,8 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
           summary.failed++;
           continue;
         }
+        // ESPN's numbers before an early kickoff, for game day's "ESPN's call" (APE-229).
+        if (!dryRun) await recordProjections(db, league.leagueId, load.view).catch((err: Error) => jobError("early", `couldn't record projections: ${err.message}`, { leagueId: league.leagueId }));
         if (load.view.currentWeek !== due.week) continue; // ESPN hasn't moved on to that week yet
         const moves = earlyMoves(load.view, due.teams);
         if (!moves.length) continue;

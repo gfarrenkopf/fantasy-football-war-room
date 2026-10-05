@@ -1,5 +1,6 @@
 "use client";
 
+import { biggestSurprises, type ProjectionAccuracy, type ProjectionCall } from "@/lib/season/accuracy";
 import { gameProgress, leftToPlay, matchupDecided, pace, type GameDayPhase, type Pace } from "@/lib/season/gameday";
 import { compareLineups } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
@@ -20,7 +21,18 @@ const PACE_TEXT: Record<Pace, string> = {
  * starters and bench alike, with what he's scored set large on the right and his projection under it.
  * A thin meter shows how much of his projection he has, and a tick where the game clock says he should be.
  */
-export function GameDayPanel({ view, phase, onLineupTools }: { view: SeasonView; phase: Exclude<GameDayPhase, "lineup">; onLineupTools(): void }) {
+export function GameDayPanel({
+  view,
+  phase,
+  accuracy,
+  onLineupTools,
+}: {
+  view: SeasonView;
+  phase: Exclude<GameDayPhase, "lineup">;
+  /** ESPN's pre-game projections against what was scored (APE-229); null when none were read. */
+  accuracy: ProjectionAccuracy | null;
+  onLineupTools(): void;
+}) {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
   if (!mine) return <p className={`${s.panel} ${s.note}`}>ESPN didn&apos;t list your team in this league.</p>;
 
@@ -56,6 +68,7 @@ export function GameDayPanel({ view, phase, onLineupTools }: { view: SeasonView;
         </section>
       </div>
       <div className={s.stack}>
+        {accuracy && <EspnCall view={view} accuracy={accuracy} />}
         <section className={s.panel} aria-labelledby="gameday-bench-title">
           <div className={s.panelHead}>
             <h2 id="gameday-bench-title" className={s.panelTitle}>
@@ -134,6 +147,82 @@ function Scoreboard({ view, phase }: { view: SeasonView; phase: Exclude<GameDayP
             ESPN: <b className="tabular-nums">{win}%</b> to win
           </span>
         </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * ESPN's call (APE-229): what ESPN projected before kickoff for both sides and for the user's players,
+ * against what they scored, and how far ESPN has been off on the user's team this season. Compact on
+ * purpose: one line a side, one line for the players who most beat and missed it, one for the season.
+ */
+function EspnCall({ view, accuracy }: { view: SeasonView; accuracy: ProjectionAccuracy }) {
+  const { me, them, season } = accuracy;
+  if (!me && !them && !season) return null;
+  const opponent = view.teams.find((t) => t.id === view.matchup?.them.teamId)?.name ?? "Your opponent";
+  const names = new Map(view.teams.find((t) => t.id === view.myTeamId)?.roster.map((p) => [p.playerId, p.name]));
+  const { best, worst } = biggestSurprises(accuracy.players.filter((p) => names.has(p.playerId)));
+  const line = (who: string, call: ProjectionCall | null, now: number | undefined) =>
+    call && (
+      <li className={s.callRow}>
+        <span className={s.callWho}>{who}</span>
+        <span className="tabular-nums">
+          ESPN had <b>{pts(call.projected)}</b>
+          {call.actual !== null ? (
+            <>
+              {" "}
+              · scored <b>{pts(call.actual)}</b>{" "}
+              <span className={s.callGap} data-sign={call.actual >= call.projected ? "over" : "under"}>
+                ({signed(call.actual - call.projected)})
+              </span>
+            </>
+          ) : (
+            now !== undefined && (
+              <>
+                {" "}
+                · <b>{pts(now)}</b> so far
+              </>
+            )
+          )}
+        </span>
+      </li>
+    );
+  const lean = season && Math.abs(season.meanBias) >= 0.5 ? `, ${season.meanBias > 0 ? "underrating" : "overrating"} you by ${pts(Math.abs(season.meanBias))} on average` : "";
+  return (
+    <section className={s.panel} aria-labelledby="call-title">
+      <div className={s.panelHead}>
+        <h2 id="call-title" className={s.panelTitle}>
+          ESPN&apos;s call
+        </h2>
+        <span className={s.panelNote}>Before kickoff</span>
+      </div>
+      <ul className={s.callList}>
+        {line("You", me, view.matchup?.me.points)}
+        {line(opponent, them, view.matchup?.them.points)}
+        {(best || worst) && (
+          <li className={s.callRow}>
+            <span className={s.callWho}>Surprises</span>
+            <span>
+              {best && (
+                <>
+                  {names.get(best.playerId)} <span className={s.callGap} data-sign="over">{signed(best.actual! - best.projected)}</span>
+                </>
+              )}
+              {best && worst && " · "}
+              {worst && (
+                <>
+                  {names.get(worst.playerId)} <span className={s.callGap} data-sign="under">{signed(worst.actual! - worst.projected)}</span>
+                </>
+              )}
+            </span>
+          </li>
+        )}
+      </ul>
+      {season && (
+        <p className={`${s.fine} ${s.callFoot}`}>
+          Over {season.weeks} {season.weeks === 1 ? "week" : "weeks"}, ESPN has missed your score by <b className="tabular-nums">{pts(season.meanMiss)}</b> a week{lean}.
+        </p>
       )}
     </section>
   );

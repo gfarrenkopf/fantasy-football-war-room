@@ -11,6 +11,7 @@ import type { SeasonViewLoad } from "./espn/seasonView";
 import { startTrial } from "./seasonAi";
 import { findAiLineups } from "./seasonAiOutputs";
 import { setSeasonEmails, verifyUnsubscribeToken } from "./seasonPrefs";
+import { projectionAccuracy } from "./seasonProjections";
 import { runSundayJob, type SundayDeps } from "./seasonSunday";
 import { createTestLeague } from "./testLeagues";
 
@@ -88,6 +89,16 @@ describe("runSundayJob", () => {
     loads.set(ids.dave, { kind: "disconnected" });
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it("records ESPN's pre-game projections for each league it reads, entitled or not", async () => {
+    const game = { state: "pre" as const, detail: "", opponent: "NYJ", home: true, kickoff: null, period: 0, clockSeconds: 0, score: null };
+    const qb = at("QB", player("Sunday QB", "QB", 21, { game }));
+    loads.set(ids.bob, { ...ok, view: { ...seasonView([qb]), matchup: { me: { teamId: 1, points: 0, projected: 117.4, winProbability: 0.5 }, them: { teamId: 2, points: 0, projected: 109, winProbability: 0.5 } } } });
+    await runSundayJob(db, deps);
+    const calls = await projectionAccuracy(db, ids.bob, seasonView([qb]));
+    expect(calls.players).toEqual([{ playerId: qb.playerId, projected: 21, actual: null }]);
+    expect(calls.me).toEqual({ projected: 117.4, actual: null });
+  });
 
   it("writes for paid and trial leagues only, skips an idle one, and sends one email per user", async () => {
     const summary = await runSundayJob(db, deps);

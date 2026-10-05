@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { AiPlan } from "@/lib/ai/planSchema";
 import type { AiLineup } from "@/lib/ai/season/lineup";
 import type { SeasonAiUseKind } from "@/lib/ai/season/state";
@@ -402,6 +402,29 @@ export const seasonAiOutputs = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.kind, t.key] })],
+);
+
+/**
+ * ESPN's projections as they stood before kickoff, and what was scored (APE-229), so game day can say
+ * how close ESPN came. One row per league, week and subject: a fantasy team (`team:<ESPN team id>`,
+ * ESPN's matchup projection) or one of the user's players (`player:<ESPN player id>`). `projected`
+ * follows ESPN until kickoff and is frozen after; `actual` is set once the game, or the matchup, is final.
+ */
+export const seasonProjections = pgTable(
+  "season_projections",
+  {
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    subject: text("subject").notNull(),
+    projected: doublePrecision("projected").notNull(),
+    actual: doublePrecision("actual"),
+    capturedAt: timestamp("captured_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    settledAt: timestamp("settled_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.subject] })],
 );
 
 /** A user's email settings. No row means the defaults. */

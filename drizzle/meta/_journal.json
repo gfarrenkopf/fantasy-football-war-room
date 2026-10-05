@@ -113,6 +113,13 @@
       "when": 1790299744062,
       "tag": "0015_lineup_write_consent",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791225142787,
+      "tag": "0016_season_projections",
+      "breakpoints": true
     }
   ]
 }

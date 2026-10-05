@@ -4,6 +4,7 @@ import { lineupMoves, renderReconnectEmail, renderSundayEmail, type LeagueSummar
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { seasonAiAccess } from "./seasonAi";
 import { writeAiLineup } from "./seasonAiOutputs";
+import { recordProjections } from "./seasonProjections";
 import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobLeague, type JobMail } from "./seasonJobs";
 
 /**
@@ -84,6 +85,8 @@ async function runLeague(db: Db, deps: SundayDeps, league: JobLeague, { dryRun, 
       return "failed";
     }
     const { view } = load;
+    // ESPN's numbers an hour before the main slot, for game day's "ESPN's call" (APE-229).
+    if (!dryRun) await recordProjections(db, league.leagueId, view).catch((err: Error) => jobError("sunday", `couldn't record projections: ${err.message}`, { leagueId: league.leagueId }));
     const access = await seasonAiAccess(db, {
       paymentsEnabled: deps.paymentsEnabled,
       allowlist: deps.allowlist,

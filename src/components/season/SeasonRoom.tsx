@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import type { PublicFlags } from "@/lib/config";
+import type { ProjectionAccuracy } from "@/lib/season/accuracy";
 import { matchupLive, type GameDayPhase } from "@/lib/season/gameday";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
@@ -50,6 +51,8 @@ type Props = {
       writeConsented: boolean;
       /** Game day (APE-227), worked out on the server when ESPN was read. */
       phase: GameDayPhase;
+      /** ESPN's pre-game projections against the scores (APE-229); null off game day. */
+      accuracy: ProjectionAccuracy | null;
     }
 );
 
@@ -128,7 +131,7 @@ export function SeasonRoom(props: Props) {
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "lineup" && props.phase !== "lineup" && !tools ? (
-                <GameDayPanel view={props.view} phase={props.phase} onLineupTools={() => setTools(true)} />
+                <GameDayPanel view={props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTools(true)} />
               ) : tab === "lineup" ? (
                 <>
                   {props.phase !== "lineup" && (

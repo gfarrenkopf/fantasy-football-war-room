@@ -7,6 +7,7 @@ import type { SeasonEmail } from "@/lib/season/email";
 import type { Schedule } from "@/lib/season/schedule";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { runEarlyJob, type EarlyDeps } from "./seasonEarly";
+import { projectionAccuracy } from "./seasonProjections";
 import { createTestLeague } from "./testLeagues";
 
 const MIN = 60 * 1000;
@@ -69,6 +70,16 @@ describe("runEarlyJob", () => {
     expect(sent[0].to).toMatch(/^alice/);
     expect(sent[0].email.subject).toBe("Set your lineup before Thursday's 8:15 PM ET kickoff");
     expect(sent[0].email.text).toContain("- Start Thursday Back at FLEX over Flex RB");
+  });
+
+  it("records the Thursday players' projections before kickoff", async () => {
+    const game = { state: "pre" as const, detail: "", opponent: "GB", home: true, kickoff: new Date(THURSDAY).toISOString(), period: 0, clockSeconds: 0, score: null };
+    const back = player("Thursday Back", "RB", 14, { team: "DET", game });
+    const userId = await createTestUser(db);
+    const leagueId = await link(userId, "Recorded", 1);
+    loads.set(leagueId, { kind: "ok", view: seasonView([back]), fetchedAt: new Date(), stale: false, projectionsMissing: false, phase: "lineup" });
+    await runEarlyJob(db, deps);
+    expect((await projectionAccuracy(db, leagueId, seasonView([back]))).players).toEqual([{ playerId: back.playerId, projected: 14, actual: null }]);
   });
 
   it("does nothing outside the 60-75 minute window", async () => {
