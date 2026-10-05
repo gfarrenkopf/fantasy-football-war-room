@@ -87,13 +87,18 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
                 <th scope="col" className={s.slot}>
                   <span className="sr-only">Slot</span>
                 </th>
-                <th scope="col">
+                {/* With nothing to change the two totals are one number, so only ESPN's is shown. */}
+                <th scope="col" colSpan={changed.length ? 1 : 3}>
                   On ESPN <span className={`${s.headTotal} tabular-nums`}>{pts(lineup.currentTotal)}</span>
                 </th>
-                <th scope="col" aria-hidden />
-                <th scope="col">
-                  War Room <span className={`${s.headTotal} ${s.headOurs} tabular-nums`}>{pts(lineup.total)}</span>
-                </th>
+                {changed.length > 0 && (
+                  <>
+                    <th scope="col" aria-hidden />
+                    <th scope="col">
+                      War Room <span className={`${s.headTotal} ${s.headOurs} tabular-nums`}>{pts(lineup.total)}</span>
+                    </th>
+                  </>
+                )}
                 <th scope="col" className={s.delta}>
                   <span className="sr-only">Gain</span>
                 </th>
@@ -108,23 +113,29 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
                     <th scope="row" className={s.slot}>
                       {SLOT_LABEL[row.key]}
                     </th>
-                    <td>{now ? <PlayerLine player={now} tone={row.changed ? "out" : "same"} locked={row.locked && !row.changed} live news ownership /> : <span className={s.fine}>Empty</span>}</td>
-                    <td className={s.arrow}>{row.changed && <ArrowRight />}</td>
-                    <td>
-                      {row.changed ? (
-                        next ? (
-                          <PlayerLine player={next} tone="in" locked={row.locked} live news ownership />
-                        ) : (
-                          <span className={s.fine}>Nobody available</span>
-                        )
-                      ) : (
-                        <span className={s.keep}>
-                          <Check />
-                          <span className={s.keepLabel}>Keep</span>
-                        </span>
-                      )}
-                    </td>
-                    <td className={`${s.delta} tabular-nums`}>{row.changed && next ? signed(next.points - (now?.points ?? 0)) : ""}</td>
+                    {row.changed ? (
+                      <>
+                        <td>{now ? <PlayerLine player={now} tone="out" live news ownership /> : <span className={s.fine}>Empty</span>}</td>
+                        <td className={s.arrow}>
+                          <ArrowRight />
+                        </td>
+                        <td>{next ? <PlayerLine player={next} tone="in" locked={row.locked} live news ownership /> : <span className={s.fine}>Nobody available</span>}</td>
+                        <td className={`${s.delta} tabular-nums`}>{next ? signed(next.points - (now?.points ?? 0)) : ""}</td>
+                      </>
+                    ) : (
+                      <>
+                        {/* A starter War Room keeps takes the whole row, so his game and points never clip. */}
+                        <td colSpan={3} className={s.keptCell}>
+                          {now ? <PlayerLine player={now} locked={row.locked} live news ownership /> : <span className={s.fine}>Empty</span>}
+                        </td>
+                        <td className={s.delta}>
+                          <span className={s.keep}>
+                            <Check />
+                            <span className={s.keepLabel}>Keep</span>
+                          </span>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -185,7 +196,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
             <h2 id="bench-title" className={s.panelTitle}>
               Bench
             </h2>
-            <span className={s.panelNote}>{bench.length} players</span>
+            <span className={s.panelNote}>{bench.length === 1 ? "1 player" : `${bench.length} players`}</span>
           </div>
           <ul className={s.bench}>
             {bench.map((p) => {

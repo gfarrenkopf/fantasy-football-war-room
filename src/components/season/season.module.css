@@ -544,6 +544,23 @@
   font-size: 12px;
 }
 
+/* On a wide screen a kept starter is one line, name then facts: nothing to compare, so no second line to spend. */
+@media (min-width: 1100px) {
+  .keptCell .player {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .keptCell .playerLine {
+    flex: none;
+    max-width: 55%;
+  }
+  .keptCell .facts {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
 .keep {
   display: inline-flex;
   align-items: center;
@@ -2840,8 +2857,13 @@
   .delta {
     padding-right: 10px !important;
   }
+  /* The check alone marks a kept starter; the word stays for screen readers. */
   .keepLabel {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   /* A started player's line would clip at this width: his points, his game and how widely he's
@@ -2853,6 +2875,16 @@
   }
   .factsSep {
     display: none;
+  }
+  /* A kept starter has the row's whole width, so his facts run on and wrap instead of stacking. */
+  .keptCell .facts {
+    white-space: normal;
+  }
+  .keptCell .factsPoints,
+  .keptCell .factsGame,
+  .keptCell .factsOwn,
+  .keptCell .factsSep {
+    display: inline;
   }
 
   /* The name keeps the room: the news tag drops its word and keeps a thumb-sized target. */

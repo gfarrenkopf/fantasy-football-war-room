@@ -11,8 +11,10 @@ import type { SeasonView, ViewPlayer } from "@/lib/season/view";
  * - before kickoff, the projection, replacing the last one;
  * - once the game is on, nothing new, so the pre-game number stays;
  * - once it's final, the points scored.
- * A team's matchup projection is pre-game until any of its starters kicks off, and final once every
- * starter on both sides is.
+ * A team's projection is the sum of its starters' own projections, not ESPN's matchup projection:
+ * ESPN folds the points already scored into that one as games finish, so it ends the week equal to
+ * the score. A player's projection stays as it was at his kickoff, so the sum is the pre-game call
+ * for the lineup that played, and follows any lineup change until the matchup is final.
  */
 
 type Stage = "pre" | "live" | "final";
@@ -39,12 +41,12 @@ export async function recordProjections(db: Db, leagueId: string, view: SeasonVi
     const stage = p.slot === "IR" ? null : playerStage(p);
     if (stage) rows.push({ subject: `player:${p.playerId}`, projected: p.points, actual: stage === "final" ? (p.actual ?? 0) : null, stage });
   }
+  const teams: (typeof seasonProjections.$inferInsert)[] = [];
   if (view.matchup) {
     const decided = matchupDecided(view);
     for (const side of [view.matchup.me, view.matchup.them]) {
-      const kicked = starters(rosterOf(side.teamId)).some((p) => playerStage(p) !== "pre" && playerStage(p) !== null);
-      const stage: Stage = decided ? "final" : kicked ? "live" : "pre";
-      rows.push({ subject: `team:${side.teamId}`, projected: side.projected, actual: decided ? side.points : null, stage });
+      const projected = round(starters(rosterOf(side.teamId)).reduce((sum, p) => sum + p.points, 0));
+      teams.push({ leagueId, season: view.season, week: view.currentWeek, subject: `team:${side.teamId}`, projected, actual: decided ? side.points : null, capturedAt: now, settledAt: decided ? now : null });
     }
   }
   const values = (stage: Stage) =>
@@ -67,6 +69,14 @@ export async function recordProjections(db: Db, leagueId: string, view: SeasonVi
       .insert(seasonProjections)
       .values(final)
       .onConflictDoUpdate({ target, set: { actual: sql`excluded.actual`, settledAt: sql`coalesce(${seasonProjections.settledAt}, excluded.settled_at)` } });
+  if (teams.length)
+    await db
+      .insert(seasonProjections)
+      .values(teams)
+      .onConflictDoUpdate({
+        target,
+        set: { projected: sql`excluded.projected`, actual: sql`excluded.actual`, capturedAt: now, settledAt: sql`coalesce(${seasonProjections.settledAt}, excluded.settled_at)` },
+      });
 }
 
 /** This week's calls for the user's matchup and players, and how close ESPN has come on their team this season. */

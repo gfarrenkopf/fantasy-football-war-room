@@ -97,7 +97,7 @@ describe("runSundayJob", () => {
     await runSundayJob(db, deps);
     const calls = await projectionAccuracy(db, ids.bob, seasonView([qb]));
     expect(calls.players).toEqual([{ playerId: qb.playerId, projected: 21, actual: null }]);
-    expect(calls.me).toEqual({ projected: 117.4, actual: null });
+    expect(calls.me).toEqual({ projected: 21, actual: null });
   });
 
   it("writes for paid and trial leagues only, skips an idle one, and sends one email per user", async () => {

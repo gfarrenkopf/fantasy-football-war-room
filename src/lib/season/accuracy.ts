@@ -5,7 +5,7 @@
  */
 
 export interface ProjectionCall {
-  /** ESPN's projection when the first game that counted kicked off. */
+  /** ESPN's pre-game projection: a player's at his kickoff, a team's the sum of its starters'. */
   projected: number;
   /** Points scored, once final; null until then. */
   actual: number | null;
