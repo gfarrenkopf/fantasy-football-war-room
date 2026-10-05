@@ -40,8 +40,6 @@ describe("recording ESPN's projections", () => {
     await recordProjections(db, leagueId, week({ qb: "pre", wr: "pre", theirs: "pre" }, { qb: 17.5, me: 118, them: 111 }));
     await recordProjections(db, leagueId, week({ qb: "in", wr: "pre", theirs: "in" }, { qb: 25, actual: 9, me: 131, them: 96 }));
     const calls = await projectionAccuracy(db, leagueId, week({ qb: "in", wr: "pre", theirs: "in" }, { qb: 25, me: 131, them: 96 }));
-    expect(calls.me).toEqual({ projected: 118, actual: null });
-    expect(calls.them).toEqual({ projected: 111, actual: null });
     expect(calls.players.find((p) => p.playerId === 1)).toEqual({ playerId: 1, projected: 17.5, actual: null });
   });
 
@@ -51,12 +49,12 @@ describe("recording ESPN's projections", () => {
     await recordProjections(db, leagueId, week({ qb: "post", wr: "post", theirs: "in" }, { qb: 19, actual: 26.4, me: 140, them: 100, points: [140, 80] }));
     let calls = await projectionAccuracy(db, leagueId, week({ qb: "post", wr: "post", theirs: "in" }, { qb: 19, me: 140, them: 100 }));
     expect(calls.players.find((p) => p.playerId === 1)).toEqual({ playerId: 1, projected: 19, actual: 26.4 });
-    expect(calls.me).toEqual({ projected: 120, actual: null });
+    expect(calls.me).toEqual({ projected: 19, actual: null });
 
     await recordProjections(db, leagueId, week({ qb: "post", wr: "post", theirs: "post" }, { qb: 19, actual: 26.4, me: 141.2, them: 98, points: [141.2, 98] }));
     calls = await projectionAccuracy(db, leagueId, week({ qb: "post", wr: "post", theirs: "post" }, { qb: 19, me: 141.2, them: 98 }));
-    expect(calls.me).toEqual({ projected: 120, actual: 141.2 });
-    expect(calls.them).toEqual({ projected: 110, actual: 98 });
+    expect(calls.me).toEqual({ projected: 19, actual: 141.2 });
+    expect(calls.them).toEqual({ projected: 18, actual: 98 });
   });
 
   it("first seen mid-game, keeps the projection then rather than none", async () => {
@@ -64,13 +62,22 @@ describe("recording ESPN's projections", () => {
     await recordProjections(db, leagueId, week({ qb: "in", wr: "pre", theirs: "pre" }, { qb: 21, actual: 4, me: 125, them: 110 }));
     const calls = await projectionAccuracy(db, leagueId, week({ qb: "in", wr: "pre", theirs: "pre" }, { qb: 21, me: 125, them: 110 }));
     expect(calls.players.find((p) => p.playerId === 1)).toEqual({ playerId: 1, projected: 21, actual: null });
-    expect(calls.me).toEqual({ projected: 125, actual: null });
-    expect(calls.them).toEqual({ projected: 110, actual: null });
+    expect(calls.me).toEqual({ projected: 21, actual: null });
+    expect(calls.them).toEqual({ projected: 18, actual: null });
+  });
+
+  it("calls a team the sum of its starters' projections, not ESPN's matchup projection", async () => {
+    const leagueId = await league();
+    // First seen after the final whistle, when ESPN's matchup projection has become the score.
+    await recordProjections(db, leagueId, week({ qb: "post", wr: "post", theirs: "post" }, { qb: 19, actual: 26.4, me: 26.4, them: 31, points: [26.4, 31] }));
+    const calls = await projectionAccuracy(db, leagueId, week({ qb: "post", wr: "post", theirs: "post" }, { qb: 19, me: 26.4, them: 31 }));
+    expect(calls.me).toEqual({ projected: 19, actual: 26.4 });
+    expect(calls.them).toEqual({ projected: 18, actual: 31 });
   });
 
   it("averages ESPN's miss on the user's team over earlier settled weeks", async () => {
     const leagueId = await league();
-    const done = (w: number, me: number, scored: number) => ({ ...week({ qb: "post", wr: "post", theirs: "post" }, { qb: 19, actual: 20, me, them: 100, points: [scored, 90] }), currentWeek: w });
+    const done = (w: number, me: number, scored: number) => ({ ...week({ qb: "post", wr: "post", theirs: "post" }, { qb: me, actual: 20, me: scored, them: 90, points: [scored, 90] }), currentWeek: w });
     await recordProjections(db, leagueId, done(3, 120, 130));
     await recordProjections(db, leagueId, done(4, 110, 104));
     const calls = await projectionAccuracy(db, leagueId, { ...week({ qb: "pre", wr: "pre", theirs: "pre" }, { qb: 19, me: 120, them: 110 }), currentWeek: 5 });
