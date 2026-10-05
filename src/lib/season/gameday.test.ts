@@ -37,9 +37,23 @@ describe("gameDayPhase", () => {
     expect(gameDayPhase(view([player("WR", game("pre")), player("BN", game("in"))]), SUNDAY_NIGHT)).toBe("live");
   });
 
-  it("stays on the lineup between game windows", () => {
-    expect(gameDayPhase(view([player("WR", game("post")), player("RB", game("pre"))]), SUNDAY_NIGHT)).toBe("lineup");
+  it("stays on the lineup before Sunday's games", () => {
+    const thursday = game("post", { kickoff: "2026-10-02T00:15:00.000Z" });
+    expect(gameDayPhase(view([player("WR", thursday), player("RB", game("pre"))]), Date.parse("2026-10-03T16:00:00Z"))).toBe("lineup");
+    expect(gameDayPhase(view([player("WR", game("pre")), player("RB", game("pre"))]), Date.parse("2026-10-04T15:00:00Z"))).toBe("lineup");
     expect(gameDayPhase(view([player("WR", null)]), SUNDAY_NIGHT)).toBe("lineup");
+  });
+
+  it("stays on game day from Sunday night until Monday night's kickoff", () => {
+    const monday = game("pre", { kickoff: "2026-10-06T00:15:00.000Z" });
+    expect(gameDayPhase(view([player("WR", game("post")), player("RB", monday)]), SUNDAY_NIGHT)).toBe("live");
+  });
+
+  it("shows the results once every starter is final, with a bench player still to play", () => {
+    const monday = game("pre", { kickoff: "2026-10-06T00:15:00.000Z" });
+    const done = view([player("WR", game("post")), player("BN", monday)]);
+    expect(gameDayPhase(done, SUNDAY_NIGHT)).toBe("results");
+    expect(gameDayPhase(done, Date.parse("2026-10-06T10:00:00Z"))).toBe("lineup");
   });
 
   it("ignores a player on IR", () => {
