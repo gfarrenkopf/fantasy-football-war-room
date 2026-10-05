@@ -71,6 +71,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       checkout={checkout}
       seasonEmails={emails}
       writeConsented={(consented ?? 0) >= ESPN_WRITE_VERSION}
+      phase={load.phase}
     />
   );
 }

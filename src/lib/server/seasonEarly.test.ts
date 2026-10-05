@@ -43,7 +43,7 @@ describe("runEarlyJob", () => {
     await db.delete(espnSeasonLinks);
     sent = [];
     loads = new Map();
-    const ok = (view: typeof thursdayMove): SeasonViewLoad => ({ kind: "ok", view, fetchedAt: new Date(), stale: false, projectionsMissing: false });
+    const ok = (view: typeof thursdayMove): SeasonViewLoad => ({ kind: "ok", view, fetchedAt: new Date(), stale: false, projectionsMissing: false, phase: "lineup" });
     const alice = await createTestUser(db, `alice-${crypto.randomUUID()}@example.test`);
     const bob = await createTestUser(db, `bob-${crypto.randomUUID()}@example.test`);
     const carol = await createTestUser(db, `carol-${crypto.randomUUID()}@example.test`);

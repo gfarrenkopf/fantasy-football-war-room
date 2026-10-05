@@ -18,7 +18,7 @@ const NOW = new Date("2026-10-11T15:40:00Z"); // a Sunday, 11:40 ET
 const DAY = 24 * 60 * 60 * 1000;
 const bench = player("Bench Back", "RB", 14);
 const view = seasonView([at("QB", player("QB", "QB", 20)), at("RB", player("RB1", "RB", 15)), at("RB", player("RB2", "RB", 6)), bench]); // week 5
-const ok: SeasonViewLoad = { kind: "ok", view, fetchedAt: NOW, stale: false, projectionsMissing: false };
+const ok: SeasonViewLoad = { kind: "ok", view, fetchedAt: NOW, stale: false, projectionsMissing: false, phase: "lineup" };
 
 let db: Db;
 let close: () => Promise<void>;

@@ -28,7 +28,7 @@ describe("buildSeasonView", () => {
   });
 
   it("puts each player's NFL game on him by team, and nothing on a team without one", () => {
-    const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd", opponent: "NYJ", home: false, kickoff: null }]]);
+    const games = new Map([["DET", { state: "in" as const, detail: "4:12 - 3rd", opponent: "NYJ", home: false, kickoff: null, period: 3, clockSeconds: 252, score: { team: 17, opponent: 10 } }]]);
     const live = buildSeasonView(season, 1, byId, { games });
     const gibbs = live.teams[0].roster.find((p) => p.name === "Jahmyr Gibbs")!;
     expect(gibbs.game).toMatchObject({ state: "in", detail: "4:12 - 3rd", opponent: "NYJ" });

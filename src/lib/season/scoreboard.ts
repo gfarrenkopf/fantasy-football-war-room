@@ -16,6 +16,11 @@ export interface GameState {
   home: boolean;
   /** Kickoff, as an ISO instant; null when ESPN didn't give one. */
   kickoff: string | null;
+  /** The quarter (5 and up is overtime) and the seconds left in it, once the game is under way (APE-227). */
+  period: number;
+  clockSeconds: number;
+  /** The game's score from this team's side, once ESPN gives one; null before kickoff. */
+  score: { team: number; opponent: number } | null;
 }
 
 /** Game state by team abbreviation, for one NFL week. */
@@ -31,6 +36,8 @@ export function parseScoreboard(raw: unknown): Scoreboard {
   for (const event of events) {
     if (!isObject(event) || !isObject(event.status) || !isObject(event.status.type)) continue;
     const { state, shortDetail } = event.status.type;
+    const period = typeof event.status.period === "number" ? event.status.period : 0;
+    const clockSeconds = typeof event.status.clock === "number" ? event.status.clock : 0;
     if (typeof state !== "string" || !STATES.has(state)) continue;
     const detail = typeof shortDetail === "string" ? shortDetail : "";
     const at = typeof event.date === "string" && !Number.isNaN(Date.parse(event.date)) ? new Date(event.date).toISOString() : null;
@@ -40,13 +47,23 @@ export function parseScoreboard(raw: unknown): Scoreboard {
       const teams = competitors.map((c) => ({
         team: isObject(c) && isObject(c.team) ? (PRO_TEAMS[Number(c.team.id)] ?? null) : null,
         home: isObject(c) && c.homeAway === "home",
+        points: isObject(c) ? parsePoints(c.score) : null,
       }));
-      for (const { team, home } of teams) {
+      for (const { team, home, points } of teams) {
         if (!team) continue;
-        const opponent = teams.length === 2 ? (teams.find((t) => t.team !== team)?.team ?? null) : null;
-        games.set(team, { state: state as GameState["state"], detail, opponent, home, kickoff: at });
+        const other = teams.length === 2 ? teams.find((t) => t.team !== team) : undefined;
+        const opponent = other?.team ?? null;
+        // ESPN lists 0-0 before kickoff, which isn't a score yet.
+        const score = state !== "pre" && points !== null && other?.points != null ? { team: points, opponent: other.points } : null;
+        games.set(team, { state: state as GameState["state"], detail, opponent, home, kickoff: at, period, clockSeconds, score });
       }
     }
   }
   return games;
+}
+
+/** ESPN sends a competitor's score as a string ("21"). */
+function parsePoints(raw: unknown): number | null {
+  const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+  return Number.isFinite(n) ? n : null;
 }
