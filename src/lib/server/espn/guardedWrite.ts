@@ -2,8 +2,9 @@ import "server-only";
 import type { Db } from "@/lib/db/types";
 import { rosterChanges, type RosterSnapshot } from "@/lib/season/apply";
 import type { RosterEntry, SeasonLeague } from "@/lib/season/types";
-import { loadLogin, markDisconnected, type EspnLogin } from "./logins";
+import { loadLogin, type EspnLogin } from "./logins";
 import { loadSeason, type SeasonLoad, type SeasonLoader } from "./seasonData";
+import { confirmSignedOut, type SessionCheck } from "./sessionCheck";
 import { writeEspnTransaction, type EspnTransaction, type EspnWrite } from "./transactionWriter";
 
 /**
@@ -63,10 +64,12 @@ export interface WriteDeps {
   load?: SeasonLoader;
   login?: (db: Db, key: Buffer, userId: string) => Promise<EspnLogin | null>;
   write?: (login: EspnLogin, transaction: EspnTransaction) => Promise<EspnWrite>;
+  /** Confirms ESPN has signed the user out before the login is dropped (APE-244). */
+  signedOut?: SessionCheck;
 }
 
 export async function guardedWrite<Landed>(db: Db, key: Buffer, userId: string, leagueId: string, w: GuardedWrite<Landed>, deps: WriteDeps = {}): Promise<GuardedOutcome<Landed>> {
-  const { load = loadSeason, login: getLogin = (d, k, u) => loadLogin(d, k, u), write = writeEspnTransaction } = deps;
+  const { load = loadSeason, login: getLogin = (d, k, u) => loadLogin(d, k, u), write = writeEspnTransaction, signedOut = confirmSignedOut } = deps;
 
   const before = await load(db, key, userId, leagueId, { refresh: true });
   if (before.kind !== "ok") return { kind: "problem", problem: before.kind };
@@ -87,8 +90,9 @@ export async function guardedWrite<Landed>(db: Db, key: Buffer, userId: string, 
   if (!credential) return { kind: "problem", problem: "no-login" };
   const sent = await write(credential, { season: league.season, espnLeagueId: league.espnLeagueId, teamId, week: league.currentWeek, ...w.transaction(fresh) });
   if (!sent.ok && sent.reason === "auth") {
-    await markDisconnected(db, userId);
-    return { kind: "problem", problem: "disconnected" };
+    if (await signedOut(db, userId, credential, league)) return { kind: "problem", problem: "disconnected" };
+    // The login still reads the league, so ESPN refused this write, not the user.
+    return { kind: "espn-refused", errors: [], detail: sent.detail };
   }
   if (!sent.ok && sent.reason === "refused") return { kind: "espn-refused", errors: sent.errors, detail: sent.detail };
 

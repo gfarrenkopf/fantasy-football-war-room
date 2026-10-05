@@ -67,7 +67,7 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
 const ok = (lg: SeasonLeague): SeasonLoad => ({ kind: "ok", league: lg, espnTeamId: 1, fetchedAt: new Date(), stale: false });
 
 /** A fake ESPN: reads return `reads` in turn, writes are recorded and answered with `answer`. */
-function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true, id: "tx" }) {
+function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true, id: "tx" }, { signedOut = true }: { signedOut?: boolean } = {}) {
   const writes: EspnTransaction[] = [];
   const refreshes: boolean[] = [];
   const deps: ApplyDeps = {
@@ -80,6 +80,7 @@ function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true, id: "tx" }) {
       writes.push(w);
       return answer;
     },
+    signedOut: async () => signedOut,
   };
   return { deps, writes, refreshes };
 }
@@ -171,5 +172,10 @@ describe("applyLineup", () => {
   it("marks the login disconnected when ESPN refuses it", async () => {
     const { deps } = fake([ok(league(ROSTER))], { ok: false, reason: "auth", detail: "HTTP 401" });
     expect(await applyLineup(db, key, "user", "league", { week: 4, snapshot: snapshotOf(ROSTER), moves: MOVES }, deps)).toEqual({ kind: "problem", problem: "disconnected" });
+  });
+
+  it("reports a refused write, not a sign-out, when the login still reads the league", async () => {
+    const { deps } = fake([ok(league(ROSTER))], { ok: false, reason: "auth", detail: "HTTP 403" }, { signedOut: false });
+    expect(await applyLineup(db, key, "user", "league", { week: 4, snapshot: snapshotOf(ROSTER), moves: MOVES }, deps)).toEqual({ kind: "espn-refused", errors: [], detail: "HTTP 403" });
   });
 });

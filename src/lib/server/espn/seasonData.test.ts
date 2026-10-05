@@ -73,6 +73,16 @@ describe("the season loader", () => {
     expect(await load(db, KEY, userId, leagueId)).toEqual({ kind: "disconnected" });
   });
 
+  it("keeps the login when ESPN's refusal doesn't hold up on a second read", async () => {
+    const { userId, leagueId } = await connectedLeague();
+    let refusals = 1;
+    const { load, fetchImpl } = setup(() => (refusals-- > 0 ? new Response("{}", { status: 403 }) : new Response(JSON.stringify(league))));
+    expect(await load(db, KEY, userId, leagueId)).toEqual({ kind: "unavailable" });
+    expect(String(fetchImpl.mock.calls[1][0])).toContain("/leagues/110222051?view=mSettings");
+    expect((await loginStatus(db, userId))?.status).toBe("connected");
+    expect(await load(db, KEY, userId, leagueId)).toMatchObject({ kind: "ok", stale: false });
+  });
+
   it("serves the last good read, marked stale, when ESPN is down", async () => {
     const { userId, leagueId } = await connectedLeague();
     let down = false;

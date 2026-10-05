@@ -5,11 +5,12 @@ import type { FreeAgent } from "@/lib/season/types";
 import { scorePlayer, type SeasonView } from "@/lib/season/view";
 import { rankPickups, type Pickup } from "@/lib/season/waivers";
 import { readEspnLeague } from "./leagueReader";
-import { loadLogin, markDisconnected } from "./logins";
+import { loadLogin } from "./logins";
 import { getEspnProjections } from "./projections";
 import { getEspnScoreboard } from "./scoreboard";
 import { loadSeason } from "./seasonData";
 import { loadSeasonView } from "./seasonView";
+import { confirmSignedOut } from "./sessionCheck";
 
 /**
  * The waiver wire (APE-212): the league's most-rostered available players, read from ESPN with the
@@ -70,10 +71,7 @@ export async function loadWaivers(db: Db, key: Buffer, userId: string, leagueId:
       filter: freeAgentFilter(league.season, league.currentWeek),
     });
     if (!read.ok) {
-      if (read.reason === "auth") {
-        await markDisconnected(db, userId, new Date());
-        return { kind: "problem", problem: "disconnected" };
-      }
+      if (read.reason === "auth" && (await confirmSignedOut(db, userId, login, league))) return { kind: "problem", problem: "disconnected" };
       console.warn(`[espn-season] free agents unavailable: ${read.detail}`);
       if (!hit) return { kind: "problem", problem: "unavailable" };
     } else {
