@@ -131,7 +131,7 @@ export function SeasonRoom(props: Props) {
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "lineup" && props.phase !== "lineup" && !tools ? (
-                <GameDayPanel view={props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTools(true)} />
+                <GameDayPanel leagueId={props.leagueId} view={props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTools(true)} />
               ) : tab === "lineup" ? (
                 <>
                   {props.phase !== "lineup" && (

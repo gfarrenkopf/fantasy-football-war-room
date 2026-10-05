@@ -859,6 +859,768 @@
   justify-self: start;
 }
 
+/*
+ * The week's result (APE-230), what win night (below) leaves behind. A win: the stage face on a
+ * Signal Green wash, with the show to watch again and the win card to save. A loss gets none of it:
+ * the panel's own ground, muted ink, no motion.
+ */
+.moment {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  overflow: hidden;
+  padding: 18px 20px 16px;
+}
+.moment[data-result="win"] {
+  background: color-mix(in srgb, var(--color-mine) 10%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--color-mine) 60%, transparent);
+}
+.moment > p {
+  margin: 0;
+}
+.momentWeek {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.moment[data-result="win"] .momentWeek {
+  color: var(--color-sky);
+}
+.momentTitle {
+  margin: 2px 0 0;
+  font-family: var(--font-stage), var(--font-sans);
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--color-mine);
+}
+.moment[data-result="loss"] .momentTitle,
+.moment[data-result="tie"] .momentTitle {
+  font-size: 40px;
+  color: var(--color-muted);
+}
+.momentScore {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-muted);
+}
+.momentScore b {
+  color: var(--color-text);
+}
+.moment[data-result="win"] .momentScore b {
+  color: var(--color-mine);
+}
+.momentDash {
+  color: var(--color-dim);
+  font-weight: 600;
+}
+.momentLine,
+.momentStar {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.momentLine b,
+.momentStar b {
+  color: var(--color-text);
+}
+.momentGain {
+  color: var(--color-mine);
+  font-weight: 700;
+}
+.momentNext {
+  padding-top: 8px;
+  margin-top: 4px !important;
+  border-top: 1px solid var(--color-row-line);
+  color: var(--color-dim);
+  font-size: 12px;
+}
+.momentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.momentReplay {
+  font-family: var(--font-stage), var(--font-sans);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  border-color: var(--color-mine);
+}
+.momentReplay:hover {
+  background: var(--color-mine);
+  filter: brightness(1.08);
+}
+
+@media (max-width: 767px) {
+  .momentTitle {
+    font-size: 54px;
+  }
+  .momentScore {
+    font-size: 30px;
+  }
+}
+
+/* ------------------------------------------------------------------ win night (APE-230)
+ * The season page's share of the Opening Night Exception (DESIGN.md): when the user opens the page
+ * after winning a week, the draft room's stage comes back for them, lit green from the floor. A W
+ * slams in and shakes the stage, the two scores race and the user's passes, the margin wipes in on
+ * the slab, the starters are dealt face up, and the follow-spots swing onto the star of the week
+ * while the confetti goes off. Once per league and week on a device; always skippable.
+ */
+.wn {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  color: var(--color-text);
+  background:
+    radial-gradient(ellipse 75% 46% at 50% 106%, color-mix(in srgb, var(--color-mine) 20%, transparent), transparent 72%),
+    radial-gradient(ellipse 90% 70% at 50% 38%, #101614, #06080a 80%);
+  animation: wnStageUp 380ms ease-out both;
+}
+.wnInner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(44px, env(safe-area-inset-top)) 20px max(28px, env(safe-area-inset-bottom));
+  font-family: var(--font-stage), var(--font-sans);
+}
+.wnBeams {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.wnBeams i {
+  position: absolute;
+  bottom: -10%;
+  width: 46vmax;
+  height: 130vh;
+  transform-origin: 50% 100%;
+  background: linear-gradient(to top, color-mix(in srgb, #ffffff 22%, transparent), color-mix(in srgb, var(--color-mine) 7%, transparent) 70%, transparent);
+  clip-path: polygon(46% 100%, 54% 100%, 100% 0, 0 0);
+  filter: blur(6px);
+  mix-blend-mode: screen;
+}
+.wnBeams i:first-child {
+  left: -12vmax;
+  animation: wnSweepL 2600ms cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+.wnBeams i:last-child {
+  right: -12vmax;
+  animation: wnSweepR 2600ms 300ms cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+.wnConverge i:first-child {
+  animation: wnAimL 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wnConverge i:last-child {
+  animation: wnAimR 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wnConfetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+.wnSkip {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: 16px;
+  z-index: 3;
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: rgb(6 8 10 / 0.6);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.wnSkip:hover {
+  color: var(--color-text);
+  border-color: var(--color-line2);
+}
+
+.wnStage {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(1100px, 100%);
+  margin: auto 0;
+  text-align: center;
+}
+.wnShake {
+  animation: wnShake 440ms 150ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.wnWeek {
+  margin: 0;
+  font-size: clamp(15px, min(2.6vw, 3.4vh), 28px);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-sky);
+  opacity: 0;
+}
+.wnWeek.in {
+  animation: wnRise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* The W: the biggest letter the product ever sets, in Signal Green with a halo off the floor. */
+.wnW {
+  margin: -0.04em 0 -0.1em;
+  font-size: clamp(150px, min(42vw, 30vh), 330px);
+  font-weight: 900;
+  line-height: 0.86;
+  color: var(--color-mine);
+  text-shadow:
+    0 0 60px color-mix(in srgb, var(--color-mine) 55%, transparent),
+    0 0 140px color-mix(in srgb, var(--color-mine) 25%, transparent),
+    0 16px 34px rgb(0 0 0 / 0.5);
+  opacity: 0;
+}
+.wnW.in {
+  animation: wnSlam 440ms cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+
+/* The race: both scores climb together; the opponent's stops and dims, the user's passes it. */
+.wnRace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: clamp(14px, 4vw, 48px);
+  width: min(760px, 100%);
+  margin-top: clamp(8px, 2vh, 20px);
+  opacity: 0;
+}
+.wnRace.in {
+  animation: wnRise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wnSide {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  text-align: right;
+}
+.wnSide:last-child {
+  text-align: left;
+}
+.wnName {
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: clamp(12px, 1.4vw, 15px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+.wnSide[data-mine="true"] .wnName {
+  color: var(--color-mine);
+}
+.wnScore {
+  font-size: clamp(54px, min(12vw, 11vh), 120px);
+  font-weight: 900;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  transition: color 500ms ease-out, opacity 500ms ease-out;
+}
+.wnScore[data-done="true"] {
+  color: var(--color-muted);
+  opacity: 0.75;
+}
+.wnRace[data-passed="true"] .wnSide[data-mine="true"] .wnScore {
+  color: var(--color-mine);
+  animation: wnPass 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.wnVs {
+  padding-bottom: 0.5em;
+  font-size: clamp(16px, 2vw, 24px);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
+
+/* The margin on the broadcast slab: skewed, saturated, dark heavy type, wiped in. */
+.wnMargin {
+  margin: clamp(14px, 2.6vh, 26px) 0 0;
+  padding: 0.08em 0.42em 0.02em;
+  font-size: clamp(34px, min(8vw, 7vh), 74px);
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  transform: skewX(-9deg);
+  box-shadow: 0 18px 60px color-mix(in srgb, var(--color-mine) 38%, transparent);
+  clip-path: inset(0 100% 0 0);
+}
+.wnMargin.in {
+  animation: wnWipe 460ms cubic-bezier(0.7, 0, 0.2, 1) both;
+}
+
+.wnBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: clamp(18px, 3vw, 44px);
+  align-items: start;
+  width: 100%;
+  margin-top: clamp(20px, 4vh, 44px);
+  text-align: left;
+}
+
+/* The starters, dealt face up, flipping down from their top edge. */
+.wnLineup {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  perspective: 900px;
+}
+.wnCard {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 14px 5px 6px;
+  background: color-mix(in srgb, var(--color-panel) 82%, transparent);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.35);
+  transform-origin: 50% 0;
+  opacity: 0;
+}
+.wnCard.in {
+  animation: wnDeal 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wnCardStar {
+  border-color: var(--color-mine);
+  background: color-mix(in srgb, var(--color-mine) 14%, var(--color-panel));
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--color-mine) 26%, transparent);
+  transition: background 400ms ease-out, border-color 400ms ease-out, box-shadow 400ms ease-out;
+}
+.wnSlot {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--pos);
+  background: color-mix(in srgb, var(--pos) 18%, transparent);
+}
+.wnWho {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-family: var(--font-sans);
+}
+.wnWho b {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wnWho small {
+  font-size: 12px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wnPts {
+  min-width: 56px;
+  font-size: 28px;
+  font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wnPts[data-tone="up"] {
+  color: var(--color-mine);
+}
+.wnPts[data-tone="down"] {
+  color: var(--color-soft-red);
+}
+
+.wnAside {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(18px, 3vh, 28px);
+}
+.wnStar {
+  position: relative;
+  padding-top: 6px;
+  opacity: 0;
+}
+.wnStar::before {
+  content: "";
+  position: absolute;
+  inset: -40px -60px -30px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 55% at 40% 45%, rgb(255 255 255 / 0.1), transparent 70%);
+}
+.wnStar.in {
+  animation: wnRise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wnSlab {
+  display: inline-block;
+  margin: 0;
+  padding: 0.08em 0.4em 0.02em;
+  font-size: clamp(26px, min(4.4vw, 6vh), 50px);
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  transform: skewX(-9deg);
+  box-shadow: 0 18px 60px color-mix(in srgb, var(--color-mine) 38%, transparent);
+  clip-path: inset(0 100% 0 0);
+}
+.wnStar.in .wnSlab {
+  animation: wnWipe 460ms 120ms cubic-bezier(0.7, 0, 0.2, 1) both;
+}
+.wnStarName {
+  margin: 12px 0 0;
+  font-size: clamp(42px, min(6.4vw, 9vh), 86px);
+  font-weight: 900;
+  line-height: 0.9;
+  text-transform: uppercase;
+  text-wrap: balance;
+  text-shadow: 0 0 36px color-mix(in srgb, var(--pos) 40%, transparent);
+}
+.wnStarMeta {
+  margin: 6px 0 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.wnStory {
+  margin: 12px 0 0;
+  font-family: var(--font-sans);
+  font-size: clamp(14px, 1.5vw, 16px);
+  line-height: 1.45;
+}
+.wnStory b {
+  font-weight: 800;
+}
+.wnGain {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 6px 0 0;
+  font-size: clamp(44px, min(6.4vw, 8.5vh), 80px);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--color-mine);
+  font-variant-numeric: tabular-nums;
+}
+.wnGain small {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.wnActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  opacity: 0;
+  /* Untappable until its beat: a tap mid-show skips ahead, it never saves. */
+  pointer-events: none;
+}
+.wnActions.in {
+  pointer-events: auto;
+  animation: wnRise 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.wnGo {
+  min-height: 52px;
+  padding: 12px 30px 10px;
+  font-family: var(--font-stage), var(--font-sans);
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 120ms ease-out, filter 120ms ease-out;
+}
+.wnGo:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.wnGo:active {
+  transform: translateY(1px);
+}
+.wnGo:disabled {
+  cursor: progress;
+  filter: saturate(0.6);
+}
+.wnGo:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.wnBack {
+  padding: 10px 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--color-line2);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.wnBack:hover {
+  color: var(--color-text);
+}
+.wnFail {
+  flex-basis: 100%;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-reach-ink);
+}
+
+.wnIrisOut {
+  animation: wnIris 700ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+/* Reduced motion: the finished state, at once and still. */
+.wnStill,
+.wnStill .wnWeek,
+.wnStill .wnW,
+.wnStill .wnRace,
+.wnStill .wnCard,
+.wnStill .wnStar,
+.wnStill .wnActions {
+  animation: none;
+  opacity: 1;
+}
+.wnStill .wnMargin,
+.wnStill .wnSlab {
+  animation: none;
+  clip-path: none;
+}
+.wnStill .wnBeams {
+  display: none;
+}
+
+@keyframes wnStageUp {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes wnSweepL {
+  from {
+    transform: rotate(22deg);
+  }
+  to {
+    transform: rotate(-8deg);
+  }
+}
+@keyframes wnSweepR {
+  from {
+    transform: rotate(-22deg);
+  }
+  to {
+    transform: rotate(8deg);
+  }
+}
+@keyframes wnAimL {
+  to {
+    transform: rotate(30deg);
+  }
+}
+@keyframes wnAimR {
+  to {
+    transform: rotate(-2deg);
+  }
+}
+@keyframes wnRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes wnSlam {
+  from {
+    opacity: 0;
+    transform: scale(3.2) rotate(-6deg);
+    filter: blur(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes wnShake {
+  10%,
+  90% {
+    transform: translate(-2px, 1px);
+  }
+  20%,
+  80% {
+    transform: translate(5px, -2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translate(-9px, 4px);
+  }
+  40%,
+  60% {
+    transform: translate(9px, -4px);
+  }
+}
+@keyframes wnPass {
+  0% {
+    transform: scale(1);
+    text-shadow: 0 0 0 transparent;
+  }
+  35% {
+    transform: scale(1.12);
+    text-shadow: 0 0 40px color-mix(in srgb, var(--color-mine) 70%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--color-mine) 30%, transparent);
+  }
+}
+@keyframes wnWipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes wnDeal {
+  from {
+    opacity: 0;
+    transform: rotateX(-88deg) translateY(-10px);
+    filter: brightness(1.8);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes wnIris {
+  from {
+    clip-path: circle(150vmax at var(--iris-x, 50%) var(--iris-y, 120px));
+  }
+  to {
+    clip-path: circle(0 at var(--iris-x, 50%) var(--iris-y, 120px));
+  }
+}
+
+/* Laptop-height screens: a smaller W so the lineup starts above the fold. */
+@media (min-width: 768px) and (max-height: 860px) {
+  .wnW {
+    font-size: clamp(130px, 24vh, 240px);
+  }
+  .wnScore {
+    font-size: clamp(50px, 9vh, 96px);
+  }
+  .wnBody {
+    margin-top: 18px;
+  }
+  .wnLineup {
+    gap: 4px;
+  }
+  .wnCard {
+    padding-block: 3px;
+  }
+}
+
+/* Phone: one column; the star leads, the actions pin in the thumb zone. */
+@media (max-width: 767px) {
+  .wnInner {
+    padding: max(68px, calc(env(safe-area-inset-top) + 56px)) 14px calc(136px + env(safe-area-inset-bottom));
+  }
+  .wnWeek {
+    font-size: 14px;
+    letter-spacing: 0.14em;
+  }
+  .wnW {
+    margin-top: 8px;
+  }
+  .wnBody {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+  .wnAside {
+    display: contents;
+  }
+  .wnStar {
+    order: -1;
+  }
+  .wnActions {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 3;
+    flex-direction: column;
+    gap: 4px;
+    padding: 28px 14px max(14px, env(safe-area-inset-bottom));
+    background: linear-gradient(to top, #06080a 72%, transparent);
+  }
+  .wnGo {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wnShake,
+  .wnBeams i {
+    animation: none;
+  }
+}
+
 /* ESPN's call (APE-229): label column in muted ink, numbers in text ink, the gap in tone. */
 .callList {
   list-style: none;

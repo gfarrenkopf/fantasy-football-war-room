@@ -4,6 +4,7 @@ import { biggestSurprises, type ProjectionAccuracy, type ProjectionCall } from "
 import { gameProgress, leftToPlay, matchupDecided, pace, type GameDayPhase, type Pace } from "@/lib/season/gameday";
 import { compareLineups } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import { MatchupMoment } from "./MatchupMoment";
 import { PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
 
@@ -22,11 +23,13 @@ const PACE_TEXT: Record<Pace, string> = {
  * A thin meter shows how much of his projection he has, and a tick where the game clock says he should be.
  */
 export function GameDayPanel({
+  leagueId,
   view,
   phase,
   accuracy,
   onLineupTools,
 }: {
+  leagueId: string;
   view: SeasonView;
   phase: Exclude<GameDayPhase, "lineup">;
   /** ESPN's pre-game projections against what was scored (APE-229); null when none were read. */
@@ -45,7 +48,8 @@ export function GameDayPanel({
   return (
     <div className={s.lineup}>
       <div className={s.stack}>
-        {view.matchup && <Scoreboard view={view} phase={phase} />}
+        {view.matchup &&
+          (phase === "results" && matchupDecided(view) ? <MatchupMoment leagueId={leagueId} view={view} accuracy={accuracy} /> : <Scoreboard view={view} phase={phase} />)}
         <section className={s.panel} aria-labelledby="starters-title">
           <div className={s.panelHead}>
             <h2 id="starters-title" className={s.panelTitle}>

@@ -10,7 +10,7 @@ import type { SeasonView, ViewPlayer } from "./view";
 
 export type GameDayPhase = "lineup" | "live" | "results";
 
-/** How a player is doing against his projection: not started, behind it, on it, ahead of it, or past all of it. */
+/** How a player is doing against his projection: not started, behind it, on it, ahead of it, or past all of it (boom). */
 export type Pace = "pre" | "behind" | "on" | "ahead" | "boom";
 
 /** The page goes back to the lineup tools at 6 AM on Tuesday, Eastern, after the week's last game. */
@@ -58,7 +58,7 @@ export function pace(player: Pick<ViewPlayer, "actual" | "points" | "game">): Pa
   if (!game || (game.state === "pre" && player.actual === null)) return "pre";
   const actual = player.actual ?? 0;
   const projected = player.points;
-  if (projected > 0 && actual >= projected) return "boom";
+  if (projected > 0 && actual > projected) return "boom";
   const expected = projected * gameProgress(game);
   const band = Math.max(PACE_FLOOR, Math.abs(expected) * PACE_BAND);
   if (actual > expected + band) return "ahead";
