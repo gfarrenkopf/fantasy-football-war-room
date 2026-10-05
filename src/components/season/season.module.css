@@ -684,6 +684,213 @@
   color: var(--color-text);
 }
 
+/* ------------------------------------------------------------------ game day (APE-228) */
+
+/*
+ * The scoreboard: the matchup as the page's hero while games are on. Both scores at 44px, the lead
+ * between them in tone (a lead in Signal Green, a deficit in Reach Red ink, a tie muted), and ESPN's
+ * win probability as a 4px split bar. No glow: the on-clock ring stays the gain ladder's.
+ */
+.scoreboard {
+  --tone: var(--color-muted);
+}
+.scoreboard[data-lead="up"] {
+  --tone: var(--gain);
+  border-color: color-mix(in srgb, var(--gain) 35%, var(--color-line));
+}
+.scoreboard[data-lead="down"] {
+  --tone: var(--color-reach-ink);
+}
+.scoreStatus {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+.scoreSides {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 10px;
+}
+.scoreSide {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.scoreSide:last-child {
+  text-align: right;
+}
+.scoreSide[data-mine="true"] .sideName {
+  color: var(--color-mine);
+}
+.scoreBig {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.scoreLead {
+  color: var(--tone);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+.winOdds {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 12px;
+}
+.winOdds b {
+  color: var(--color-text);
+}
+.winBar {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-reach) 35%, var(--color-panel2));
+}
+.winFill {
+  display: block;
+  height: 100%;
+  background: var(--color-mine);
+}
+
+/*
+ * A player on game day, starter or bench alike: his points at 18px/800 on the right, his projection
+ * under them, and a 3px meter of how much of it he has. The tick marks where the game clock says he
+ * should be. Pace sets the ink: behind in Reach Red ink, ahead in Signal Green, and past his whole
+ * projection ("boom") the row takes a 7% green wash and the number flares once.
+ */
+.scoreList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+.scoreRow {
+  --pace: var(--color-text);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+}
+.scoreRow[data-slotted="true"] {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+}
+.scoreRow + .scoreRow {
+  border-top: 1px solid var(--color-row-line);
+}
+.scoreRow[data-pace="pre"] {
+  --pace: var(--color-muted);
+}
+.scoreRow[data-pace="behind"] {
+  --pace: var(--color-reach-ink);
+}
+.scoreRow[data-pace="ahead"],
+.scoreRow[data-pace="boom"] {
+  --pace: var(--color-mine);
+}
+.scoreRow[data-pace="boom"] {
+  background: color-mix(in srgb, var(--color-mine) 7%, transparent);
+}
+.scoreSlot {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.scoreCell {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 64px;
+}
+.scoreNow {
+  color: var(--pace);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.scoreRow[data-pace="pre"] .scoreNow {
+  font-size: 15px;
+  font-weight: 600;
+}
+.scoreRow[data-pace="boom"] .scoreNow {
+  animation: boom 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.scoreProj {
+  color: var(--color-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.scoreOver {
+  color: var(--color-mine);
+  font-weight: 700;
+}
+.paceMeter {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 2px;
+  background: var(--color-line);
+}
+.paceFill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--pace);
+}
+.paceTick {
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 7px;
+  background: var(--color-text);
+  opacity: 0.7;
+}
+.lineupTools {
+  justify-self: start;
+}
+.backToGame {
+  margin-bottom: 14px;
+}
+
+@media (max-width: 767px) {
+  .scoreBig {
+    font-size: 34px;
+  }
+  .scoreSides {
+    padding: 12px 14px 8px;
+  }
+  .lineupTools,
+  .backToGame {
+    min-height: 44px;
+    width: 100%;
+  }
+}
+
+@keyframes boom {
+  0% {
+    transform: scale(1);
+    text-shadow: 0 0 0 transparent;
+  }
+  35% {
+    transform: scale(1.18);
+    text-shadow: 0 0 14px color-mix(in srgb, var(--color-mine) 70%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    text-shadow: 0 0 0 transparent;
+  }
+}
+
 .tag {
   flex-shrink: 0;
   padding: 0 5px;
@@ -1954,7 +2161,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .gainNumber,
-  .gain[data-level="must"][data-sign="gain"] {
+  .gain[data-level="must"][data-sign="gain"],
+  .scoreRow[data-pace="boom"] .scoreNow {
     animation: none;
   }
 }

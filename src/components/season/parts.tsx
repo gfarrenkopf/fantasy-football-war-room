@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
-import type { Standing } from "@/lib/season/types";
+import type { LineupSlot, Standing } from "@/lib/season/types";
 import type { ViewPlayer } from "@/lib/season/view";
 import { Check, Lock, Note } from "./Icons";
 import s from "./season.module.css";
@@ -21,6 +21,20 @@ export function recordText(standing: Standing, teams: number): string {
   const record = `${standing.wins}–${standing.losses}${standing.ties ? `–${standing.ties}` : ""}`;
   return standing.seed ? `${record}, ${ordinal(standing.seed)} of ${teams}` : record;
 }
+/** Slot names as ESPN shows them. */
+export const SLOT_LABEL: Record<LineupSlot, string> = {
+  QB: "QB",
+  RB: "RB",
+  WR: "WR",
+  TE: "TE",
+  FLEX: "FLEX",
+  SUPERFLEX: "OP",
+  DST: "D/ST",
+  K: "K",
+  BN: "Bench",
+  IR: "IR",
+};
+
 export const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
 
 /** ESPN's injury designations as the short tags ESPN itself shows. */
@@ -80,24 +94,28 @@ const kickoffTime = (iso: string) => new Date(iso).toLocaleString([], { weekday:
 
 /**
  * The player's NFL game this week: who it's against (APE-211) and where it stands (APE-196). Before
- * kickoff, the opponent and kickoff in muted ink; while it's on, the clock in Terminal Sky behind a
- * still dot; once it's over, a muted "Final". Nothing when the scoreboard didn't load.
+ * kickoff, the opponent and kickoff in muted ink; while it's on, the score from his team's side and
+ * the clock in Terminal Sky behind a still dot; once it's over, a muted "W 24–17 · Final" (APE-228).
+ * Nothing when the scoreboard didn't load.
  */
 export function GameStatus({ player }: { player: ViewPlayer }) {
   const game = player.game;
   if (!game) return null;
   const opponent = game.opponent && `${game.home ? "vs" : "@"} ${game.opponent}`;
+  const score = game.score && `${game.score.team}–${game.score.opponent}`;
   if (game.state === "in") {
     return (
       <span className={s.live}>
         <span className={s.liveDot} aria-hidden />
         <span className="sr-only">Playing now: </span>
-        {opponent && `${opponent} · `}
-        {game.detail || "Live"}
+        {[opponent, score, game.detail || "Live"].filter(Boolean).join(" · ")}
       </span>
     );
   }
-  if (game.state === "post") return <span className={s.final}>{[opponent, game.detail || "Final"].filter(Boolean).join(" · ")}</span>;
+  if (game.state === "post") {
+    const result = game.score && `${game.score.team > game.score.opponent ? "W" : game.score.team < game.score.opponent ? "L" : "T"} ${score}`;
+    return <span className={s.final}>{[opponent, result, game.detail || "Final"].filter(Boolean).join(" · ")}</span>;
+  }
   return (
     <span className={s.pregame}>
       {opponent}

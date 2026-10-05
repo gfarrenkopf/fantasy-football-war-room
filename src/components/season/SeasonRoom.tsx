@@ -13,6 +13,7 @@ import { ArrowLeft, ChevronDown, Refresh } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
+import { GameDayPanel } from "./GameDayPanel";
 import { useLivePolling } from "./useLivePolling";
 import { WaiverPanel } from "./WaiverPanel";
 import s from "./season.module.css";
@@ -70,6 +71,8 @@ export function SeasonRoom(props: Props) {
   const ai = "view" in props ? props.ai : null;
   const checkout = useCheckoutReturn(ai, "view" in props ? props.checkout : null);
   const phase = "view" in props ? props.phase : "lineup";
+  // On game day the first tab is the scoreboard; the lineup tools are a tap away for players still to play.
+  const [tools, setTools] = useState(false);
   useLivePolling(!!view && matchupLive(view));
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
@@ -124,8 +127,17 @@ export function SeasonRoom(props: Props) {
               </p>
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-              {tab === "lineup" ? (
-                <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
+              {tab === "lineup" && props.phase !== "lineup" && !tools ? (
+                <GameDayPanel view={props.view} phase={props.phase} onLineupTools={() => setTools(true)} />
+              ) : tab === "lineup" ? (
+                <>
+                  {props.phase !== "lineup" && (
+                    <button type="button" className={`${s.button} ${s.backToGame}`} onClick={() => setTools(false)}>
+                      Back to game day
+                    </button>
+                  )}
+                  <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
+                </>
               ) : tab === "trade" ? (
                 <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : (
