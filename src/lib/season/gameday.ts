@@ -3,9 +3,10 @@ import type { SeasonView, ViewPlayer } from "./view";
 
 /**
  * Game day (APE-226, APE-227). While any of the user's players is in a game, the season page is a
- * scoreboard rather than a lineup tool; once they're all final it shows the week's result, until
- * Tuesday morning brings the lineup tools back for the next week. Between game windows (Friday, a
- * Sunday morning) the page stays on the lineup, which is what those hours are for.
+ * scoreboard rather than a lineup tool; once the starters are all final it shows the week's result,
+ * until Tuesday morning brings the lineup tools back for the next week. Before Sunday (a Friday after
+ * the Thursday game, a Sunday morning) the page stays on the lineup, which is what those hours are
+ * for; from Sunday's games on it stays the scoreboard, Sunday night waiting on Monday included.
  */
 
 export type GameDayPhase = "lineup" | "live" | "results";
@@ -17,6 +18,9 @@ export type Pace = "pre" | "behind" | "on" | "ahead" | "boom";
 const RESET_ZONE = "America/New_York";
 const RESET_WEEKDAY = 2;
 const RESET_HOUR = 6;
+
+/** Sunday and Monday, Eastern: once a game on these days is final, the week is under way. */
+const GAME_DAYS = new Set([0, 1]);
 
 const QUARTER_SECONDS = 15 * 60;
 const REGULATION_SECONDS = 4 * QUARTER_SECONDS;
@@ -34,10 +38,17 @@ const starting = (roster: readonly ViewPlayer[]) => roster.filter((p) => p.slot 
 const rosterOf = (view: SeasonView, teamId: number) => view.teams.find((t) => t.id === teamId)?.roster ?? [];
 
 export function gameDayPhase(view: SeasonView, now: number): GameDayPhase {
-  const games = active(rosterOf(view, view.myTeamId)).flatMap((p) => (p.game ? [p.game] : []));
+  const roster = active(rosterOf(view, view.myTeamId));
+  const games = roster.flatMap((p) => (p.game ? [p.game] : []));
   if (games.some((g) => g.state === "in")) return "live";
-  if (!games.length || games.some((g) => g.state !== "post")) return "lineup";
+  // Only starters score, and once they're all final no bench player can be swapped in.
+  const starterGames = starting(roster).flatMap((p) => (p.game ? [p.game] : []));
+  if (!starterGames.length) return "lineup";
   const kickoffs = games.flatMap((g) => (g.kickoff ? [Date.parse(g.kickoff)] : []));
+  if (starterGames.some((g) => g.state !== "post")) {
+    const played = games.flatMap((g) => (g.state === "post" && g.kickoff ? [Date.parse(g.kickoff)] : []));
+    return played.some((at) => GAME_DAYS.has(wallClock(at).weekday)) ? "live" : "lineup";
+  }
   // Without kickoffs there's no Tuesday to count to; ESPN moving to the next week ends the results instead.
   if (!kickoffs.length) return "results";
   return now < nextReset(Math.max(...kickoffs)) ? "results" : "lineup";

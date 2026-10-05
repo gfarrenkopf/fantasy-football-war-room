@@ -1,7 +1,7 @@
 "use client";
 
 import { biggestSurprises, type ProjectionAccuracy, type ProjectionCall } from "@/lib/season/accuracy";
-import { gameProgress, leftToPlay, matchupDecided, pace, type GameDayPhase, type Pace } from "@/lib/season/gameday";
+import { gameProgress, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type Pace } from "@/lib/season/gameday";
 import { compareLineups } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { MatchupMoment } from "./MatchupMoment";
@@ -112,7 +112,9 @@ function Scoreboard({ view, phase }: { view: SeasonView; phase: Exclude<GameDayP
   const lead = me.points - them.points;
   const decided = matchupDecided(view);
   const theirLeft = leftToPlay(view, them.teamId);
-  const status = phase === "live" ? "Live" : decided ? "Final" : `${theirLeft} left for ${opponent}`;
+  const toPlay = leftToPlay(view, me.teamId) + theirLeft;
+  // Live while a game is on; between games (Sunday night, before Monday's) it says what's left.
+  const status = matchupLive(view) ? "Live" : decided ? "Final" : phase === "live" ? `${toPlay} to play` : `${theirLeft} left for ${opponent}`;
   const win = me.winProbability === null ? null : Math.round(me.winProbability * 100);
   const side = (name: string, team: typeof me, mine: boolean) => {
     const left = leftToPlay(view, team.teamId);
