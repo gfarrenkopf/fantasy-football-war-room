@@ -3,8 +3,9 @@ import type { Db } from "@/lib/db/types";
 import { parseSeasonLeague } from "@/lib/season/espnLeague";
 import type { SeasonLeague } from "@/lib/season/types";
 import { readEspnLeague } from "./leagueReader";
-import { loadLogin, loginStatus, markDisconnected, markVerified } from "./logins";
+import { loadLogin, loginStatus, markVerified } from "./logins";
 import { findSeasonLink } from "./seasonLinks";
+import { createSessionCheck } from "./sessionCheck";
 
 /**
  * Every team's roster, read from ESPN with the user's stored login (10.4). ESPN is the source of
@@ -43,6 +44,7 @@ export function createSeasonLoader({
   ttlMs = 3 * 60 * 1000,
   cache = new Map(),
 }: { fetchImpl?: typeof fetch; now?: () => Date; ttlMs?: number; cache?: SeasonCache } = {}): SeasonLoader {
+  const signedOut = createSessionCheck({ fetchImpl, now });
 
   return async (db, key, userId, leagueId, { refresh = false, maxAgeMs = ttlMs } = {}) => {
     const link = await findSeasonLink(db, userId, leagueId);
@@ -57,10 +59,8 @@ export function createSeasonLoader({
 
     const read = await readEspnLeague(login, { season: link.season, espnLeagueId: link.espnLeagueId, views: VIEWS }, { fetchImpl });
     if (!read.ok) {
-      if (read.reason === "auth") {
-        await markDisconnected(db, userId, now());
-        return { kind: "disconnected" };
-      }
+      // A refusal ESPN doesn't repeat is served like any other failed read.
+      if (read.reason === "auth" && (await signedOut(db, userId, login, link))) return { kind: "disconnected" };
       if (read.reason === "not-found") return { kind: "invalid", error: `ESPN no longer has league ${link.espnLeagueId} for ${link.season}.` };
       console.warn(`[espn-season] league read failed: ${read.detail}`);
       return hit ? { kind: "ok", ...hit, espnTeamId: link.espnTeamId, stale: true } : { kind: "unavailable" };
