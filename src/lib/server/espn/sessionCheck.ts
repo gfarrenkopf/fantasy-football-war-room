@@ -5,7 +5,7 @@ import { markDisconnected, markVerified, type EspnLogin } from "./logins";
 
 /**
  * One login covers all of a user's leagues, so disconnecting it signs every one of them out until the
- * user clicks the bookmarklet again. That's right when ESPN has ended the session (they signed out,
+ * user uses the bookmark again. That's right when ESPN has ended the session (they signed out,
  * changed their password, or it expired), but a single 401 or 403 can also be ESPN's edge having a
  * moment, or a write ESPN refuses with a 403. So a refusal is confirmed first, with a light read of
  * the same league (APE-244).

@@ -234,7 +234,7 @@ function Problem({ flags, problem }: { flags: PublicFlags; problem: SeasonProble
   }
   const reconnect = (
     <>
-      Open your league on ESPN, click the{" "}
+      Open your league on ESPN, use the{" "}
       <a className={s.link} href="/espn">
         War Room bookmark
       </a>

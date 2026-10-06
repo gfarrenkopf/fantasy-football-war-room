@@ -17,7 +17,7 @@ export type SeasonLoad =
   | { kind: "ok"; league: SeasonLeague; espnTeamId: number; fetchedAt: Date; stale: boolean }
   /** This war room league isn't following an ESPN league. */
   | { kind: "not-linked" }
-  /** No stored login, or ESPN refused it: the user needs to click the bookmarklet again. */
+  /** No stored login, or ESPN refused it: the user needs to use the bookmark again. */
   | { kind: "no-login" }
   | { kind: "disconnected" }
   | { kind: "unavailable" }
