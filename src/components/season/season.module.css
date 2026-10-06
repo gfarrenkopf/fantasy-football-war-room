@@ -356,19 +356,33 @@
 
 /* The lineup's verdict (APE-249): the gain, and under it the total it moves, as loud as the page gets
    after the number itself. */
+/* One axis for the number, the total and its caption: centred, so lines of different widths read as one block. */
 .gainLead {
   grid-row: span 2;
   display: grid;
   gap: 8px;
-  justify-items: start;
+  justify-items: center;
+  text-align: center;
 }
 .gainLead .gainNumber {
+  position: relative;
   grid-row: auto;
+}
+/* Room for the unit that hangs past the digits. */
+.gain:has(.gainLead) {
+  column-gap: 34px;
+}
+/* The unit hangs off the digits, so the digits themselves sit on the axis. */
+.gainLead .gainUnit {
+  position: absolute;
+  left: calc(100% + 5px);
+  bottom: 0.15em;
 }
 .gainShift {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  justify-content: center;
   gap: 2px 6px;
   margin: 0;
   font-size: 22px;
@@ -3350,6 +3364,13 @@ li + li > .pickerOption {
     align-items: flex-end;
     gap: 6px 16px;
     margin-bottom: 4px;
+    text-align: left;
+  }
+  .gainLead .gainShift {
+    justify-content: flex-start;
+  }
+  .gainLead .gainUnit {
+    position: static;
   }
 
   /* The rows come first; the apply panel follows them, with a bar to reach it. */
