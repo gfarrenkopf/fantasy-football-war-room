@@ -90,6 +90,8 @@ function page({
   /** The popup the bridge opens, which it answers through postMessage. */
   const popup = { postMessage: vi.fn() };
   const open = vi.fn(() => popup);
+  /** Where the bridge sends this tab, if anywhere. */
+  const assign = vi.fn<(url: string) => void>();
   const shadow = new FakeEl();
   const keyListeners: ((e: { key: string; preventDefault(): void }) => void)[] = [];
   const document = {
@@ -105,7 +107,7 @@ function page({
   const press = (key: string) => keyListeners.forEach((fn) => fn({ key, preventDefault() {} }));
   const context: Record<string, unknown> = {
     document,
-    location: { hostname: url.hostname, pathname: url.pathname, search: url.search },
+    location: { hostname: url.hostname, pathname: url.pathname, search: url.search, assign },
     sessionStorage: {
       getItem: (k: string) => storage.get(k) ?? null,
       setItem: (k: string, v: string) => storage.set(k, v),
@@ -138,7 +140,7 @@ function page({
     fetch.mock.calls
       .filter(([url, init]) => init && init.body && String(url).endsWith("/frames"))
       .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number; handoverVersion?: number });
-  return { load, bridge, decode, Socket, postMessage, fetch, open, popup, storage, shadow, bodies, press };
+  return { load, bridge, decode, Socket, postMessage, fetch, open, assign, popup, storage, shadow, bodies, press };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -880,55 +882,79 @@ describe("standing down while War Room holds the ESPN connection (APE-168)", () 
   });
 });
 
-describe("connecting the season from an ESPN league page (10.3)", () => {
+describe("connecting the season from an ESPN league page (10.3, APE-298)", () => {
   const LEAGUE_PAGE = "https://fantasy.espn.com/football/team?leagueId=704343562&teamId=2&seasonId=2026";
   const COOKIE = `region=us; espn_s2=AEB%2Fnot-real%3D; SWID=${SWID}; other=1`;
+  const OFFER = { version: 1, lines: ["This tab hands War Room your ESPN login cookies (not your password)."] };
 
-  function connected() {
-    const p = page({ href: LEAGUE_PAGE, cookie: COOKIE });
+  /** A league page whose War Room answers the disclosure GET and the hand-off POST. */
+  function leaguePage(cookie = COOKIE, handoff: () => Response = () => Response.json({ claim: "c0de-claim_123" })) {
+    const p = page({ href: LEAGUE_PAGE, cookie });
+    p.fetch.mockImplementation(async (_url, init) => (init?.method === "POST" ? handoff() : Response.json(OFFER)));
     p.load();
-    p.shadow.querySelector(".sc").onclick!();
     return p;
   }
+  const tap = async (p: ReturnType<typeof page>, sel: string) => {
+    p.shadow.querySelector(sel).onclick!();
+    await vi.advanceTimersByTimeAsync(0);
+  };
+  const posts = (p: ReturnType<typeof page>) => p.fetch.mock.calls.filter(([, init]) => init?.method === "POST");
 
-  it("offers to connect the season, and opens War Room's season popup for this league", () => {
-    const p = connected();
-    expect(p.bridge()).toMatchObject({ onSeasonPage: true, onDraftPage: false });
-    expect(p.open).toHaveBeenCalledWith(`${WAR_ROOM}/espn/season?league=704343562&season=2026`, "warroom-season", expect.any(String));
+  it("shows what War Room asks before anything leaves the page", async () => {
+    const p = leaguePage();
+    expect(p.bridge()).toMatchObject({ onSeasonPage: true, onDraftPage: false, seasonStep: "idle" });
+    await tap(p, ".sc");
+    expect(p.bridge()).toMatchObject({ seasonStep: "offer" });
+    expect(p.shadow.querySelector(".so").hidden).toBe(false);
+    expect(p.shadow.querySelector(".so ul").textContent).toContain("cookies");
+    expect(p.fetch).toHaveBeenCalledWith(`${WAR_ROOM}/api/espn/season/handoff`, expect.objectContaining({ credentials: "omit" }));
+    expect(posts(p)).toEqual([]);
+    expect(p.open).not.toHaveBeenCalled();
   });
 
-  it("hands the login only to its own popup, only when asked, and only to War Room's origin", async () => {
-    const p = connected();
-    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, { other: "window" });
-    p.postMessage({ type: "warroom-season-login?" }, "https://evil.example", p.popup);
-    expect(p.popup.postMessage).not.toHaveBeenCalled();
-    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, p.popup);
-    expect(p.popup.postMessage).toHaveBeenCalledWith(
-      { type: "warroom-season-login", espnLeagueId: "704343562", season: 2026, login: { espnS2: "AEB%2Fnot-real%3D", swid: SWID } },
-      WAR_ROOM,
-    );
-    // Nothing goes anywhere else: no request to War Room or ESPN carries it.
-    await vi.advanceTimersByTimeAsync(300);
+  it("hands the login to War Room once the user agrees, then opens War Room in this tab to claim it", async () => {
+    const p = leaguePage();
+    await tap(p, ".sc");
+    await tap(p, ".sy");
+    const [[url, init]] = posts(p);
+    expect(url).toBe(`${WAR_ROOM}/api/espn/season/handoff`);
+    expect(init.credentials).toBe("omit");
+    expect(JSON.parse(String(init.body))).toEqual({ espnLeagueId: "704343562", season: 2026, consentVersion: 1, espnS2: "AEB%2Fnot-real%3D", swid: SWID });
+    expect(p.assign).toHaveBeenCalledWith(`${WAR_ROOM}/espn/season?claim=c0de-claim_123`);
+    expect(p.open).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the user says not now", async () => {
+    const p = leaguePage();
+    await tap(p, ".sc");
+    await tap(p, ".sn");
+    expect(p.bridge()).toMatchObject({ seasonStep: "idle" });
+    expect(p.shadow.querySelector(".so").hidden).toBe(true);
+    expect(posts(p)).toEqual([]);
+  });
+
+  it("says when ESPN has no login to give, without asking War Room anything", async () => {
+    const p = leaguePage("region=us");
+    await tap(p, ".sc");
+    expect(p.bridge()).toMatchObject({ seasonStep: "signed-out" });
+    expect(p.shadow.querySelector(".s").textContent).toContain("signed out");
     expect(p.fetch).not.toHaveBeenCalled();
   });
 
-  it("answers nothing before the user has opened the popup", () => {
-    const p = page({ href: LEAGUE_PAGE, cookie: COOKIE });
-    p.load();
-    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, p.popup);
-    expect(p.popup.postMessage).not.toHaveBeenCalled();
-  });
-
-  it("says when ESPN has no login to give, and shows when the season is connected", () => {
-    const p = page({ href: LEAGUE_PAGE, cookie: "region=us" });
-    p.load();
-    p.shadow.querySelector(".sc").onclick!();
-    p.postMessage({ type: "warroom-season-login?" }, WAR_ROOM, p.popup);
-    expect(p.popup.postMessage).toHaveBeenCalledWith(expect.objectContaining({ login: null }), WAR_ROOM);
-    p.postMessage({ type: "warroom-season-connected" }, WAR_ROOM, p.popup);
-    expect(p.bridge()).toMatchObject({ seasonConnected: true });
-    expect(p.shadow.querySelector(".s").textContent).toContain("Connected");
-    expect(p.shadow.querySelector(".sc").hidden).toBe(true);
+  it("shows the current wording again when it changed, and says when War Room can't be reached", async () => {
+    let first = true;
+    const p = leaguePage(COOKIE, () => {
+      if (first) return (first = false), Response.json({ seasonVersion: 2 }, { status: 409 });
+      return new Response(null, { status: 503 });
+    });
+    await tap(p, ".sc");
+    await tap(p, ".sy");
+    expect(p.bridge()).toMatchObject({ seasonStep: "offer" });
+    expect(p.assign).not.toHaveBeenCalled();
+    await tap(p, ".sy");
+    expect(p.bridge()).toMatchObject({ seasonStep: "failed" });
+    expect(p.shadow.querySelector(".s").textContent).toContain("Couldn't reach War Room");
+    expect(p.assign).not.toHaveBeenCalled();
   });
 
   it("never offers it in the draft room", () => {
@@ -938,4 +964,3 @@ describe("connecting the season from an ESPN league page (10.3)", () => {
     expect(p.shadow.querySelector(".sc").hidden).toBe(true);
   });
 });
-

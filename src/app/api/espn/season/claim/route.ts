@@ -9,8 +9,9 @@ import { error, json, readJson } from "@/lib/server/http";
  * POST /api/espn/season/claim { claim } → { leagueId, created }
  *
  * The season page (src/app/espn/season/page.tsx) claiming the ESPN login the bridge handed off
- * (APE-297) for the signed-in user, then connecting the season with it exactly as
- * /api/espn/season/connect does. The claim is used up unless ESPN couldn't be reached, so the user
+ * (APE-297) for the signed-in user, then connecting the season with it (connectSeason()). One tap
+ * on the page, not on load, so a link can't connect someone else's ESPN login to a user's account
+ * behind their back. The claim is used up unless ESPN couldn't be reached, so the user
  * can retry that; 410 when it's unknown or expired, so the page can send them back to the bookmark.
  */
 export const POST = withUser<unknown>(async (request, _ctx, { db, userId, email }) => {

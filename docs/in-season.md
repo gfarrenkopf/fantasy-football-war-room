@@ -41,7 +41,12 @@ ESPN's own projections, behind a `ProjectionSource` interface so a paid source (
 
 ## 3. Connecting a league
 
-The bookmarklet, clicked once on an ESPN league page, reads `espn_s2` and `SWID` from `document.cookie` (neither is `HttpOnly`) and hands them to War Room together with `mSettings`, after a consent screen.
+The bookmarklet, run once on an ESPN league page, reads `espn_s2` and `SWID` from `document.cookie` (neither is `HttpOnly`) and hands them to War Room after the user agrees in its overlay. Everything happens in that one tab, so it works on a phone (APE-254):
+
+1. The overlay shows the season disclosure, fetched from `GET /api/espn/season/handoff` so its wording lives only in `src/lib/espn/disclosure.ts`.
+2. On agree, the bridge posts the cookies, league id and season to `POST /api/espn/season/handoff`. No War Room session reaches ESPN's site, so this only parks them as a one-time **claim** (`espn_login_claims`, `loginClaims.ts`): sealed under the SHA-256 of a random code, gone after 15 minutes, with the table capped.
+3. The bridge sends the tab to `/espn/season?claim=<code>`. There the user signs in if they need to (the magic link and Google both come back to this page, even from another browser; a brand-new account is sent back from the welcome) and taps Connect, which posts the claim to `/api/espn/season/claim`. That reads the league with the login (`mSettings`, `mTeam`, `mDraftDetail`), checks the user owns a team in it, and only then stores it. The tap, rather than claiming on load, keeps a link from attaching someone else's ESPN login to a user's account.
+4. A claim is used up whether connecting works or not, except when ESPN couldn't be reached, so that one can be retried.
 
 - The credential is stored **per user**, sealed with `secretBox`, because one ESPN login covers all of a user's leagues.
 - There's no fixed expiry. A 401 or 403 from ESPN is confirmed with a second, light read of the same league (`mSettings`, `sessionCheck.ts`). Only if ESPN refuses that too is the credential marked disconnected, which asks for one more bookmarklet click. One login covers every league, so a refusal ESPN doesn't repeat is treated as a failed read (served stale or unavailable), or, on a write, as ESPN refusing that change (APE-244).
