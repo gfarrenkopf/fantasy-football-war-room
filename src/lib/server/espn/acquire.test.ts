@@ -29,6 +29,7 @@ const entry = (playerId: number, name: string, slot: LineupSlot, locked = false)
   locked,
   injuryStatus: "ACTIVE",
   actual: null,
+  statLine: null,
   ownership: null,
   news: null,
 });

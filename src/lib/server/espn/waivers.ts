@@ -88,7 +88,7 @@ export async function loadWaivers(db: Db, key: Buffer, userId: string, leagueId:
   const pool = agents.map((a) => ({
     ...scorePlayer(
       league,
-      { ...a, slot: "BN" as const, espnSlotId: 20, locked: false, actual: null, news: null },
+      { ...a, slot: "BN" as const, espnSlotId: 20, locked: false, actual: null, statLine: null, news: null },
       projections.get(a.playerId),
       games,
     ),

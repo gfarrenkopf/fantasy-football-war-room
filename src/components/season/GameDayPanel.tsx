@@ -5,7 +5,7 @@ import { gameProgress, leftToPlay, matchupDecided, matchupLive, pace, type GameD
 import { compareLineups } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { MatchupMoment } from "./MatchupMoment";
-import { PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
+import { PlayerLine, posLabel, pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
 
 /** What the pace meter says, for a screen reader. */
@@ -234,7 +234,7 @@ function EspnCall({ view, accuracy }: { view: SeasonView; accuracy: ProjectionAc
   );
 }
 
-/** One player on game day: his line and game on the left, his points large on the right over his projection and pace. */
+/** One player on game day: his line, game and stats on the left, his points large on the right over his projection and pace. */
 function ScoreRow({ player, slot }: { player: ViewPlayer; slot?: string }) {
   const level = pace(player);
   const started = level !== "pre";
@@ -244,7 +244,8 @@ function ScoreRow({ player, slot }: { player: ViewPlayer; slot?: string }) {
   return (
     <li className={s.scoreRow} data-pace={level} data-slotted={slot !== undefined}>
       {slot !== undefined && <span className={s.scoreSlot}>{slot}</span>}
-      <PlayerLine player={player} value="none" news live />
+      {/* A slot that names his position says it already; the bench and FLEX/OP still show it. */}
+      <PlayerLine player={player} value="none" news live stats pos={slot !== posLabel(player.pos)} />
       <span className={s.scoreCell}>
         {/* Keyed on boom, so the flare plays once when he passes his projection, not on every refresh. */}
         <b key={level === "boom" ? "boom" : "pts"} className={`${s.scoreNow} tabular-nums`}>

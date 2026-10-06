@@ -21,6 +21,9 @@ export function recordText(standing: Standing, teams: number): string {
   const record = `${standing.wins}–${standing.losses}${standing.ties ? `–${standing.ties}` : ""}`;
   return standing.seed ? `${record}, ${ordinal(standing.seed)} of ${teams}` : record;
 }
+/** A position as ESPN writes it. */
+export const posLabel = (pos: ViewPlayer["pos"]) => (pos === "DST" ? "D/ST" : pos);
+
 /** Slot names as ESPN shows them. */
 export const SLOT_LABEL: Record<LineupSlot, string> = {
   QB: "QB",
@@ -158,7 +161,7 @@ function NewsNote({ player }: { player: ViewPlayer }) {
   );
 }
 
-/** A player's name, injury tag and lock, over their position, team and projection. */
+/** A player's name, injury tag and lock, over their position, team and projection, and on game day what he's done. */
 export function PlayerLine({
   player,
   tone = "same",
@@ -167,6 +170,8 @@ export function PlayerLine({
   live = false,
   news = false,
   ownership = false,
+  pos = true,
+  stats = false,
 }: {
   player: ViewPlayer;
   tone?: "same" | "out" | "in";
@@ -179,6 +184,10 @@ export function PlayerLine({
   news?: boolean;
   /** Add how widely he's rostered and started across ESPN. */
   ownership?: boolean;
+  /** Show his position. Off where a slot label already says it; his team then leads his game (APE-247). */
+  pos?: boolean;
+  /** Add a line of the stats behind his points once his game starts (APE-247). */
+  stats?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = player.points === 0 && player.projected;
@@ -202,10 +211,19 @@ export function PlayerLine({
         )}
       </span>
       <span className={s.facts}>
-        <span className={s.pos} data-pos={player.pos}>
-          {player.pos === "DST" ? "D/ST" : player.pos}
-        </span>{" "}
-        · {player.team ?? "FA"}
+        {(pos || !status) && (
+          <>
+            {pos && (
+              <>
+                <span className={s.pos} data-pos={player.pos}>
+                  {posLabel(player.pos)}
+                </span>{" "}
+                ·{" "}
+              </>
+            )}
+            {player.team ?? "FA"}
+          </>
+        )}
         {value === "points" &&
           (started ? (
             <span className={s.factsPoints}>
@@ -224,7 +242,7 @@ export function PlayerLine({
           ))}
         {status && (
           <span className={s.factsGame}>
-            <span className={s.factsSep}> · </span>
+            {pos ? <span className={s.factsSep}> · </span> : `${player.team ?? "FA"} `}
             <GameStatus player={player} />
           </span>
         )}
@@ -235,6 +253,7 @@ export function PlayerLine({
           </span>
         )}
       </span>
+      {stats && player.statLine && <span className={`${s.factsStats} tabular-nums`}>{player.statLine}</span>}
     </span>
   );
 }

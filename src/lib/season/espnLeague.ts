@@ -2,7 +2,8 @@ import type { RosterSlotKey } from "@/lib/draft/types";
 import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
-import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingClaim, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, Waivers } from "./types";
+import { summarizeStats } from "./statLine";
+import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingClaim, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, StatLine, Waivers } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -40,13 +41,18 @@ export const ESPN_SLOT_ID: Readonly<Record<RosterSlotKey | "IR", number>> = {
   IR,
 };
 
-/** The player's league-scored actual points for one NFL week: the stat row ESPN keys by game. */
-function actualPoints(stats: unknown, season: number, week: number): number | null {
-  if (!Array.isArray(stats)) return null;
-  const row = stats.find(
+/** The player's actual row for one NFL week: league-scored points and raw stats, keyed by game. */
+function actualRow(stats: unknown, season: number, week: number): Record<string, unknown> | undefined {
+  if (!Array.isArray(stats)) return undefined;
+  return stats.find(
     (s) => isObject(s) && s.statSourceId === 0 && s.statSplitTypeId === 1 && s.seasonId === season && s.scoringPeriodId === week && typeof s.appliedTotal === "number",
   );
-  return row ? Math.round(row.appliedTotal * 100) / 100 : null;
+}
+
+/** A raw stat map with anything that isn't a finite number left out. */
+function statLineOf(raw: unknown): StatLine {
+  if (!isObject(raw)) return {};
+  return Object.fromEntries(Object.entries(raw).filter((e): e is [string, number] => typeof e[1] === "number" && Number.isFinite(e[1])));
 }
 
 /** % rostered and % started across ESPN, rounded: a market signal, not a fact about this league. */
@@ -70,6 +76,7 @@ function parseEntry(raw: unknown, season: number, week: number): RosterEntry | n
   const pos = typeof player.defaultPositionId === "number" ? ESPN_POSITIONS[player.defaultPositionId] : undefined;
   const slot: LineupSlot | undefined = raw.lineupSlotId === IR ? "IR" : SLOT_BY_ESPN_ID[raw.lineupSlotId];
   if (!pos || !slot) return null;
+  const actual = actualRow(player.stats, season, week);
   const injury = typeof player.injuryStatus === "string" ? player.injuryStatus : typeof raw.injuryStatus === "string" ? raw.injuryStatus : "ACTIVE";
   return {
     playerId: raw.playerId,
@@ -81,7 +88,8 @@ function parseEntry(raw: unknown, season: number, week: number): RosterEntry | n
     locked: pool.lineupLocked === true,
     ...(pool.tradeLocked === true ? { tradeLocked: true } : {}),
     injuryStatus: injury,
-    actual: actualPoints(player.stats, season, week),
+    actual: actual ? Math.round((actual.appliedTotal as number) * 100) / 100 : null,
+    statLine: actual ? summarizeStats(pos, statLineOf(actual.stats), statLineOf(actual.appliedStats)) : null,
     ownership: ownershipOf(player.ownership),
     news: newsOf(player, week),
   };

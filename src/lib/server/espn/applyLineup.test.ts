@@ -29,6 +29,7 @@ const entry = (playerId: number, name: string, pos: RosterEntry["pos"], slot: Li
   locked,
   injuryStatus: "ACTIVE",
   actual: null,
+  statLine: null,
   ownership: null,
   news: null,
 });
