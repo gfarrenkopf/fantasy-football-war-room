@@ -40,18 +40,19 @@ const rosterOf = (view: SeasonView, teamId: number) => view.teams.find((t) => t.
 export function gameDayPhase(view: SeasonView, now: number): GameDayPhase {
   const roster = active(rosterOf(view, view.myTeamId));
   const games = roster.flatMap((p) => (p.game ? [p.game] : []));
-  if (games.some((g) => g.state === "in")) return "live";
-  // Only starters score, and once they're all final no bench player can be swapped in.
-  const starterGames = starting(roster).flatMap((p) => (p.game ? [p.game] : []));
-  if (!starterGames.length) return "lineup";
   const kickoffs = games.flatMap((g) => (g.kickoff ? [Date.parse(g.kickoff)] : []));
-  if (starterGames.some((g) => g.state !== "post")) {
-    const played = games.flatMap((g) => (g.state === "post" && g.kickoff ? [Date.parse(g.kickoff)] : []));
-    return played.some((at) => GAME_DAYS.has(wallClock(at).weekday)) ? "live" : "lineup";
+  // Only starters score, and once they're all final no bench player can be swapped in: a bench
+  // player still playing Monday night doesn't hold the result back (APE-245).
+  const starterGames = starting(roster).flatMap((p) => (p.game ? [p.game] : []));
+  if (starterGames.length && starterGames.every((g) => g.state === "post")) {
+    // Without kickoffs there's no Tuesday to count to; ESPN moving to the next week ends the results instead.
+    if (!kickoffs.length) return "results";
+    return now < nextReset(Math.max(...kickoffs)) ? "results" : "lineup";
   }
-  // Without kickoffs there's no Tuesday to count to; ESPN moving to the next week ends the results instead.
-  if (!kickoffs.length) return "results";
-  return now < nextReset(Math.max(...kickoffs)) ? "results" : "lineup";
+  if (games.some((g) => g.state === "in")) return "live";
+  if (!starterGames.length) return "lineup";
+  const played = games.flatMap((g) => (g.state === "post" && g.kickoff ? [Date.parse(g.kickoff)] : []));
+  return played.some((at) => GAME_DAYS.has(wallClock(at).weekday)) ? "live" : "lineup";
 }
 
 /** How much of the game has been played, 0–1. Overtime counts as all of it. */
