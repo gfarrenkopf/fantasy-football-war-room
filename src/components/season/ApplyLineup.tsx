@@ -7,6 +7,7 @@ import { irEligible, label, snapshotOf } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { Check } from "./Icons";
+import { signed } from "./parts";
 import s from "./season.module.css";
 import type { Landed, LineupDraft } from "./useLineupDraft";
 import { WriteConsent } from "./WriteConsent";
@@ -17,7 +18,23 @@ import { WriteConsent } from "./WriteConsent";
  * server re-reads ESPN, writes the chosen moves in one transaction, and reads ESPN back to show which
  * landed. Moves left out stay staged for later. Nothing here ever writes on its own.
  */
-export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { draft: LineupDraft; view: SeasonView; leagueId: string; agreed: boolean }) {
+export function ApplyLineup({
+  draft,
+  view,
+  leagueId,
+  agreed: agreedAtLoad,
+  done = false,
+  banked = 0,
+}: {
+  draft: LineupDraft;
+  view: SeasonView;
+  leagueId: string;
+  agreed: boolean;
+  /** ESPN has War Room's lineup (APE-294): the panel's title says so, and nothing here repeats it. */
+  done?: boolean;
+  /** What War Room's moves banked this week. */
+  banked?: number;
+}) {
   const router = useRouter();
   const [agreed, setAgreed] = useState(agreedAtLoad);
   const [consenting, setConsenting] = useState(false);
@@ -97,10 +114,17 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
 
   return (
     <div className={s.apply}>
-      {landed && <Results moves={landed} line={moveLine} />}
+      {landed && !(done && landed.every((m) => m.landed)) && <Results moves={landed} line={moveLine} />}
 
       {moves.length === 0 ? (
-        <p className={s.fine}>ESPN already has this lineup. Tap a slot to change anything, starters or bench.</p>
+        <>
+          {done && banked >= 0.05 && (
+            <p className={s.applyBanked}>
+              Every War Room move is in, worth <b className="tabular-nums">{signed(banked)}</b> projected this week.
+            </p>
+          )}
+          <p className={s.fine}>{done ? "" : "ESPN already has this lineup. "}Tap a slot to change anything, starters or bench.</p>
+        </>
       ) : (
         <>
           {picked.length > 0 && (

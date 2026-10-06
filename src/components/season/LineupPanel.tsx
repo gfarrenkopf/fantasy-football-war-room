@@ -11,6 +11,7 @@ import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
 import { ArrowLeft, ArrowRight, Check, External } from "./Icons";
 import { Gain, hasStarted, INJURY_TAG, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
+import { Banked, LockIn } from "./LockIn";
 import s from "./season.module.css";
 import { useLineupDraft, type LineupDraft } from "./useLineupDraft";
 
@@ -61,68 +62,100 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
   const bench = draft.roster.filter((p) => p.slot === "BN").sort((a, b) => b.points - a.points);
   const ir = draft.roster.filter((p) => p.slot === "IR");
   const espnTeam = `https://fantasy.espn.com/football/team?leagueId=${view.espnLeagueId}&seasonId=${view.season}&teamId=${view.myTeamId}`;
+  // What War Room's moves have already banked this week (APE-256), so the verdict keeps the reward.
+  const banked = view.warRoomMoves.reduce((sum, m) => sum + m.gain, 0);
+  // War Room's rows draw their bars in as the lineup locks (APE-294).
+  // Nothing left to suggest and nothing staged: the lineup on ESPN is War Room's.
+  const onWarRooms = !suggested && draft.moves.length === 0;
+  const fresh = new Set(draft.moment?.warRoom.map((m) => m.playerId));
   const reviewable = draft.chosen.length > 0 && draft.problems.length === 0 && draft.phase.kind === "idle" && !panelInView;
 
   return (
     <div className={s.lineup}>
       <div className={s.stack}>
-        <Gain
-          className={s.orderGain}
-          level={level}
-          value={gain}
-          unit="pts"
-          headline={HEADLINE[level]}
-          aside={
-            suggested && (
-              <p className={s.gainShift}>
-                <span className={s.gainShiftFrom}>
-                  <span className="tabular-nums">{pts(lineup.currentTotal)}</span> →
-                </span>{" "}
-                <b className="tabular-nums">{pts(lineup.total)}</b>
-                <span className={s.gainShiftNote}>projected · week {view.currentWeek}</span>
-              </p>
-            )
-          }
-          detail={
-            suggested ? (
-              <ul className={s.gainMoves}>
-                {suggestions.map((m) => (
-                  <li key={m.key}>
-                    <span className={s.gainMoveText}>
-                      {m.into ? (
-                        <>
-                          Start <b>{m.into.name}</b>
-                        </>
-                      ) : (
-                        <>Leave {m.slot} empty</>
-                      )}
-                      {m.out && (
-                        <>
-                          {" "}
-                          over {m.out.name}
-                          {m.tag && (
-                            <>
-                              {" "}
-                              <span className={s.tag} data-kind="out">
-                                {m.tag}
-                              </span>
-                            </>
-                          )}
-                        </>
-                      )}
+        {draft.moment ? (
+          <LockIn
+            className={s.orderGain}
+            moment={draft.moment}
+            settled={draft.momentSettled}
+            left={suggestions}
+            leftGain={suggested ? gain : 0}
+            name={(id) => byId.get(id)?.name ?? `Player ${id}`}
+            leagueId={leagueId}
+            season={view.season}
+            week={view.currentWeek}
+            onFinish={() => {
+              draft.startFrom(draft.recommended);
+              draft.setPhase({ kind: "review" });
+              document.getElementById("apply-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
+        ) : !suggested && banked >= 0.05 ? (
+          <Banked className={s.orderGain} moves={view.warRoomMoves} total={lineup.total} week={view.currentWeek} name={(id) => byId.get(id)?.name ?? `Player ${id}`} />
+        ) : (
+          <Gain
+            className={s.orderGain}
+            level={level}
+            value={gain}
+            unit="pts"
+            headline={HEADLINE[level]}
+            aside={
+              suggested && (
+                <p className={s.gainShift}>
+                  <span className={s.gainShiftFrom}>
+                    <span className="tabular-nums">{pts(lineup.currentTotal)}</span> →
+                  </span>{" "}
+                  <b className="tabular-nums">{pts(lineup.total)}</b>
+                  <span className={s.gainShiftNote}>projected · week {view.currentWeek}</span>
+                  {banked >= 0.05 && (
+                    <span className={s.gainShiftNote}>
+                      <span className="tabular-nums">{signed(banked)}</span> already banked
                     </span>
-                    <b className={`${s.gainMoveGain} tabular-nums`}>{signed(m.gain)}</b>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <>
-                <b className="tabular-nums">{pts(lineup.total)}</b> projected points in week {view.currentWeek}. Check back before kickoff: injury news can
-                change it.
-              </>
-            )
-          }
-        />
+                  )}
+                </p>
+              )
+            }
+            detail={
+              suggested ? (
+                <ul className={s.gainMoves}>
+                  {suggestions.map((m) => (
+                    <li key={m.key}>
+                      <span className={s.gainMoveText}>
+                        {m.into ? (
+                          <>
+                            Start <b>{m.into.name}</b>
+                          </>
+                        ) : (
+                          <>Leave {m.slot} empty</>
+                        )}
+                        {m.out && (
+                          <>
+                            {" "}
+                            over {m.out.name}
+                            {m.tag && (
+                              <>
+                                {" "}
+                                <span className={s.tag} data-kind="out">
+                                  {m.tag}
+                                </span>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </span>
+                      <b className={`${s.gainMoveGain} tabular-nums`}>{signed(m.gain)}</b>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <>
+                  <b className="tabular-nums">{pts(lineup.total)}</b> projected points in week {view.currentWeek}. Check back before kickoff: injury news can
+                  change it.
+                </>
+              )
+            }
+          />
+        )}
 
         <section className={`${s.panel} ${s.orderTable}`} aria-labelledby="starters-title">
           <div className={s.panelHead}>
@@ -136,7 +169,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           </div>
           <ul className={s.rows}>
             {draft.seats.map((key, i) => (
-              <StarterRow key={`${key}-${i}`} draft={draft} seat={i} made={view.warRoomMoves} />
+              <StarterRow key={`${key}-${i}`} draft={draft} seat={i} made={view.warRoomMoves} fresh={fresh} />
             ))}
           </ul>
         </section>
@@ -168,13 +201,14 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
       </div>
 
       <div className={s.stack}>
-        <section id="apply-panel" className={`${s.panel} ${s.orderMoves}`} aria-labelledby="moves-title">
+        <section id="apply-panel" className={`${s.panel} ${s.orderMoves}`} data-done={onWarRooms || undefined} aria-labelledby="moves-title">
           <div className={s.panelHead}>
-            <h2 id="moves-title" className={s.panelTitle}>
-              {draft.moves.length ? "Make these moves on ESPN" : "Nothing to change on ESPN"}
+            <h2 id="moves-title" className={`${s.panelTitle} ${s.applyTitle}`}>
+              {onWarRooms && <Check />}
+              {draft.moves.length ? "Make these moves on ESPN" : onWarRooms ? "ESPN has War Room's lineup" : "Nothing to change on ESPN"}
             </h2>
           </div>
-          <ApplyLineup draft={draft} view={view} leagueId={leagueId} agreed={writeConsented} />
+          <ApplyLineup draft={draft} view={view} leagueId={leagueId} agreed={writeConsented} done={onWarRooms} banked={banked} />
           <a className={s.applyEspn} href={espnTeam} target="_blank" rel="noreferrer">
             Open my team on ESPN <External />
           </a>
@@ -253,7 +287,7 @@ function Points({ player, delta }: { player: ViewPlayer; delta?: number }) {
  * War Room got into this seat this week is marked with a tint and a bar (APE-256); what the move was
  * worth opens from the bar and his points, and is read out to screen readers.
  */
-function StarterRow({ draft, seat, made }: { draft: LineupDraft; seat: number; made: readonly WarRoomMove[] }) {
+function StarterRow({ draft, seat, made, fresh }: { draft: LineupDraft; seat: number; made: readonly WarRoomMove[]; fresh: ReadonlySet<number> }) {
   const key = draft.seats[seat];
   const now = draft.onEspn[seat] === null ? undefined : draft.byId.get(draft.onEspn[seat]!);
   const next = draft.staged[seat] === null ? undefined : draft.byId.get(draft.staged[seat]!);
@@ -265,7 +299,14 @@ function StarterRow({ draft, seat, made }: { draft: LineupDraft; seat: number; m
   const ours = !changed && now ? made.find((m) => m.playerId === now.playerId && m.slot === key) : undefined;
   const delta = (next?.points ?? 0) - (now?.points ?? 0);
   return (
-    <li className={s.row} data-changed={changed} data-skipped={changed && !picked} data-made={!!ours || undefined}>
+    <li
+      className={s.row}
+      data-changed={changed}
+      data-skipped={changed && !picked}
+      data-made={!!ours || undefined}
+      data-fresh={(ours && fresh.has(ours.playerId)) || undefined}
+      style={{ "--seat": seat } as CSSProperties}
+    >
       <span className={s.rowSlot}>
         <SeatPicker draft={draft} seat={seat} label={SLOT_LABEL[key]} />
       </span>
