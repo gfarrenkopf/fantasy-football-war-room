@@ -115,6 +115,13 @@ export function useLineupDraft(view: SeasonView) {
       });
       setPhase({ kind: "idle" });
     },
+    /** Back to War Room's lineup with every change ticked: the way out after leaving everything out. */
+    restore() {
+      setStagedRaw(recommended);
+      setIr(onIr);
+      setSkipped(new Set());
+      edited();
+    },
     startFrom(lineup: readonly (number | null)[]) {
       setStagedRaw([...lineup]);
       setIr(onIr);

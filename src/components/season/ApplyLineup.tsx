@@ -110,13 +110,24 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
               ))}
             </ul>
           )}
-          <p className={s.fine}>
-            {changes.length > picked.length
-              ? `${changes.length - picked.length} left out. Tick its Swap box to put it back.`
-              : changes.length > 1
-                ? "Untick a row's Swap box to leave that change out."
-                : "Untick Swap on the row to leave it out."}
-          </p>
+          {picked.length === 0 ? (
+            <p className={s.fine}>{changes.length === 1 ? "The change is left out." : `All ${changes.length} changes are left out.`}</p>
+          ) : (
+            <p className={s.fine}>
+              {changes.length > picked.length ? (
+                <>
+                  {changes.length - picked.length} left out.{" "}
+                  <button type="button" className={s.textButton} onClick={draft.restore} disabled={phase.kind === "sending"}>
+                    Restore all
+                  </button>
+                </>
+              ) : changes.length > 1 ? (
+                "Untick a row's Swap box to leave that change out."
+              ) : (
+                "Untick Swap on the row to leave it out."
+              )}
+            </p>
+          )}
           {problems.length > 0 && (
             <ul className={s.applyProblems}>
               {problems.map((p) => (
@@ -140,9 +151,14 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
                 </button>
               </div>
             </div>
+          ) : picked.length === 0 ? (
+            // Everything left out: the one useful next step is getting War Room's picks back.
+            <button type="button" className={s.primary} onClick={draft.restore}>
+              Restore War Room&apos;s picks
+            </button>
           ) : (
             <button type="button" className={s.primary} disabled={chosen.length === 0 || problems.length > 0} onClick={() => setPhase({ kind: "review" })}>
-              {picked.length === 0 ? "No changes chosen" : `Review ${count}`}
+              Review {count}
             </button>
           )}
         </>
