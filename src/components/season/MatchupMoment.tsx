@@ -120,7 +120,7 @@ export function MatchupMoment({ leagueId, view, accuracy }: { leagueId: string; 
             </button>
           </div>
         )}
-        <p className={s.momentNext}>Next week&apos;s lineup tools are back Tuesday morning.</p>
+        <p className={s.momentNext}>Next week&apos;s lineup tools are back Tuesday at 1 PM ET.</p>
       </section>
       {open && (
         <WinNight
