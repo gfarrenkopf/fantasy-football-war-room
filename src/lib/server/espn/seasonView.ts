@@ -3,6 +3,7 @@ import type { Db } from "@/lib/db/types";
 import type { PlayerProjections, SeasonLeague } from "@/lib/season/types";
 import { buildSeasonView, type SeasonView } from "@/lib/season/view";
 import { gameDayPhase, inResultHold, matchupLive, type GameDayPhase } from "@/lib/season/gameday";
+import { listLineupMoves } from "../lineupMoves";
 import { getEspnProjections } from "./projections";
 import { getEspnScoreboard } from "./scoreboard";
 import { loadSeason, type SeasonLoad } from "./seasonData";
@@ -41,23 +42,28 @@ export async function loadSeasonView(db: Db, key: Buffer, userId: string, league
   let projections = new Map<number, PlayerProjections>();
   let projectionsMissing = false;
   const fresh = refresh ? { maxAgeMs: 0 } : {};
-  // The scoreboard never fails: without it, live points show without a game status.
-  const [projected, games] = await Promise.all([
+  // The scoreboard never fails: without it, live points show without a game status. Nor do War
+  // Room's moves (APE-256): without them the lineup just doesn't mark them.
+  const [projected, games, moves] = await Promise.all([
     getEspnProjections({ season: season.season, playerIds: ids, fromWeek: season.currentWeek, toWeek: season.finalWeek, ...fresh }).catch((err: Error) => {
       console.warn(`[espn-season] projections unavailable: ${err.message}`);
       projectionsMissing = true;
       return projections;
     }),
     getEspnScoreboard({ season: season.season, week: season.currentWeek, ...fresh }),
+    listLineupMoves(db, leagueId, season.season, season.currentWeek).catch((err: Error) => {
+      console.warn(`[espn-season] War Room's moves unavailable: ${err.message}`);
+      return [];
+    }),
   ]);
   projections = projected;
-  let view = buildSeasonView(season, load.espnTeamId, projections, { games, now: load.fetchedAt.getTime() });
+  let view = buildSeasonView(season, load.espnTeamId, projections, { games, now: load.fetchedAt.getTime(), moves });
   // The cached league is minutes old, but games are on: read it again for the points scored since.
   if (!refresh && matchupLive(view) && Date.now() - load.fetchedAt.getTime() >= LIVE_MAX_AGE_MS) {
     const live = await loadSeason(db, key, userId, leagueId, { maxAgeMs: LIVE_MAX_AGE_MS });
     if (live.kind === "ok" && live.league.currentWeek === season.currentWeek) {
       load = live;
-      view = buildSeasonView(live.league, live.espnTeamId, projections, { games, now: live.fetchedAt.getTime() });
+      view = buildSeasonView(live.league, live.espnTeamId, projections, { games, now: live.fetchedAt.getTime(), moves });
     }
   }
   const now = Date.now();

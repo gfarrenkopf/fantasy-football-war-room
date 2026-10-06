@@ -224,6 +224,21 @@ export function landedMoves(moves: readonly LineupMove[], after: readonly ApplyE
   return moves.map((m) => ({ ...m, landed: slotOf.get(m.playerId) === m.to }));
 }
 
+/** A move the page says War Room suggested, with the projected points it gains (APE-256). */
+export interface SuggestedMove {
+  playerId: number;
+  to: LineupSlot;
+  gain: number;
+}
+
+/** The moves War Room suggested that ESPN shows landed: the page's claim alone never counts. */
+export function madeMoves(moves: readonly (LineupMove & { landed: boolean })[], suggested: readonly SuggestedMove[]): (LineupMove & { gain: number })[] {
+  return moves.flatMap((m) => {
+    const hit = m.landed ? suggested.find((x) => x.playerId === m.playerId && x.to === m.to) : undefined;
+    return hit ? [{ playerId: m.playerId, from: m.from, to: m.to, gain: hit.gain }] : [];
+  });
+}
+
 /**
  * ESPN's refusal of any roster transaction (`409`, `details[].type`) in plain words. Unknown types fall back to ESPN's own message.
  */

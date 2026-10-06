@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alignSeats, checkMoves, chooseSeat, espnRefusal, groupMoves, landedMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
+import { alignSeats, checkMoves, chooseSeat, espnRefusal, groupMoves, landedMoves, madeMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
 
@@ -247,6 +247,24 @@ describe("landedMoves", () => {
     ];
     const after = t.roster.map((p) => (p === t.rb1 ? { ...p, slot: "BN" as const } : p));
     expect(landedMoves(moves, after).map((m) => m.landed)).toEqual([true, false]);
+  });
+});
+
+describe("madeMoves (APE-256)", () => {
+  it("keeps War Room's suggested moves that landed, with their gain", () => {
+    const moves = [
+      { playerId: 1, from: "BN" as const, to: "RB" as const, landed: true },
+      { playerId: 2, from: "RB" as const, to: "BN" as const, landed: true },
+      { playerId: 3, from: "BN" as const, to: "WR" as const, landed: false },
+      { playerId: 4, from: "BN" as const, to: "FLEX" as const, landed: true },
+    ];
+    const suggested = [
+      { playerId: 1, to: "RB" as const, gain: 4.2 },
+      { playerId: 3, to: "WR" as const, gain: 2 },
+      // The page claimed a slot the player didn't go to.
+      { playerId: 4, to: "TE" as const, gain: 9 },
+    ];
+    expect(madeMoves(moves, suggested)).toEqual([{ playerId: 1, from: "BN", to: "RB", gain: 4.2 }]);
   });
 });
 

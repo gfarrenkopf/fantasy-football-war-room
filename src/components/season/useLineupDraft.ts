@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { alignSeats, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats } from "@/lib/season/apply";
+import { alignSeats, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats, type SuggestedMove } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { SeasonView } from "@/lib/season/view";
 
@@ -60,6 +60,13 @@ export function useLineupDraft(view: SeasonView) {
   /** The change each moving player belongs to. */
   const changeOf = new Map(changes.flatMap((g) => g.map((m) => [m.playerId, g] as const)));
   const same = (a: readonly (number | null)[]) => staged.every((id, i) => id === a[i]);
+  // A chosen move is War Room's when it puts the player in the very seat War Room recommended him
+  // for (APE-256). Its gain is that seat's: his projection over the player ESPN has there.
+  const points = (id: number | null) => (id === null ? 0 : (byId.get(id)?.points ?? 0));
+  const suggested: SuggestedMove[] = chosen.flatMap((m) => {
+    const seat = staged.indexOf(m.playerId);
+    return seat >= 0 && recommended[seat] === m.playerId && seats[seat] === m.to ? [{ playerId: m.playerId, to: m.to, gain: Math.round((points(m.playerId) - points(onEspn[seat])) * 100) / 100 }] : [];
+  });
 
   /** Any edit starts over: the review closes and the last apply's results go. */
   const edited = () => {
@@ -79,6 +86,7 @@ export function useLineupDraft(view: SeasonView) {
     changes,
     picked,
     chosen,
+    suggested,
     problems,
     changeOf,
     phase,

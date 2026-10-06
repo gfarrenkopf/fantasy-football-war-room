@@ -6,7 +6,7 @@ import { canPlay } from "@/lib/season/apply";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
-import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
 import { External } from "./Icons";
@@ -87,7 +87,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           </div>
           <ul className={s.rows}>
             {draft.seats.map((key, i) => (
-              <StarterRow key={`${key}-${i}`} draft={draft} seat={i} />
+              <StarterRow key={`${key}-${i}`} draft={draft} seat={i} made={view.warRoomMoves} />
             ))}
           </ul>
         </section>
@@ -198,8 +198,12 @@ function Points({ player, delta }: { player: ViewPlayer; delta?: number }) {
   );
 }
 
-/** One starting seat: ESPN's player, or a swap to the player staged there, ticked to be made. */
-function StarterRow({ draft, seat }: { draft: LineupDraft; seat: number }) {
+/**
+ * One starting seat: ESPN's player, or a swap to the player staged there, ticked to be made. A player
+ * War Room got into this seat this week is marked with a tint and a bar (APE-256); what the move was
+ * worth opens from the bar and his points, and is read out to screen readers.
+ */
+function StarterRow({ draft, seat, made }: { draft: LineupDraft; seat: number; made: readonly WarRoomMove[] }) {
   const key = draft.seats[seat];
   const now = draft.onEspn[seat] === null ? undefined : draft.byId.get(draft.onEspn[seat]!);
   const next = draft.staged[seat] === null ? undefined : draft.byId.get(draft.staged[seat]!);
@@ -208,8 +212,9 @@ function StarterRow({ draft, seat }: { draft: LineupDraft; seat: number }) {
   const picked = group ? draft.isPicked(group) : true;
   const why = changed && now ? outReason(now) : null;
   const shown = next ?? (changed ? undefined : now);
+  const ours = !changed && shown ? made.find((m) => m.playerId === shown.playerId && m.slot === key) : undefined;
   return (
-    <li className={s.row} data-changed={changed} data-skipped={changed && !picked}>
+    <li className={s.row} data-changed={changed} data-skipped={changed && !picked} data-made={!!ours || undefined}>
       <span className={s.rowSlot}>
         <SeatPicker draft={draft} seat={seat} label={SLOT_LABEL[key]} />
         {group && (
@@ -243,8 +248,62 @@ function StarterRow({ draft, seat }: { draft: LineupDraft; seat: number }) {
           <span className={s.fine}>Empty</span>
         )}
       </span>
-      {shown ? <Points player={shown} delta={changed ? shown.points - (now?.points ?? 0) : undefined} /> : <span />}
+      {ours && shown ? (
+        <MadeNote move={ours} player={shown} made={made} />
+      ) : shown ? (
+        <Points player={shown} delta={changed ? shown.points - (now?.points ?? 0) : undefined} />
+      ) : (
+        <span />
+      )}
     </li>
+  );
+}
+
+/** Opens or closes a note. A tap only opens it, so a hover that already did isn't undone; tapping elsewhere closes it. */
+function show(id: string, on: boolean) {
+  const note = document.getElementById(id);
+  if (!note) return;
+  if (on && !note.matches(":popover-open")) note.showPopover();
+  if (!on && note.matches(":popover-open")) note.hidePopover();
+}
+
+/** Where a pointer can hover, hovering opens the note too. */
+function hover(id: string, on: boolean) {
+  if (window.matchMedia("(hover: hover)").matches) show(id, on);
+}
+
+/**
+ * A War Room move's points, as a button over the row's bar and points: it opens what the move gained
+ * and what War Room's moves gained this week. The screen shows only the mark; the words wait for a tap.
+ */
+function MadeNote({ move, player, made }: { move: WarRoomMove; player: ViewPlayer; made: readonly WarRoomMove[] }) {
+  const id = useId();
+  const week = made.reduce((sum, m) => sum + m.gain, 0);
+  const line = `Started by War Room · ${signed(move.gain)} proj`;
+  const anchor = `--made${id.replace(/[^a-zA-Z0-9]/g, "")}`;
+  return (
+    <>
+      <button
+        type="button"
+        className={s.madeButton}
+        aria-label={`${pts(hasStarted(player) ? (player.actual ?? 0) : player.points)}. ${line}`}
+        onClick={() => show(id, true)}
+        onMouseEnter={() => hover(id, true)}
+        onMouseLeave={() => hover(id, false)}
+        style={{ anchorName: anchor } as CSSProperties}
+      >
+        <span className={s.madeBar} aria-hidden />
+        <Points player={player} />
+      </button>
+      <div id={id} popover="auto" className={`${s.picker} ${s.madeNote}`} style={{ positionAnchor: anchor } as CSSProperties}>
+        <p className={s.madeLine}>
+          Started by War Room · <b className="tabular-nums">{signed(move.gain)}</b> proj
+        </p>
+        <p className={s.madeWeek}>
+          War Room moves this week: <b className="tabular-nums">{signed(week)}</b> proj
+        </p>
+      </div>
+    </>
   );
 }
 

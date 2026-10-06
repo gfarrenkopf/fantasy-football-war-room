@@ -30,7 +30,14 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
     const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/season/apply`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ week: view.currentWeek, snapshot: snapshotOf(roster), moves: chosen, ...(agreed ? {} : { consentVersion: ESPN_WRITE_VERSION }) }),
+      body: JSON.stringify({
+        week: view.currentWeek,
+        season: view.season,
+        snapshot: snapshotOf(roster),
+        moves: chosen,
+        suggested: draft.suggested,
+        ...(agreed ? {} : { consentVersion: ESPN_WRITE_VERSION }),
+      }),
     }).catch(() => null);
     if (!res) return setPhase({ kind: "failed", error: "Can't reach War Room right now. Nothing was sent to ESPN.", details: [] });
     const body = (await res.json().catch(() => ({}))) as {
@@ -132,12 +139,22 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
   );
 }
 
-/** What the last apply did, move by move, from ESPN's read after it. */
+/**
+ * What the last apply did. Once everything landed, the rows say it: the moves War Room got the user
+ * are marked there (APE-256). Only a move that didn't land is listed, move by move, from ESPN's read.
+ */
 function Results({ moves, line }: { moves: Landed; line: (m: LineupMove) => React.ReactNode }) {
   const missed = moves.filter((m) => !m.landed);
+  if (!missed.length) {
+    return (
+      <p className={`${s.applyHead} ${s.applyDone}`} role="status">
+        <Check /> Done. ESPN has your new lineup.
+      </p>
+    );
+  }
   return (
     <div className={s.applyResult} role="status">
-      <p className={s.applyHead}>{missed.length ? "Some moves didn't land on ESPN" : "Done. ESPN has your new lineup."}</p>
+      <p className={s.applyHead}>Some moves didn&apos;t land on ESPN</p>
       <ul className={s.applyList}>
         {moves.map((m) => (
           <li key={m.playerId} data-landed={m.landed}>
@@ -146,7 +163,7 @@ function Results({ moves, line }: { moves: Landed; line: (m: LineupMove) => Reac
           </li>
         ))}
       </ul>
-      {missed.length > 0 && <p className={s.aiError}>Check these on ESPN. War Room has been alerted.</p>}
+      <p className={s.aiError}>Check these on ESPN. War Room has been alerted.</p>
     </div>
   );
 }

@@ -549,7 +549,7 @@
   padding: 1px 6px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--color-mine) 14%, transparent);
-  color: var(--color-mine-ink);
+  color: var(--color-mine);
   font-size: 11px;
   font-weight: 700;
 }
@@ -600,6 +600,9 @@
     margin: 4px 0;
     position-area: bottom span-right;
     position-try-fallbacks: flip-block, flip-inline;
+  }
+  .madeNote {
+    position-area: bottom span-left;
   }
 }
 .menu {
@@ -660,6 +663,79 @@
 .pickerEmpty {
   display: block;
   color: var(--color-muted);
+}
+
+/* A player War Room got into his seat this week (APE-256): a tint and a bar, the words behind a tap. */
+.row[data-made] {
+  background: color-mix(in srgb, var(--color-mine) 9%, transparent);
+}
+.row[data-made]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--color-mine);
+}
+
+/* The bar and the points are one target: the bar is drawn by the row, the button spans to it. */
+.madeButton {
+  display: grid;
+  justify-items: end;
+  min-width: 52px;
+  min-height: 44px;
+  margin: -6px 0;
+  padding: 6px 0 6px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.madeButton::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+}
+.madeBar {
+  display: none;
+}
+@media (hover: hover) {
+  .madeButton:hover .rowPts {
+    color: var(--color-mine);
+  }
+}
+
+.madeNote {
+  display: none;
+  gap: 4px;
+  width: min(300px, calc(100vw - 24px));
+  padding: 12px 14px;
+}
+.madeNote:popover-open {
+  display: grid;
+}
+.madeLine,
+.madeWeek {
+  margin: 0;
+}
+.madeLine b {
+  color: var(--color-mine);
+}
+.madeWeek {
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+
+.applyDone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.applyDone svg {
+  width: 13px;
+  height: 13px;
+  color: var(--color-value-ink);
 }
 
 /* Shown on a phone only, while there's something to review. */
@@ -3091,6 +3167,9 @@
     margin: 0;
     border-radius: 12px 12px 0 0;
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  .madeNote {
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
   }
 
   /* A started player's line would clip at this width: his points, his game and how widely he's
