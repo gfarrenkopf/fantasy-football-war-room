@@ -22,20 +22,20 @@ const subscribeReduced = (onChange: () => void) => {
 export const useReducedMotion = () => useSyncExternalStore(subscribeReduced, () => window.matchMedia(REDUCED).matches, () => false);
 
 /** Tabular digits running up to the league's real number, fast, the way a broadcast graphic fills. */
-export function CountUp({ to, delay, still, decimals = 0, ms = 620 }: { to: number; delay: number; still: boolean; decimals?: number; ms?: number }) {
-  const [n, setN] = useState(still ? to : 0);
+export function CountUp({ to, from = 0, delay, still, decimals = 0, ms = 620 }: { to: number; from?: number; delay: number; still: boolean; decimals?: number; ms?: number }) {
+  const [n, setN] = useState(still ? to : from);
   useEffect(() => {
     if (still) return;
     let frame = 0;
     const start = performance.now() + delay;
     const tick = (now: number) => {
       const t = Math.min(1, Math.max(0, (now - start) / ms));
-      setN(to * (1 - Math.pow(1 - t, 3)));
+      setN(from + (to - from) * (1 - Math.pow(1 - t, 3)));
       if (t < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [to, delay, still, ms]);
+  }, [to, from, delay, still, ms]);
   return <>{n.toFixed(decimals)}</>;
 }
 

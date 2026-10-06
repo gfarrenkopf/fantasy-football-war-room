@@ -540,6 +540,246 @@
   }
 }
 
+/* ------------------------------------------------------------------ lineup locked (APE-294) */
+
+/* The verdict once War Room's moves land on ESPN: the panel lights green from the top, one sweep of
+   light crosses it, the ✓ stamps in and the totals count up. Never a ring: the breathe is the gain
+   ladder's, and it stays off here. Every level gets the green; the number's size keeps its step. */
+.lockIn,
+.lockIn[data-level] {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--color-mine) 60%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-mine) 10%, transparent), transparent 80%), var(--color-panel);
+  animation: lockIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lockIn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--color-mine) 22%, transparent) 50%, transparent 70%);
+  transform: translateX(100%);
+  animation: lockSweep 1000ms 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lockIn .gainNumber {
+  color: var(--color-mine);
+}
+.lockFrom {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--color-muted) 70%, transparent);
+}
+.lockHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* The mine card's ✓ badge, stamped. */
+.lockStamp {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--color-mine);
+  color: var(--color-mine-ink);
+  animation: lockStamp 440ms 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lockStamp svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 3;
+}
+.lockIn .gainMoves li::before {
+  background: var(--color-mine);
+}
+/* The user's own moves stand with War Room's, marked as theirs in sky, never as a warning. */
+.lockIn .gainMoves .lockOwn::before {
+  background: var(--color-sky);
+}
+.lockCall {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 1px 6px;
+  border: 1px solid var(--color-sky-line);
+  border-radius: 4px;
+  color: var(--color-sky);
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.lockIn .gainMoveGain[data-loss] {
+  color: var(--color-reach-ink);
+}
+
+/* A partial apply: what was banked against what War Room's whole lineup would add. */
+.lockLeft {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
+}
+.lockLeftHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+  margin: 0;
+}
+.lockLeftHead > b {
+  color: var(--color-text);
+}
+.lockLeftHead span b {
+  color: var(--color-text);
+}
+.lockMeter {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-mine) 35%, transparent);
+  overflow: hidden;
+}
+.lockMeter i {
+  display: block;
+  width: var(--banked);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-mine);
+  transform-origin: left;
+  animation: lockFill 760ms 150ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lockLeft .gainMoves {
+  margin-top: 0;
+}
+.lockLeft .gainMoves li::before {
+  background: color-mix(in srgb, var(--color-mine) 45%, transparent);
+}
+/* Under the moves it would make, in the detail's column (one column on a phone). */
+.lockIn .lockFinish {
+  grid-column: -2;
+  justify-self: start;
+  min-height: 40px;
+  margin-top: 6px;
+}
+.lockConfetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* The rest of the week: the same green, still. It's seen every visit, so nothing moves. */
+.lockSettled,
+.lockSettled[data-level] {
+  animation: none;
+  border-color: color-mix(in srgb, var(--color-mine) 45%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-mine) 7%, transparent), transparent 80%), var(--color-panel);
+}
+.lockSettled::after {
+  display: none;
+}
+.lockSettled .lockStamp {
+  animation: none;
+}
+.lockFoot {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+}
+
+/* The apply panel once ESPN has War Room's lineup: it says so in the lineup's green. */
+.applyTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.applyTitle svg {
+  width: 14px;
+  height: 14px;
+  color: var(--color-mine);
+}
+.panel[data-done] > .panelHead {
+  background: color-mix(in srgb, var(--color-mine) 7%, transparent);
+}
+.panel[data-done] {
+  border-color: color-mix(in srgb, var(--color-mine) 35%, var(--color-line));
+}
+.applyBanked {
+  margin: 0;
+  color: var(--color-text);
+}
+.applyBanked b {
+  color: var(--color-value-ink);
+}
+
+/* War Room's rows answer the hero: their bars draw down the lineup, one after another. */
+.row[data-fresh] {
+  animation: lockRow 700ms calc(300ms + var(--seat, 0) * 90ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.row[data-fresh]::before {
+  transform-origin: top;
+  animation: lockBar 520ms calc(300ms + var(--seat, 0) * 90ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes lockIn {
+  from {
+    opacity: 0.5;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+@keyframes lockSweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes lockStamp {
+  from {
+    opacity: 0;
+    transform: scale(1.8) rotate(-10deg);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lockFill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes lockBar {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes lockRow {
+  from {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lockIn,
+  .lockIn[data-level],
+  .lockStamp,
+  .lockMeter i,
+  .row[data-fresh],
+  .row[data-fresh]::before {
+    animation: none;
+  }
+  .lockIn::after {
+    display: none;
+  }
+}
+
 /* ------------------------------------------------------------------ lineup rows (APE-249) */
 
 /* Starters and bench alike, as ESPN lays out a roster: slot pill, the player stacked, points on the right. */
@@ -3352,6 +3592,11 @@ li + li > .pickerOption {
   }
   .tab {
     flex: 1;
+    min-height: 44px;
+  }
+
+  /* Finishing War Room's lineup is a thumb's reach away. */
+  .lockIn .lockFinish {
     min-height: 44px;
   }
 

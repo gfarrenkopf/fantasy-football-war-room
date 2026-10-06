@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { alignSeats, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats, type SuggestedMove } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
+import { lockIn, type LockIn, type OwnMove } from "@/lib/season/lockIn";
 import type { SeasonView } from "@/lib/season/view";
 
 /**
@@ -40,6 +41,8 @@ export function useLineupDraft(view: SeasonView) {
   const [seenRoster, setSeenRoster] = useState(() => rosterKey(roster));
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [landed, setLanded] = useState<Landed | null>(null);
+  /** The lineup just locked in with War Room's moves (APE-294), and ESPN's roster as it was sent. */
+  const [moment, setMoment] = useState<(LockIn & { sentFrom: string }) | null>(null);
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());
   // After an apply that left moves out, keep the staged lineup so those moves are still on offer.
   const [keepStaged, setKeepStaged] = useState(false);
@@ -68,10 +71,11 @@ export function useLineupDraft(view: SeasonView) {
     return seat >= 0 && recommended[seat] === m.playerId && seats[seat] === m.to ? [{ playerId: m.playerId, to: m.to, gain: Math.round((points(m.playerId) - points(onEspn[seat])) * 100) / 100 }] : [];
   });
 
-  /** Any edit starts over: the review closes and the last apply's results go. */
+  /** Any edit starts over: the review closes and the last apply's results, and their moment, go. */
   const edited = () => {
     setPhase({ kind: "idle" });
     setLanded(null);
+    setMoment(null);
   };
 
   return {
@@ -92,6 +96,9 @@ export function useLineupDraft(view: SeasonView) {
     phase,
     setPhase,
     landed,
+    moment,
+    /** ESPN's lineup has been read back since the moment: what's left of War Room's lineup is current. */
+    momentSettled: moment !== null && rosterKey(roster) !== moment.sentFrom,
     isOnEspn: same(onEspn),
     isRecommended: same(recommended),
     isPicked: (group: readonly LineupMove[]) => !skipped.has(changeKey(group)),
@@ -130,6 +137,21 @@ export function useLineupDraft(view: SeasonView) {
     /** ESPN took the apply: show what landed, and keep what was left out on offer. */
     applied(result: Landed) {
       setLanded(result);
+      // The starting seats this apply changed, and what each does to the projection.
+      const seatMoves = seats.flatMap((to, i) => {
+        const group = changeOf.get(staged[i] ?? onEspn[i] ?? -1);
+        return staged[i] !== onEspn[i] && (!group || picked.includes(group)) ? [{ i, to, delta: points(staged[i]) - points(onEspn[i]) }] : [];
+      });
+      // The ones the user made themselves.
+      const own: OwnMove[] = seatMoves.flatMap(({ i, to, delta }) => {
+        const id = staged[i];
+        return id !== null && !suggested.some((m) => m.playerId === id && m.to === to) ? [{ playerId: id, to, delta: Math.round(delta * 100) / 100 }] : [];
+      });
+      const total = (lineup: readonly (number | null)[]) => lineup.reduce((sum: number, id) => sum + points(id), 0);
+      const before = total(onEspn);
+      const after = before + seatMoves.reduce((sum, m) => sum + m.delta, 0);
+      const found = lockIn({ landed: result, suggested, own, before, after, recommended: total(recommended) });
+      setMoment(found && { ...found, sentFrom: rosterKey(roster) });
       setKeepStaged(chosen.length < moves.length);
       setPhase({ kind: "idle" });
     },
