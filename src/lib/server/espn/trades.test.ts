@@ -30,6 +30,7 @@ const entry = (playerId: number, name: string, slot: LineupSlot = "BN"): RosterE
   locked: false,
   injuryStatus: "ACTIVE",
   actual: null,
+  statLine: null,
   ownership: null,
   news: null,
 });

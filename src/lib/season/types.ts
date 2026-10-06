@@ -58,6 +58,8 @@ export interface RosterEntry {
    * week. Null until the player's game starts.
    */
   actual: number | null;
+  /** The stats behind `actual`, ESPN-style ("329 YDS, 2 TD"; src/lib/season/statLine.ts). Null until his game starts. */
+  statLine: string | null;
   /** Share of ESPN leagues that roster and start him, 0–100; null when ESPN didn't say. */
   ownership: { owned: number; started: number } | null;
   /** ESPN's outlook for him this week, and when ESPN last had news on him; null with no outlook. */

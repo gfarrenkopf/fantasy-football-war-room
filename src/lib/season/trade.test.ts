@@ -36,6 +36,7 @@ function p(pos: Position, pts: number | number[]): ViewPlayer {
     ros: byWeek.reduce((a, b) => a + b, 0),
     projected: true,
     actual: null,
+    statLine: null,
     ownership: null,
     news: null,
     game: null,

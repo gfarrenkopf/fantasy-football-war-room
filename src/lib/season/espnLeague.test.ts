@@ -39,6 +39,7 @@ describe("parseSeasonLeague", () => {
       locked: false,
       injuryStatus: "ACTIVE",
       actual: null,
+      statLine: null,
       ownership: null,
       news: null,
     });
@@ -70,6 +71,18 @@ describe("parseSeasonLeague", () => {
     };
     const parsed = parseSeasonLeague(raw, "1");
     expect(parsed.ok && parsed.league.teams[0].roster.map((e) => e.actual)).toEqual([12.35, null, null]);
+  });
+
+  it("sums up the stats behind this week's points from the same row", () => {
+    const row = { statSourceId: 0, statSplitTypeId: 1, seasonId: 2026, scoringPeriodId: 3, appliedTotal: 17.7, stats: { "24": 46, "25": 1, "42": 31, "53": 4, "99": "x" }, appliedStats: { "24": 4.6, "25": 6, "42": 3.1, "53": 4 } };
+    const entry = (playerId: number, stats: unknown[]) => ({
+      playerId,
+      lineupSlotId: 2,
+      playerPoolEntry: { player: { fullName: "X", defaultPositionId: 2, proTeamId: 8, stats } },
+    });
+    const raw = { ...league, teams: [{ id: 9, roster: { entries: [entry(1, [row]), entry(2, [{ ...row, scoringPeriodId: 2 }]), entry(3, [{ ...row, stats: undefined, appliedStats: undefined }])] } }] };
+    const parsed = parseSeasonLeague(raw, "1");
+    expect(parsed.ok && parsed.league.teams[0].roster.map((e) => e.statLine)).toEqual(["77 YDS, TD, 4 REC", null, null]);
   });
 
   it("reads ESPN's ownership and this week's outlook, and leaves out other weeks' outlooks", () => {

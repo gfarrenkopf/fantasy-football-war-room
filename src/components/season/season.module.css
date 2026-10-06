@@ -616,6 +616,16 @@
   font-size: 11.5px;
 }
 
+/* What a player has done on game day (APE-247): "329 YDS, 2 TD", a line of its own at every width. */
+.factsStats {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+
 .pts {
   color: var(--color-text);
   font-weight: 600;

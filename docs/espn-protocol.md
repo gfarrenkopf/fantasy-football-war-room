@@ -183,6 +183,13 @@ Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/S
 ### Points scored and game state (APE-196)
 
 - **Weekly actuals are in `mRoster`.** `player.stats[]` rows with `statSourceId 0`, `statSplitTypeId 1` are one NFL game each, keyed by game id (`externalId`, e.g. `401872932`), with `scoringPeriodId` and an `appliedTotal` scored in the league's own scoring. A row appears once the player's game has stats, and its `appliedTotal` rises during the game in the default read, without a `scoringPeriodId` (seen on the season page in week 4, 2026-10-04: Jalen Hurts at 0.6 with 8:38 left in the 1st).
+- **An actual row has the stats behind its points (APE-247).** Next to `appliedTotal`, `stats` holds the game's raw stats by stat id, and `appliedStats` holds the league-scored points of each stat that scored. `appliedStats` already includes D/ST tiers, per-slot `pointsOverrides` and bonuses, and its values sum to `appliedTotal`. Seen 2026-10-06 on week-4 finals across 64 rostered players. A player who didn't play has a row with empty `stats` and a 0 total. The ids confirmed:
+  - **Passing:** 3 yards, 4 TD, 19 two-point, 20 INT. Every-5/10/20/25/50/100-yard counts are 5–10.
+  - **Rushing:** 24 yards, 25 TD, 26 two-point. Every-N-yard counts are 27–32.
+  - **Receiving:** 42 yards, 43 TD, 44 two-point, 53 receptions, 58 targets. Every-N-yard counts are 47–52, and 56 is a 100–199-yard game.
+  - **Fumbles lost:** 72.
+  - **Kicking:** 83/84/85 are FG made/tried/missed and 86/87/88 XP made/tried/missed. Made by distance are 74, 77, 80 and 198.
+  - **D/ST:** 120 points allowed, scored by tiers 89–92 and 121–125. 127 yards allowed, scored by tiers 128–136. 95 INT, 96 FR, 97 blocked kick, 98 safety, 99 sack.
 - **Game state is public.** `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={season}&seasontype=2&week={week}` needs no cookies (about 290 KB for a week). Each event has `status.type.state` (`pre`, `in` or `post`) and `status.type.shortDetail` ("Final", "Halftime", "4:12 - 3rd", or a kickoff time). `status.period` is the quarter (0 before kickoff, 5 and up in overtime) and `status.clock` the seconds left in it. Each competitor's `score` is a string ("21"), "0" before kickoff. Event ids are the same game ids as the stat rows and `proTeamSchedules_wl`. `competitions[0].competitors[].team.id` is the same pro-team id as `proTeamId` (GB 9, ATL 1, BUF 2, DET 8).
 - **`proTeamSchedules_wl` has a `statsOfficial` flag per game.** It was still `false` the day after the game, so it isn't a signal that the game is final.
 

@@ -36,7 +36,7 @@ type SeasonCache = Map<string, { league: SeasonLeague; espnTeamId: number; fetch
  * as the new shape. In production a deploy restarts the process anyway; in development the cache
  * outlives hot reloads.
  */
-const CACHE_VERSION = 9;
+const CACHE_VERSION = 10;
 
 export function createSeasonLoader({
   fetchImpl,
