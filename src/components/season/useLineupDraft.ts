@@ -92,8 +92,6 @@ export function useLineupDraft(view: SeasonView) {
     phase,
     setPhase,
     landed,
-    /** Where the staged lineup came from, in words. */
-    source: same(recommended) ? "War Room's lineup" : "your edits",
     isOnEspn: same(onEspn),
     isRecommended: same(recommended),
     isPicked: (group: readonly LineupMove[]) => !skipped.has(changeKey(group)),

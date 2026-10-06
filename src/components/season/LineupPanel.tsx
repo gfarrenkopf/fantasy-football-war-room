@@ -158,7 +158,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
             </h2>
           </div>
           <ApplyLineup draft={draft} view={view} leagueId={leagueId} agreed={writeConsented} />
-          <a className={s.espnLink} href={espnTeam} target="_blank" rel="noreferrer">
+          <a className={s.applyEspn} href={espnTeam} target="_blank" rel="noreferrer">
             Open my team on ESPN <External />
           </a>
         </section>

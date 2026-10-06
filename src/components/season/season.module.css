@@ -507,29 +507,51 @@
   gap: 6px;
 }
 
+/* Quiet at rest so the players lead; it lights up as a control under the pointer or the keyboard. */
 .slotPill {
   min-width: 44px;
   min-height: 30px;
   padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid var(--color-sky-line);
-  background: transparent;
-  color: var(--color-sky);
+  border: 1px solid var(--color-line2);
+  background: var(--color-panel2);
+  color: var(--color-muted);
   font: inherit;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
+  transition:
+    color 120ms ease-out,
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
 }
-.slotPill:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-sky) 10%, transparent);
+.slotPill:hover:not(:disabled),
+.slotPill:focus-visible,
+.slotPill:popover-open,
+.slotPill[aria-expanded="true"] {
+  border-color: var(--color-sky-line);
+  background: color-mix(in srgb, var(--color-sky) 10%, var(--color-panel2));
+  color: var(--color-sky);
+}
+.slotPill:focus-visible,
+.pickerOption:focus-visible,
+.madeButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+/* A swap's seat is the one to look at. */
+.row[data-changed="true"] .slotPill {
+  border-color: color-mix(in srgb, var(--color-mine) 45%, var(--color-line2));
+  color: var(--color-mine);
 }
 .slotPill:disabled,
 .slotPill[data-static] {
   display: inline-grid;
   place-items: center;
   border-color: var(--color-row-line);
-  color: var(--color-muted);
+  background: transparent;
+  color: var(--color-dim);
   cursor: default;
 }
 
@@ -858,12 +880,21 @@ li + li > .pickerOption {
   font-size: 11.5px;
 }
 
-/* On ESPN's roster layout (APE-249) his game and ownership take a line each, at every width. */
-.player[data-stacked] .factsGame,
+/* On ESPN's roster layout (APE-249): position, team and game on one line, ownership on the next, at
+   every width. A long live status wraps rather than clips. */
+.player[data-stacked] .facts {
+  white-space: normal;
+}
+.player[data-stacked] .factsGame {
+  display: inline;
+}
+.player[data-stacked] .factsGame .factsSep {
+  display: inline;
+}
 .player[data-stacked] .factsOwn {
   display: block;
 }
-.player[data-stacked] .factsSep {
+.player[data-stacked] .factsOwn .factsSep {
   display: none;
 }
 
@@ -2284,12 +2315,35 @@ li + li > .pickerOption {
 
 .apply {
   display: grid;
-  gap: 8px;
-  margin: 0 14px 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--color-row-line);
-  background: var(--color-panel2);
+  gap: 10px;
+  padding: 12px 14px 4px;
+}
+/* The panel's one action spans it; everything else in the panel is quieter. */
+.apply .primary {
+  justify-self: stretch;
+  min-height: 40px;
+}
+.applyChanges {
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.applyEspn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 14px 14px;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+.applyEspn:hover,
+.applyEspn:focus-visible {
+  color: var(--color-sky);
+}
+.applyEspn svg {
+  width: 11px;
+  height: 11px;
 }
 
 .applyHead {
