@@ -9,7 +9,7 @@ import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
-import { Check, External } from "./Icons";
+import { ArrowRight, Check, External } from "./Icons";
 import { Gain, hasStarted, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
 import { useLineupDraft, type LineupDraft } from "./useLineupDraft";
@@ -231,7 +231,8 @@ function Points({ player, delta }: { player: ViewPlayer; delta?: number }) {
 }
 
 /**
- * One starting seat: ESPN's player, or a swap to the player staged there, ticked to be made. A player
+ * One starting seat: ESPN's player on the left, as set; a change on offer on the right, ticked to be
+ * made, showing who comes in and what he adds. A player
  * War Room got into this seat this week is marked with a tint and a bar (APE-256); what the move was
  * worth opens from the bar and his points, and is read out to screen readers.
  */
@@ -243,50 +244,52 @@ function StarterRow({ draft, seat, made }: { draft: LineupDraft; seat: number; m
   const group = changed ? draft.changeOf.get(next?.playerId ?? now?.playerId ?? -1) : undefined;
   const picked = group ? draft.isPicked(group) : true;
   const why = changed && now ? outReason(now) : null;
-  const shown = next ?? (changed ? undefined : now);
-  const ours = !changed && shown ? made.find((m) => m.playerId === shown.playerId && m.slot === key) : undefined;
+  const ours = !changed && now ? made.find((m) => m.playerId === now.playerId && m.slot === key) : undefined;
+  const delta = (next?.points ?? 0) - (now?.points ?? 0);
   return (
     <li className={s.row} data-changed={changed} data-skipped={changed && !picked} data-made={!!ours || undefined}>
       <span className={s.rowSlot}>
         <SeatPicker draft={draft} seat={seat} label={SLOT_LABEL[key]} />
-        {group && (
-          <label className={s.rowCheck}>
-            <input type="checkbox" checked={picked} disabled={draft.phase.kind === "sending"} onChange={(e) => draft.toggle(group, e.target.checked)} />
-            Swap<span className="sr-only"> at {SLOT_LABEL[key]}</span>
-          </label>
-        )}
       </span>
+      {/* Left: the player ESPN has in this seat, as set. */}
       <span className={s.rowPlayer}>
-        {shown ? (
-          <PlayerLine player={shown} tone={changed ? "in" : "same"} locked={shown.locked} value="none" news ownership live stacked />
-        ) : (
-          <span className={s.fine}>Empty</span>
-        )}
-        {/* A swap says where each player goes, in words: who comes up from where, who goes to the bench. */}
-        {changed && (
-          <span className={s.rowMove}>
-            {shown ? (
-              <>
-                <b className={s.rowIn}>Up from {fromWhere(shown)}</b>
-                {" · "}
-              </>
-            ) : null}
-            {now ? (
-              <span className={why ? s.rowWhy : undefined}>
-                {now.name} {why ? `${why}, to the bench` : <>goes to the bench</>} <span className="tabular-nums">({pts(now.points)})</span>
-              </span>
-            ) : (
-              <>{SLOT_LABEL[key]} is empty on ESPN</>
-            )}
+        {now ? <PlayerLine player={now} locked={now.locked} value="none" news ownership live stacked /> : <span className={s.fine}>Empty on ESPN</span>}
+        {why && now && (
+          <span className={`${s.rowMove} ${s.rowWhy}`}>
+            {now.name} {why}
           </span>
         )}
       </span>
-      {ours && shown ? (
-        <MadeNote move={ours} player={shown} made={made} />
-      ) : shown ? (
-        <Points player={shown} delta={changed ? shown.points - (now?.points ?? 0) : undefined} />
-      ) : (
-        <span />
+      {ours && now ? <MadeNote move={ours} player={now} made={made} /> : now ? <Points player={now} /> : <span />}
+      {/* Right: the change on offer, ticked to be made; the whole box is the tick. */}
+      {changed && (
+        <label className={s.suggest}>
+          {group && (
+            <input type="checkbox" className={s.suggestCheck} checked={picked} disabled={draft.phase.kind === "sending"} onChange={(e) => draft.toggle(group, e.target.checked)} />
+          )}
+          <span className={s.suggestBody}>
+            <span className={s.suggestHead}>
+              <ArrowRight className={s.suggestArrow} />
+              <span className="sr-only">Swap in </span>
+              <b className={s.suggestName}>{next ? next.name : "Leave empty"}</b>
+            </span>
+            {next && (
+              <span className={s.suggestFacts}>
+                <span className={s.pos} data-pos={next.pos}>
+                  {next.pos === "DST" ? "D/ST" : next.pos}
+                </span>{" "}
+                · {next.team ?? "FA"} · from {fromWhere(next)}
+              </span>
+            )}
+          </span>
+          <span className={s.suggestPts}>
+            {next && <span className={`${s.rowPts} tabular-nums`}>{pts(next.points)}</span>}
+            <span className={`${s.rowDelta} tabular-nums`} data-loss={delta < 0 || undefined}>
+              {signed(delta)}
+              <span className="sr-only"> projected</span>
+            </span>
+          </span>
+        </label>
       )}
     </li>
   );

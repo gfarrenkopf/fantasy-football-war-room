@@ -489,16 +489,85 @@
   border-top: 1px solid var(--color-row-line);
 }
 
-/* A change to make: tinted like War Room's own, and quieter once the user leaves it out. */
+/* A seat with a change on offer: ESPN's player stays on the left as set, the change takes the right. */
 .row[data-changed="true"] {
-  background: color-mix(in srgb, var(--color-mine) 7%, transparent);
+  grid-template-columns: 52px minmax(0, 1fr) auto minmax(0, 42%);
 }
-.row[data-skipped="true"] {
+
+/* The change on offer: who comes in, from where, and what he adds. The whole box is the tick. */
+.suggest {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-mine) 38%, var(--color-line2));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-mine) 8%, transparent);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out,
+    opacity 120ms ease-out;
+}
+.suggest:hover {
+  background: color-mix(in srgb, var(--color-mine) 12%, transparent);
+}
+.suggest:has(:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+/* Left out: still there to take back, but plainly not happening. */
+.row[data-skipped="true"] .suggest {
+  border-style: dashed;
+  border-color: var(--color-line2);
   background: none;
+  opacity: 0.6;
 }
-.row[data-skipped="true"] .rowPlayer,
-.row[data-skipped="true"] .rowPoints {
-  opacity: 0.55;
+.row[data-skipped="true"] .suggestName {
+  color: var(--color-muted);
+}
+
+.suggestCheck {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-mine);
+  cursor: pointer;
+}
+.suggestBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.suggestHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.suggestArrow {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  align-self: center;
+  color: var(--color-mine);
+}
+.suggestName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-mine);
+  font-weight: 700;
+}
+.suggestFacts {
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+.suggestPts {
+  display: grid;
+  justify-items: end;
 }
 
 .rowSlot {
@@ -555,23 +624,6 @@
   cursor: default;
 }
 
-.rowCheck {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  color: var(--color-muted);
-  font-size: 10.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.rowCheck input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--color-mine);
-  cursor: pointer;
-}
-
 .rowPlayer {
   display: grid;
   gap: 2px;
@@ -583,10 +635,6 @@
   color: var(--color-muted);
   font-size: 11.5px;
   line-height: 1.35;
-}
-.rowIn {
-  color: var(--color-mine);
-  font-weight: 700;
 }
 .rowWhy {
   color: var(--color-reach-ink);
@@ -3285,6 +3333,13 @@ li + li > .pickerOption {
 
   .row {
     padding-right: 10px;
+  }
+  /* On a phone the change on offer takes its own line under ESPN's player, full width. */
+  .row[data-changed="true"] {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+  }
+  .row[data-changed="true"] .suggest {
+    grid-column: 2 / -1;
   }
 
   /* A slot's choices rise from the bottom, in thumb reach. */
