@@ -172,6 +172,7 @@ export function PlayerLine({
   ownership = false,
   pos = true,
   stats = false,
+  stacked = false,
 }: {
   player: ViewPlayer;
   tone?: "same" | "out" | "in";
@@ -188,13 +189,15 @@ export function PlayerLine({
   pos?: boolean;
   /** Add a line of the stats behind his points once his game starts (APE-247). */
   stats?: boolean;
+  /** His game and ownership take a line each at every width, as on ESPN's roster (APE-249). */
+  stacked?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = player.points === 0 && player.projected;
   const started = live && hasStarted(player);
   const status = live && player.game !== null;
   return (
-    <span className={s.player} data-tone={tone}>
+    <span className={s.player} data-tone={tone} data-stacked={stacked || undefined}>
       <span className={s.playerLine}>
         <span className={s.name}>{player.name}</span>
         {tag && (

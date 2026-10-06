@@ -71,6 +71,53 @@ export function movesToStaged(roster: readonly ApplyEntry[], seats: readonly Sta
 }
 
 /**
+ * A staged lineup laid against ESPN's, seat for seat (APE-249): within each slot, a player who holds
+ * it on ESPN keeps his seat there, so two RBs trading seats aren't a change and only the seats that
+ * really change show as swaps. `before` is `seatsFromRoster()`.
+ */
+export function alignSeats(seats: readonly StarterKey[], before: readonly (number | null)[], after: readonly (number | null)[]): (number | null)[] {
+  const aligned: (number | null)[] = seats.map(() => null);
+  const placed = new Set<number>();
+  seats.forEach((key, i) => {
+    const id = before[i];
+    if (id !== null && seats.some((k, j) => k === key && after[j] === id)) {
+      aligned[i] = id;
+      placed.add(id);
+    }
+  });
+  // Everyone else takes the first open seat of the slot he's staged in.
+  seats.forEach((key, i) => {
+    const id = after[i];
+    if (id === null || placed.has(id)) return;
+    aligned[seats.findIndex((k, j) => k === key && aligned[j] === null)] = id;
+  });
+  return aligned;
+}
+
+/**
+ * The staged lineup after putting a player in a seat, or emptying it with null. Picking someone
+ * already staged elsewhere swaps the two, when the other seat can take the player displaced; a bench
+ * player just takes the seat, and whoever held it goes to the bench.
+ */
+export function chooseSeat(
+  staged: readonly (number | null)[],
+  seats: readonly StarterKey[],
+  roster: readonly Pick<ApplyEntry, "playerId" | "pos">[],
+  seat: number,
+  id: number | null,
+): (number | null)[] {
+  const next = [...staged];
+  const was = id === null ? -1 : next.indexOf(id);
+  if (was >= 0 && was !== seat) {
+    const displaced = next[seat];
+    const p = displaced === null ? undefined : roster.find((r) => r.playerId === displaced);
+    next[was] = p && canPlay(p.pos, seats[was]) ? displaced : null;
+  }
+  next[seat] = id;
+  return next;
+}
+
+/**
  * The moves in the groups the user sees as one change: a player who takes a seat is tied to the
  * player who held it on ESPN, so a bench swap (Higgins out, Love in at WR) or a chain through FLEX is
  * made or left out whole. `before` is `seatsFromRoster()`, `after` the staged lineup. Groups keep the
