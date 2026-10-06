@@ -41,7 +41,7 @@ export const SLOT_LABEL: Record<LineupSlot, string> = {
 export const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
 
 /** ESPN's injury designations as the short tags ESPN itself shows. */
-const INJURY_TAG: Record<string, string> = { QUESTIONABLE: "Q", DOUBTFUL: "D", OUT: "OUT", INJURY_RESERVE: "IR", SUSPENSION: "SSPD" };
+export const INJURY_TAG: Record<string, string> = { QUESTIONABLE: "Q", DOUBTFUL: "D", OUT: "OUT", INJURY_RESERVE: "IR", SUSPENSION: "SSPD" };
 
 /**
  * The page's verdict: a signed number that grows louder the more it's worth (src/lib/season/emphasis.ts).
@@ -53,6 +53,7 @@ export function Gain({
   unit,
   headline,
   detail,
+  aside,
   compact = false,
   inline = false,
   className,
@@ -62,11 +63,25 @@ export function Gain({
   unit: string;
   headline: string;
   detail: React.ReactNode;
+  /** Under the number, as part of the verdict: what it does to a total (the lineup's "99.5 → 117.5"). */
+  aside?: React.ReactNode;
   compact?: boolean;
   /** Part of a card rather than a surface of its own. */
   inline?: boolean;
   className?: string;
 }) {
+  const number = (
+    <p className={s.gainNumber} key={`${level}:${value.toFixed(1)}`}>
+      {level === "rest" ? (
+        <Check />
+      ) : (
+        <>
+          <span className="tabular-nums">{signed(value)}</span>
+          <span className={s.gainUnit}>{unit}</span>
+        </>
+      )}
+    </p>
+  );
   return (
     <div
       className={[s.gain, compact && s.gainCompact, inline && s.gainInline, className].filter(Boolean).join(" ")}
@@ -74,18 +89,16 @@ export function Gain({
       data-sign={value < 0 ? "loss" : "gain"}
       role="status"
     >
-      <p className={s.gainNumber} key={`${level}:${value.toFixed(1)}`}>
-        {level === "rest" ? (
-          <Check />
-        ) : (
-          <>
-            <span className="tabular-nums">{signed(value)}</span>
-            <span className={s.gainUnit}>{unit}</span>
-          </>
-        )}
-      </p>
+      {aside ? (
+        <div className={s.gainLead}>
+          {number}
+          {aside}
+        </div>
+      ) : (
+        number
+      )}
       <p className={s.gainHeadline}>{headline}</p>
-      <p className={s.gainDetail}>{detail}</p>
+      <div className={s.gainDetail}>{detail}</div>
     </div>
   );
 }

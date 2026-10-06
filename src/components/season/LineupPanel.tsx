@@ -10,34 +10,27 @@ import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
 import { ArrowRight, Check, External } from "./Icons";
-import { Gain, hasStarted, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
+import { Gain, hasStarted, INJURY_TAG, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
 import { useLineupDraft, type LineupDraft } from "./useLineupDraft";
 
 const HEADLINE: Record<Emphasis, string> = {
-  rest: "Your ESPN lineup is already the best one",
+  rest: "Your lineup is set",
   trim: "A small tweak",
-  gain: "Worth changing",
-  swing: "A real swing this week",
-  must: "Don't leave these points on your bench",
+  gain: "Worth a swap",
+  swing: "Big swing on your bench",
+  must: "Points stuck on your bench",
 };
 
-/** Why a starter is coming out, when it's news: he won't play. */
-function outReason(p: ViewPlayer): string | null {
-  if (isRuledOut(p.injuryStatus)) return "is ruled out";
-  if (p.points === 0 && p.projected) return "has no game this week";
+/** Why a starter is coming out, when it's news, in the word managers use: BYE, or his designation (OUT, IR, SSPD). */
+function outTag(p: ViewPlayer): string | null {
+  if (isRuledOut(p.injuryStatus)) return INJURY_TAG[p.injuryStatus] ?? "OUT";
+  if (p.points === 0 && p.projected) return "BYE";
   return null;
 }
 
 /** Where a player is on ESPN, as the end of "up from …": "the bench", "WR". */
 const fromWhere = (p: ViewPlayer) => (p.slot === "BN" ? "the bench" : SLOT_LABEL[p.slot]);
-
-/** One War Room change as a sentence: "Start Justin Jefferson at FLEX over Garrett Wilson". */
-function moveSentence(slot: string, into: ViewPlayer | undefined, out: ViewPlayer | undefined): string {
-  if (!into) return `Bench ${out?.name ?? "nobody"} and leave ${slot} empty`;
-  if (!out) return `Start ${into.name} at ${slot}, empty on ESPN now`;
-  return `Start ${into.name} at ${slot} over ${out.name}`;
-}
 
 /**
  * This week's lineup (10.5, 10.8, 12.1, APE-249), laid out the way ESPN's roster screen is: starters
@@ -60,10 +53,8 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
     .map((r) => {
       const into = r.next === null ? undefined : byId.get(r.next);
       const out = r.now === null ? undefined : byId.get(r.now);
-      const why = out && outReason(out);
-      return { key: `${r.key}-${r.next}`, text: moveSentence(SLOT_LABEL[r.key], into, out), gain: (into?.points ?? 0) - (out?.points ?? 0), why: why ? `${out.name} ${why}` : null };
+      return { key: `${r.key}-${r.next}`, slot: SLOT_LABEL[r.key], into, out, gain: (into?.points ?? 0) - (out?.points ?? 0), tag: out ? outTag(out) : null };
     });
-  const only = suggestions.length === 1 ? suggestions[0] : null;
   const gain = lineup.total - lineup.currentTotal;
   const level = suggested ? lineupEmphasis(gain) : "rest";
   const swaps = draft.seats.filter((_, i) => draft.onEspn[i] !== draft.staged[i]).length;
@@ -80,24 +71,50 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           level={level}
           value={gain}
           unit="pts"
-          headline={only ? only.text : suggested ? `${HEADLINE[level]}: ${suggestions.length} changes` : HEADLINE[level]}
+          headline={HEADLINE[level]}
+          aside={
+            suggested && (
+              <p className={s.gainShift}>
+                <span className={s.gainShiftFrom}>
+                  <span className="tabular-nums">{pts(lineup.currentTotal)}</span> →
+                </span>{" "}
+                <b className="tabular-nums">{pts(lineup.total)}</b>
+                <span className={s.gainShiftNote}>projected · week {view.currentWeek}</span>
+              </p>
+            )
+          }
           detail={
             suggested ? (
-              <>
-                {only ? (
-                  only.why && <span className={s.gainWhy}>{only.why}. </span>
-                ) : (
-                  suggestions.map((m) => (
-                    <span key={m.key} className={s.gainMove}>
-                      {m.text} <b className="tabular-nums">{signed(m.gain)}</b>
-                      {m.why && <span className={s.gainWhy}> · {m.why}</span>}
+              <ul className={s.gainMoves}>
+                {suggestions.map((m) => (
+                  <li key={m.key}>
+                    <span className={s.gainMoveText}>
+                      {m.into ? (
+                        <>
+                          Start <b>{m.into.name}</b>
+                        </>
+                      ) : (
+                        <>Leave {m.slot} empty</>
+                      )}
+                      {m.out && (
+                        <>
+                          {" "}
+                          over {m.out.name}
+                          {m.tag && (
+                            <>
+                              {" "}
+                              <span className={s.tag} data-kind="out">
+                                {m.tag}
+                              </span>
+                            </>
+                          )}
+                        </>
+                      )}
                     </span>
-                  ))
-                )}
-                <span className={s.gainTotal}>
-                  <span className="tabular-nums">{pts(lineup.currentTotal)}</span> → <b className="tabular-nums">{pts(lineup.total)}</b> projected in week {view.currentWeek}.
-                </span>
-              </>
+                    <b className={`${s.gainMoveGain} tabular-nums`}>{signed(m.gain)}</b>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <>
                 <b className="tabular-nums">{pts(lineup.total)}</b> projected points in week {view.currentWeek}. Check back before kickoff: injury news can
@@ -243,7 +260,8 @@ function StarterRow({ draft, seat, made }: { draft: LineupDraft; seat: number; m
   const changed = now?.playerId !== next?.playerId;
   const group = changed ? draft.changeOf.get(next?.playerId ?? now?.playerId ?? -1) : undefined;
   const picked = group ? draft.isPicked(group) : true;
-  const why = changed && now ? outReason(now) : null;
+  // His injury tag already shows by his name; a bye has no tag of its own, so it gets one here.
+  const bye = changed && now ? outTag(now) === "BYE" : false;
   const ours = !changed && now ? made.find((m) => m.playerId === now.playerId && m.slot === key) : undefined;
   const delta = (next?.points ?? 0) - (now?.points ?? 0);
   return (
@@ -254,9 +272,11 @@ function StarterRow({ draft, seat, made }: { draft: LineupDraft; seat: number; m
       {/* Left: the player ESPN has in this seat, as set. */}
       <span className={s.rowPlayer}>
         {now ? <PlayerLine player={now} locked={now.locked} value="none" news ownership live stacked /> : <span className={s.fine}>Empty on ESPN</span>}
-        {why && now && (
-          <span className={`${s.rowMove} ${s.rowWhy}`}>
-            {now.name} {why}
+        {bye && (
+          <span className={s.rowMove}>
+            <span className={s.tag} data-kind="out">
+              BYE
+            </span>
           </span>
         )}
       </span>

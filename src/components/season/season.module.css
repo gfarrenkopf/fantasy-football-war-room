@@ -354,20 +354,78 @@
   font-size: 13px;
 }
 
-/* The lineup's changes, one per line, then where they take the total (APE-249). */
-.gainMove {
-  display: block;
+/* The lineup's verdict (APE-249): the gain, and under it the total it moves, as loud as the page gets
+   after the number itself. */
+.gainLead {
+  grid-row: span 2;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.gainLead .gainNumber {
+  grid-row: auto;
+}
+.gainShift {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--tone, var(--color-mine));
+}
+.gainShiftFrom {
+  color: var(--color-muted);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.gainShiftNote {
+  flex-basis: 100%;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The moves, one per line: a mark in the gain's tone, the move, its points lined up on the right. */
+.gainMoves {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.gainMoves li {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.gainMoves li::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tone, var(--color-mine));
+  transform: translateY(-2px);
+}
+.gainMoveText b {
   color: var(--color-text);
+  font-weight: 700;
 }
-.gainMove b {
+.gainMoveText .tag {
+  vertical-align: 1px;
+}
+.gainMoveGain {
   color: var(--color-value-ink);
-}
-.gainWhy {
-  color: var(--color-reach-ink);
-}
-.gainTotal {
-  display: block;
-  margin-top: 2px;
+  font-size: 14px;
 }
 
 /* Rest: nothing to do. Quiet, and it says so with a check rather than a zero. */
@@ -3284,6 +3342,14 @@ li + li > .pickerOption {
   }
   .gain[data-level="must"] .gainNumber {
     font-size: 48px;
+  }
+  /* The number and the total it moves share a line, above the headline. */
+  .gainLead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 6px 16px;
+    margin-bottom: 4px;
   }
 
   /* The rows come first; the apply panel follows them, with a bar to reach it. */
