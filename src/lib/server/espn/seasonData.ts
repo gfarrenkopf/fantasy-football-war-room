@@ -24,8 +24,11 @@ export type SeasonLoad =
   /** ESPN answered with something War Room can't use. */
   | { kind: "invalid"; error: string };
 
-/** `refresh` always reads ESPN; `maxAgeMs` reads it when the cached copy is older than that (APE-227: fresher during games). */
-export type SeasonLoader = (db: Db, key: Buffer, userId: string, leagueId: string, options?: { refresh?: boolean; maxAgeMs?: number }) => Promise<SeasonLoad>;
+/**
+ * `refresh` always reads ESPN; `maxAgeMs` reads it when the cached copy is older than that (APE-227:
+ * fresher during games). `week` reads a past week instead of ESPN's current one (APE-251).
+ */
+export type SeasonLoader = (db: Db, key: Buffer, userId: string, leagueId: string, options?: { refresh?: boolean; maxAgeMs?: number; week?: number }) => Promise<SeasonLoad>;
 
 const VIEWS = ["mSettings", "mStatus", "mRoster", "mTeam", "mPendingTransactions", "mMatchupScore"] as const;
 
@@ -46,18 +49,18 @@ export function createSeasonLoader({
 }: { fetchImpl?: typeof fetch; now?: () => Date; ttlMs?: number; cache?: SeasonCache } = {}): SeasonLoader {
   const signedOut = createSessionCheck({ fetchImpl, now });
 
-  return async (db, key, userId, leagueId, { refresh = false, maxAgeMs = ttlMs } = {}) => {
+  return async (db, key, userId, leagueId, { refresh = false, maxAgeMs = ttlMs, week } = {}) => {
     const link = await findSeasonLink(db, userId, leagueId);
     if (!link) return { kind: "not-linked" };
 
-    const cacheKey = `v${CACHE_VERSION}:${userId}:${leagueId}:${link.espnLeagueId}:${link.season}`;
+    const cacheKey = `v${CACHE_VERSION}:${userId}:${leagueId}:${link.espnLeagueId}:${link.season}${week ? `:${week}` : ""}`;
     const hit = cache.get(cacheKey);
     if (hit && !refresh && now().getTime() - hit.fetchedAt.getTime() < maxAgeMs) return { kind: "ok", ...hit, espnTeamId: link.espnTeamId, stale: false };
 
     const login = await loadLogin(db, key, userId, now());
     if (!login) return (await loginStatus(db, userId, now()))?.status === "disconnected" ? { kind: "disconnected" } : { kind: "no-login" };
 
-    const read = await readEspnLeague(login, { season: link.season, espnLeagueId: link.espnLeagueId, views: VIEWS }, { fetchImpl });
+    const read = await readEspnLeague(login, { season: link.season, espnLeagueId: link.espnLeagueId, views: VIEWS, scoringPeriodId: week }, { fetchImpl });
     if (!read.ok) {
       // A refusal ESPN doesn't repeat is served like any other failed read.
       if (read.reason === "auth" && (await signedOut(db, userId, login, link))) return { kind: "disconnected" };

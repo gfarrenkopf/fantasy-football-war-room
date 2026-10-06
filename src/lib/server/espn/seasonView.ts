@@ -1,8 +1,8 @@
 import "server-only";
 import type { Db } from "@/lib/db/types";
-import type { PlayerProjections } from "@/lib/season/types";
+import type { PlayerProjections, SeasonLeague } from "@/lib/season/types";
 import { buildSeasonView, type SeasonView } from "@/lib/season/view";
-import { gameDayPhase, matchupLive, type GameDayPhase } from "@/lib/season/gameday";
+import { gameDayPhase, inResultHold, matchupLive, type GameDayPhase } from "@/lib/season/gameday";
 import { getEspnProjections } from "./projections";
 import { getEspnScoreboard } from "./scoreboard";
 import { loadSeason, type SeasonLoad } from "./seasonData";
@@ -10,8 +10,20 @@ import { loadSeason, type SeasonLoad } from "./seasonData";
 /** While a game is under way the league is read at most this long ago, so a page refreshing each minute sees new points (APE-227). */
 export const LIVE_MAX_AGE_MS = 45 * 1000;
 
+/** A finished week barely changes (stat corrections), so last week's read is kept longer. */
+const RESULT_MAX_AGE_MS = 15 * 60 * 1000;
+
 export type SeasonViewLoad =
-  | { kind: "ok"; view: SeasonView; fetchedAt: Date; stale: boolean; projectionsMissing: boolean; phase: GameDayPhase }
+  | {
+      kind: "ok";
+      view: SeasonView;
+      /** Last week, when ESPN has moved on but its result is still up (APE-251); game day shows it instead of `view`. */
+      result?: SeasonView;
+      fetchedAt: Date;
+      stale: boolean;
+      projectionsMissing: boolean;
+      phase: GameDayPhase;
+    }
   | Exclude<SeasonLoad, { kind: "ok" }>;
 
 /**
@@ -48,5 +60,33 @@ export async function loadSeasonView(db: Db, key: Buffer, userId: string, league
       view = buildSeasonView(live.league, live.espnTeamId, projections, { games, now: live.fetchedAt.getTime() });
     }
   }
-  return { kind: "ok", view, fetchedAt: load.fetchedAt, stale: load.stale, projectionsMissing, phase: gameDayPhase(view, Date.now()) };
+  const now = Date.now();
+  const phase = gameDayPhase(view, now);
+  const result = phase === "lineup" && inResultHold(now) ? await lastWeek(db, key, userId, leagueId, season, now) : null;
+  if (result) return { kind: "ok", view, result, fetchedAt: load.fetchedAt, stale: load.stale, projectionsMissing, phase: "results" };
+  return { kind: "ok", view, fetchedAt: load.fetchedAt, stale: load.stale, projectionsMissing, phase };
+}
+
+/**
+ * ESPN moves to the next week early Tuesday, but the week's result stays up until Wednesday morning
+ * (APE-251): last week's view, when its result is still the one to show. Null otherwise, and when
+ * any of its reads fails, so the page falls back to the lineup.
+ */
+async function lastWeek(db: Db, key: Buffer, userId: string, leagueId: string, current: SeasonLeague, now: number): Promise<SeasonView | null> {
+  const week = current.currentWeek - 1;
+  if (week < 1) return null;
+  try {
+    const load = await loadSeason(db, key, userId, leagueId, { week, maxAgeMs: RESULT_MAX_AGE_MS });
+    if (load.kind !== "ok" || load.league.currentWeek !== week) return null;
+    const ids = load.league.teams.flatMap((t) => t.roster.map((e) => e.playerId));
+    const [projections, games] = await Promise.all([
+      getEspnProjections({ season: load.league.season, playerIds: ids, fromWeek: week, toWeek: week }),
+      getEspnScoreboard({ season: load.league.season, week }),
+    ]);
+    const view = buildSeasonView(load.league, load.espnTeamId, projections, { games, now: load.fetchedAt.getTime() });
+    return gameDayPhase(view, now) === "results" ? view : null;
+  } catch (err) {
+    console.warn(`[espn-season] last week's result unavailable: ${(err as Error).message}`);
+    return null;
+  }
 }

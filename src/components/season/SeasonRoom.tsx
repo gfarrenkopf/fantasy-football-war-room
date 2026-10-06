@@ -38,6 +38,8 @@ type Props = {
   | { problem: SeasonProblem }
   | {
       view: SeasonView;
+      /** Last week, while its result is still up after ESPN has moved on (APE-251); game day shows it. */
+      result?: SeasonView;
       fetchedAt: string;
       stale: boolean;
       projectionsMissing: boolean;
@@ -131,7 +133,7 @@ export function SeasonRoom(props: Props) {
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "lineup" && props.phase !== "lineup" && !tools ? (
-                <GameDayPanel leagueId={props.leagueId} view={props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTools(true)} />
+                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTools(true)} />
               ) : tab === "lineup" ? (
                 <>
                   {props.phase !== "lineup" && (

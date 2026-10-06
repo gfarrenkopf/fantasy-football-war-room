@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameDayPhase, gameProgress, leftToPlay, matchupDecided, matchupLive, nextReset, pace } from "./gameday";
+import { gameDayPhase, gameProgress, inResultHold, leftToPlay, matchupDecided, matchupLive, nextReset, pace } from "./gameday";
 import type { GameState } from "./scoreboard";
 import type { LineupSlot } from "./types";
 import type { SeasonView, ViewPlayer } from "./view";
@@ -53,7 +53,7 @@ describe("gameDayPhase", () => {
     const monday = game("pre", { kickoff: "2026-10-06T00:15:00.000Z" });
     const done = view([player("WR", game("post")), player("BN", monday)]);
     expect(gameDayPhase(done, SUNDAY_NIGHT)).toBe("results");
-    expect(gameDayPhase(done, Date.parse("2026-10-06T17:00:00Z"))).toBe("lineup");
+    expect(gameDayPhase(done, Date.parse("2026-10-07T13:00:00Z"))).toBe("lineup");
   });
 
   it("shows the results once every starter is final, with a bench player mid-game", () => {
@@ -65,28 +65,43 @@ describe("gameDayPhase", () => {
     expect(gameDayPhase(view([player("WR", game("pre")), player("IR", game("in"))]), SUNDAY_NIGHT)).toBe("lineup");
   });
 
-  it("shows the results once every player is final, until Tuesday 1 PM Eastern", () => {
+  it("shows the results once every player is final, until Wednesday 9 AM Eastern", () => {
     const done = view([player("WR", game("post")), player("BN", game("post", { kickoff: "2026-10-06T00:15:00.000Z" }))]);
     expect(gameDayPhase(done, SUNDAY_NIGHT)).toBe("results");
-    expect(gameDayPhase(done, Date.parse("2026-10-06T16:59:00Z"))).toBe("results");
-    expect(gameDayPhase(done, Date.parse("2026-10-06T17:00:00Z"))).toBe("lineup");
+    expect(gameDayPhase(done, Date.parse("2026-10-06T17:00:00Z"))).toBe("results");
+    expect(gameDayPhase(done, Date.parse("2026-10-07T12:59:00Z"))).toBe("results");
+    expect(gameDayPhase(done, Date.parse("2026-10-07T13:00:00Z"))).toBe("lineup");
   });
 });
 
 describe("nextReset", () => {
-  it("finds the next Tuesday 1 PM Eastern, in daylight time and in standard time", () => {
-    expect(new Date(nextReset(Date.parse("2026-10-04T17:00:00Z"))).toISOString()).toBe("2026-10-06T17:00:00.000Z");
-    expect(new Date(nextReset(Date.parse("2026-11-08T18:00:00Z"))).toISOString()).toBe("2026-11-10T18:00:00.000Z");
+  it("finds the next Wednesday 9 AM Eastern, in daylight time and in standard time", () => {
+    expect(new Date(nextReset(Date.parse("2026-10-04T17:00:00Z"))).toISOString()).toBe("2026-10-07T13:00:00.000Z");
+    expect(new Date(nextReset(Date.parse("2026-11-08T18:00:00Z"))).toISOString()).toBe("2026-11-11T14:00:00.000Z");
   });
 
   it("counts across the November clock change", () => {
     // Sunday Nov 1 2026 is the change; Monday night's game is in standard time.
-    expect(new Date(nextReset(Date.parse("2026-10-30T00:15:00Z"))).toISOString()).toBe("2026-11-03T18:00:00.000Z");
+    expect(new Date(nextReset(Date.parse("2026-10-30T00:15:00Z"))).toISOString()).toBe("2026-11-04T14:00:00.000Z");
   });
 
-  it("on a Tuesday, is that afternoon before 1 PM and the next week after", () => {
-    expect(new Date(nextReset(Date.parse("2026-10-06T16:00:00Z"))).toISOString()).toBe("2026-10-06T17:00:00.000Z");
-    expect(new Date(nextReset(Date.parse("2026-10-06T17:00:00Z"))).toISOString()).toBe("2026-10-13T17:00:00.000Z");
+  it("on a Wednesday, is that morning before 9 AM and the next week after", () => {
+    expect(new Date(nextReset(Date.parse("2026-10-07T12:00:00Z"))).toISOString()).toBe("2026-10-07T13:00:00.000Z");
+    expect(new Date(nextReset(Date.parse("2026-10-07T13:00:00Z"))).toISOString()).toBe("2026-10-14T13:00:00.000Z");
+  });
+});
+
+describe("inResultHold", () => {
+  it("holds from Tuesday midnight until Wednesday 9 AM Eastern", () => {
+    expect(inResultHold(Date.parse("2026-10-06T03:59:00Z"))).toBe(false);
+    expect(inResultHold(Date.parse("2026-10-06T04:00:00Z"))).toBe(true);
+    expect(inResultHold(Date.parse("2026-10-07T12:59:00Z"))).toBe(true);
+    expect(inResultHold(Date.parse("2026-10-07T13:00:00Z"))).toBe(false);
+  });
+
+  it("counts Eastern standard time after the November clock change", () => {
+    expect(inResultHold(Date.parse("2026-11-04T13:59:00Z"))).toBe(true);
+    expect(inResultHold(Date.parse("2026-11-04T14:00:00Z"))).toBe(false);
   });
 });
 

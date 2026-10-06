@@ -4,7 +4,7 @@ import type { SeasonView, ViewPlayer } from "./view";
 /**
  * Game day (APE-226, APE-227). While any of the user's players is in a game, the season page is a
  * scoreboard rather than a lineup tool; once the starters are all final it shows the week's result,
- * until Tuesday afternoon brings the lineup tools back for the next week. Before Sunday (a Friday after
+ * until Wednesday morning brings the lineup tools back for the next week. Before Sunday (a Friday after
  * the Thursday game, a Sunday morning) the page stays on the lineup, which is what those hours are
  * for; from Sunday's games on it stays the scoreboard, Sunday night waiting on Monday included.
  */
@@ -14,10 +14,17 @@ export type GameDayPhase = "lineup" | "live" | "results";
 /** How a player is doing against his projection: not started, behind it, on it, ahead of it, or past all of it (boom). */
 export type Pace = "pre" | "behind" | "on" | "ahead" | "boom";
 
-/** The page goes back to the lineup tools at 1 PM on Tuesday, Eastern, after the week's last game: late enough that a Monday night's result is still there for someone who sleeps in. */
+/**
+ * The page goes back to the lineup tools at 9 AM on Wednesday, Eastern, after the week's last game:
+ * a whole day after Monday night (APE-251). ESPN moves to the next week early Tuesday, so from then
+ * the result is read from last week (inResultHold()).
+ */
 const RESET_ZONE = "America/New_York";
-const RESET_WEEKDAY = 2;
-const RESET_HOUR = 13;
+const RESET_WEEKDAY = 3;
+const RESET_HOUR = 9;
+
+/** Tuesday, Eastern: the day after the week's last game, when ESPN has moved on but the result holds. */
+const HOLD_WEEKDAY = 2;
 
 /** Sunday and Monday, Eastern: once a game on these days is final, the week is under way. */
 const GAME_DAYS = new Set([0, 1]);
@@ -45,7 +52,7 @@ export function gameDayPhase(view: SeasonView, now: number): GameDayPhase {
   // player still playing Monday night doesn't hold the result back (APE-245).
   const starterGames = starting(roster).flatMap((p) => (p.game ? [p.game] : []));
   if (starterGames.length && starterGames.every((g) => g.state === "post")) {
-    // Without kickoffs there's no Tuesday to count to; ESPN moving to the next week ends the results instead.
+    // Without kickoffs there's no Wednesday to count to; ESPN moving to the next week ends the results instead.
     if (!kickoffs.length) return "results";
     return now < nextReset(Math.max(...kickoffs)) ? "results" : "lineup";
   }
@@ -97,7 +104,16 @@ export function matchupLive(view: SeasonView): boolean {
   return ids.some((id) => active(rosterOf(view, id)).some((p) => p.game?.state === "in"));
 }
 
-/** The first Tuesday 1 PM Eastern after an instant, as epoch ms. */
+/**
+ * Whether ESPN may have moved past a week whose result is still up: Tuesday, or Wednesday before
+ * 9 AM, Eastern. Last week is then worth reading for its result (APE-251).
+ */
+export function inResultHold(now: number): boolean {
+  const wall = wallClock(now);
+  return wall.weekday === HOLD_WEEKDAY || (wall.weekday === RESET_WEEKDAY && wall.hour < RESET_HOUR);
+}
+
+/** The first Wednesday 9 AM Eastern after an instant, as epoch ms. */
 export function nextReset(after: number): number {
   const wall = wallClock(after);
   const days = (RESET_WEEKDAY - wall.weekday + 7) % 7 || (wall.hour < RESET_HOUR ? 0 : 7);
