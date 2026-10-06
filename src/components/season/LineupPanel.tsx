@@ -9,7 +9,7 @@ import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
-import { ArrowRight, Check, External } from "./Icons";
+import { ArrowLeft, ArrowRight, Check, External } from "./Icons";
 import { Gain, hasStarted, INJURY_TAG, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
 import { useLineupDraft, type LineupDraft } from "./useLineupDraft";
@@ -369,8 +369,10 @@ function BenchRow({ draft, player }: { draft: LineupDraft; player: ViewPlayer })
   const group = draft.changeOf.get(player.playerId);
   const moving = seat >= 0 && (!group || draft.isPicked(group));
   const toIr = draft.ir.includes(player.playerId);
+  // Who comes down to the bench in his place: ESPN's player in the seat he's taking.
+  const down = moving && draft.onEspn[seat] !== null ? draft.byId.get(draft.onEspn[seat]!) : undefined;
   return (
-    <li className={s.row} data-moving={moving || toIr}>
+    <li className={s.row} data-moving={moving || toIr} data-swapping={!!down || undefined}>
       <span className={s.rowSlot}>
         <BenchPicker draft={draft} player={player} />
       </span>
@@ -379,6 +381,27 @@ function BenchRow({ draft, player }: { draft: LineupDraft; player: ViewPlayer })
         {(moving || toIr) && <span className={s.rowChip}>{toIr ? "Going on IR" : `Starting at ${SLOT_LABEL[draft.seats[seat]]}`}</span>}
       </span>
       <Points player={player} />
+      {/* Right: the starter he replaces, coming down to the bench. Muted: the change is made or left out on the starter's row. */}
+      {down && (
+        <span className={`${s.suggest} ${s.suggestDown}`}>
+          <span className={s.suggestBody}>
+            <span className={s.suggestHead}>
+              <ArrowLeft className={s.suggestArrow} />
+              <span className="sr-only">To the bench: </span>
+              <b className={s.suggestName}>{down.name}</b>
+            </span>
+            <span className={s.suggestFacts}>
+              <span className={s.pos} data-pos={down.pos}>
+                {down.pos === "DST" ? "D/ST" : down.pos}
+              </span>{" "}
+              · {down.team ?? "FA"} · from {SLOT_LABEL[draft.seats[seat]]}
+            </span>
+          </span>
+          <span className={s.suggestPts}>
+            <span className={`${s.rowPts} tabular-nums`}>{pts(down.points)}</span>
+          </span>
+        </span>
+      )}
     </li>
   );
 }

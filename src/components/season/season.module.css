@@ -562,7 +562,8 @@
 }
 
 /* A seat with a change on offer: ESPN's player stays on the left as set, the change takes the right. */
-.row[data-changed="true"] {
+.row[data-changed="true"],
+.row[data-swapping] {
   grid-template-columns: 52px minmax(0, 1fr) auto minmax(0, 42%);
 }
 
@@ -601,6 +602,26 @@
   color: var(--color-muted);
 }
 
+/* The bench's side of a swap: the starter coming down. Muted, and not a control. */
+.suggestDown {
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-color: var(--color-line2);
+  background: var(--color-panel2);
+  cursor: default;
+}
+.suggestDown:hover {
+  background: var(--color-panel2);
+}
+.suggestDown .suggestName {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+.suggestDown .suggestArrow {
+  color: var(--color-dim);
+}
+.suggestDown .rowPts {
+  color: var(--color-muted);
+}
 .suggestCheck {
   width: 18px;
   height: 18px;
@@ -3422,10 +3443,12 @@ li + li > .pickerOption {
     padding-right: 10px;
   }
   /* On a phone the change on offer takes its own line under ESPN's player, full width. */
-  .row[data-changed="true"] {
+  .row[data-changed="true"],
+  .row[data-swapping] {
     grid-template-columns: 52px minmax(0, 1fr) auto;
   }
-  .row[data-changed="true"] .suggest {
+  .row[data-changed="true"] .suggest,
+  .row[data-swapping] .suggest {
     grid-column: 2 / -1;
   }
 
