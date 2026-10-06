@@ -4,12 +4,12 @@ import { useEffect, useId, useState, type CSSProperties } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { canPlay } from "@/lib/season/apply";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
-import { isRuledOut } from "@/lib/season/lineup";
+import { compareLineups, isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
-import { External } from "./Icons";
+import { Check, External } from "./Icons";
 import { Gain, hasStarted, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
 import { useLineupDraft, type LineupDraft } from "./useLineupDraft";
@@ -24,9 +24,19 @@ const HEADLINE: Record<Emphasis, string> = {
 
 /** Why a starter is coming out, when it's news: he won't play. */
 function outReason(p: ViewPlayer): string | null {
-  if (isRuledOut(p.injuryStatus)) return "ruled out";
-  if (p.points === 0 && p.projected) return "no game this week";
+  if (isRuledOut(p.injuryStatus)) return "is ruled out";
+  if (p.points === 0 && p.projected) return "has no game this week";
   return null;
+}
+
+/** Where a player is on ESPN, as the end of "up from …": "the bench", "WR". */
+const fromWhere = (p: ViewPlayer) => (p.slot === "BN" ? "the bench" : SLOT_LABEL[p.slot]);
+
+/** One War Room change as a sentence: "Start Justin Jefferson at FLEX over Garrett Wilson". */
+function moveSentence(slot: string, into: ViewPlayer | undefined, out: ViewPlayer | undefined): string {
+  if (!into) return `Bench ${out?.name ?? "nobody"} and leave ${slot} empty`;
+  if (!out) return `Start ${into.name} at ${slot}, empty on ESPN now`;
+  return `Start ${into.name} at ${slot} over ${out.name}`;
 }
 
 /**
@@ -43,6 +53,17 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
 
   const { lineup } = view;
   const suggested = lineup.moves.length > 0;
+  // War Room's changes, seat by seat: the hero names them, whatever the user has staged since.
+  const byId = draft.byId;
+  const suggestions = compareLineups(mine.roster, lineup)
+    .filter((r) => r.changed)
+    .map((r) => {
+      const into = r.next === null ? undefined : byId.get(r.next);
+      const out = r.now === null ? undefined : byId.get(r.now);
+      const why = out && outReason(out);
+      return { key: `${r.key}-${r.next}`, text: moveSentence(SLOT_LABEL[r.key], into, out), gain: (into?.points ?? 0) - (out?.points ?? 0), why: why ? `${out.name} ${why}` : null };
+    });
+  const only = suggestions.length === 1 ? suggestions[0] : null;
   const gain = lineup.total - lineup.currentTotal;
   const level = suggested ? lineupEmphasis(gain) : "rest";
   const swaps = draft.seats.filter((_, i) => draft.onEspn[i] !== draft.staged[i]).length;
@@ -59,12 +80,23 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           level={level}
           value={gain}
           unit="pts"
-          headline={HEADLINE[level]}
+          headline={only ? only.text : suggested ? `${HEADLINE[level]}: ${suggestions.length} changes` : HEADLINE[level]}
           detail={
             suggested ? (
               <>
-                War Room&apos;s lineup takes you from <span className="tabular-nums">{pts(lineup.currentTotal)}</span> to{" "}
-                <b className="tabular-nums">{pts(lineup.total)}</b> projected points in week {view.currentWeek}.
+                {only ? (
+                  only.why && <span className={s.gainWhy}>{only.why}. </span>
+                ) : (
+                  suggestions.map((m) => (
+                    <span key={m.key} className={s.gainMove}>
+                      {m.text} <b className="tabular-nums">{signed(m.gain)}</b>
+                      {m.why && <span className={s.gainWhy}> · {m.why}</span>}
+                    </span>
+                  ))
+                )}
+                <span className={s.gainTotal}>
+                  <span className="tabular-nums">{pts(lineup.currentTotal)}</span> → <b className="tabular-nums">{pts(lineup.total)}</b> projected in week {view.currentWeek}.
+                </span>
               </>
             ) : (
               <>
@@ -218,34 +250,35 @@ function StarterRow({ draft, seat, made }: { draft: LineupDraft; seat: number; m
       <span className={s.rowSlot}>
         <SeatPicker draft={draft} seat={seat} label={SLOT_LABEL[key]} />
         {group && (
-          <input
-            type="checkbox"
-            className={s.rowCheck}
-            checked={picked}
-            disabled={draft.phase.kind === "sending"}
-            onChange={(e) => draft.toggle(group, e.target.checked)}
-            aria-label={`Make this ${SLOT_LABEL[key]} change on ESPN`}
-          />
+          <label className={s.rowCheck}>
+            <input type="checkbox" checked={picked} disabled={draft.phase.kind === "sending"} onChange={(e) => draft.toggle(group, e.target.checked)} />
+            Swap<span className="sr-only"> at {SLOT_LABEL[key]}</span>
+          </label>
         )}
       </span>
       <span className={s.rowPlayer}>
-        {changed && (
-          <span className={s.rowOut}>
-            {now ? (
-              <>
-                <span className="sr-only">Replacing </span>
-                <s>{now.name}</s> · <span className="tabular-nums">{pts(now.points)}</span>
-                {why && <span className={s.rowWhy}> · {why}</span>}
-              </>
-            ) : (
-              "Empty on ESPN"
-            )}
-          </span>
-        )}
         {shown ? (
           <PlayerLine player={shown} tone={changed ? "in" : "same"} locked={shown.locked} value="none" news ownership live stacked />
         ) : (
           <span className={s.fine}>Empty</span>
+        )}
+        {/* A swap says where each player goes, in words: who comes up from where, who goes to the bench. */}
+        {changed && (
+          <span className={s.rowMove}>
+            {shown ? (
+              <>
+                <b className={s.rowIn}>Up from {fromWhere(shown)}</b>
+                {" · "}
+              </>
+            ) : null}
+            {now ? (
+              <span className={why ? s.rowWhy : undefined}>
+                {now.name} {why ? `${why}, to the bench` : <>goes to the bench</>} <span className="tabular-nums">({pts(now.points)})</span>
+              </span>
+            ) : (
+              <>{SLOT_LABEL[key]} is empty on ESPN</>
+            )}
+          </span>
         )}
       </span>
       {ours && shown ? (
@@ -320,7 +353,7 @@ function BenchRow({ draft, player }: { draft: LineupDraft; player: ViewPlayer })
       </span>
       <span className={s.rowPlayer}>
         <PlayerLine player={player} locked={player.locked} value="none" news ownership live stacked />
-        {(moving || toIr) && <span className={s.rowChip}>→ {toIr ? "IR" : SLOT_LABEL[draft.seats[seat]]}</span>}
+        {(moving || toIr) && <span className={s.rowChip}>{toIr ? "Going on IR" : `Starting at ${SLOT_LABEL[draft.seats[seat]]}`}</span>}
       </span>
       <Points player={player} />
     </li>
@@ -352,34 +385,55 @@ function Picker({ label: text, disabled, title, children }: { label: string; dis
   );
 }
 
-/** Who can play a starting seat: anyone eligible and not on IR, the player staged there first. */
+/**
+ * Who can play a starting seat: anyone eligible and not on IR. War Room's pick for the seat leads and
+ * says so, then ESPN's player there; everyone else says where picking him takes him from.
+ */
 function SeatPicker({ draft, seat, label: text }: { draft: LineupDraft; seat: number; label: string }) {
   const key = draft.seats[seat];
   const current = draft.staged[seat];
+  const ours = draft.recommended[seat];
+  const espn = draft.onEspn[seat];
   const holder = current === null ? undefined : draft.byId.get(current);
+  const rank = (id: number) => (id === ours ? 0 : id === espn ? 1 : 2);
   const options = draft.roster
     .filter((p) => !draft.ir.includes(p.playerId) && canPlay(p.pos, key) && (!p.locked || p.playerId === current))
-    .sort((a, b) => Number(b.playerId === current) - Number(a.playerId === current) || b.points - a.points);
+    .sort((a, b) => rank(a.playerId) - rank(b.playerId) || b.points - a.points);
   return (
     <Picker label={text} disabled={!!holder?.locked} title={`Who plays ${text}`}>
       {(close) => (
         <>
           {options.map((p) => {
             const at = draft.staged.indexOf(p.playerId);
+            const where = at === seat ? null : at >= 0 ? `Starting at ${SLOT_LABEL[draft.seats[at]]}` : "On the bench";
             return (
               <li key={p.playerId}>
                 <button
                   type="button"
                   className={s.pickerOption}
                   aria-current={p.playerId === current}
+                  data-ours={p.playerId === ours || undefined}
                   onClick={() => {
                     if (p.playerId !== current) draft.choose(seat, p.playerId);
                     close();
                   }}
                 >
-                  <span className={s.pickerWhere}>{at >= 0 ? SLOT_LABEL[draft.seats[at]] : "BN"}</span>
-                  <PlayerLine player={p} value="none" live />
-                  <span className={`${s.rowPts} tabular-nums`}>{pts(p.points)}</span>
+                  <span className={s.pickerWho}>
+                    <PlayerLine player={p} value="none" live />
+                    <span className={s.pickerTags}>
+                      {p.playerId === ours && <span className={s.pickerOurs}>War Room&apos;s pick</span>}
+                      {p.playerId === espn && <span className={s.pickerEspn}>On ESPN at {text}</span>}
+                      {where && p.playerId !== espn && <span>{where}</span>}
+                    </span>
+                  </span>
+                  <span className={s.pickerRight}>
+                    <span className={`${s.rowPts} tabular-nums`}>{pts(p.points)}</span>
+                    {p.playerId === current && (
+                      <span className={s.pickerChosen}>
+                        <Check /> Chosen
+                      </span>
+                    )}
+                  </span>
                 </button>
               </li>
             );
@@ -412,7 +466,7 @@ function BenchPicker({ draft, player }: { draft: LineupDraft; player: ViewPlayer
     return canPlay(player.pos, key as LineupSlot) && !holder?.locked && i !== at ? [{ key, i, holder }] : [];
   });
   return (
-    <Picker label="BN" disabled={player.locked || draft.ir.includes(player.playerId)} title={`Start ${player.name} at`}>
+    <Picker label="BN" disabled={player.locked || draft.ir.includes(player.playerId)} title={`Where ${player.name} starts`}>
       {(close) => (
         <>
           {seats.map(({ key, i, holder }) => (
@@ -425,8 +479,16 @@ function BenchPicker({ draft, player }: { draft: LineupDraft; player: ViewPlayer
                   close();
                 }}
               >
-                <span className={s.pickerWhere}>{SLOT_LABEL[key]}</span>
-                <span>{holder ? <>for {holder.name}</> : "Empty slot"}</span>
+                <span className={s.pickerWho}>
+                  <b>
+                    {SLOT_LABEL[key]}, {holder ? <>over {holder.name}</> : "empty now"}
+                  </b>
+                  {draft.recommended[i] === player.playerId && (
+                    <span className={s.pickerTags}>
+                      <span className={s.pickerOurs}>War Room&apos;s pick</span>
+                    </span>
+                  )}
+                </span>
                 {holder && <span className={`${s.rowPts} tabular-nums`}>{pts(holder.points)}</span>}
               </button>
             </li>

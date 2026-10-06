@@ -65,6 +65,30 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
     setPhase({ kind: "failed", error: body.error ?? "Something went wrong. Check your lineup on ESPN.", details: body.changed ?? body.problems ?? body.refused ?? [], unverified: body.unverified });
   }
 
+  // A straight swap reads as one: "Start Jefferson at FLEX, bench Wilson". Anything else lists its moves.
+  const changeLine = (group: readonly LineupMove[]) => {
+    const into = group.find((m) => m.to !== "BN" && m.to !== "IR");
+    const out = group.find((m) => m.to === "BN");
+    if (group.length <= 2 && into && (!out || out.from === into.to)) {
+      return (
+        <>
+          Start <b>{name(into.playerId)}</b> at {label(into.to)}
+          {out && (
+            <>
+              , bench <b>{name(out.playerId)}</b>
+            </>
+          )}
+        </>
+      );
+    }
+    return group.map((m, i) => (
+      <span key={m.playerId}>
+        {i > 0 && "; "}
+        {moveLine(m)}
+      </span>
+    ));
+  };
+
   const moveLine = (m: LineupMove) => (
     <>
       <b>{name(m.playerId)}</b>: {label(m.from)} → {label(m.to)}
@@ -79,8 +103,19 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
         <p className={s.fine}>ESPN already has this lineup. Tap a slot to change anything, starters or bench.</p>
       ) : (
         <>
+          {picked.length > 0 && (
+            <ul className={`${s.applyList} ${s.applyChanges}`}>
+              {picked.map((g) => (
+                <li key={g.map((m) => m.playerId).join("-")}>{changeLine(g)}</li>
+              ))}
+            </ul>
+          )}
           <p className={s.fine}>
-            {picked.length} of {changes.length === 1 ? "1 change" : `${changes.length} changes`} ticked, from {draft.source}. Untick a row to leave it out.
+            {changes.length > picked.length
+              ? `${changes.length - picked.length} left out. Tick its Swap box to put it back.`
+              : changes.length > 1
+                ? "Untick a row's Swap box to leave that change out."
+                : "Untick Swap on the row to leave it out."}
           </p>
           {problems.length > 0 && (
             <ul className={s.applyProblems}>
@@ -95,11 +130,6 @@ export function ApplyLineup({ draft, view, leagueId, agreed: agreedAtLoad }: { d
               <p>
                 Apply {picked.length === 1 ? "this change" : `these ${picked.length} changes`} to your team on ESPN for week {view.currentWeek}?
               </p>
-              <ul className={s.applyList}>
-                {chosen.map((m) => (
-                  <li key={m.playerId}>{moveLine(m)}</li>
-                ))}
-              </ul>
               {!agreed && <WriteConsent checked={consenting} onChange={setConsenting} />}
               <div className={s.confirmActions}>
                 <button type="button" className={s.primary} onClick={apply} disabled={phase.kind === "sending" || (!agreed && !consenting)}>

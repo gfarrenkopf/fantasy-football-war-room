@@ -354,6 +354,22 @@
   font-size: 13px;
 }
 
+/* The lineup's changes, one per line, then where they take the total (APE-249). */
+.gainMove {
+  display: block;
+  color: var(--color-text);
+}
+.gainMove b {
+  color: var(--color-value-ink);
+}
+.gainWhy {
+  color: var(--color-reach-ink);
+}
+.gainTotal {
+  display: block;
+  margin-top: 2px;
+}
+
 /* Rest: nothing to do. Quiet, and it says so with a check rather than a zero. */
 .gain[data-level="rest"] .gainNumber {
   font-size: 30px;
@@ -518,10 +534,20 @@
 }
 
 .rowCheck {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  color: var(--color-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rowCheck input {
   width: 18px;
   height: 18px;
   margin: 0;
   accent-color: var(--color-mine);
+  cursor: pointer;
 }
 
 .rowPlayer {
@@ -530,18 +556,24 @@
   min-width: 0;
 }
 
-.rowOut {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Under a swap: where each player goes, in words. */
+.rowMove {
   color: var(--color-muted);
   font-size: 11.5px;
+  line-height: 1.35;
 }
-.rowOut s {
-  text-decoration-color: color-mix(in srgb, var(--color-reach) 70%, transparent);
+.rowIn {
+  color: var(--color-mine);
+  font-weight: 700;
 }
 .rowWhy {
   color: var(--color-reach-ink);
+}
+
+/* A bench player staged to start is leaving the bench: his row steps back, his chip says where he's going. */
+.row[data-moving="true"] .player,
+.row[data-moving="true"] .rowPoints {
+  opacity: 0.55;
 }
 
 .rowChip {
@@ -633,12 +665,12 @@
 
 .pickerOption {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
   min-height: 44px;
-  padding: 6px 14px;
+  padding: 7px 14px;
   border: 0;
   background: none;
   color: inherit;
@@ -649,16 +681,56 @@
 .pickerOption:hover {
   background: var(--color-hover);
 }
-.pickerOption[aria-current="true"] {
+.pickerOption + .pickerOption,
+li + li > .pickerOption {
+  border-top: 1px solid var(--color-row-line);
+}
+/* War Room's pick for the seat: it leads the list and carries the green the rest of the lineup uses for War Room. */
+.pickerOption[data-ours] {
   background: color-mix(in srgb, var(--color-mine) 9%, transparent);
+}
+.pickerOption[data-ours]:hover {
+  background: color-mix(in srgb, var(--color-mine) 14%, transparent);
 }
 .pickerOption .rowPts {
   font-size: 13px;
 }
-.pickerWhere {
+
+.pickerWho {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.pickerTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   color: var(--color-muted);
   font-size: 11px;
+}
+.pickerOurs {
+  color: var(--color-mine);
   font-weight: 700;
+}
+.pickerEspn {
+  color: var(--color-text);
+}
+.pickerRight {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+.pickerChosen {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--color-sky);
+  font-size: 11px;
+  font-weight: 600;
+}
+.pickerChosen svg {
+  width: 11px;
+  height: 11px;
 }
 .pickerEmpty {
   display: block;
@@ -2246,6 +2318,10 @@
   width: 12px;
   height: 12px;
   color: var(--color-value-ink);
+}
+/* A change is a sentence: it wraps as text, never as columns. */
+.applyChanges li {
+  display: block;
 }
 .applyList li[data-landed="false"] {
   color: var(--color-reach-ink);
