@@ -49,16 +49,19 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   );
   const load = await loadSeasonView(db, key, user.userId, leagueId, { refresh });
   if (load.kind !== "ok") return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} />;
-  const { view } = load;
-  // ESPN's projections as they stand, kept for game day's "ESPN's call" (APE-229).
-  after(() => recordProjections(db, leagueId, view).catch((err: unknown) => console.warn(`[espn-season] couldn't record projections: ${(err as Error).message}`)));
+  const { view, result } = load;
+  // ESPN's projections as they stand, kept for game day's "ESPN's call" (APE-229); last week's too
+  // while its result is up, so ESPN's stat corrections still land (APE-251).
+  for (const v of result ? [view, result] : [view]) {
+    after(() => recordProjections(db, leagueId, v).catch((err: unknown) => console.warn(`[espn-season] couldn't record projections: ${(err as Error).message}`)));
+  }
   const [ai, emails, consented, , accuracy] = await Promise.all([
     seasonAiState(db, user, league, view),
     // Only offered when the Sunday job can send email at all.
     config.seasonJobEnabled && config.emailAuthEnabled ? wantsSeasonEmails(db, user.userId) : null,
     writeConsent(db, user.userId),
     markSeasonViewed(db, user.userId, leagueId),
-    load.phase === "lineup" ? null : projectionAccuracy(db, leagueId, view),
+    load.phase === "lineup" ? null : projectionAccuracy(db, leagueId, result ?? view),
   ]);
 
   return (
@@ -68,6 +71,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       leagueName={league.name}
       leagues={leagues}
       view={view}
+      result={result}
       fetchedAt={load.fetchedAt.toISOString()}
       stale={load.stale}
       projectionsMissing={load.projectionsMissing}

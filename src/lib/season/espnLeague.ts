@@ -224,15 +224,27 @@ export function parseFreeAgents(raw: unknown): FreeAgent[] {
   });
 }
 
-/** The current matchup period's fantasy matchups (`mMatchupScore`), home and away. */
-export function parseMatchups(raw: unknown): Matchup[] {
+/**
+ * The fantasy matchups (`mMatchupScore`), home and away, for the matchup period holding `week`, or
+ * ESPN's current one without it. A past week's read still says the current period (APE-251), so the
+ * period comes from the schedule's map of periods to weeks when it can.
+ */
+export function parseMatchups(raw: unknown, week?: number): Matchup[] {
   if (!isObject(raw) || !Array.isArray(raw.schedule) || !isObject(raw.status)) return [];
-  const period = raw.status.currentMatchupPeriod;
+  const period = (week === undefined ? undefined : periodOf(raw, week)) ?? raw.status.currentMatchupPeriod;
   return raw.schedule.flatMap((m): Matchup[] => {
     if (!isObject(m) || m.matchupPeriodId !== period) return [];
     const home = parseSide(m.home);
     return home ? [{ home, away: parseSide(m.away) }] : [];
   });
+}
+
+/** The matchup period whose weeks include `week`, from `mSettings`; undefined when ESPN doesn't say. */
+function periodOf(raw: Record<string, unknown>, week: number): number | undefined {
+  const schedule = isObject(raw.settings) ? raw.settings.scheduleSettings : undefined;
+  const periods = isObject(schedule) && isObject(schedule.matchupPeriods) ? schedule.matchupPeriods : {};
+  const found = Object.entries(periods).find(([, weeks]) => Array.isArray(weeks) && weeks.includes(week));
+  return found ? Number(found[0]) : undefined;
 }
 
 /**
@@ -318,7 +330,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       pendingClaims: parsePendingClaims(raw),
       draftOrder: parseDraftOrder(settings.draftSettings),
       tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
-      matchups: parseMatchups(raw),
+      matchups: parseMatchups(raw, currentWeek),
       waivers: parseWaivers(settings, raw.teams),
     },
   };

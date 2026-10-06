@@ -65,6 +65,19 @@ describe("the season loader", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("reads a past week on its own, cached apart from the current week (APE-251)", async () => {
+    const { userId, leagueId } = await connectedLeague();
+    const { load, fetchImpl } = setup();
+    await load(db, KEY, userId, leagueId);
+    await load(db, KEY, userId, leagueId, { week: 3 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(String(fetchImpl.mock.calls[0][0])).not.toContain("scoringPeriodId");
+    expect(String(fetchImpl.mock.calls[1][0])).toContain("&scoringPeriodId=3");
+    await load(db, KEY, userId, leagueId, { week: 3 });
+    await load(db, KEY, userId, leagueId);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("marks the login disconnected when ESPN refuses it", async () => {
     const { userId, leagueId } = await connectedLeague();
     const { load } = setup(() => new Response("{}", { status: 401 }));

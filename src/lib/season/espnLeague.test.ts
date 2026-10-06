@@ -265,6 +265,12 @@ describe("parseMatchups", () => {
     ]);
   });
 
+  it("reads a past week's period from the schedule, since ESPN still says the current one (APE-251)", () => {
+    const past = { ...raw, settings: { scheduleSettings: { matchupPeriods: { "3": [3], "4": [4] } } } };
+    expect(parseMatchups(past, 3)).toEqual([{ home: { teamId: 1, points: 12.35, projected: 118.5, winProbability: 0.49 }, away: { teamId: 2, points: 12.35, projected: 118.5, winProbability: 0.49 } }]);
+    expect(parseMatchups(raw, 3)).toHaveLength(2);
+  });
+
   it("is empty without a schedule", () => {
     expect(parseMatchups({ status: {} })).toEqual([]);
     expect(parseMatchups(null)).toEqual([]);
