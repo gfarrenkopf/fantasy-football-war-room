@@ -53,7 +53,7 @@ describe("gameDayPhase", () => {
     const monday = game("pre", { kickoff: "2026-10-06T00:15:00.000Z" });
     const done = view([player("WR", game("post")), player("BN", monday)]);
     expect(gameDayPhase(done, SUNDAY_NIGHT)).toBe("results");
-    expect(gameDayPhase(done, Date.parse("2026-10-06T10:00:00Z"))).toBe("lineup");
+    expect(gameDayPhase(done, Date.parse("2026-10-06T17:00:00Z"))).toBe("lineup");
   });
 
   it("shows the results once every starter is final, with a bench player mid-game", () => {
@@ -65,28 +65,28 @@ describe("gameDayPhase", () => {
     expect(gameDayPhase(view([player("WR", game("pre")), player("IR", game("in"))]), SUNDAY_NIGHT)).toBe("lineup");
   });
 
-  it("shows the results once every player is final, until Tuesday 6 AM Eastern", () => {
+  it("shows the results once every player is final, until Tuesday 1 PM Eastern", () => {
     const done = view([player("WR", game("post")), player("BN", game("post", { kickoff: "2026-10-06T00:15:00.000Z" }))]);
     expect(gameDayPhase(done, SUNDAY_NIGHT)).toBe("results");
-    expect(gameDayPhase(done, Date.parse("2026-10-06T09:59:00Z"))).toBe("results");
-    expect(gameDayPhase(done, Date.parse("2026-10-06T10:00:00Z"))).toBe("lineup");
+    expect(gameDayPhase(done, Date.parse("2026-10-06T16:59:00Z"))).toBe("results");
+    expect(gameDayPhase(done, Date.parse("2026-10-06T17:00:00Z"))).toBe("lineup");
   });
 });
 
 describe("nextReset", () => {
-  it("finds the next Tuesday 6 AM Eastern, in daylight time and in standard time", () => {
-    expect(new Date(nextReset(Date.parse("2026-10-04T17:00:00Z"))).toISOString()).toBe("2026-10-06T10:00:00.000Z");
-    expect(new Date(nextReset(Date.parse("2026-11-08T18:00:00Z"))).toISOString()).toBe("2026-11-10T11:00:00.000Z");
+  it("finds the next Tuesday 1 PM Eastern, in daylight time and in standard time", () => {
+    expect(new Date(nextReset(Date.parse("2026-10-04T17:00:00Z"))).toISOString()).toBe("2026-10-06T17:00:00.000Z");
+    expect(new Date(nextReset(Date.parse("2026-11-08T18:00:00Z"))).toISOString()).toBe("2026-11-10T18:00:00.000Z");
   });
 
   it("counts across the November clock change", () => {
     // Sunday Nov 1 2026 is the change; Monday night's game is in standard time.
-    expect(new Date(nextReset(Date.parse("2026-10-30T00:15:00Z"))).toISOString()).toBe("2026-11-03T11:00:00.000Z");
+    expect(new Date(nextReset(Date.parse("2026-10-30T00:15:00Z"))).toISOString()).toBe("2026-11-03T18:00:00.000Z");
   });
 
-  it("on a Tuesday, is that morning before 6 and the next week after", () => {
-    expect(new Date(nextReset(Date.parse("2026-10-06T09:00:00Z"))).toISOString()).toBe("2026-10-06T10:00:00.000Z");
-    expect(new Date(nextReset(Date.parse("2026-10-06T10:00:00Z"))).toISOString()).toBe("2026-10-13T10:00:00.000Z");
+  it("on a Tuesday, is that afternoon before 1 PM and the next week after", () => {
+    expect(new Date(nextReset(Date.parse("2026-10-06T16:00:00Z"))).toISOString()).toBe("2026-10-06T17:00:00.000Z");
+    expect(new Date(nextReset(Date.parse("2026-10-06T17:00:00Z"))).toISOString()).toBe("2026-10-13T17:00:00.000Z");
   });
 });
 
