@@ -23,6 +23,15 @@ export interface LoginStatus {
   verifiedAt: Date | null;
 }
 
+/** The login's two cookies from a request body, or null if either doesn't look like ESPN's. */
+export function parseEspnLogin(body: unknown): EspnLogin | null {
+  const b = (body ?? {}) as Partial<EspnLogin>;
+  // espn_s2 is URL-encoded base64, a few hundred characters.
+  if (typeof b.espnS2 !== "string" || !/^[A-Za-z0-9%+/=._-]{20,2000}$/.test(b.espnS2)) return null;
+  if (typeof b.swid !== "string" || !/^\{[0-9A-Fa-f-]{36}\}$/.test(b.swid)) return null;
+  return { espnS2: b.espnS2, swid: b.swid };
+}
+
 /** Bound into the seal, so a sealed value only opens on the row it was written for. */
 const context = (userId: string) => `espn-login:${userId}`;
 

@@ -23,7 +23,7 @@ import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
 export interface ConnectRequest extends EspnLogin {
   espnLeagueId: string;
   season: number;
-  /** The consent version the user agreed to in the popup. */
+  /** The consent version the user agreed to in the bridge overlay. */
   consentVersion: number;
 }
 

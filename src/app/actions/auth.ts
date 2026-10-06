@@ -4,8 +4,16 @@ import { AuthError } from "next-auth";
 import { authjs } from "@/lib/auth";
 import { config } from "@/lib/config";
 
-/** Where every successful sign-in lands: the war room, with the user's leagues already synced. */
+/** Where a successful sign-in lands by default: the war room, with the user's leagues already synced. */
 const AFTER_SIGN_IN = "/draft?welcome=1";
+
+/**
+ * Where to land instead, for a page that asked for sign-in mid-task (the ESPN season claim). Only
+ * paths on this site: anything else falls back to the war room, so this can't be an open redirect.
+ */
+function landing(next?: string): string {
+  return next && /^\/(?![/\\])/.test(next) ? next : AFTER_SIGN_IN;
+}
 
 /** Ends the session. The caller reloads the page, so every store and provider starts fresh for the signed-out user. */
 export async function signOutAction(): Promise<void> {
@@ -22,13 +30,13 @@ export type EmailSignInResult = { ok: true } | { ok: false; reason: "unavailable
  * The result never says whether the address has an account — it reports only whether the mail
  * went out, so the form can't be used to probe for registered users.
  */
-export async function signInWithEmail(email: string): Promise<EmailSignInResult> {
+export async function signInWithEmail(email: string, next?: string): Promise<EmailSignInResult> {
   if (!authjs || !config.emailAuthEnabled) return { ok: false, reason: "unavailable" };
   const address = email.trim().toLowerCase();
   // Deliberately loose: the mail provider is the real validator. This only catches obvious typos.
   if (address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { ok: false, reason: "invalid-email" };
   try {
-    await authjs.signIn("resend", { email: address, redirect: false, redirectTo: AFTER_SIGN_IN });
+    await authjs.signIn("resend", { email: address, redirect: false, redirectTo: landing(next) });
     return { ok: true };
   } catch (error) {
     if (error instanceof AuthError) return { ok: false, reason: "failed" };
@@ -37,7 +45,7 @@ export async function signInWithEmail(email: string): Promise<EmailSignInResult>
 }
 
 /** Starts the Google flow. This one really does redirect — OAuth has to leave the page. */
-export async function signInWithGoogle(): Promise<void> {
+export async function signInWithGoogle(next?: string): Promise<void> {
   if (!authjs || !config.googleAuthEnabled) return;
-  await authjs.signIn("google", { redirectTo: AFTER_SIGN_IN });
+  await authjs.signIn("google", { redirectTo: landing(next) });
 }

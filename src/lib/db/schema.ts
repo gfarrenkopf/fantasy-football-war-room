@@ -315,6 +315,28 @@ export const espnLogins = pgTable(
 );
 
 /**
+ * An ESPN login on its way from the bridge to a War Room account (APE-297). The bridge, on ESPN's
+ * site, can't carry the user's War Room session, so it posts the login here and gets back a one-time
+ * claim code; the same tab then opens War Room, where the signed-in user claims it and it becomes
+ * their `espn_logins` row. Single use, gone after a few minutes. Only the code's SHA-256 is stored,
+ * and the login is sealed with ESPN_CODE_KEY bound to that hash.
+ */
+export const espnLoginClaims = pgTable(
+  "espn_login_claims",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    /** `{ espnS2, swid }` as JSON, sealed. Never logged, never returned by an API. */
+    sealed: text("sealed").notNull(),
+    espnLeagueId: text("espn_league_id").notNull(),
+    season: integer("season").notNull(),
+    consentVersion: integer("consent_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (t) => [index("espn_login_claims_expires_at_idx").on(t.expiresAt)],
+);
+
+/**
  * Which ESPN league and team a war room league follows during the season (10.3). Written when the
  * user connects their season from ESPN; the season page reads rosters for this ESPN league with the
  * user's stored login (`espn_logins`). One per war room league, and one war room league per ESPN

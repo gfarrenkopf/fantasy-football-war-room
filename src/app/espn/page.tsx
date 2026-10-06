@@ -4,11 +4,11 @@ import { connection } from "next/server";
 import { BridgeInstall } from "@/components/espn/BridgeInstall";
 import { config } from "@/lib/config";
 
-export const metadata: Metadata = { title: "Sync your ESPN draft · Fantasy War Room" };
+export const metadata: Metadata = { title: "The War Room bookmark · Fantasy War Room" };
 
-/** How to set up ESPN live sync: install the War Room bookmark, then click it in the ESPN draft room. */
+/** How to install the War Room bookmark, on a computer or a phone, and use it to connect the season or sync the draft. */
 export default async function EspnSetup() {
   await connection();
   if (!config.espnSyncEnabled) notFound();
-  return <BridgeInstall />;
+  return <BridgeInstall season={config.espnSeasonEnabled} />;
 }

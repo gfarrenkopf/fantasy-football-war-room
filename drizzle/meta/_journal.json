@@ -127,6 +127,13 @@
       "when": 1791312540877,
       "tag": "0017_season_lineup_moves",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791327891987,
+      "tag": "0018_espn_login_claims",
+      "breakpoints": true
     }
   ]
 }

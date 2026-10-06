@@ -1,85 +1,48 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import type { PublicFlags } from "@/lib/config";
 import { listenForSignIn } from "@/lib/auth/channel";
-import { ESPN_SEASON_DISCLOSURE, ESPN_SEASON_VERSION } from "@/lib/espn/disclosure";
 
-/** Where the bridge runs. The login request only ever goes to this origin. */
-const ESPN_ORIGIN = "https://fantasy.espn.com";
-/** How long to wait for the bridge to answer before assuming the ESPN tab is gone. */
-const BRIDGE_TIMEOUT_MS = 5000;
+type Phase = { kind: "idle" } | { kind: "connecting" } | { kind: "expired" } | { kind: "error"; message: string };
 
-type Phase = { kind: "idle" } | { kind: "connecting" } | { kind: "error"; message: string };
+/** A claim the bridge handed off, or "expired" when its code is unknown or past its time. */
+export type SeasonClaim = { code: string; espnLeagueId: string; season: number } | "expired" | null;
 
-interface EspnLogin {
-  espnS2: string;
-  swid: string;
-}
+const BACK_TO_ESPN = "Go back to your ESPN league page and tap the War Room bookmark again.";
 
-/** Asks the bridge in the ESPN tab that opened this window for the user's ESPN login. */
-function askBridgeForLogin(espnLeagueId: string): Promise<EspnLogin | "signed-out" | "no-bridge"> {
-  const opener = window.opener as Window | null;
-  if (!opener) return Promise.resolve("no-bridge");
-  return new Promise((resolve) => {
-    const done = (value: EspnLogin | "signed-out" | "no-bridge") => {
-      window.removeEventListener("message", onMessage);
-      clearTimeout(timer);
-      resolve(value);
-    };
-    const onMessage = (e: MessageEvent) => {
-      if (e.origin !== ESPN_ORIGIN || e.source !== opener || e.data?.type !== "warroom-season-login") return;
-      if (e.data.espnLeagueId !== espnLeagueId) return;
-      done(e.data.login ?? "signed-out");
-    };
-    const timer = setTimeout(() => done("no-bridge"), BRIDGE_TIMEOUT_MS);
-    window.addEventListener("message", onMessage);
-    opener.postMessage({ type: "warroom-season-login?" }, ESPN_ORIGIN);
-  });
-}
-
-/** The season popup's body. See src/app/espn/season/page.tsx. */
-export function EspnSeasonConnect({
-  flags,
-  signedIn,
-  allowed,
-  espn,
-}: {
-  flags: PublicFlags;
-  signedIn: boolean;
-  allowed: boolean;
-  espn: { leagueId: string; season: number };
-}) {
+/** The season connect page's body. See src/app/espn/season/page.tsx. */
+export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: PublicFlags; signedIn: boolean; allowed: boolean; claim: SeasonClaim }) {
   const router = useRouter();
-  const [agreed, setAgreed] = useState(false);
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [phase, setPhase] = useState<Phase>(claim === "expired" ? { kind: "expired" } : { kind: "idle" });
 
-  // Signing in finishes in another tab (the magic link); pick it up here.
+  // Signing in can finish in another tab (the magic link); pick it up here.
   useEffect(() => (signedIn ? undefined : listenForSignIn(() => location.reload())), [signedIn]);
 
-  const valid = /^\d+$/.test(espn.leagueId) && espn.season > 0;
-
-  async function connect() {
+  async function connect(code: string) {
     setPhase({ kind: "connecting" });
-    const login = await askBridgeForLogin(espn.leagueId);
-    if (login === "no-bridge") {
-      return setPhase({ kind: "error", message: "Lost touch with your ESPN tab. Click the War Room bookmark on your ESPN league page again." });
-    }
-    if (login === "signed-out") return setPhase({ kind: "error", message: "ESPN says you're signed out in that tab. Sign in to ESPN, then try again." });
-    const res = await fetch("/api/espn/season/connect", {
+    const res = await fetch("/api/espn/season/claim", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ espnLeagueId: espn.leagueId, season: espn.season, consentVersion: ESPN_SEASON_VERSION, ...login }),
+      body: JSON.stringify({ claim: code }),
     }).catch(() => null);
     if (!res) return setPhase({ kind: "error", message: "Couldn't reach War Room. Check your connection and try again." });
-    if (res.status === 401 || res.status === 409) return location.reload();
+    if (res.status === 401) return location.reload();
+    if (res.status === 410) return setPhase({ kind: "expired" });
     const body = (await res.json().catch(() => ({}))) as { leagueId?: string; error?: string };
     if (!res.ok || !body.leagueId) return setPhase({ kind: "error", message: body.error ?? "Something went wrong connecting. Try again." });
-    (window.opener as Window | null)?.postMessage({ type: "warroom-season-connected" }, ESPN_ORIGIN);
     router.push(`/season/${body.leagueId}`);
   }
+
+  const card = "rounded-card border border-line bg-panel p-4 text-sm space-y-2";
+  const howTo = (
+    <Link href="/espn" className="text-focus underline">
+      How to add the War Room bookmark
+    </Link>
+  );
 
   return (
     <main className="min-h-dvh bg-bg text-text px-5 py-6 font-sans">
@@ -90,30 +53,34 @@ export function EspnSeasonConnect({
           <p className="text-sm text-muted">A recommended lineup every week, and trade checks against every team&apos;s real roster.</p>
         </header>
 
-        {!valid ? (
-          <p className="rounded-card border border-line bg-panel p-4 text-sm">
-            Open this from the War Room bookmark on your ESPN league page, so it knows which league to connect.
-          </p>
+        {!claim ? (
+          <div className={card}>
+            <p>Start from your ESPN league page: open it, tap the War Room bookmark, then Connect my season.</p>
+            <p>{howTo}</p>
+          </div>
+        ) : phase.kind === "expired" || claim === "expired" ? (
+          <div className={card}>
+            <p className="font-semibold">That connect link has expired.</p>
+            <p className="text-muted">{BACK_TO_ESPN}</p>
+            <p>{howTo}</p>
+          </div>
         ) : !signedIn ? (
           <section className="rounded-card border border-line bg-panel p-4">
-            <SignIn flags={flags} title="Sign in to War Room first" fine="Then come back to this window. It picks up your sign-in on its own." autoFocus />
+            <SignIn
+              flags={flags}
+              title="Sign in to War Room to finish"
+              fine="The link brings you back here to finish connecting, on whichever device you open it."
+              next={`/espn/season?claim=${encodeURIComponent(claim.code)}`}
+              autoFocus
+            />
           </section>
         ) : !allowed ? (
           <p className="rounded-card border border-line bg-panel p-4 text-sm">In-season help isn&apos;t available on your account yet. It&apos;s in a limited beta.</p>
         ) : (
           <section className="rounded-card border border-line bg-panel p-4 space-y-3">
-            <div className="space-y-2 rounded-card border border-line2 bg-panel2 p-3 text-sm">
-              <p className="font-semibold">Before you connect</p>
-              <ul className="list-disc space-y-1 pl-5 text-muted">
-                {ESPN_SEASON_DISCLOSURE.map((point) => (
-                  <li key={point}>{point}</li>
-                ))}
-              </ul>
-              <label className="flex items-start gap-2">
-                <input type="checkbox" className="mt-1" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-                <span>I understand</span>
-              </label>
-            </div>
+            <p className="text-sm">
+              Connect ESPN league <span className="font-semibold tabular-nums">{claim.espnLeagueId}</span> ({claim.season}) to your War Room account.
+            </p>
             {phase.kind === "error" && (
               <p className="text-sm text-warn-ink" role="alert">
                 {phase.message}
@@ -121,9 +88,9 @@ export function EspnSeasonConnect({
             )}
             <button
               type="button"
-              className="w-full rounded-card bg-mine px-3 py-2 font-semibold text-mine-ink disabled:opacity-60"
-              disabled={!agreed || phase.kind === "connecting"}
-              onClick={connect}
+              className="w-full rounded-card bg-mine px-3 py-3 font-semibold text-mine-ink disabled:opacity-60"
+              disabled={phase.kind === "connecting"}
+              onClick={() => connect(claim.code)}
             >
               {phase.kind === "connecting" ? "Connecting…" : "Connect my season"}
             </button>

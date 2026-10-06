@@ -29,6 +29,7 @@ export function SignIn({
   fine = "Signing in syncs your leagues across devices. It never changes how the draft room works.",
   initialEmail = "",
   describedBy,
+  next,
 }: {
   flags: PublicFlags;
   title?: string | null;
@@ -42,6 +43,8 @@ export function SignIn({
   initialEmail?: string;
   /** Ids of the host's copy that describes the field (its heading and sub-line). */
   describedBy?: string;
+  /** Where to land after signing in, for a host that needs the user back mid-task. Defaults to the war room. */
+  next?: string;
 }) {
   const [email, setEmail] = useState(initialEmail);
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -54,7 +57,7 @@ export function SignIn({
     if (state.kind === "sent") sentHeading.current?.focus();
   }, [state.kind]);
 
-  if (state.kind === "sent") return <Sent email={state.email} headingRef={sentHeading} onChangeAddress={() => setState({ kind: "idle" })} />;
+  if (state.kind === "sent") return <Sent email={state.email} next={next} headingRef={sentHeading} onChangeAddress={() => setState({ kind: "idle" })} />;
 
   return (
     // Structural only — the children below own their own spacing in both hosts.
@@ -66,7 +69,7 @@ export function SignIn({
           onSubmit={(e) => {
             e.preventDefault();
             start(async () => {
-              const result = await signInWithEmail(email);
+              const result = await signInWithEmail(email, next);
               setState(result.ok ? { kind: "sent", email: email.trim().toLowerCase() } : { kind: "error", message: MESSAGES[result.reason] });
             });
           }}
@@ -102,7 +105,7 @@ export function SignIn({
       )}
       {flags.emailAuthEnabled && flags.googleAuthEnabled && <div className={s.or}>or</div>}
       {flags.googleAuthEnabled && (
-        <form action={signInWithGoogle}>
+        <form action={signInWithGoogle.bind(null, next)}>
           <button type="submit" className={cx("btn", "wide")}>
             <GoogleMark />
             Continue with Google
@@ -124,10 +127,12 @@ const RESEND_AFTER = 30;
  */
 function Sent({
   email,
+  next,
   headingRef,
   onChangeAddress,
 }: {
   email: string;
+  next?: string;
   headingRef: React.RefObject<HTMLParagraphElement | null>;
   onChangeAddress(): void;
 }) {
@@ -174,7 +179,7 @@ function Sent({
 
   const again = () =>
     start(async () => {
-      const result = await signInWithEmail(email);
+      const result = await signInWithEmail(email, next);
       if (result.ok) {
         setSentAt(Date.now());
         setNow(Date.now());

@@ -130,10 +130,10 @@ export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: League
 /** ESPN signed War Room out, so the Sunday lineup couldn't be written. */
 export function renderReconnectEmail({ url, unsubscribeUrl }: { url: string; unsubscribeUrl: string }): SeasonEmail {
   const subject = "Reconnect ESPN for your Sunday lineup";
-  const body = "ESPN signed War Room out, which it does every so often, so this morning's AI lineup couldn't be written. Open your league on ESPN and click the War Room bookmark to reconnect.";
+  const body = "ESPN signed War Room out, which it does every so often, so this morning's AI lineup couldn't be written. Open your league on ESPN and use the War Room bookmark to reconnect, on your phone or a computer.";
   const html = shell({
     title: subject,
-    preheader: "One click on ESPN and you're back.",
+    preheader: "One tap on ESPN and you're back.",
     headline: "Reconnect ESPN.",
     body: `<tr><td style="padding:10px 32px 0;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">${escape(body)}</td></tr>
         <tr><td style="padding:20px 32px 0;">${button(url, "How to reconnect")}</td></tr>`,
