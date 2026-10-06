@@ -1026,10 +1026,10 @@
 }
 .swingRow {
   display: grid;
-  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) 3.6rem;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) 6.5rem;
   align-items: center;
   gap: 12px;
-  min-height: 30px;
+  min-height: 34px;
 }
 .swingLabel {
   display: grid;
@@ -1104,8 +1104,17 @@
   font-weight: 700;
   color: var(--color-text);
 }
+.swingValue > span {
+  display: block;
+}
 .swingDelta {
   color: var(--tone);
+}
+/* The lead each player left the user with, under his swing. */
+.swingRun {
+  color: var(--color-muted);
+  font-size: 11.5px;
+  font-weight: 500;
 }
 .swingBench {
   color: var(--color-muted);
@@ -1151,6 +1160,11 @@
   .swingBar {
     grid-column: 1 / -1;
     grid-row: 2;
+  }
+  /* Zero stays inside the bar's own line here, clear of the numbers above it. */
+  .swingBar::before {
+    top: -3px;
+    bottom: -3px;
   }
 }
 

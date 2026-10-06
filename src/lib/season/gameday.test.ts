@@ -56,6 +56,11 @@ describe("gameDayPhase", () => {
     expect(gameDayPhase(done, Date.parse("2026-10-06T10:00:00Z"))).toBe("lineup");
   });
 
+  it("shows the results once every starter is final, with a bench player mid-game", () => {
+    const monday = game("in", { kickoff: "2026-10-06T00:15:00.000Z" });
+    expect(gameDayPhase(view([player("WR", game("post")), player("BN", monday)]), Date.parse("2026-10-06T01:00:00Z"))).toBe("results");
+  });
+
   it("ignores a player on IR", () => {
     expect(gameDayPhase(view([player("WR", game("pre")), player("IR", game("in"))]), SUNDAY_NIGHT)).toBe("lineup");
   });
