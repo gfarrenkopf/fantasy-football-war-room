@@ -68,6 +68,18 @@ describe("buildSeasonView", () => {
     expect(buildSeasonView({ ...season, waivers: { budget: null, teams: [] } }, 1, byId).waiver).toEqual({ rank: null, budget: null, left: null });
   });
 
+  it("marks War Room's moves only while ESPN still has the player in that slot (APE-256)", () => {
+    const starter = view.teams[0].roster.find((p) => p.slot === "RB")!;
+    const moves = [
+      { playerId: starter.playerId, slot: "RB" as const, gain: 3.5 },
+      // Moved again on ESPN since: no longer War Room's doing.
+      { playerId: starter.playerId + 100000, slot: "WR" as const, gain: 2 },
+      { playerId: starter.playerId, slot: "FLEX" as const, gain: 1 },
+    ];
+    expect(buildSeasonView(season, 1, byId, { moves }).warRoomMoves).toEqual([{ playerId: starter.playerId, slot: "RB", gain: 3.5 }]);
+    expect(view.warRoomMoves).toEqual([]);
+  });
+
   it("recommends the user's own lineup", () => {
     expect(view.lineup.starters.every((s) => s.playerId !== null)).toBe(true);
     const mine = new Set(view.teams[0].roster.map((p) => p.playerId));

@@ -1,7 +1,7 @@
 import { optimalLineup, type LineupPlan } from "./lineup";
 import type { GameState, Scoreboard } from "./scoreboard";
 import { restOfSeason, weeklyPoints } from "./scoring";
-import type { LineupSlotCount, MatchupSide, PendingClaim, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
+import type { LineupSlot, LineupSlotCount, MatchupSide, PendingClaim, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
 
 /**
  * Everything the season page shows, computed on the server from ESPN's league and projections and
@@ -55,6 +55,18 @@ export interface SeasonView {
   waiver: { rank: number | null; budget: number | null; left: number | null };
   /** The user's waiver claims pending on ESPN (13.4). */
   claims: ViewClaim[];
+  /**
+   * The moves War Room suggested that the user made this week (APE-256), each kept only while ESPN
+   * still has the player in that slot.
+   */
+  warRoomMoves: WarRoomMove[];
+}
+
+/** A lineup move War Room suggested and the user made on ESPN: who, into which slot, and the projected points it gained then. */
+export interface WarRoomMove {
+  playerId: number;
+  slot: LineupSlot;
+  gain: number;
 }
 
 /** A pending claim, with the incoming player named from ESPN's projections feed. */
@@ -88,7 +100,7 @@ export function buildSeasonView(
   league: SeasonLeague,
   myTeamId: number,
   projections: ReadonlyMap<number, PlayerProjections>,
-  { games = new Map(), now = 0 }: { games?: Scoreboard; now?: number } = {},
+  { games = new Map(), now = 0, moves = [] }: { games?: Scoreboard; now?: number; moves?: readonly WarRoomMove[] } = {},
 ): SeasonView {
   const toPlayer = (entry: RosterEntry) => scorePlayer(league, entry, projections.get(entry.playerId), games);
   // ESPN writes an outlook for nearly everyone each week, so only a day-old or newer story earns the tag. Outlooks run
@@ -120,6 +132,7 @@ export function buildSeasonView(
     tradeDeadlinePassed: !!league.tradeDeadline && now > Date.parse(league.tradeDeadline),
     matchup: myMatchup(league, myTeamId),
     waiver: myWaiver(league, myTeamId),
+    warRoomMoves: moves.filter((m) => mine.some((p) => p.playerId === m.playerId && p.slot === m.slot)),
     claims: league.pendingClaims
       .filter((c) => c.teamId === myTeamId)
       .map(({ id, add, drop, bid, processesAt }) => {

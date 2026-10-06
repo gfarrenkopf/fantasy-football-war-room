@@ -120,6 +120,13 @@
       "when": 1791225142787,
       "tag": "0016_season_projections",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791312540877,
+      "tag": "0017_season_lineup_moves",
+      "breakpoints": true
     }
   ]
 }

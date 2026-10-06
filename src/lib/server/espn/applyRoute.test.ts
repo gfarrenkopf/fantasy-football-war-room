@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
+import { listLineupMoves } from "../lineupMoves";
 import { agreeToWrites, writeConsent } from "../seasonPrefs";
 import { createTestLeague } from "../testLeagues";
 import type { LineupMove } from "@/lib/season/lineup";
@@ -84,6 +85,18 @@ describe("POST /api/leagues/:id/season/apply", () => {
     expect((await POST(post(leagueId), ctx(leagueId))).status).toBe(200);
     expect(state.calls).toBe(2);
     expect(errors).toEqual([]);
+  });
+
+  it("keeps the moves War Room suggested that landed, and nothing the page merely claims (APE-256)", async () => {
+    await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
+    state.outcome = { kind: "applied", moves: [{ ...MOVES[0], landed: true }, { ...MOVES[1], landed: false }] } satisfies ApplyOutcome;
+    const POST = await route();
+    const suggested = [
+      { playerId: 1, to: "RB", gain: 4.2 },
+      { playerId: 2, to: "BN", gain: 0 },
+    ];
+    expect((await POST(post(leagueId, { season: 2026, suggested }), ctx(leagueId))).status).toBe(200);
+    expect(await listLineupMoves(db, leagueId, 2026, 4)).toEqual([{ playerId: 1, slot: "RB", gain: 4.2 }]);
   });
 
   it("asks again when the user agreed to an older consent", async () => {

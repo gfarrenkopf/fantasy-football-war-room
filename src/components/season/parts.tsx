@@ -41,7 +41,7 @@ export const SLOT_LABEL: Record<LineupSlot, string> = {
 export const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
 
 /** ESPN's injury designations as the short tags ESPN itself shows. */
-const INJURY_TAG: Record<string, string> = { QUESTIONABLE: "Q", DOUBTFUL: "D", OUT: "OUT", INJURY_RESERVE: "IR", SUSPENSION: "SSPD" };
+export const INJURY_TAG: Record<string, string> = { QUESTIONABLE: "Q", DOUBTFUL: "D", OUT: "OUT", INJURY_RESERVE: "IR", SUSPENSION: "SSPD" };
 
 /**
  * The page's verdict: a signed number that grows louder the more it's worth (src/lib/season/emphasis.ts).
@@ -53,6 +53,7 @@ export function Gain({
   unit,
   headline,
   detail,
+  aside,
   compact = false,
   inline = false,
   className,
@@ -62,11 +63,25 @@ export function Gain({
   unit: string;
   headline: string;
   detail: React.ReactNode;
+  /** Under the number, as part of the verdict: what it does to a total (the lineup's "99.5 → 117.5"). */
+  aside?: React.ReactNode;
   compact?: boolean;
   /** Part of a card rather than a surface of its own. */
   inline?: boolean;
   className?: string;
 }) {
+  const number = (
+    <p className={s.gainNumber} key={`${level}:${value.toFixed(1)}`}>
+      {level === "rest" ? (
+        <Check />
+      ) : (
+        <>
+          <span className="tabular-nums">{signed(value)}</span>
+          <span className={s.gainUnit}>{unit}</span>
+        </>
+      )}
+    </p>
+  );
   return (
     <div
       className={[s.gain, compact && s.gainCompact, inline && s.gainInline, className].filter(Boolean).join(" ")}
@@ -74,18 +89,16 @@ export function Gain({
       data-sign={value < 0 ? "loss" : "gain"}
       role="status"
     >
-      <p className={s.gainNumber} key={`${level}:${value.toFixed(1)}`}>
-        {level === "rest" ? (
-          <Check />
-        ) : (
-          <>
-            <span className="tabular-nums">{signed(value)}</span>
-            <span className={s.gainUnit}>{unit}</span>
-          </>
-        )}
-      </p>
+      {aside ? (
+        <div className={s.gainLead}>
+          {number}
+          {aside}
+        </div>
+      ) : (
+        number
+      )}
       <p className={s.gainHeadline}>{headline}</p>
-      <p className={s.gainDetail}>{detail}</p>
+      <div className={s.gainDetail}>{detail}</div>
     </div>
   );
 }
@@ -172,6 +185,7 @@ export function PlayerLine({
   ownership = false,
   pos = true,
   stats = false,
+  stacked = false,
 }: {
   player: ViewPlayer;
   tone?: "same" | "out" | "in";
@@ -188,13 +202,15 @@ export function PlayerLine({
   pos?: boolean;
   /** Add a line of the stats behind his points once his game starts (APE-247). */
   stats?: boolean;
+  /** His game and ownership take a line each at every width, as on ESPN's roster (APE-249). */
+  stacked?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = player.points === 0 && player.projected;
   const started = live && hasStarted(player);
   const status = live && player.game !== null;
   return (
-    <span className={s.player} data-tone={tone}>
+    <span className={s.player} data-tone={tone} data-stacked={stacked || undefined}>
       <span className={s.playerLine}>
         <span className={s.name}>{player.name}</span>
         {tag && (

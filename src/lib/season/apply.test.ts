@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkMoves, espnRefusal, groupMoves, landedMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
+import { alignSeats, checkMoves, chooseSeat, espnRefusal, groupMoves, landedMoves, madeMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
 
@@ -74,6 +74,55 @@ describe("groupMoves", () => {
     const before = seatsFromRoster(t.roster, seats);
     const staged = [t.qb.playerId, t.rb1.playerId, t.rb2.playerId, null, t.flex.playerId];
     expect(groupMoves(movesToStaged(t.roster, seats, staged), before, staged)).toEqual([[{ playerId: t.wr.playerId, from: "WR", to: "BN" }]]);
+  });
+});
+
+describe("alignSeats", () => {
+  it("keeps a player in his ESPN seat, so only seats that really change differ", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS); // QB RB RB WR FLEX
+    const before = seatsFromRoster(t.roster, seats);
+    // War Room's order puts Rb Two first and the bench RB second: Rb One's seat is the one that changes.
+    const after = [t.qb.playerId, t.rb2.playerId, t.benchRb.playerId, t.wr.playerId, t.flex.playerId];
+    expect(alignSeats(seats, before, after)).toEqual([t.qb.playerId, t.benchRb.playerId, t.rb2.playerId, t.wr.playerId, t.flex.playerId]);
+  });
+
+  it("leaves a seat empty where the staged lineup has nobody", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS);
+    const before = seatsFromRoster(t.roster, seats);
+    expect(alignSeats(seats, before, [t.qb.playerId, null, t.rb2.playerId, t.wr.playerId, t.flex.playerId])).toEqual([
+      t.qb.playerId,
+      null,
+      t.rb2.playerId,
+      t.wr.playerId,
+      t.flex.playerId,
+    ]);
+  });
+});
+
+describe("chooseSeat", () => {
+  const seats = starterSeats(STARTERS); // QB RB RB WR FLEX
+
+  it("puts a bench player in a seat, sending its holder to the bench", () => {
+    const t = team();
+    const staged = seatsFromRoster(t.roster, seats);
+    expect(chooseSeat(staged, seats, t.roster, 1, t.benchRb.playerId)).toEqual([t.qb.playerId, t.benchRb.playerId, t.rb2.playerId, t.wr.playerId, t.flex.playerId]);
+  });
+
+  it("swaps two starters when each can play the other's seat", () => {
+    const t = team();
+    const staged = seatsFromRoster(t.roster, seats);
+    // Rb One into FLEX: the FLEX WR can't play RB, so his old seat is left empty rather than misfilled.
+    expect(chooseSeat(staged, seats, t.roster, 4, t.rb1.playerId)).toEqual([t.qb.playerId, null, t.rb2.playerId, t.wr.playerId, t.rb1.playerId]);
+    // The WR into FLEX and the FLEX WR into WR: both fit, so they trade.
+    expect(chooseSeat(staged, seats, t.roster, 4, t.wr.playerId)).toEqual([t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.flex.playerId, t.wr.playerId]);
+  });
+
+  it("empties a seat", () => {
+    const t = team();
+    const staged = seatsFromRoster(t.roster, seats);
+    expect(chooseSeat(staged, seats, t.roster, 0, null)[0]).toBeNull();
   });
 });
 
@@ -198,6 +247,24 @@ describe("landedMoves", () => {
     ];
     const after = t.roster.map((p) => (p === t.rb1 ? { ...p, slot: "BN" as const } : p));
     expect(landedMoves(moves, after).map((m) => m.landed)).toEqual([true, false]);
+  });
+});
+
+describe("madeMoves (APE-256)", () => {
+  it("keeps War Room's suggested moves that landed, with their gain", () => {
+    const moves = [
+      { playerId: 1, from: "BN" as const, to: "RB" as const, landed: true },
+      { playerId: 2, from: "RB" as const, to: "BN" as const, landed: true },
+      { playerId: 3, from: "BN" as const, to: "WR" as const, landed: false },
+      { playerId: 4, from: "BN" as const, to: "FLEX" as const, landed: true },
+    ];
+    const suggested = [
+      { playerId: 1, to: "RB" as const, gain: 4.2 },
+      { playerId: 3, to: "WR" as const, gain: 2 },
+      // The page claimed a slot the player didn't go to.
+      { playerId: 4, to: "TE" as const, gain: 9 },
+    ];
+    expect(madeMoves(moves, suggested)).toEqual([{ playerId: 1, from: "BN", to: "RB", gain: 4.2 }]);
   });
 });
 

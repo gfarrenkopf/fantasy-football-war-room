@@ -427,6 +427,29 @@ export const seasonProjections = pgTable(
   (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.subject] })],
 );
 
+/**
+ * The lineup moves War Room suggested that the user made on ESPN through War Room (APE-256), so the
+ * lineup can keep showing them and a recap can count them. One row per league, week and player: the
+ * slot he moved to, and the projected points the move gained when it was made. Moves the user made by
+ * hand aren't kept, and only moves ESPN's re-read confirmed landed are.
+ */
+export const seasonLineupMoves = pgTable(
+  "season_lineup_moves",
+  {
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    playerId: integer("player_id").notNull(),
+    fromSlot: text("from_slot").notNull(),
+    toSlot: text("to_slot").notNull(),
+    gain: doublePrecision("gain").notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.playerId] })],
+);
+
 /** A user's email settings. No row means the defaults. */
 export const userPrefs = pgTable("user_prefs", {
   userId: text("user_id")
