@@ -1,5 +1,6 @@
 import { config } from "@/lib/config";
 import { withUser } from "@/lib/server/api";
+import { parseEspnLogin } from "@/lib/server/espn/logins";
 import { connectSeason, type ConnectRequest } from "@/lib/server/espn/seasonConnect";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { error, json, readJson } from "@/lib/server/http";
@@ -9,10 +10,9 @@ function parse(body: unknown): ConnectRequest | null {
   if (typeof b.espnLeagueId !== "string" || !/^\d{1,12}$/.test(b.espnLeagueId)) return null;
   if (!Number.isInteger(b.season) || b.season! < 2000 || b.season! > 2100) return null;
   if (!Number.isInteger(b.consentVersion)) return null;
-  // espn_s2 is URL-encoded base64, a few hundred characters.
-  if (typeof b.espnS2 !== "string" || !/^[A-Za-z0-9%+/=._-]{20,2000}$/.test(b.espnS2)) return null;
-  if (typeof b.swid !== "string" || !/^\{[0-9A-Fa-f-]{36}\}$/.test(b.swid)) return null;
-  return { espnLeagueId: b.espnLeagueId, season: b.season!, consentVersion: b.consentVersion!, espnS2: b.espnS2, swid: b.swid };
+  const login = parseEspnLogin(body);
+  if (!login) return null;
+  return { espnLeagueId: b.espnLeagueId, season: b.season!, consentVersion: b.consentVersion!, ...login };
 }
 
 /**
