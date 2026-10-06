@@ -1,3 +1,4 @@
+import type { Position } from "@/lib/draft/types";
 import type { ProjectionAccuracy } from "./accuracy";
 import { optimalLineup } from "./lineup";
 import { weekRecap } from "./recap";
@@ -14,6 +15,7 @@ import type { SeasonView } from "./view";
 export interface Swing {
   playerId: number;
   name: string;
+  pos: Position;
   /** Whose starter: the user's ("me") or the opponent's ("them"). */
   side: "me" | "them";
   points: number;
@@ -54,10 +56,10 @@ export function weekSwing(view: SeasonView, accuracy: ProjectionAccuracy | null)
   if (!recap || !view.matchup) return null;
   const theirRoster = view.teams.find((t) => t.id === view.matchup!.them.teamId)?.roster ?? [];
   const candidates: Omit<Swing, "before" | "after">[] = [
-    ...recap.starters.map((p) => ({ playerId: p.playerId, name: p.name, side: "me" as const, points: p.points, projected: p.projected, delta: round(p.points - p.projected) })),
+    ...recap.starters.map((p) => ({ playerId: p.playerId, name: p.name, pos: p.pos, side: "me" as const, points: p.points, projected: p.projected, delta: round(p.points - p.projected) })),
     ...theirRoster
       .filter((p) => p.slot !== "BN" && p.slot !== "IR")
-      .map((p) => ({ playerId: p.playerId, name: p.name, side: "them" as const, points: p.actual ?? 0, projected: p.points, delta: round(p.points - (p.actual ?? 0)) })),
+      .map((p) => ({ playerId: p.playerId, name: p.name, pos: p.pos, side: "them" as const, points: p.actual ?? 0, projected: p.points, delta: round(p.points - (p.actual ?? 0)) })),
   ];
   const projected = round(
     recap.starters.reduce((sum, p) => sum + p.projected, 0) -
