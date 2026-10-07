@@ -2493,18 +2493,26 @@ a.btn {
 .toolsSheet:popover-open {
   display: grid;
   gap: 2px;
+  /* Rows keep their own height; a box taller than its rows never spreads them apart. */
+  align-content: start;
 }
-@supports (position-area: bottom) {
-  .toolsSheet {
-    position-area: bottom span-left;
-    margin-top: 6px;
+/*
+ * Hung under its button on a wide screen only. The phone's sheet never gets position-area at all,
+ * not even `none`: WebKit then resolves the auto insets to 0 and the sheet stretches to the top.
+ */
+@media (min-width: 768px) {
+  @supports (position-area: bottom) {
+    .toolsSheet {
+      position-area: bottom span-left;
+      margin-top: 6px;
+    }
   }
-}
-@supports not (position-area: bottom) {
-  .toolsSheet {
-    inset: auto;
-    top: 120px;
-    right: 14px;
+  @supports not (position-area: bottom) {
+    .toolsSheet {
+      inset: auto;
+      top: 120px;
+      right: 14px;
+    }
   }
 }
 .toolsItem {
@@ -2781,6 +2789,16 @@ a.btn {
     flex: none;
     border: 0;
   }
+  /* With no actions (a finished draft from ESPN), the view switch takes the whole bar, half each. */
+  .bar:not(:has(.actions > *)) > .seg {
+    flex: 1;
+  }
+  .bar:not(:has(.actions > *)) > .seg button {
+    flex: 1;
+  }
+  .bar:not(:has(.actions > *)) > .actions {
+    display: none;
+  }
   .actions {
     order: 1;
     margin-left: auto;
@@ -2807,14 +2825,33 @@ a.btn {
   .toolsLabel {
     display: none;
   }
+  /* As tall as its rows, sitting 8px above the floating bar; it scrolls before it reaches the top. */
   .toolsSheet {
-    position-area: none;
-    inset: auto max(12px, env(safe-area-inset-right)) calc(var(--bar-h) + 6px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    inset: auto max(12px, env(safe-area-inset-right)) calc(var(--bar-h) + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     width: auto;
+    height: fit-content;
+    max-height: calc(100dvh - var(--bar-h) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
     margin: 0;
+    padding: 4px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    font-size: 15px;
+  }
+  .toolsSheet::backdrop {
+    background: rgb(10 12 16 / 0.5);
   }
   .toolsItem {
-    min-height: 44px;
+    min-height: 48px;
+    padding: 0 12px;
+  }
+  .toolsState {
+    font-size: 13px;
+  }
+  /* The destructive row sits apart, last, under a hairline, so a hurried thumb doesn't land on it. */
+  .toolsItem + .toolsDanger {
+    margin-top: 4px;
+    border-top: 1px solid var(--color-row-line);
+    border-radius: 0 0 5px 5px;
   }
   .actions > * {
     flex: none;

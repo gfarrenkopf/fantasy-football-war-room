@@ -206,26 +206,34 @@
 .menu:popover-open {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* Rows keep their own height; a box taller than its rows never spreads them apart. */
+  align-content: start;
 }
-@supports (position-area: bottom) {
-  .menu {
-    position-area: bottom span-right;
-    position-try-fallbacks: flip-inline;
-    margin-top: 6px;
+/*
+ * Hung off the trigger on a wide screen only. A phone never gets position-area at all, not even
+ * `none`: WebKit then resolves the auto insets to 0 and the menu stretches to the screen's edge.
+ */
+@media (min-width: 900px) {
+  @supports (position-area: bottom) {
+    .menu {
+      position-area: bottom span-right;
+      position-try-fallbacks: flip-inline;
+      margin-top: 6px;
+    }
+    .menu[data-align="end"] {
+      position-area: bottom span-left;
+    }
   }
-  .menu[data-align="end"] {
-    position-area: bottom span-left;
-  }
-}
-@supports not (position-area: bottom) {
-  .menu {
-    inset: auto;
-    top: calc(env(safe-area-inset-top) + 52px);
-    left: 12px;
-  }
-  .menu[data-align="end"] {
-    left: auto;
-    right: 12px;
+  @supports not (position-area: bottom) {
+    .menu {
+      inset: auto;
+      top: calc(env(safe-area-inset-top) + 52px);
+      left: 12px;
+    }
+    .menu[data-align="end"] {
+      left: auto;
+      right: 12px;
+    }
   }
 }
 
@@ -466,19 +474,37 @@
   .syncTime {
     display: none;
   }
-  /* A phone is too narrow to hang a menu off its trigger: it drops from the bar, gutter to gutter. */
-  .menu,
-  .menu[data-align="end"] {
-    position-area: none;
-    inset: auto 12px auto 12px;
-    top: calc(env(safe-area-inset-top) + 56px);
+  /*
+   * A phone is too narrow to hang a menu off its trigger: it drops from the bar, gutter to gutter,
+   * as tall as its rows and no taller, and scrolls inside itself before it runs off the screen.
+   */
+  .menu {
+    inset: auto max(12px, env(safe-area-inset-right)) auto max(12px, env(safe-area-inset-left));
+    top: calc(env(safe-area-inset-top) + 58px);
     width: auto;
+    height: fit-content;
     min-width: 0;
     max-width: none;
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 70px);
     margin: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    font-size: 15px;
+  }
+  /* The page dims behind it, so the menu reads as the one thing in hand. */
+  .menu::backdrop {
+    background: rgb(10 12 16 / 0.5);
   }
   .item,
-  .create {
+  .create,
+  .go {
     min-height: 44px;
+  }
+  .email {
+    font-size: 13px;
+  }
+  /* About six leagues show before the list scrolls; this league's actions stay above it. */
+  .leagues {
+    max-height: min(40dvh, 270px);
   }
 }
