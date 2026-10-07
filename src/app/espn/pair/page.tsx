@@ -10,7 +10,7 @@ import { lastPairedLeague } from "@/lib/server/espn/bridgeTokens";
 import { hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
 import { listLeagues } from "@/lib/server/leagues";
 
-export const metadata: Metadata = { title: "Connect your ESPN draft · Fantasy War Room" };
+export const metadata: Metadata = { title: "Connect your ESPN draft · Draft Room" };
 
 /**
  * The popup the ESPN bridge opens (public/espn-bridge.js). First-party, so the War Room session

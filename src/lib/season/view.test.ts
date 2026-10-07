@@ -68,7 +68,7 @@ describe("buildSeasonView", () => {
     expect(buildSeasonView({ ...season, waivers: { budget: null, teams: [] } }, 1, byId).waiver).toEqual({ rank: null, budget: null, left: null });
   });
 
-  it("marks War Room's moves only while ESPN still has the player in that slot (APE-256)", () => {
+  it("marks Draft Room's moves only while ESPN still has the player in that slot (APE-256)", () => {
     const starter = view.teams[0].roster.find((p) => p.slot === "RB")!;
     const moves = [
       { playerId: starter.playerId, slot: "RB" as const, gain: 3.5 },

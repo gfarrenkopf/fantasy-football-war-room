@@ -235,7 +235,7 @@ describe("ESPN bridge", () => {
     expect(p.bodies().flatMap((b) => b.frames)).toEqual([]);
   });
 
-  it("batches frames and advances by what War Room confirms", async () => {
+  it("batches frames and advances by what Draft Room confirms", async () => {
     const p = page({ stored: "tok-1" });
     p.fetch.mockImplementation(async (_u, init) => {
       const body = JSON.parse(String(init.body));
@@ -257,7 +257,7 @@ describe("ESPN bridge", () => {
     expect(p.bridge()).toMatchObject({ status: "live", sent: 3, frames: 3 });
   });
 
-  it("resends from where War Room is when it has lost frames (409), e.g. after a restart", async () => {
+  it("resends from where Draft Room is when it has lost frames (409), e.g. after a restart", async () => {
     const p = page({ stored: "tok-1" });
     let calls = 0;
     p.fetch.mockImplementation(async (_u, init) => {
@@ -293,7 +293,7 @@ describe("ESPN bridge", () => {
     expect([...sessionsA][0]).not.toBe([...sessionsB][0]);
   });
 
-  it("heartbeats while idle so War Room knows the tab is still there", async () => {
+  it("heartbeats while idle so Draft Room knows the tab is still there", async () => {
     const p = page({ stored: "tok-1" });
     p.load();
     await vi.advanceTimersByTimeAsync(0);
@@ -314,7 +314,7 @@ describe("ESPN bridge", () => {
     expect(p.open).toHaveBeenCalledWith(`${WAR_ROOM}/espn/pair?league=704343562&team=1&season=2026`, "warroom-pair", expect.any(String));
   });
 
-  it("backs off while War Room is unreachable, keeping every frame", async () => {
+  it("backs off while Draft Room is unreachable, keeping every frame", async () => {
     const p = page({ stored: "tok-1" });
     p.fetch.mockRejectedValue(new Error("offline"));
     p.load();
@@ -325,7 +325,7 @@ describe("ESPN bridge", () => {
     expect(p.bridge()).toMatchObject({ status: "offline", frames: 1, sent: 0 });
   });
 
-  it("ignores pairing messages from any origin but War Room's", async () => {
+  it("ignores pairing messages from any origin but Draft Room's", async () => {
     const p = page();
     p.load();
     p.postMessage({ type: "warroom-bridge-paired", token: "evil" }, "https://evil.example");
@@ -349,10 +349,10 @@ describe("ESPN bridge", () => {
     p.load();
     await vi.advanceTimersByTimeAsync(300);
     expect(p.bridge()).toMatchObject({ onDraftPage: false, paired: false });
-    expect(p.shadow.querySelector(".s").textContent).toContain("Open your ESPN draft room");
+    expect(p.shadow.querySelector(".s").textContent).toContain("Open your ESPN draft");
   });
 
-  describe("picks made from War Room", () => {
+  describe("picks made from Draft Room", () => {
     /** A paired bridge on team 1's draft page, with War Room handing it `command` once. */
     function withCommand(command: { id: string; select: number }) {
       const p = page({ stored: "tok-1" });
@@ -389,7 +389,7 @@ describe("ESPN bridge", () => {
       expect(p.bodies().map((b) => (b as { result?: unknown }).result).find(Boolean)).toEqual({ id: "r1", sent: false, reason: "not-on-the-clock" });
     });
 
-    it("never sends the same pick twice, even if War Room hands it out again", async () => {
+    it("never sends the same pick twice, even if Draft Room hands it out again", async () => {
       const p = page({ stored: "tok-1" });
       p.fetch.mockImplementation(async (_u, init) => {
         const body = JSON.parse(String(init.body));
@@ -504,12 +504,12 @@ describe("ESPN bridge", () => {
       expect(q.ws.sent).toEqual([]);
     });
 
-    it("says where the plan comes from when War Room hasn't published one", async () => {
+    it("says where the plan comes from when Draft Room hasn't published one", async () => {
       const p = page({ stored: "tok-1" });
       p.load();
       new (p.Socket())(DRAFT_URL).emit("CLOCK 0 5000");
       await vi.advanceTimersByTimeAsync(300);
-      expect(p.shadow.querySelector(".note").textContent).toContain("Open your War Room board");
+      expect(p.shadow.querySelector(".note").textContent).toContain("Open your Draft Room board");
     });
   });
 });
@@ -675,7 +675,7 @@ describe("catching up on picks made before the bridge attached (8.12)", () => {
   });
 });
 
-describe("telling War Room how ESPN has this league set up (8.8)", () => {
+describe("telling Draft Room how ESPN has this league set up (8.8)", () => {
   const SETTINGS = {
     settings: {
       size: 4,
@@ -699,7 +699,7 @@ describe("telling War Room how ESPN has this league set up (8.8)", () => {
     return p;
   }
 
-  it("sends only the settings War Room reads, once", async () => {
+  it("sends only the settings Draft Room reads, once", async () => {
     const p = onDraftPage();
     await vi.advanceTimersByTimeAsync(300);
     console.log("BODIES", JSON.stringify(p.bodies().map((b) => Object.keys(b))));
@@ -766,7 +766,7 @@ describe("handing over the join code (9.1)", () => {
   const JOIN_URL =
     "wss://fantasydraft.espn.com/game-1/league-704343562/JOIN?1=1&2=704343562&3=1" +
     `&4=${encodeURIComponent(SWID)}&5=${encodeURIComponent(`1:704343562:1:${SWID}:${CODE}`)}&6=false&7=false&8=KONA&nocache=0.5`;
-  const OFFER = { version: 1, lines: ["Let War Room join your ESPN draft room itself.", "Your ESPN draft room disconnects."] };
+  const OFFER = { version: 1, lines: ["Let Draft Room join your ESPN draft itself.", "Your ESPN draft disconnects."] };
 
   function setup({ offer = true as boolean, url = JOIN_URL } = {}) {
     const p = page({ stored: "tok-1" });
@@ -789,7 +789,7 @@ describe("handing over the join code (9.1)", () => {
     return { ...p, ws, handovers, box };
   }
 
-  it("offers only what War Room offers, and sends nothing until the user opts in", async () => {
+  it("offers only what Draft Room offers, and sends nothing until the user opts in", async () => {
     const p = setup();
     await vi.advanceTimersByTimeAsync(300);
     expect(p.box().hidden).toBe(false);
@@ -803,7 +803,7 @@ describe("handing over the join code (9.1)", () => {
     expect(q.box().hidden).toBe(true);
   });
 
-  it("hands over the code, the SWID and who owns each pick, once, to War Room's own endpoint", async () => {
+  it("hands over the code, the SWID and who owns each pick, once, to Draft Room's own endpoint", async () => {
     const p = setup();
     await vi.advanceTimersByTimeAsync(300);
     p.shadow.querySelector(".ha").onclick!();
@@ -844,7 +844,7 @@ describe("handing over the join code (9.1)", () => {
   });
 });
 
-describe("standing down while War Room holds the ESPN connection (APE-168)", () => {
+describe("standing down while Draft Room holds the ESPN connection (APE-168)", () => {
   function setup() {
     const p = page({ stored: "tok-1" });
     let held = false;
@@ -864,7 +864,7 @@ describe("standing down while War Room holds the ESPN connection (APE-168)", () 
     let closed = false;
     p.ws.addEventListener("close", () => (closed = true));
     p.hold(true);
-    await vi.advanceTimersByTimeAsync(5_300); // the next check-in hears War Room is taking over
+    await vi.advanceTimersByTimeAsync(5_300); // the next check-in hears Draft Room is taking over
     expect(closed).toBe(true);
     expect(p.bridge()).toMatchObject({ held: true });
 
@@ -873,7 +873,7 @@ describe("standing down while War Room holds the ESPN connection (APE-168)", () 
     expect(again.readyState).toBe(0);
     expect(again.sent).toBeUndefined(); // not a FakeSocket: nothing reached ESPN
     expect(p.bridge()).toMatchObject({ standIns: 1 });
-    expect(p.shadow.querySelector(".s").textContent).toContain("War Room is drafting for you");
+    expect(p.shadow.querySelector(".s").textContent).toContain("Draft Room is drafting for you");
     expect(p.shadow.querySelector(".rel").hidden).toBe(false);
     expect(p.shadow.querySelector(".plan").hidden).toBe(true);
     // Sockets that aren't ESPN's draft socket are left alone.
@@ -903,7 +903,7 @@ describe("standing down while War Room holds the ESPN connection (APE-168)", () 
 describe("connecting the season from an ESPN league page (10.3, APE-298)", () => {
   const LEAGUE_PAGE = "https://fantasy.espn.com/football/team?leagueId=704343562&teamId=2&seasonId=2026";
   const COOKIE = `region=us; espn_s2=AEB%2Fnot-real%3D; SWID=${SWID}; other=1`;
-  const OFFER = { version: 1, lines: ["This tab hands War Room your ESPN login cookies (not your password)."] };
+  const OFFER = { version: 1, lines: ["This tab hands Draft Room your ESPN login cookies (not your password)."] };
 
   /** A league page whose War Room answers the disclosure GET and the hand-off POST. */
   function leaguePage(cookie = COOKIE, handoff: () => Response = () => Response.json({ claim: "c0de-claim_123" })) {
@@ -918,7 +918,7 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
   };
   const posts = (p: ReturnType<typeof page>) => p.fetch.mock.calls.filter(([, init]) => init?.method === "POST");
 
-  it("shows what War Room asks before anything leaves the page", async () => {
+  it("shows what Draft Room asks before anything leaves the page", async () => {
     const p = leaguePage();
     expect(p.bridge()).toMatchObject({ onSeasonPage: true, onDraftPage: false, seasonStep: "idle" });
     await tap(p, ".sc");
@@ -930,7 +930,7 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     expect(p.open).not.toHaveBeenCalled();
   });
 
-  it("hands the login to War Room once the user agrees, then opens War Room in this tab to claim it", async () => {
+  it("hands the login to Draft Room once the user agrees, then opens Draft Room in this tab to claim it", async () => {
     const p = leaguePage();
     await tap(p, ".sc");
     await tap(p, ".sy");
@@ -951,7 +951,7 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     expect(posts(p)).toEqual([]);
   });
 
-  it("says when ESPN has no login to give, without asking War Room anything", async () => {
+  it("says when ESPN has no login to give, without asking Draft Room anything", async () => {
     const p = leaguePage("region=us");
     await tap(p, ".sc");
     expect(p.bridge()).toMatchObject({ seasonStep: "signed-out" });
@@ -959,7 +959,7 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     expect(p.fetch).not.toHaveBeenCalled();
   });
 
-  it("shows the current wording again when it changed, and says when War Room can't be reached", async () => {
+  it("shows the current wording again when it changed, and says when Draft Room can't be reached", async () => {
     let first = true;
     const p = leaguePage(COOKIE, () => {
       if (first) return (first = false), Response.json({ seasonVersion: 2 }, { status: 409 });
@@ -971,7 +971,7 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     expect(p.assign).not.toHaveBeenCalled();
     await tap(p, ".sy");
     expect(p.bridge()).toMatchObject({ seasonStep: "failed" });
-    expect(p.shadow.querySelector(".s").textContent).toContain("Couldn't reach War Room");
+    expect(p.shadow.querySelector(".s").textContent).toContain("Couldn't reach Draft Room");
     expect(p.assign).not.toHaveBeenCalled();
   });
 

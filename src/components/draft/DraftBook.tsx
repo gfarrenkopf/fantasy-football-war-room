@@ -12,7 +12,8 @@ import { useModel } from "./DraftModel";
 import { useLeague } from "./LeagueProvider";
 import { ordinal, stage } from "./OpeningNight";
 import { posLabel } from "./PlayerCard";
-import { useHasSeasonPage } from "./SeasonLinks";
+import { SignInDialog } from "./Account";
+import { useHasSeasonPage, useSeasonPrompt } from "./SeasonLinks";
 
 /**
  * The finished draft at rest (APE-225): what the room shows once every pick is in, in place of the
@@ -26,6 +27,8 @@ export function DraftBook() {
   const { active } = useLeague();
   const { league, dataset } = model;
   const linked = useHasSeasonPage(active?.id);
+  const prompt = useSeasonPrompt(active?.id);
+  const [signingIn, setSigningIn] = useState(false);
   const names = useDraftTeamNames(linked ? (active?.id ?? null) : null);
 
   const wrap = useMemo(() => draftWrap(model.slots, league.teams, byeWeekList(dataset.byeWeeks)), [model.slots, league.teams, dataset.byeWeeks]);
@@ -56,7 +59,19 @@ export function DraftBook() {
               This week&apos;s lineup
             </a>
           )}
+          {/* No season page yet: one quiet way to get one (Epic 15). */}
+          {prompt === "connect" && (
+            <a className={cx("btn", "bookDoor")} href="/espn">
+              Manage your season: connect ESPN
+            </a>
+          )}
+          {prompt === "sign-in" && (
+            <button className={cx("btn", "bookDoor")} onClick={() => setSigningIn(true)}>
+              Sign in to manage your season
+            </button>
+          )}
         </header>
+        {signingIn && <SignInDialog onClose={() => setSigningIn(false)} />}
 
         <div className={s.bookBody}>
           <section className={s.bookLineup} aria-labelledby="book-lineup">

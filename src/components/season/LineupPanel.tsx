@@ -210,7 +210,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           <div className={s.panelHead}>
             <h2 id="moves-title" className={`${s.panelTitle} ${s.applyTitle}`}>
               {onWarRooms && <Check />}
-              {draft.moves.length ? "Make these moves on ESPN" : onWarRooms ? "ESPN has War Room's lineup" : "Nothing to change on ESPN"}
+              {draft.moves.length ? "Make these moves on ESPN" : onWarRooms ? "ESPN has Draft Room's lineup" : "Nothing to change on ESPN"}
             </h2>
           </div>
           <ApplyLineup draft={draft} view={view} leagueId={leagueId} agreed={writeConsented} done={onWarRooms} banked={banked} />
@@ -381,7 +381,7 @@ function hover(id: string, on: boolean) {
 function MadeNote({ move, player, made }: { move: WarRoomMove; player: ViewPlayer; made: readonly WarRoomMove[] }) {
   const id = useId();
   const week = made.reduce((sum, m) => sum + m.gain, 0);
-  const line = `Started by War Room · ${signed(move.gain)} proj`;
+  const line = `Started by Draft Room · ${signed(move.gain)} proj`;
   const anchor = `--made${id.replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
     <>
@@ -399,10 +399,10 @@ function MadeNote({ move, player, made }: { move: WarRoomMove; player: ViewPlaye
       </button>
       <div id={id} popover="auto" className={`${s.picker} ${s.madeNote}`} style={{ positionAnchor: anchor } as CSSProperties}>
         <p className={s.madeLine}>
-          Started by War Room · <b className="tabular-nums">{signed(move.gain)}</b> proj
+          Started by Draft Room · <b className="tabular-nums">{signed(move.gain)}</b> proj
         </p>
         <p className={s.madeWeek}>
-          War Room moves this week: <b className="tabular-nums">{signed(week)}</b> proj
+          Draft Room moves this week: <b className="tabular-nums">{signed(week)}</b> proj
         </p>
       </div>
     </>
@@ -513,7 +513,7 @@ function SeatPicker({ draft, seat, label: text }: { draft: LineupDraft; seat: nu
                   <span className={s.pickerWho}>
                     <PlayerLine player={p} value="none" live />
                     <span className={s.pickerTags}>
-                      {p.playerId === ours && <span className={s.pickerOurs}>War Room&apos;s pick</span>}
+                      {p.playerId === ours && <span className={s.pickerOurs}>Suggested</span>}
                       {p.playerId === espn && <span className={s.pickerEspn}>On ESPN at {text}</span>}
                       {where && p.playerId !== espn && <span>{where}</span>}
                     </span>
@@ -577,7 +577,7 @@ function BenchPicker({ draft, player }: { draft: LineupDraft; player: ViewPlayer
                   </b>
                   {draft.recommended[i] === player.playerId && (
                     <span className={s.pickerTags}>
-                      <span className={s.pickerOurs}>War Room&apos;s pick</span>
+                      <span className={s.pickerOurs}>Suggested</span>
                     </span>
                   )}
                 </span>
@@ -618,7 +618,7 @@ function LineupSources({ draft }: { draft: LineupDraft }) {
       )}
       {!draft.isRecommended && (
         <button type="button" className={s.textButton} onClick={() => draft.startFrom(draft.recommended)}>
-          Start from War Room&apos;s lineup
+          Start from Draft Room&apos;s lineup
         </button>
       )}
     </div>

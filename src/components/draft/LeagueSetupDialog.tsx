@@ -116,7 +116,7 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
           )}
         </div>
         <div className={s.setupBody}>
-          {firstRun && <p className={s.setupIntro}>Tell the war room about your draft. You can change this any time from the League button.</p>}
+          {firstRun && <p className={s.setupIntro}>Tell Draft Room about your draft. You can change this any time from the League button.</p>}
 
           <label className={s.field}>
             <span className={s.fieldLabel}>Name</span>

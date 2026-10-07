@@ -53,12 +53,12 @@ describe("importing an ESPN league (8.8)", () => {
   it("refuses what it can't represent, in words the user can act on", () => {
     expect(toLeagueSettings(settings({ draftSettings: { type: "AUCTION", pickOrder: [1] } }), 1)).toEqual({
       ok: false,
-      error: "War Room doesn't do auction drafts yet.",
+      error: "Draft Room doesn't do auction drafts yet.",
     });
     // An IDP league: ESPN slot 11 is a linebacker.
     expect(toLeagueSettings(settings({ rosterSettings: { lineupSlotCounts: { "0": 1, "11": 2, "20": 5 } } }), 1)).toEqual({
       ok: false,
-      error: "This league starts a linebacker, which War Room can't draft for yet.",
+      error: "This league starts a linebacker, which Draft Room can't draft for yet.",
     });
     expect(toLeagueSettings(settings({ rosterSettings: {} }), 1)).toMatchObject({ ok: false });
     expect(toLeagueSettings({ nothing: true }, 1)).toEqual({ ok: false, error: "That doesn't look like an ESPN league." });
@@ -66,7 +66,7 @@ describe("importing an ESPN league (8.8)", () => {
 
   it("says so when the draft order hasn't been drawn, or isn't this team's", () => {
     const notYet = toLeagueSettings(settings({ draftSettings: { type: "SNAKE" } }), 1);
-    expect(notYet).toEqual({ ok: false, error: "ESPN hasn't set the draft order yet. It's drawn when the draft room opens, about an hour before." });
+    expect(notYet).toEqual({ ok: false, error: "ESPN hasn't set the draft order yet. It's drawn when ESPN opens the draft, about an hour before." });
     expect(toLeagueSettings(settings(), 99)).toMatchObject({ ok: false });
   });
 

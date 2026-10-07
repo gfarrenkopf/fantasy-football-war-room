@@ -23,7 +23,7 @@ type Post<T> = { ok: true; body: T } | { ok: false; status: number; error: strin
 
 export async function post<T>(url: string, body?: unknown): Promise<Post<T>> {
   const res = await fetch(url, { method: "POST", ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) }).catch(() => null);
-  if (!res) return { ok: false, status: 0, error: "Can't reach War Room right now. Try again in a moment." };
+  if (!res) return { ok: false, status: 0, error: "Can't reach Draft Room right now. Try again in a moment." };
   const json = (await res.json().catch(() => ({}))) as T & { error?: string };
   return res.ok ? { ok: true, body: json } : { ok: false, status: res.status, error: json.error ?? "Something went wrong. Try again in a moment." };
 }

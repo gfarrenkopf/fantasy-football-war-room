@@ -6,8 +6,8 @@ import { useEspnSync } from "./EspnSync";
 import { useConfirm, useToast } from "./Feedback";
 
 const TAKE_OVER_WARNING =
-  "Your ESPN draft room will disconnect, on every device, and War Room becomes where you draft: from this screen or any other signed in to War Room. " +
-  "You can hand back at any time. If something goes wrong, click Reconnect in ESPN and War Room steps back.";
+  "Your ESPN draft will disconnect, on every device, and Draft Room becomes where you draft: from this screen or any other signed in to Draft Room. " +
+  "You can hand back at any time. If something goes wrong, click Reconnect in ESPN and Draft Room steps back.";
 
 /**
  * Taking over the user's ESPN draft connection, and giving it back (9.4). ESPN allows one connection
@@ -42,11 +42,11 @@ export function EspnTakeover() {
     return (
       <div className={s.espnArm} role="status">
         <span className={s.espnArmText}>
-          {serverClient.reason ?? "Connecting to your ESPN draft room…"}
+          {serverClient.reason ?? "Connecting to your ESPN draft…"}
           <small>
             {serverClient.reason
               ? "Picks made meanwhile land on your board once it's back. If you're on the clock, ESPN autopicks from your queue."
-              : "Your ESPN draft room will show “Duplicate Connection”. That's expected."}
+              : "Your ESPN draft will show “Duplicate Connection”. That's expected."}
           </small>
         </span>
       </div>
@@ -55,17 +55,17 @@ export function EspnTakeover() {
 
   if (state === "holding") {
     return (
-      <div className={cx("espnArm", "espnHold")} role="region" aria-label="War Room is drafting for you">
+      <div className={cx("espnArm", "espnHold")} role="region" aria-label="Draft Room is drafting for you">
         <span className={s.espnArmText}>
-          War Room holds your ESPN connection
-          <small>Draft here. Your ESPN draft room is disconnected until you hand back.</small>
+          Draft Room holds your ESPN connection
+          <small>Draft here. Your ESPN draft is disconnected until you hand back.</small>
         </span>
         <button
           className={s.btn}
           disabled={busy}
           onClick={() => run(() => queuePlan(!serverClient.queueSync))}
           aria-pressed={!!serverClient.queueSync}
-          title="Keep ESPN's pick queue set to your turn plan, so ESPN's autopick takes your targets if War Room's connection drops on your turn. Replaces what you queued in ESPN."
+          title="Keep ESPN's pick queue set to your turn plan, so ESPN's autopick takes your targets if Draft Room's connection drops on your turn. Replaces what you queued in ESPN."
         >
           {serverClient.queueSync ? "✓ ESPN queue follows plan" : "Queue my plan in ESPN"}
         </button>
@@ -82,8 +82,8 @@ export function EspnTakeover() {
     return (
       <div className={s.espnArm} role="alert">
         <span className={s.espnArmText}>
-          {serverClient.refused ? "War Room couldn't join your ESPN draft room" : "ESPN took the connection back"}
-          <small>{serverClient.reason ?? "War Room's connection to ESPN ended."} War Room won&apos;t reconnect by itself.</small>
+          {serverClient.refused ? "Draft Room couldn't join your ESPN draft" : "ESPN took the connection back"}
+          <small>{serverClient.reason ?? "Draft Room's connection to ESPN ended."} Draft Room won&apos;t reconnect by itself.</small>
         </span>
         <button className={cx("btn", "espnGo")} disabled={busy} onClick={takeOver}>
           {serverClient.refused ? "Try again" : "Take over again"}
@@ -101,7 +101,7 @@ export function EspnTakeover() {
     <div className={s.espnArm} role="region" aria-label="Draft without your ESPN tab">
       <span className={s.espnArmText}>
         {state === "released" ? "You're drafting in ESPN again" : "Draft from here, with no ESPN tab open"}
-        <small>War Room can hold your ESPN draft connection, so you can close ESPN and draft from your phone.</small>
+        <small>Draft Room can hold your ESPN draft connection, so you can close ESPN and draft from your phone.</small>
       </span>
       <button className={cx("btn", "espnGo")} disabled={busy} onClick={takeOver}>
         {state === "released" ? "Take over again" : "Take over"}

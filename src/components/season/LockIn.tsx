@@ -79,7 +79,7 @@ export function LockIn({
 
   const spoken = [
     "Lineup set on ESPN.",
-    `War Room's moves add ${pts(moment.banked)} projected points.`,
+    `Draft Room's moves add ${pts(moment.banked)} projected points.`,
     remaining >= 0.05 ? `${pts(remaining)} more points are still on your bench.` : "",
   ].join(" ");
 
@@ -137,7 +137,7 @@ export function LockIn({
             <p className={s.lockLeftHead}>
               <b>Still on your bench</b>
               <span>
-                You banked <b className="tabular-nums">{pts(moment.banked)}</b> of War Room&apos;s <b className="tabular-nums">{pts(owed)}</b>
+                You banked <b className="tabular-nums">{pts(moment.banked)}</b> of Draft Room&apos;s <b className="tabular-nums">{pts(owed)}</b>
               </span>
             </p>
             <span
@@ -225,7 +225,7 @@ export function Banked({ moves, total, week, name, className }: { moves: readonl
           </ul>
         )}
         <p className={s.lockFoot}>
-          {none ? "ESPN has War Room's lineup." : "War Room's moves banked these points."} Check back before kickoff: injury news can change it.
+          {none ? "ESPN has Draft Room's lineup." : "Draft Room's moves banked these points."} Check back before kickoff: injury news can change it.
         </p>
       </div>
     </div>

@@ -251,7 +251,7 @@ describe("landedMoves", () => {
 });
 
 describe("madeMoves (APE-256)", () => {
-  it("keeps War Room's suggested moves that landed, with their gain", () => {
+  it("keeps Draft Room's suggested moves that landed, with their gain", () => {
     const moves = [
       { playerId: 1, from: "BN" as const, to: "RB" as const, landed: true },
       { playerId: 2, from: "RB" as const, to: "BN" as const, landed: true },

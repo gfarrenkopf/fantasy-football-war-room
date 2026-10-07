@@ -39,13 +39,13 @@ export async function connectSeason(
   { fetchImpl, now = new Date(), crosswalkFor }: { fetchImpl?: typeof fetch; now?: Date } & DraftImportDeps = {},
 ): Promise<ConnectResult> {
   if (req.consentVersion !== ESPN_SEASON_VERSION) {
-    return { ok: false, status: 409, error: "What War Room asks for has changed. Read it again.", seasonVersion: ESPN_SEASON_VERSION };
+    return { ok: false, status: 409, error: "What Draft Room asks for has changed. Read it again.", seasonVersion: ESPN_SEASON_VERSION };
   }
 
   const login = { espnS2: req.espnS2, swid: req.swid };
   const read = await readEspnLeague(login, { season: req.season, espnLeagueId: req.espnLeagueId, views: ["mSettings", "mTeam", "mDraftDetail"] }, { fetchImpl });
   if (!read.ok) {
-    if (read.reason === "auth") return { ok: false, status: 400, error: "ESPN didn't let War Room read this league. Make sure you're signed in to ESPN, then try again." };
+    if (read.reason === "auth") return { ok: false, status: 400, error: "ESPN didn't let Draft Room read this league. Make sure you're signed in to ESPN, then try again." };
     if (read.reason === "not-found") return { ok: false, status: 404, error: `ESPN has no league ${req.espnLeagueId} for ${req.season}.` };
     return { ok: false, status: 503, error: "Couldn't reach ESPN. Try again in a minute." };
   }
@@ -77,7 +77,7 @@ export async function connectSeason(
   if (!imported.ok) return { ok: false, status: 422, error: imported.error };
   const record = newLeagueRecord(imported.name ?? `ESPN league ${req.espnLeagueId}`, { ...imported.league, valueThreshold: DEFAULT_LEAGUE.valueThreshold });
   const saved = await upsertLeague(db, userId, record);
-  if (saved.status !== "ok") return { ok: false, status: 409, error: "You have too many War Room leagues. Delete one, then try again." };
+  if (saved.status !== "ok") return { ok: false, status: 409, error: "You have too many Draft Room leagues. Delete one, then try again." };
   await linkSeason(db, userId, { leagueId: record.id, ...link }, now);
   await withDraft(record.id);
   return { ok: true, leagueId: record.id, espnTeamId, created: true };

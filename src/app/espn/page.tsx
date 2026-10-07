@@ -9,7 +9,7 @@ import { espnLeaguePage } from "@/lib/espn/pages";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
 
-export const metadata: Metadata = { title: "The War Room bookmark · Fantasy War Room" };
+export const metadata: Metadata = { title: "Your ESPN bookmark · Draft Room" };
 
 /**
  * How to install the War Room bookmark, on a computer or a phone, and use it to connect the season or

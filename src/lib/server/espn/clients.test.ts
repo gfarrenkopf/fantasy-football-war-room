@@ -147,7 +147,7 @@ describe("taking over and handing back an ESPN draft connection", () => {
     expect(relay.serverClient(userId, leagueId)).toEqual({ state: "complete" });
   });
 
-  it("sends a War Room pick and the turn plan's queue on its own socket (9.3)", async () => {
+  it("sends a Draft Room pick and the turn plan's queue on its own socket (9.3)", async () => {
     const { takeOver, relay } = await load();
     await takeOver(db, userId, leagueId, { connect });
     sockets[0].fire("open");

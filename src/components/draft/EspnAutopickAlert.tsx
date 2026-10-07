@@ -63,7 +63,7 @@ function AutopickOn() {
         <strong>{myTurn ? "ESPN is picking for you right now" : "ESPN is making your picks"}</strong>
         <span>
           Autopick is on for your team, so ESPN drafts the moment you&apos;re on the clock, before you can.
-          {holding ? "" : " Turn it off in your ESPN draft room: Pick Queue, then Autopick."}
+          {holding ? "" : " Turn it off in your ESPN draft: Pick Queue, then Autopick."}
         </span>
       </span>
       {holding && (

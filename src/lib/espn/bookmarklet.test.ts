@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { bookmarkletFor } from "./bookmarklet";
 
 describe("bookmarkletFor", () => {
-  it("is a javascript: URL that appends the bridge script from War Room's origin", () => {
+  it("is a javascript: URL that appends the bridge script from Draft Room's origin", () => {
     const url = bookmarkletFor("https://draftroom.online");
     expect(url.startsWith("javascript:")).toBe(true);
     const appended: { src: string }[] = [];

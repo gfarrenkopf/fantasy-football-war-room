@@ -343,7 +343,7 @@ export function createRelay({
     const reason = error
       ? `ESPN refused the draft connection: ${error.message}`
       : unreadable >= driftLimit
-        ? "ESPN's draft feed changed, so War Room stopped trusting it"
+        ? "ESPN's draft feed changed, so Draft Room stopped trusting it"
         : null;
     if (!reason) return;
     ch.degraded = { reason, unknownFrames, malformedFrames };

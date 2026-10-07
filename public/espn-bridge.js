@@ -791,14 +791,14 @@
     .ho ul,.so ul{margin:0;padding-left:18px;color:#aab7c4;font-size:12px}.ho li,.so li{margin-top:3px}
     .so ul{max-height:40vh;overflow:auto}
     @media (pointer:coarse){button{padding:8px 12px}.row{flex-wrap:wrap}}
-  </style><div class="box"><div class="t">War Room <i>●</i></div><div class="s"></div>
+  </style><div class="box"><div class="t">Draft Room <i>●</i></div><div class="s"></div>
   <div class="plan" hidden><div class="ph"><b class="pt"></b><span class="pr"></span><button class="more" type="button">More</button></div>
   <div class="rows"></div><div class="note"></div></div>
   <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="hn"></div>
-  <div class="row"><button class="ha" type="button">Let War Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
+  <div class="row"><button class="ha" type="button">Let Draft Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
   <div class="so" hidden><b>Before you connect</b><ul></ul>
   <div class="row"><button class="sy" type="button">I understand, connect</button><button class="sn" type="button">Not now</button></div></div>
-  <div class="row"><button class="go" type="button">Connect to War Room</button><button class="sc" type="button" hidden>Connect my season</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
+  <div class="row"><button class="go" type="button">Connect to Draft Room</button><button class="sc" type="button" hidden>Connect my season</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
   const goEl = /** @type {HTMLButtonElement} */ (root.querySelector(".go"));
@@ -894,7 +894,7 @@
       planRoundEl.textContent = "";
       moreEl.hidden = true;
       rowsEl.replaceChildren();
-      noteEl.textContent = "Open your War Room board to see your turn plan here.";
+      noteEl.textContent = "Open your Draft Room board to see your turn plan here.";
       return;
     }
     const open = (/** @type {OverlayPlayer[]} */ list) => list.filter((p) => !p.espnPlayerId || !takenEspn.has(p.espnPlayerId));
@@ -944,7 +944,7 @@
     handoverNoEl.hidden = done;
     handoverYesEl.disabled = handover === "sending";
     handoverNoteEl.textContent = done
-      ? "Handed over. Take over from War Room when you're ready to leave this tab."
+      ? "Handed over. Take over from Draft Room when you're ready to leave this tab."
       : handover === "sending"
         ? "Handing over…"
         : handover === "failed"
@@ -958,7 +958,7 @@
     if (armed !== null && !myTurn()) armed = null;
     const needsPairing = !token && onDraftPage;
     goEl.hidden = !needsPairing;
-    goEl.textContent = status === "expired" ? "Connect again" : "Connect to War Room";
+    goEl.textContent = status === "expired" ? "Connect again" : "Connect to Draft Room";
     let text;
     const offering = seasonStep === "offer" || seasonStep === "sending";
     seasonEl.hidden = !onSeasonPage || offering;
@@ -970,21 +970,21 @@
     if (onSeasonPage)
       text =
         seasonStep === "sending"
-          ? "Opening War Room…"
+          ? "Opening Draft Room…"
           : seasonStep === "signed-out"
             ? "ESPN says you're signed out on this page. Sign in to ESPN, then try again."
             : seasonStep === "failed"
-              ? "Couldn't reach War Room. Check your connection and try again."
-              : "Get War Room's weekly lineup and trade help for this league.";
-    else if (!onDraftPage) text = "Open your ESPN draft room, then click the War Room bookmark again.";
-    else if (status === "expired") text = "Your War Room connection expired.";
-    else if (status === "denied") text = "ESPN live sync isn't available on this War Room account yet.";
-    else if (status === "purchase") text = "This league needs a War Room season pass for live sync.";
-    else if (!token) text = "Connect this draft to your War Room board.";
-    else if (status === "offline") text = "Can't reach War Room. Retrying…";
+              ? "Couldn't reach Draft Room. Check your connection and try again."
+              : "Get Draft Room's weekly lineup and trade help for this league.";
+    else if (!onDraftPage) text = "Open your ESPN draft, then click the Draft Room bookmark again.";
+    else if (status === "expired") text = "Your Draft Room connection expired.";
+    else if (status === "denied") text = "ESPN live sync isn't available on this Draft Room account yet.";
+    else if (status === "purchase") text = "This league needs a Draft Room season pass for live sync.";
+    else if (!token) text = "Connect this draft to your Draft Room board.";
+    else if (status === "offline") text = "Can't reach Draft Room. Retrying…";
     else if (heldByWarRoom)
-      text = releaseRequested ? "Handing the connection back to this tab…" : "War Room is drafting for you, so this tab stays disconnected. You can close it.";
-    else if (!sockets) text = "Connected. Waiting for ESPN's draft room…";
+      text = releaseRequested ? "Handing the connection back to this tab…" : "Draft Room is drafting for you, so this tab stays disconnected. You can close it.";
+    else if (!sockets) text = "Connected. Waiting for ESPN's draft…";
     else text = `Live · ${picks()} picks synced. Keep this tab open.`;
     statusEl.textContent = text;
     releaseEl.hidden = !heldByWarRoom || releaseRequested;

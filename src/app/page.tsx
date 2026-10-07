@@ -9,7 +9,7 @@ import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
 
 export const metadata: Metadata = {
-  title: "Fantasy War Room — know who to pick",
+  title: "Draft Room — know who to pick",
   description:
     "Set up your fantasy football draft in one screen. Practice drafts of your league show who will still be there at your next pick, and a season pass adds an AI-written plan for your exact slot.",
 };

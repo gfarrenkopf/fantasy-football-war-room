@@ -10,17 +10,17 @@ const SITE = "https://draftroom.online";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: "Fantasy War Room", template: "%s" },
+  title: { default: "Draft Room", template: "%s" },
   description: "Know who to pick in your fantasy football draft.",
   openGraph: {
     type: "website",
-    siteName: "Fantasy War Room",
-    title: "Fantasy War Room",
+    siteName: "Draft Room",
+    title: "Draft Room",
     description: "Know who to pick. Practice drafts of your league show who will still be there at your next turn.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fantasy War Room",
+    title: "Draft Room",
     description: "Know who to pick. Practice drafts of your league show who will still be there at your next turn.",
   },
 };
@@ -42,7 +42,7 @@ export const viewport: Viewport = {
  * production build and can be audited against the render. Hidden, inert, and greppable by seed key.
  */
 const DIRECTION_CONTRACT = `<!--
-THESIS: A dim room with one lit board. The landing page is a war room already running - a real
+THESIS: A dim room with one lit board. The landing page is a draft room already running - a real
 mock draft of the visitor's own league - with one translucent panel over it holding the entire
 decision. It refuses the category default: a centred headline above a screenshot in a browser
 frame. Here the screenshot is the room, and you are already in it.
@@ -52,7 +52,7 @@ primary. The floating panel is the only lift on the page, because it floats.
 STORY: A manager arrives minutes before a draft, sees a real board being drafted and real survival
 odds resolving for their slot, and either signs in or starts drafting in seconds.
 FIRST VIEWPORT: Full-bleed six-column board at 100dvh, one pick logged every 1.4s. Over it, left,
-one panel: brand, thesis, the compact league setup, the outlined primary "Open the war room", then
+one panel: brand, thesis, the compact league setup, the outlined primary "Open the Draft Room", then
 a hairline and the sign-in block. Sample-data label bottom right.
 FORM: The Lit Board - ranked 1 of 7 on the grounded list, locked by the user over the dealt lead.
 Seed key 94984e6d. Signature interaction: editing teams / slot / scoring re-simulates the board

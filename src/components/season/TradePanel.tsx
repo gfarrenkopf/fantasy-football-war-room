@@ -190,7 +190,7 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
                     onCancel={() => setProposing(false)}
                     onDone={(landed) => {
                       setProposing(false);
-                      setNotice(landed ? `Offer sent to ${partner.name}. It's in Pending on ESPN.` : "ESPN doesn't show your offer. Check ESPN. War Room has been alerted.");
+                      setNotice(landed ? `Offer sent to ${partner.name}. It's in Pending on ESPN.` : "ESPN doesn't show your offer. Check ESPN. Draft Room has been alerted.");
                       clear();
                     }}
                   />
@@ -328,7 +328,7 @@ function Offer({
             onCancel={() => setActing(null)}
             onDone={(landed) => {
               const past = acting === "accept" ? "accepted. It's in the league's review" : acting === "decline" ? "declined" : "withdrawn";
-              onNotice(landed ? `Offer ${past}.` : "ESPN doesn't show that change. Check ESPN. War Room has been alerted.");
+              onNotice(landed ? `Offer ${past}.` : "ESPN doesn't show that change. Check ESPN. Draft Room has been alerted.");
               setActing(null);
             }}
           />

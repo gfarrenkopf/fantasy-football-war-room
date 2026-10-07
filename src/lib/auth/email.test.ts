@@ -9,7 +9,7 @@ describe("renderSignInEmail", () => {
     const signUp = renderSignInEmail({ ...base, isNew: true });
     const signIn = renderSignInEmail({ ...base, isNew: false });
     expect(signUp.subject).not.toBe(signIn.subject);
-    expect(signUp.html).toContain("Enter the war room");
+    expect(signUp.html).toContain("Enter the Draft Room");
     expect(signIn.html).toContain("Sign in");
   });
 

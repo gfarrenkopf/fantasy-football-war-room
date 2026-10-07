@@ -77,7 +77,7 @@ describe("connectSeason", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("refuses a roster War Room can't represent", async () => {
+  it("refuses a roster Draft Room can't represent", async () => {
     const userId = await createTestUser(db);
     const idp = { ...espnLeague, settings: { ...league.settings, rosterSettings: { lineupSlotCounts: { ...league.settings.rosterSettings.lineupSlotCounts, "11": 1 } } } };
     expect(await connectSeason(db, KEY, userId, request, { fetchImpl: espn(200, idp) })).toMatchObject({ ok: false, status: 422, error: expect.stringContaining("linebacker") });

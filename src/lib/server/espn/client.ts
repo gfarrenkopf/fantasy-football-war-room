@@ -149,7 +149,7 @@ export function createEspnClient({
       console.warn(`[espn-client] relay refused frames league=${scope.espnLeagueId}: ${(err as Error).message}`);
       return;
     }
-    if (reply.status === 413) return end("stopped", "This draft sent more frames than War Room keeps.");
+    if (reply.status === 413) return end("stopped", "This draft sent more frames than Draft Room keeps.");
     sent = Math.min(Math.max(0, reply.have), log.length);
     if (result === reporting) result = undefined;
     if (reply.status === 200 && reply.command && onCommand && !ended) {
@@ -203,7 +203,7 @@ export function createEspnClient({
     }
     // A refused join isn't draft data: relaying it would mark the whole draft's feed untrustworthy (8.6),
     // including a bookmarklet that's still working fine.
-    if (head === "ERROR" && !joined) return end("refused", "ESPN refused War Room's connection to your draft room. Run the bookmarklet again to hand over a fresh code.");
+    if (head === "ERROR" && !joined) return end("refused", "ESPN refused Draft Room's connection to your ESPN draft. Run the bookmarklet again to hand over a fresh code.");
     const frame = sanitizeFrame(text);
     if (!frame) return;
     log.push(frame);
@@ -211,7 +211,7 @@ export function createEspnClient({
     void flush();
   });
 
-  socket.on("unexpected-response", (status) => end("refused", `ESPN refused War Room's connection (HTTP ${status}).`));
+  socket.on("unexpected-response", (status) => end("refused", `ESPN refused Draft Room's connection (HTTP ${status}).`));
   socket.on("error", () => {
     // Always followed by `close`, which says what it means for the user.
   });
@@ -220,16 +220,16 @@ export function createEspnClient({
     end(
       joined ? "lost" : "refused",
       joined
-        ? "ESPN closed War Room's connection. If you reconnected in ESPN, you're drafting there now."
-        : "Couldn't join your ESPN draft room. It opens about an hour before the draft.",
+        ? "ESPN closed Draft Room's connection. If you reconnected in ESPN, you're drafting there now."
+        : "Couldn't join your ESPN draft. It opens about an hour before the draft.",
     );
   });
 
   timers.push(
     setInterval(() => {
       if (ended) return;
-      if (!joined && now() - lastHeard > JOIN_TIMEOUT_MS) return end("refused", "ESPN didn't answer War Room's connection.");
-      if (joined && now() - lastHeard > SILENCE_MS) return end("lost", "ESPN stopped answering War Room's connection.");
+      if (!joined && now() - lastHeard > JOIN_TIMEOUT_MS) return end("refused", "ESPN didn't answer Draft Room's connection.");
+      if (joined && now() - lastHeard > SILENCE_MS) return end("lost", "ESPN stopped answering Draft Room's connection.");
       if (joined) void flush();
     }, FLUSH_MS),
   );

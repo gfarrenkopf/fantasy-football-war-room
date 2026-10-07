@@ -87,7 +87,7 @@ describe("POST /api/leagues/:id/season/apply", () => {
     expect(errors).toEqual([]);
   });
 
-  it("keeps the moves War Room suggested that landed, and nothing the page merely claims (APE-256)", async () => {
+  it("keeps the moves Draft Room suggested that landed, and nothing the page merely claims (APE-256)", async () => {
     await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
     state.outcome = { kind: "applied", moves: [{ ...MOVES[0], landed: true }, { ...MOVES[1], landed: false }] } satisfies ApplyOutcome;
     const POST = await route();

@@ -324,7 +324,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       continue;
     }
     const key = SLOT_BY_ESPN_ID[Number(id)];
-    if (!key || key === "BN") return { ok: false, error: `This league starts a lineup slot War Room doesn't support yet (ESPN slot ${id}).` };
+    if (!key || key === "BN") return { ok: false, error: `This league starts a lineup slot Draft Room doesn't support yet (ESPN slot ${id}).` };
     starting.set(key, (starting.get(key) ?? 0) + n);
   }
   const starters = LINEUP_ORDER.filter((k) => starting.has(k)).map((key) => ({ key, count: starting.get(key)! }));

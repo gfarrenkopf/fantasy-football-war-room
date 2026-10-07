@@ -1,4 +1,4 @@
-# Fantasy War Room
+# Draft Room
 
 An open-source fantasy football draft room. Keep a tiered board open during your draft, see which picks are **Value** or **Reach** against ADP, catch bye-week conflicts before they happen, and rehearse with a mock-draft simulator against CPU drafters that each have their own style.
 

@@ -6,6 +6,8 @@ import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
 import { farewellMood, gatherFarewell, getStores, saveFarewell, soonestDraft, type Farewell, type FarewellMood, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
+import bar from "@/components/shell/appBar.module.css";
+import { EspnConnectionDialog } from "@/components/shell/EspnConnection";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
 import { useFlags } from "./Flags";
@@ -55,17 +57,26 @@ export function AccountProvider({ user, children }: { user: SessionUser | null; 
 
 export const useAccount = () => useContext(AccountContext);
 
-/** Sign-in link, or the signed-in email with sign-out. Renders nothing when cloud features are off. */
-export function AccountMenu() {
+/** The current league's settings, as the account menu offers them: in place, or on the draft room. */
+export type LeagueSettingsLink = { name: string; href: string; external?: boolean } | { name: string; onSelect(): void };
+
+/**
+ * Sign-in link, or the signed-in email with sign-out. Renders nothing when cloud features are off.
+ * Signed in, it also reaches the current league's settings (people look for those under their
+ * account) and, with an ESPN login, the ESPN connection, which belongs to the account (Epic 15).
+ */
+export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueSettingsLink | null; espn?: { seasonEmails: boolean | null } | null } = {}) {
   const flags = useFlags();
   const { cloudEnabled, paymentsEnabled } = flags;
   const user = useAccount();
   const confirm = useConfirm();
   const [showPurchases, setShowPurchases] = useState(false);
+  const [showEspn, setShowEspn] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
   const [signInNotice, setSignInNotice] = useState<string | undefined>();
   const signInBtn = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
 
   // A sign-in link that failed (used, expired, cancelled) lands here with `?error=`: reopen the
   // dialog saying what happened. Signed in already, there's nothing to recover, so just tidy up.
@@ -100,7 +111,7 @@ export function AccountMenu() {
     if (!flags.emailAuthEnabled && !flags.googleAuthEnabled) return null;
     return (
       <>
-        <button ref={signInBtn} className={s.btn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
+        <button ref={signInBtn} className={bar.textBtn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
           Sign in
         </button>
         {showSignIn && <SignInDialog onClose={closeSignIn} notice={signInNotice} />}
@@ -148,30 +159,63 @@ export function AccountMenu() {
     action();
   };
 
-  // One button, not three: the header's action row is the draft's, and identity sat in it wide
-  // enough to push the roster needs under the buttons. The popover is native (Esc, light dismiss).
+  // The app bar's account (Epic 15): the user's initial in a ring, opening a native popover menu.
   return (
     <>
-      <button className={cx("btn", "accountBtn")} popoverTarget="account-menu" aria-haspopup="menu" title={label}>
-        <span className={s.accountInitial} aria-hidden="true">
+      <button className={bar.avatarBtn} popoverTarget="account-menu" aria-haspopup="menu" aria-expanded={open} aria-label={`Account: ${label}`} title={label}>
+        <span className={bar.avatar} aria-hidden="true">
           {(user.email ?? "?").charAt(0)}
         </span>
-        Account
       </button>
-      <div ref={menuRef} id="account-menu" popover="auto" role="menu" aria-label="Account" className={s.accountMenu}>
-        <span className={s.accountEmail} title={label}>
-          {label}
-        </span>
-        {paymentsEnabled && (
-          <button className={cx("btn")} role="menuitem" onClick={pick(() => setShowPurchases(true))}>
-            Purchases
-          </button>
+      <div
+        ref={menuRef}
+        id="account-menu"
+        popover="auto"
+        role="menu"
+        aria-label="Account"
+        className={bar.menu}
+        data-align="end"
+        onToggle={(e) => setOpen(e.newState === "open")}
+      >
+        <div className={bar.group}>
+          <span className={bar.email} title={label}>
+            {label}
+          </span>
+        </div>
+        {(leagueSettings || espn) && (
+          <div className={bar.group}>
+            {leagueSettings &&
+              ("href" in leagueSettings ? (
+                <a className={bar.item} role="menuitem" href={leagueSettings.href} {...(leagueSettings.external ? { target: "_blank", rel: "noreferrer" } : {})}>
+                  <span>
+                    League settings{leagueSettings.external && " on ESPN"} · {leagueSettings.name}
+                  </span>
+                </a>
+              ) : (
+                <button className={bar.item} role="menuitem" onClick={pick(leagueSettings.onSelect)}>
+                  <span>League settings · {leagueSettings.name}</span>
+                </button>
+              ))}
+            {espn && (
+              <button className={bar.item} role="menuitem" onClick={pick(() => setShowEspn(true))}>
+                <span>ESPN connection</span>
+              </button>
+            )}
+          </div>
         )}
-        <button className={cx("btn")} role="menuitem" onClick={pick(() => void signOut())}>
-          Sign out
-        </button>
+        <div className={bar.group}>
+          {paymentsEnabled && (
+            <button className={bar.item} role="menuitem" onClick={pick(() => setShowPurchases(true))}>
+              <span>Purchases</span>
+            </button>
+          )}
+          <button className={bar.item} role="menuitem" onClick={pick(() => void signOut())}>
+            <span>Sign out</span>
+          </button>
+        </div>
       </div>
       {showPurchases && <PurchasesDialog onClose={() => setShowPurchases(false)} />}
+      {showEspn && espn && <EspnConnectionDialog seasonEmails={espn.seasonEmails} onClose={() => setShowEspn(false)} />}
     </>
   );
 }
@@ -263,7 +307,7 @@ export function SignInDialog({ onClose, notice }: { onClose(): void; notice?: st
       <div className={s.scrim} onClick={onClose} />
       <div className={cx("dialog", "signIn")} role="dialog" aria-modal="true" aria-labelledby="signin-title" aria-describedby="signin-lead">
         <h3 id="signin-title" className={s.siTitle}>
-          Take your war room everywhere
+          Take your board everywhere
         </h3>
         <p id="signin-lead" className={s.siLead}>
           Sign in and your leagues sync to your account: the same board on your laptop, your phone, and at the draft table. Nothing about how the room works changes.

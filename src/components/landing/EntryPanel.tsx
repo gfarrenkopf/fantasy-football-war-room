@@ -118,7 +118,7 @@ export function EntryPanel({
     <div ref={panel} className={s.panel} style={holdHeight ? { minHeight: holdHeight } : undefined}>
       <div className={s.sweep} aria-hidden="true" />
       <div className={s.brand}>
-        <b>Fantasy War Room</b>
+        <b>Draft Room</b>
         {canSignIn &&
           (face === "signin" ? (
             <button type="button" className={s.faceLink} onClick={() => flip("draft")}>
@@ -195,7 +195,7 @@ export function EntryPanel({
               {reseat}
             </p>
             <button type="button" className={cx("btn", "primary", "wide")} onClick={() => void open()} disabled={busy || errors.length > 0}>
-              {busy ? "Opening…" : "Open the war room →"}
+              {busy ? "Opening…" : "Open the Draft Room →"}
             </button>
             {errors.length > 0 && (
               <p className={s.error} role="alert">

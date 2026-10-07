@@ -6,10 +6,10 @@ export interface Mailbox {
 
 /**
  * Gmail can go straight to the message, wherever it was filed: both subjects the sign-in email
- * uses (see email.ts) contain "war room", and `in:anywhere` includes Spam, where a first email
+ * uses (see email.ts) contain "draft room", and `in:anywhere` includes Spam, where a first email
  * from a new sender often lands.
  */
-const GMAIL = { name: "Gmail", url: "https://mail.google.com/mail/u/0/#search/subject%3A%22war+room%22+in%3Aanywhere+newer_than%3A1d" };
+const GMAIL = { name: "Gmail", url: "https://mail.google.com/mail/u/0/#search/subject%3A%22draft+room%22+in%3Aanywhere+newer_than%3A1d" };
 const OUTLOOK = { name: "Outlook", url: "https://outlook.live.com/mail/0/" };
 const YAHOO = { name: "Yahoo Mail", url: "https://mail.yahoo.com/" };
 const ICLOUD = { name: "iCloud Mail", url: "https://www.icloud.com/mail/" };

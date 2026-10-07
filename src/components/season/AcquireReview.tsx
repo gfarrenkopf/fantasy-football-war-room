@@ -66,7 +66,7 @@ export function AcquireReview({
     if (!res)
       return setPhase({
         kind: "failed",
-        error: "Can't reach War Room right now. Nothing was sent to ESPN.",
+        error: "Can't reach Draft Room right now. Nothing was sent to ESPN.",
         details: [],
       });
     const body = (await res.json().catch(() => ({}))) as {
@@ -84,13 +84,13 @@ export function AcquireReview({
       return onDone(
         body.pending
           ? `Claim placed for ${pickup.player.name}${pickup.player.waiverClears ? `. Waivers process ${new Date(pickup.player.waiverClears).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}` : ""}.`
-          : `ESPN doesn't show your claim for ${pickup.player.name}. Check ESPN. War Room has been alerted.`,
+          : `ESPN doesn't show your claim for ${pickup.player.name}. Check ESPN. Draft Room has been alerted.`,
       );
     }
     if (res.ok && typeof body.added === "boolean") {
       router.refresh();
       const dropped = drop === null ? "" : body.dropped ? `, and ${roster.find((p) => p.playerId === drop)?.name ?? "your drop"} is gone` : ", but your drop is still on your team";
-      return onDone(body.added ? `Done. ${pickup.player.name} is on your team${dropped}.` : `ESPN doesn't show ${pickup.player.name} on your team. Check ESPN. War Room has been alerted.`);
+      return onDone(body.added ? `Done. ${pickup.player.name} is on your team${dropped}.` : `ESPN doesn't show ${pickup.player.name} on your team. Check ESPN. Draft Room has been alerted.`);
     }
     if (body.consent) {
       setAgreed(false);

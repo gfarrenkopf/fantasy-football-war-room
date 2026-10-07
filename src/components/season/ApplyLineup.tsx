@@ -56,7 +56,7 @@ export function ApplyLineup({
         ...(agreed ? {} : { consentVersion: ESPN_WRITE_VERSION }),
       }),
     }).catch(() => null);
-    if (!res) return setPhase({ kind: "failed", error: "Can't reach War Room right now. Nothing was sent to ESPN.", details: [] });
+    if (!res) return setPhase({ kind: "failed", error: "Can't reach Draft Room right now. Nothing was sent to ESPN.", details: [] });
     const body = (await res.json().catch(() => ({}))) as {
       error?: string;
       moves?: Landed;
@@ -120,7 +120,7 @@ export function ApplyLineup({
         <>
           {done && banked >= 0.05 && (
             <p className={s.applyBanked}>
-              Every War Room move is in, worth <b className="tabular-nums">{signed(banked)}</b> projected this week.
+              Every Draft Room move is in, worth <b className="tabular-nums">{signed(banked)}</b> projected this week.
             </p>
           )}
           <p className={s.fine}>{done ? "" : "ESPN already has this lineup. "}Tap a slot to change anything, starters or bench.</p>
@@ -178,7 +178,7 @@ export function ApplyLineup({
           ) : picked.length === 0 ? (
             // Everything left out: the one useful next step is getting War Room's picks back.
             <button type="button" className={s.primary} onClick={draft.restore}>
-              Restore War Room&apos;s picks
+              Restore Draft Room&apos;s picks
             </button>
           ) : (
             <button type="button" className={s.primary} disabled={chosen.length === 0 || problems.length > 0} onClick={() => setPhase({ kind: "review" })}>
@@ -233,7 +233,7 @@ function Results({ moves, line }: { moves: Landed; line: (m: LineupMove) => Reac
           </li>
         ))}
       </ul>
-      <p className={s.aiError}>Check these on ESPN. War Room has been alerted.</p>
+      <p className={s.aiError}>Check these on ESPN. Draft Room has been alerted.</p>
     </div>
   );
 }

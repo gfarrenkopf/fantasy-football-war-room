@@ -14,11 +14,12 @@ import { loadSeasonView, loadWeekView } from "@/lib/server/espn/seasonView";
 import { projectionAccuracy, recordProjections } from "@/lib/server/seasonProjections";
 import { keepWeeks, listWeeks } from "@/lib/server/seasonRecaps";
 import { archiveWeek } from "@/lib/season/leagueRecap";
-import { wantsSeasonEmails, writeConsent } from "@/lib/server/seasonPrefs";
+import { writeConsent } from "@/lib/server/seasonPrefs";
+import { loadShell } from "@/lib/server/shell";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
 
-export const metadata: Metadata = { title: "Your season · Fantasy War Room" };
+export const metadata: Metadata = { title: "Your season · Draft Room" };
 
 /**
  * A league's in-season page (10.5): this week's recommended lineup, and trades (10.6), plus in-season
@@ -38,11 +39,8 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   if (!user) return <SeasonRoom flags={publicFlags} leagueId={leagueId} problem={{ kind: "signed-out" }} />;
   if (!mayUseSeason(config.espnSyncAllowlist, user.email)) notFound();
   const db = getDb();
-  const [league, links] = await Promise.all([findLeague(db, user.userId, leagueId), listSeasonLinks(db, user.userId)]);
+  const [league, links, shell] = await Promise.all([findLeague(db, user.userId, leagueId), listSeasonLinks(db, user.userId), loadShell(db, user)]);
   if (!league) notFound();
-  // Every league the user follows on ESPN, for the switcher; this one even if its link is gone.
-  const leagues = links.map((l) => ({ id: l.leagueId, name: l.name }));
-  if (!leagues.some((l) => l.id === leagueId)) leagues.unshift({ id: leagueId, name: league.name });
 
   const key = config.espnCodeKey;
   // A league connected before its draft could be imported (APE-193) gets its board now, after the
@@ -55,7 +53,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
     // Reconnecting starts on the user's ESPN league page (APE-301).
     const link = links.find((l) => l.leagueId === leagueId);
     const espnUrl = link ? espnLeaguePage(link) : undefined;
-    return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} espnUrl={espnUrl} />;
+    return <SeasonRoom flags={publicFlags} user={user} leagueId={leagueId} leagueName={league.name} shell={shell} problem={load as SeasonProblem} espnUrl={espnUrl} />;
   }
   const { view, result, previous } = load;
   // ESPN's projections as they stand, kept for game day's "ESPN's call" (APE-229); last week's too
@@ -75,10 +73,8 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       limit: 3,
     }).catch((err: unknown) => console.warn(`[espn-season] couldn't keep the recaps: ${(err as Error).message}`)),
   );
-  const [ai, emails, consented, , accuracy, previousAccuracy, kept] = await Promise.all([
+  const [ai, consented, , accuracy, previousAccuracy, kept] = await Promise.all([
     seasonAiState(db, user, league, view),
-    // Only offered when the Sunday job can send email at all.
-    config.seasonJobEnabled && config.emailAuthEnabled ? wantsSeasonEmails(db, user.userId) : null,
     writeConsent(db, user.userId),
     markSeasonViewed(db, user.userId, leagueId),
     projectionAccuracy(db, leagueId, result ?? view),
@@ -89,9 +85,10 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   return (
     <SeasonRoom
       flags={publicFlags}
+      user={user}
       leagueId={leagueId}
       leagueName={league.name}
-      leagues={leagues}
+      shell={shell}
       view={view}
       result={result}
       previous={previous ? { view: previous, accuracy: previousAccuracy } : undefined}
@@ -100,7 +97,6 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       projectionsMissing={load.projectionsMissing}
       ai={ai}
       checkout={checkout}
-      seasonEmails={emails}
       writeConsented={(consented ?? 0) >= ESPN_WRITE_VERSION}
       phase={load.phase}
       accuracy={accuracy}

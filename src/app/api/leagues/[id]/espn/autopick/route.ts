@@ -24,7 +24,7 @@ export const POST = withUser<Ctx>(async (_request, ctx, { db, userId, email }) =
   const access = await espnAccess(db, id, email);
   if (access.kind !== "allowed") return error(access.kind === "needs-purchase" ? 402 : 403, "ESPN live sync isn't available for this league");
   if (!clientFor(userId, id)?.joined() || !getRelay().setAutopick(userId, id, false)) {
-    return json(409, { error: "War Room isn't holding your ESPN connection. Turn autopick off in ESPN's Pick Queue panel." });
+    return json(409, { error: "Draft Room isn't holding your ESPN connection. Turn autopick off in ESPN's Pick Queue panel." });
   }
   return json(202, { ok: true });
 });

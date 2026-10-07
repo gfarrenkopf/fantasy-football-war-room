@@ -46,6 +46,6 @@ export async function POST(request: Request) {
   if (season < 2000 || season > 2100) return withCors(error(400, "Invalid hand-off"), request);
   if (b.consentVersion !== ESPN_SEASON_VERSION) return withCors(json(409, { seasonVersion: ESPN_SEASON_VERSION }), request);
   const claim = await createClaim(getDb(), config.espnCodeKey!, login, { espnLeagueId: b.espnLeagueId, season, consentVersion: ESPN_SEASON_VERSION });
-  if (!claim) return withCors(error(503, "War Room is busy. Try again in a few minutes."), request);
+  if (!claim) return withCors(error(503, "Draft Room is busy. Try again in a few minutes."), request);
   return withCors(json(200, { claim }), request);
 }

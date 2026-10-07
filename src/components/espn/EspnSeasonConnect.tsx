@@ -12,7 +12,7 @@ type Phase = { kind: "idle" } | { kind: "connecting" } | { kind: "expired" } | {
 /** A claim the bridge handed off, or "expired" when its code is unknown or past its time. */
 export type SeasonClaim = { code: string; espnLeagueId: string; season: number } | "expired" | null;
 
-const BACK_TO_ESPN = "Go back to your ESPN league page and tap the War Room bookmark again.";
+const BACK_TO_ESPN = "Go back to your ESPN league page and tap the Draft Room bookmark again.";
 
 /** The season connect page's body. See src/app/espn/season/page.tsx. */
 export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: PublicFlags; signedIn: boolean; allowed: boolean; claim: SeasonClaim }) {
@@ -29,7 +29,7 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ claim: code }),
     }).catch(() => null);
-    if (!res) return setPhase({ kind: "error", message: "Couldn't reach War Room. Check your connection and try again." });
+    if (!res) return setPhase({ kind: "error", message: "Couldn't reach Draft Room. Check your connection and try again." });
     if (res.status === 401) return location.reload();
     if (res.status === 410) return setPhase({ kind: "expired" });
     const body = (await res.json().catch(() => ({}))) as { leagueId?: string; error?: string };
@@ -40,7 +40,7 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
   const card = "rounded-card border border-line bg-panel p-4 text-sm space-y-2";
   const howTo = (
     <Link href="/espn" className="text-focus underline">
-      How to add the War Room bookmark
+      How to add the Draft Room bookmark
     </Link>
   );
 
@@ -48,14 +48,14 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
     <main className="min-h-dvh bg-bg text-text px-5 py-6 font-sans">
       <div className="mx-auto max-w-md space-y-4">
         <header className="space-y-1">
-          <p className="text-xs uppercase tracking-wider text-muted">Fantasy War Room</p>
+          <p className="text-xs uppercase tracking-wider text-muted">Draft Room</p>
           <h1 className="text-xl font-semibold">Connect your season</h1>
           <p className="text-sm text-muted">A recommended lineup every week, and trade checks against every team&apos;s real roster.</p>
         </header>
 
         {!claim ? (
           <div className={card}>
-            <p>Start from your ESPN league page: open it, tap the War Room bookmark, then Connect my season.</p>
+            <p>Start from your ESPN league page: open it, tap the Draft Room bookmark, then Connect my season.</p>
             <p>{howTo}</p>
           </div>
         ) : phase.kind === "expired" || claim === "expired" ? (
@@ -68,7 +68,7 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
           <section className="rounded-card border border-line bg-panel p-4">
             <SignIn
               flags={flags}
-              title="Sign in to War Room to finish"
+              title="Sign in to Draft Room to finish"
               fine="The link brings you back here to finish connecting, on whichever device you open it."
               next={`/espn/season?claim=${encodeURIComponent(claim.code)}`}
               autoFocus
@@ -79,7 +79,7 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
         ) : (
           <section className="rounded-card border border-line bg-panel p-4 space-y-3">
             <p className="text-sm">
-              Connect ESPN league <span className="font-semibold tabular-nums">{claim.espnLeagueId}</span> ({claim.season}) to your War Room account.
+              Connect ESPN league <span className="font-semibold tabular-nums">{claim.espnLeagueId}</span> ({claim.season}) to your Draft Room account.
             </p>
             {phase.kind === "error" && (
               <p className="text-sm text-warn-ink" role="alert">

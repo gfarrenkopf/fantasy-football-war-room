@@ -176,7 +176,7 @@ export function OpeningNight() {
             <span className={cx("otYear", at(1) && "in")}>The {show.season}</span>
             <span className={cx("otDraft", at(2) && "in")}>Draft</span>
           </h1>
-          <p className={cx("otLeague", at(3) && "in")}>{show.name} · welcome to the war room</p>
+          <p className={cx("otLeague", at(3) && "in")}>{show.name} · welcome to the Draft Room</p>
 
           <dl className={s.otStats}>
             {[

@@ -34,14 +34,14 @@ export function ClaimList({ view, leagueId, agreed: agreedAtLoad, onNotice }: { 
     if (res?.ok && typeof body?.cancelled === "boolean") {
       setConfirming(null);
       router.refresh();
-      return onNotice(body.cancelled ? `Claim for ${claim.add.name} cancelled.` : `ESPN still shows your claim for ${claim.add.name}. Check ESPN. War Room has been alerted.`);
+      return onNotice(body.cancelled ? `Claim for ${claim.add.name} cancelled.` : `ESPN still shows your claim for ${claim.add.name}. Check ESPN. Draft Room has been alerted.`);
     }
     if (body?.consent) {
       setAgreed(false);
       return setConsenting(false);
     }
     if (res && (res.status === 409 || res.status === 502)) setAgreed(true);
-    setFailed([body?.error ?? "Can't reach War Room right now. Nothing was sent to ESPN.", ...(body?.problems ?? body?.refused ?? [])].join(" "));
+    setFailed([body?.error ?? "Can't reach Draft Room right now. Nothing was sent to ESPN.", ...(body?.problems ?? body?.refused ?? [])].join(" "));
   }
 
   return (

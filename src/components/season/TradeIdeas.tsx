@@ -278,7 +278,7 @@ function IdeaCard({
             onCancel={() => setOffering(false)}
             onDone={(landed) => {
               setOffering(false);
-              onNotice(landed ? `Offer sent to ${partner}. It's in Pending on ESPN.` : "ESPN doesn't show your offer. Check ESPN. War Room has been alerted.");
+              onNotice(landed ? `Offer sent to ${partner}. It's in Pending on ESPN.` : "ESPN doesn't show your offer. Check ESPN. Draft Room has been alerted.");
             }}
           />
         ) : (

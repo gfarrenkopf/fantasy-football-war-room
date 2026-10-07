@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Fantasy War Room — know who survives to your next turn";
+export const alt = "Draft Room — know who survives to your next turn";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -49,7 +49,7 @@ export default function OpengraphImage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #323a45", paddingTop: 24 }}>
-          <div style={{ fontSize: 26, fontWeight: 600 }}>Fantasy War Room</div>
+          <div style={{ fontSize: 26, fontWeight: 600 }}>Draft Room</div>
           <div style={{ fontSize: 22, color: "#5f6a78" }}>draftroom.online</div>
         </div>
       </div>
