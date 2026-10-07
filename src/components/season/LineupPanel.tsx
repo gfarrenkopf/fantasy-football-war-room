@@ -90,7 +90,7 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
               document.getElementById("apply-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
             }}
           />
-        ) : !suggested && banked >= 0.05 ? (
+        ) : !suggested && (banked >= 0.05 || onWarRooms) ? (
           <Banked className={s.orderGain} moves={view.warRoomMoves} total={lineup.total} week={view.currentWeek} name={(id) => byId.get(id)?.name ?? `Player ${id}`} />
         ) : (
           <Gain
