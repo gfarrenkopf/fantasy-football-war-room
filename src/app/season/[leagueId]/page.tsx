@@ -10,8 +10,9 @@ import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
 import { backfillEspnDraft } from "@/lib/server/espn/draftImport";
 import { listSeasonLinks, markSeasonViewed } from "@/lib/server/espn/seasonLinks";
-import { loadSeasonView } from "@/lib/server/espn/seasonView";
+import { loadSeasonView, loadWeekView } from "@/lib/server/espn/seasonView";
 import { projectionAccuracy, recordProjections } from "@/lib/server/seasonProjections";
+import { keepWeeks } from "@/lib/server/seasonRecaps";
 import { wantsSeasonEmails, writeConsent } from "@/lib/server/seasonPrefs";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
@@ -61,6 +62,18 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   for (const v of [view, result ?? previous].filter((v) => v !== undefined)) {
     after(() => recordProjections(db, leagueId, v).catch((err: unknown) => console.warn(`[espn-season] couldn't record projections: ${(err as Error).message}`)));
   }
+  // The weeks that are over go into the recap archive (APE-308): the one on show, and a few older
+  // ones a visit fills in, so the archive builds up without one page view reading the whole season.
+  const shown = load.phase === "results" ? (result ?? view) : previous;
+  const over = shown?.currentWeek ?? view.currentWeek - 1;
+  after(() =>
+    keepWeeks(db, leagueId, {
+      season: view.season,
+      throughWeek: over,
+      loadWeek: (week) => (week === shown?.currentWeek ? Promise.resolve(shown) : loadWeekView(db, key, user.userId, leagueId, week)),
+      limit: 3,
+    }).catch((err: unknown) => console.warn(`[espn-season] couldn't keep the recaps: ${(err as Error).message}`)),
+  );
   const [ai, emails, consented, , accuracy, previousAccuracy] = await Promise.all([
     seasonAiState(db, user, league, view),
     // Only offered when the Sunday job can send email at all.

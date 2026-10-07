@@ -86,16 +86,25 @@ async function lastWeek(db: Db, key: Buffer, userId: string, leagueId: string, c
   const week = current.currentWeek - 1;
   if (week < 1) return null;
   try {
-    const load = await loadSeason(db, key, userId, leagueId, { week, maxAgeMs: RESULT_MAX_AGE_MS });
-    if (load.kind !== "ok" || load.league.currentWeek !== week) return null;
-    const ids = load.league.teams.flatMap((t) => t.roster.map((e) => e.playerId));
-    const [projections, games] = await Promise.all([
-      getEspnProjections({ season: load.league.season, playerIds: ids, fromWeek: week, toWeek: week }),
-      getEspnScoreboard({ season: load.league.season, week }),
-    ]);
-    return buildSeasonView(load.league, load.espnTeamId, projections, { games, now: load.fetchedAt.getTime() });
+    return await loadWeekView(db, key, userId, leagueId, week);
   } catch (err) {
     console.warn(`[espn-season] last week's result unavailable: ${(err as Error).message}`);
     return null;
   }
+}
+
+/**
+ * A past week's view, as ESPN has it now: rosters and points for that week, scored with its
+ * projections (APE-308). Null when the league can't be read or ESPN doesn't have the week; throws
+ * when the projections or scoreboard reads fail.
+ */
+export async function loadWeekView(db: Db, key: Buffer, userId: string, leagueId: string, week: number, { maxAgeMs = RESULT_MAX_AGE_MS }: { maxAgeMs?: number } = {}): Promise<SeasonView | null> {
+  const load = await loadSeason(db, key, userId, leagueId, { week, maxAgeMs });
+  if (load.kind !== "ok" || load.league.currentWeek !== week) return null;
+  const ids = load.league.teams.flatMap((t) => t.roster.map((e) => e.playerId));
+  const [projections, games] = await Promise.all([
+    getEspnProjections({ season: load.league.season, playerIds: ids, fromWeek: week, toWeek: week }),
+    getEspnScoreboard({ season: load.league.season, week }),
+  ]);
+  return buildSeasonView(load.league, load.espnTeamId, projections, { games, now: load.fetchedAt.getTime() });
 }

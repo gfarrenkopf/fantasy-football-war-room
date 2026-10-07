@@ -7,6 +7,7 @@ import type { AiTradeIdeas } from "@/lib/ai/season/tradeIdeas";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
+import type { WeekFacts } from "@/lib/season/weekFacts";
 
 /**
  * The hosted database. Change it here, then run `npm run db:generate` to write a migration
@@ -472,6 +473,30 @@ export const seasonLineupMoves = pgTable(
     appliedAt: timestamp("applied_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week, t.playerId] })],
+);
+
+/**
+ * Each finished week of a league, kept for its recap (APE-308): the week's facts (every team's
+ * players, points and projections, the matchups and the standings), from which the page builds the
+ * recap. Kept so the archive outlasts the user's ESPN login and the season. Saved when the season
+ * page shows a finished week and again by the Wednesday job, which sets `settledAt` once ESPN's stat
+ * corrections are in; a settled week isn't rewritten by the page.
+ */
+export const seasonRecaps = pgTable(
+  "season_recaps",
+  {
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    /** WEEK_FACTS_VERSION when it was saved. */
+    version: integer("version").notNull(),
+    facts: jsonb("facts").$type<WeekFacts>().notNull(),
+    savedAt: timestamp("saved_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    settledAt: timestamp("settled_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week] })],
 );
 
 /** A user's email settings. No row means the defaults. */

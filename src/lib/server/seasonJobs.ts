@@ -20,8 +20,12 @@ export interface JobLeague {
   season: number;
 }
 
-/** Connected leagues opened in the last two weeks, by user, and how many were left out as idle. */
-export async function activeLeagues(db: Db, now: Date): Promise<{ total: number; inactive: number; byUser: Map<string, JobLeague[]> }> {
+/**
+ * Connected leagues opened in the last two weeks, by user, and how many were left out as idle.
+ * `includeIdle` keeps the idle ones too, for the recap job (APE-308), whose archive is worth keeping
+ * for a user who stopped looking.
+ */
+export async function activeLeagues(db: Db, now: Date, { includeIdle = false }: { includeIdle?: boolean } = {}): Promise<{ total: number; inactive: number; byUser: Map<string, JobLeague[]> }> {
   const rows = await db
     .select({
       userId: espnSeasonLinks.userId,
@@ -40,7 +44,7 @@ export async function activeLeagues(db: Db, now: Date): Promise<{ total: number;
   const byUser = new Map<string, JobLeague[]>();
   let inactive = 0;
   for (const { lastViewedAt, ...league } of rows) {
-    if (!lastViewedAt || now.getTime() - lastViewedAt.getTime() > INACTIVE_AFTER_MS) {
+    if (!includeIdle && (!lastViewedAt || now.getTime() - lastViewedAt.getTime() > INACTIVE_AFTER_MS)) {
       inactive++;
       continue;
     }
