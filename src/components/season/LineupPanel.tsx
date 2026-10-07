@@ -165,8 +165,8 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
             <span className={s.panelNote}>
               {swaps ? (swaps === 1 ? "1 swap · " : `${swaps} swaps · `) : ""}On ESPN <span className="tabular-nums">{pts(lineup.currentTotal)}</span>
             </span>
-            <LineupMenu draft={draft} irSlots={view.irSlots} />
           </div>
+          <LineupSources draft={draft} />
           <ul className={s.rows}>
             {draft.seats.map((key, i) => (
               <StarterRow key={`${key}-${i}`} draft={draft} seat={i} made={view.warRoomMoves} fresh={fresh} />
@@ -197,6 +197,11 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
               </li>
             ))}
           </ul>
+          {view.irSlots > 0 && (
+            <div className={s.panelTools}>
+              <IrPicker roster={draft.roster} ir={draft.ir} irSlots={view.irSlots} onToggle={draft.toggleIr} />
+            </div>
+          )}
         </section>
       </div>
 
@@ -601,47 +606,22 @@ function BenchPicker({ draft, player }: { draft: LineupDraft; player: ViewPlayer
   );
 }
 
-/** The lineup's other tools: IR, and starting over from ESPN's lineup or War Room's. */
-function LineupMenu({ draft, irSlots }: { draft: LineupDraft; irSlots: number }) {
-  const id = useId();
-  const close = () => document.getElementById(id)?.hidePopover();
-  if (!irSlots && draft.isOnEspn && draft.isRecommended) return null;
+/** Starting over from ESPN's lineup or War Room's (APE-295), shown only once the staged lineup is neither. */
+function LineupSources({ draft }: { draft: LineupDraft }) {
+  if (draft.isOnEspn && draft.isRecommended) return null;
   return (
-    <>
-      <button type="button" className={s.textButton} popoverTarget={id}>
-        More
-      </button>
-      <div id={id} popover="auto" className={`${s.picker} ${s.menu}`}>
-        <p className={s.pickerHead}>Your lineup</p>
-        <div className={s.seatSources}>
-          {!draft.isOnEspn && (
-            <button
-              type="button"
-              className={s.textButton}
-              onClick={() => {
-                draft.startFrom(draft.onEspn);
-                close();
-              }}
-            >
-              Start from ESPN&apos;s lineup
-            </button>
-          )}
-          {!draft.isRecommended && (
-            <button
-              type="button"
-              className={s.textButton}
-              onClick={() => {
-                draft.startFrom(draft.recommended);
-                close();
-              }}
-            >
-              Start from War Room&apos;s lineup
-            </button>
-          )}
-        </div>
-        {irSlots > 0 && <IrPicker roster={draft.roster} ir={draft.ir} irSlots={irSlots} onToggle={draft.toggleIr} />}
-      </div>
-    </>
+    <div className={`${s.seatSources} ${s.panelTools}`}>
+      {!draft.isOnEspn && (
+        <button type="button" className={s.textButton} onClick={() => draft.startFrom(draft.onEspn)}>
+          Start from ESPN&apos;s lineup
+        </button>
+      )}
+      {!draft.isRecommended && (
+        <button type="button" className={s.textButton} onClick={() => draft.startFrom(draft.recommended)}>
+          Start from War Room&apos;s lineup
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -417,13 +417,13 @@ function RosterPicker({
   onToggle: (id: number) => void;
 }) {
   return (
-    <fieldset className={s.picker} data-hidden={hidden}>
+    <fieldset className={s.rosterPicker} data-hidden={hidden}>
       <legend className="sr-only">{title}</legend>
-      <div className={s.pickerHead} aria-hidden>
+      <div className={s.rosterPickerHead} aria-hidden>
         {title}
         <span>Rest of season</span>
       </div>
-      <ul className={s.pickerList}>
+      <ul className={s.rosterPickerList}>
         {/* Picked players first, so a trade loaded from ESPN shows who's in it without scrolling. */}
         {[...roster].sort((a, b) => Number(picked.includes(b.playerId)) - Number(picked.includes(a.playerId)) || byRos(a, b)).map((p) => {
           const on = picked.includes(p.playerId);
