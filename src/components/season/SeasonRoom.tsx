@@ -18,7 +18,6 @@ import { matchupLive, type GameDayPhase } from "@/lib/season/gameday";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
 import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
-import { ArrowLeft } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
@@ -126,17 +125,13 @@ export function SeasonRoom(props: Props) {
         </AccountProvider>
       </FlagsProvider>
       <div className={s.frame}>
-        <header className={s.top}>
-          <div className={s.titleBlock}>
-            <nav className={s.crumbs} aria-label="Draft Room">
-              <a href={`/draft?league=${encodeURIComponent(props.leagueId)}`} className={s.draftDoor}>
-                <ArrowLeft /> Draft room
-              </a>
-            </nav>
-            <h1 className={s.title}>{title}</h1>
-            {"view" in props && <Freshness view={props.view} />}
-          </div>
-          {view && (
+        {/* The league's name is the app bar's; the page keeps it as its heading for screen readers. */}
+        <h1 className="sr-only">{title}</h1>
+        {view && (
+          <header className={s.top}>
+            <div className={s.titleBlock}>
+              <Freshness view={view} />
+            </div>
             <div className={s.tabs} role="tablist" aria-label="Season tools">
               <TabButton id="gameday" tab={tab} onSelect={setTab}>
                 Game day
@@ -156,8 +151,8 @@ export function SeasonRoom(props: Props) {
                 Waivers
               </TabButton>
             </div>
-          )}
-        </header>
+          </header>
+        )}
 
         {"problem" in props ? (
           <Problem flags={props.flags} problem={props.problem} espnUrl={props.espnUrl} />
@@ -201,7 +196,7 @@ function TabButton({ id, tab, onSelect, children }: { id: Tab; tab: Tab; onSelec
 
 const noSubscription = () => () => {};
 
-/** The user's week and record under the title; ESPN's sync time is the app bar's chip. */
+/** The week and the user's record, opening the page; ESPN's sync time is the app bar's chip. */
 function Freshness({ view }: { view: SeasonView }) {
   const standing = view.teams.find((t) => t.id === view.myTeamId)?.standing;
   return (

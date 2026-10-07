@@ -27,7 +27,7 @@ import { DraftFinale } from "./DraftFinale";
 import { OpeningNight } from "./OpeningNight";
 import { useWelcomeHold, Welcome } from "./Welcome";
 import { FlagsProvider } from "./Flags";
-import { SeasonLinksProvider, useHasSeasonPage, useShell } from "./SeasonLinks";
+import { SeasonLinksProvider, useHasSeasonPage, useSeasonPrompt, useShell } from "./SeasonLinks";
 import type { ShellData } from "@/lib/server/shell";
 import { DraftBook } from "./DraftBook";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
@@ -128,6 +128,8 @@ function WarRoomView() {
   /* ---- the app bar's league menu (Epic 15) ---- */
   const shell = useShell();
   const hasSeasonPage = useHasSeasonPage(active?.id);
+  // A finished draft with no season page offers to connect ESPN (Epic 15).
+  const connectSeason = useSeasonPrompt(active?.id) === "connect" && model.done;
   // A league that's linked and drafted opens on its season page; any other switches here.
   const pickLeague = (id: string) => {
     const home = shell.leagues.find((l) => l.id === id)?.home;
@@ -282,6 +284,7 @@ function WarRoomView() {
               onPick={pickLeague}
               actions={[
                 ...(hasSeasonPage ? [{ label: "Season", href: `/season/${encodeURIComponent(active.id)}` }] : []),
+                ...(connectSeason ? [{ label: "Manage your season", href: "/espn" }] : []),
                 espnSettings ? { label: "League settings on ESPN", href: espnSettings, external: true } : { label: "League settings", onSelect: openSettings },
               ]}
               onNewLeague={() => setSetup("create")}

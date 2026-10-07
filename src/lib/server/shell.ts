@@ -30,6 +30,8 @@ export interface ShellEspn {
 export interface ShellData {
   leagues: ShellLeague[];
   espn: ShellEspn | null;
+  /** In-season tools are on for this user, so a league that isn't linked yet can be. */
+  season: boolean;
 }
 
 /**
@@ -58,5 +60,5 @@ export async function loadShell(db: Db, user: { userId: string; email?: string |
   const espn = login
     ? { seasonEmails: config.seasonJobEnabled && config.emailAuthEnabled ? await wantsSeasonEmails(db, user.userId) : null }
     : null;
-  return { leagues, espn };
+  return { leagues, espn, season };
 }
