@@ -27,7 +27,8 @@ import { DraftFinale } from "./DraftFinale";
 import { OpeningNight } from "./OpeningNight";
 import { useWelcomeHold, Welcome } from "./Welcome";
 import { FlagsProvider } from "./Flags";
-import { SeasonLinksProvider } from "./SeasonLinks";
+import { SeasonLinksProvider, useHasSeasonPage, useShell } from "./SeasonLinks";
+import type { ShellData } from "@/lib/server/shell";
 import { DraftBook } from "./DraftBook";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
 import { Header, leagueSummary } from "./Header";
@@ -46,12 +47,12 @@ const REPORT_MOCKS = 300;
 const PLAN_MOCKS = 100;
 
 /** The war room app: providers plus the active view. */
-export function WarRoom({ flags, user, seasonLeagueIds = [] }: { flags: PublicFlags; user: SessionUser | null; seasonLeagueIds?: readonly string[] }) {
+export function WarRoom({ flags, user, shell = null }: { flags: PublicFlags; user: SessionUser | null; shell?: ShellData | null }) {
   // Chooses local or server-backed persistence before any provider below reads from it. Idempotent.
   configureStores({ cloudEnabled: flags.cloudEnabled, userId: user?.userId ?? null });
   return (
     <FlagsProvider flags={flags}>
-      <SeasonLinksProvider leagueIds={seasonLeagueIds}>
+      <SeasonLinksProvider shell={shell}>
         {/* Keyed by user: signing in or out swaps the stores, so every provider below reloads from the new ones. */}
         <AccountProvider key={user?.userId ?? "signed-out"} user={user}>
           <ToastProvider>
@@ -123,6 +124,35 @@ function WarRoomView() {
   const setupMode = configured ? setup : welcomeHold ? null : "create";
   const closeSetup = useCallback(() => setSetup(null), [setSetup]);
   const showSetup = setupMode !== null;
+
+  /* ---- the app bar's league menu (Epic 15) ---- */
+  const shell = useShell();
+  const hasSeasonPage = useHasSeasonPage(active?.id);
+  // A league that's linked and drafted opens on its season page; any other switches here.
+  const pickLeague = (id: string) => {
+    const home = shell.leagues.find((l) => l.id === id)?.home;
+    if (home?.startsWith("/season/")) window.location.assign(home);
+    else switchLeague(id);
+  };
+  const openSettings = () => setSetup("edit");
+  // A league that follows ESPN takes its settings from ESPN, so its League settings goes there.
+  const espnSettings = shell.leagues.find((l) => l.id === active?.id)?.espnSettings ?? null;
+  // The season page's League settings and + New league land here as `?settings=1` and `?new=1`,
+  // once `?league=` (LeagueProvider) has switched to the league they're for.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const want = url.searchParams.get("settings") === "1" ? "edit" : url.searchParams.get("new") === "1" ? "create" : null;
+    if (!want || url.searchParams.has("league")) return;
+    // Stripped and acted on together, from a timeout, as AccountMenu does with `?error=`: an effect
+    // cleaned up before it fires (StrictMode) leaves the URL to retry.
+    const t = setTimeout(() => {
+      url.searchParams.delete("settings");
+      url.searchParams.delete("new");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      setSetup(want);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [active?.id]);
 
   /* ---- flag picks logged against different player data (e.g. sample data swapped for a live run) ---- */
   const staleWarned = useRef(false);
@@ -249,12 +279,16 @@ function WarRoomView() {
               currentId={active.id}
               currentName={active.name}
               title={leagueSummary(model.league)}
-              onPick={switchLeague}
+              onPick={pickLeague}
+              actions={[
+                ...(hasSeasonPage ? [{ label: "Season", href: `/season/${encodeURIComponent(active.id)}` }] : []),
+                espnSettings ? { label: "League settings on ESPN", href: espnSettings, external: true } : { label: "League settings", onSelect: openSettings },
+              ]}
               onNewLeague={() => setSetup("create")}
             />
           ) : null
         }
-        account={<AccountMenu />}
+        account={<AccountMenu leagueSettings={!active ? null : espnSettings ? { name: active.name, href: espnSettings, external: true } : { name: active.name, onSelect: openSettings }} espn={shell.espn} />}
       />
       <Header
         ref={searchRef}
@@ -262,7 +296,6 @@ function WarRoomView() {
         onQueryChange={onQueryChange}
         onQueryKeyDown={onQueryKeyDown}
         hint={hint}
-        onOpenLeague={() => setSetup("edit")}
         arrival={arrival}
         needs={<NeedsStrip />}
         actions={

@@ -5,8 +5,7 @@ import { WarRoom } from "@/components/draft/WarRoom";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
 import { getDb } from "@/lib/db";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
-import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
+import { loadShell } from "@/lib/server/shell";
 
 export const metadata: Metadata = { title: "Draft Room" };
 
@@ -33,8 +32,7 @@ export default async function Draft({ searchParams }: PageProps<"/draft">) {
   if (resume) redirect(resume);
 
   const user = await getSessionUser();
-  // Leagues with a season page (10.7), so the draft room can link to it.
-  const season = user && config.espnSeasonEnabled && mayUseSeason(config.espnSyncAllowlist, user.email);
-  const seasonLeagueIds = season ? (await listSeasonLinks(getDb(), user.userId)).map((l) => l.leagueId) : [];
-  return <WarRoom flags={publicFlags} user={user} seasonLeagueIds={seasonLeagueIds} />;
+  // The app bar's leagues and where each lands (Epic 15), and the user's ESPN connection.
+  const shell = user && config.cloudEnabled ? await loadShell(getDb(), user) : null;
+  return <WarRoom flags={publicFlags} user={user} shell={shell} />;
 }

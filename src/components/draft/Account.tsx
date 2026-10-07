@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { farewellMood, gatherFarewell, getStores, saveFarewell, soonestDraft, type Farewell, type FarewellMood, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
 import bar from "@/components/shell/appBar.module.css";
+import { EspnConnectionDialog } from "@/components/shell/EspnConnection";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
 import { useFlags } from "./Flags";
@@ -56,13 +57,21 @@ export function AccountProvider({ user, children }: { user: SessionUser | null; 
 
 export const useAccount = () => useContext(AccountContext);
 
-/** Sign-in link, or the signed-in email with sign-out. Renders nothing when cloud features are off. */
-export function AccountMenu() {
+/** The current league's settings, as the account menu offers them: in place, or on the draft room. */
+export type LeagueSettingsLink = { name: string; href: string; external?: boolean } | { name: string; onSelect(): void };
+
+/**
+ * Sign-in link, or the signed-in email with sign-out. Renders nothing when cloud features are off.
+ * Signed in, it also reaches the current league's settings (people look for those under their
+ * account) and, with an ESPN login, the ESPN connection, which belongs to the account (Epic 15).
+ */
+export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueSettingsLink | null; espn?: { seasonEmails: boolean | null } | null } = {}) {
   const flags = useFlags();
   const { cloudEnabled, paymentsEnabled } = flags;
   const user = useAccount();
   const confirm = useConfirm();
   const [showPurchases, setShowPurchases] = useState(false);
+  const [showEspn, setShowEspn] = useState(false);
   const [showSignIn, setShowSignIn] = useState(false);
   const [signInNotice, setSignInNotice] = useState<string | undefined>();
   const signInBtn = useRef<HTMLButtonElement>(null);
@@ -172,6 +181,29 @@ export function AccountMenu() {
           <span className={bar.email} title={label}>
             {label}
           </span>
+        </div>
+        {(leagueSettings || espn) && (
+          <div className={bar.group}>
+            {leagueSettings &&
+              ("href" in leagueSettings ? (
+                <a className={bar.item} role="menuitem" href={leagueSettings.href} {...(leagueSettings.external ? { target: "_blank", rel: "noreferrer" } : {})}>
+                  <span>
+                    League settings{leagueSettings.external && " on ESPN"} · {leagueSettings.name}
+                  </span>
+                </a>
+              ) : (
+                <button className={bar.item} role="menuitem" onClick={pick(leagueSettings.onSelect)}>
+                  <span>League settings · {leagueSettings.name}</span>
+                </button>
+              ))}
+            {espn && (
+              <button className={bar.item} role="menuitem" onClick={pick(() => setShowEspn(true))}>
+                <span>ESPN connection</span>
+              </button>
+            )}
+          </div>
+        )}
+        <div className={bar.group}>
           {paymentsEnabled && (
             <button className={bar.item} role="menuitem" onClick={pick(() => setShowPurchases(true))}>
               <span>Purchases</span>
@@ -183,6 +215,7 @@ export function AccountMenu() {
         </div>
       </div>
       {showPurchases && <PurchasesDialog onClose={() => setShowPurchases(false)} />}
+      {showEspn && espn && <EspnConnectionDialog seasonEmails={espn.seasonEmails} onClose={() => setShowEspn(false)} />}
     </>
   );
 }

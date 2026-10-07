@@ -193,10 +193,9 @@
 .menu {
   min-width: 220px;
   max-width: min(320px, calc(100vw - 24px));
-  max-height: min(70dvh, 520px);
   margin: 0;
   padding: 6px;
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid var(--color-line2);
   border-radius: 8px;
   background: var(--color-panel);
@@ -206,6 +205,7 @@
 }
 .menu:popover-open {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 @supports (position-area: bottom) {
   .menu {
@@ -236,6 +236,88 @@
 }
 .group {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+/* The league menu's three shapes (Epic 15): places to go, leagues to pick, one to create. */
+.here {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 4px;
+  border-radius: 6px;
+  background: var(--color-panel2);
+}
+.go {
+  justify-content: space-between;
+  font-weight: 600;
+}
+/* Scoped, so it outranks .item's hover further down. */
+.here .go:hover {
+  background: var(--color-btn-hover);
+}
+.chevron {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--color-muted);
+}
+.go:hover .chevron {
+  color: var(--color-text);
+}
+.switchGroup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 10px;
+}
+.switchGroup .item[aria-checked="true"] {
+  color: var(--color-mine);
+}
+.create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--color-sky-line);
+  border-radius: 6px;
+  background: var(--color-panel2);
+  color: var(--color-sky);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.create:hover {
+  background: color-mix(in srgb, var(--color-sky) 10%, var(--color-panel2));
+}
+.create:focus-visible,
+.go:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.create svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* A group's name, where the rows need telling apart from the ones above (the menu's leagues). */
+.groupLabel {
+  padding: 2px 10px 4px;
+  color: var(--color-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* A long list of leagues scrolls on its own, so this league's actions never drop out of reach. */
+.leagues {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-height: min(50dvh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .item {
@@ -273,9 +355,6 @@
   margin-left: auto;
   color: var(--color-mine);
 }
-.muted {
-  color: var(--color-muted);
-}
 .email {
   padding: 6px 10px 8px;
   color: var(--color-muted);
@@ -283,6 +362,74 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---- the ESPN connection dialog: account settings, so it sits apart from any league ---- */
+
+.dialog {
+  width: min(420px, calc(100vw - 24px));
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--color-line2);
+  border-radius: 10px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-size: 13.5px;
+  line-height: 1.4;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+}
+.dialog::backdrop {
+  background: rgb(10 12 16 / 0.6);
+}
+.dialogBody {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+}
+.dialogTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.dialogText {
+  margin: 0;
+  color: var(--color-muted);
+}
+.dialogDanger {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-row-line);
+}
+.dialogDanger p {
+  margin: 0;
+}
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.dialogFoot {
+  display: flex;
+  justify-content: flex-end;
+}
+.checkRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.checkRow input {
+  accent-color: var(--color-mine);
+}
+.dangerBtn {
+  color: var(--color-reach-ink);
+}
+.warnText {
+  color: var(--color-warn-ink);
+  font-size: 12.5px;
 }
 
 /* ---- phone: the bar keeps one row; the sync chip keeps only its time ---- */
@@ -308,10 +455,15 @@
     margin-left: 0;
     font-size: 15px;
   }
+  /* The league's name needs the width more; the time is in the chip's label. */
   .sync {
-    padding: 0 9px;
+    width: 36px;
+    min-height: 36px;
+    padding: 0;
+    justify-content: center;
   }
-  .syncLabel {
+  .syncLabel,
+  .syncTime {
     display: none;
   }
   /* A phone is too narrow to hang a menu off its trigger: it drops from the bar, gutter to gutter. */
@@ -325,7 +477,8 @@
     max-width: none;
     margin: 0;
   }
-  .item {
+  .item,
+  .create {
     min-height: 44px;
   }
 }

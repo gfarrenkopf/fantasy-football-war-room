@@ -1,16 +1,23 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { ShellData } from "@/lib/server/shell";
 
-/** The user's war room leagues that follow an ESPN league this season (10.3), from the server. */
-const SeasonLinksContext = createContext<readonly string[]>([]);
+/**
+ * What the server knows about the user's leagues for the app bar (Epic 15): which follow an ESPN
+ * league this season (10.3), where picking each one lands, and the user's ESPN connection.
+ * Empty when signed out or self-hosted.
+ */
+const ShellContext = createContext<ShellData>({ leagues: [], espn: null });
 
-export function SeasonLinksProvider({ leagueIds, children }: { leagueIds: readonly string[]; children: React.ReactNode }) {
-  return <SeasonLinksContext.Provider value={leagueIds}>{children}</SeasonLinksContext.Provider>;
+export function SeasonLinksProvider({ shell, children }: { shell: ShellData | null; children: React.ReactNode }) {
+  return <ShellContext.Provider value={shell ?? { leagues: [], espn: null }}>{children}</ShellContext.Provider>;
 }
+
+export const useShell = () => useContext(ShellContext);
 
 /** Whether this league has a season page to go to. */
 export const useHasSeasonPage = (leagueId: string | null | undefined) => {
-  const ids = useContext(SeasonLinksContext);
-  return !!leagueId && ids.includes(leagueId);
+  const { leagues } = useShell();
+  return !!leagueId && leagues.some((l) => l.id === leagueId && l.linked);
 };

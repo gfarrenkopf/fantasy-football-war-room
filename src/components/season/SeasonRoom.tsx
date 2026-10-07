@@ -11,6 +11,7 @@ import { ConfirmProvider } from "@/components/draft/Feedback";
 import { FlagsProvider } from "@/components/draft/Flags";
 import { AppBar, SyncChip } from "@/components/shell/AppBar";
 import { LeagueMenu } from "@/components/shell/LeagueMenu";
+import type { ShellData } from "@/lib/server/shell";
 import type { ProjectionAccuracy } from "@/lib/season/accuracy";
 import type { ArchiveWeek } from "@/lib/season/leagueRecap";
 import { matchupLive, type GameDayPhase } from "@/lib/season/gameday";
@@ -41,8 +42,8 @@ type Props = {
   user?: SessionUser;
   leagueId: string;
   leagueName?: string;
-  /** The user's leagues that follow ESPN (APE-194), to switch between; absent when signed out. */
-  leagues?: SeasonLeagueLink[];
+  /** The app bar's leagues and the user's ESPN connection (Epic 15); absent when signed out. */
+  shell?: ShellData;
 } & (
   | {
       problem: SeasonProblem;
@@ -62,8 +63,6 @@ type Props = {
       ai: SeasonAiState | null;
       /** Stripe just sent the user back here (`?checkout=`). */
       checkout: CheckoutOutcome | null;
-      /** Whether the user gets the Sunday lineup email; null when there's no such email to offer. */
-      seasonEmails: boolean | null;
       /** Whether the user has agreed to War Room changing their ESPN team (12.1, Epic 13), so confirming needn't ask. */
       writeConsented: boolean;
       /** Game day (APE-227), worked out on the server when ESPN was read. */
@@ -76,11 +75,6 @@ type Props = {
 );
 
 type Tab = "gameday" | "lineup" | "trade" | "waivers";
-
-export interface SeasonLeagueLink {
-  id: string;
-  name: string;
-}
 
 /**
  * The season page (src/app/season/[leagueId]/page.tsx). On a desktop everything that decides the
@@ -96,6 +90,11 @@ export function SeasonRoom(props: Props) {
   const checkout = useCheckoutReturn(ai, "view" in props ? props.checkout : null);
   useLivePolling(!!view && matchupLive(view));
   const router = useRouter();
+  // A league that follows ESPN takes its settings from ESPN, so its League settings goes there.
+  const espnSettings = props.shell?.leagues.find((l) => l.id === props.leagueId)?.espnSettings ?? null;
+  const settings = espnSettings
+    ? { label: "League settings on ESPN", href: espnSettings, external: true }
+    : { label: "League settings", href: `/draft?league=${encodeURIComponent(props.leagueId)}&settings=1` };
   const time = useLocalTime("view" in props ? props.fetchedAt : null);
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
@@ -106,17 +105,22 @@ export function SeasonRoom(props: Props) {
           <ConfirmProvider>
             <AppBar
               league={
-                props.user ? (
+                props.shell ? (
                   <LeagueMenu
-                    leagues={props.leagues ?? [{ id: props.leagueId, name: title }]}
+                    leagues={props.shell.leagues.some((l) => l.id === props.leagueId) ? props.shell.leagues : [{ id: props.leagueId, name: title }, ...props.shell.leagues]}
                     currentId={props.leagueId}
                     currentName={title}
-                    onPick={(id) => router.push(`/season/${encodeURIComponent(id)}`)}
+                    onPick={(id) => router.push(props.shell?.leagues.find((l) => l.id === id)?.home ?? `/draft?league=${encodeURIComponent(id)}`)}
+                    actions={[
+                      { label: "Draft board", href: `/draft?league=${encodeURIComponent(props.leagueId)}` },
+                      settings,
+                    ]}
+                    onNewLeague={() => router.push("/draft?new=1")}
                   />
                 ) : null
               }
               sync={"view" in props ? <SyncChip time={time} stale={props.stale} href={`/season/${props.leagueId}?refresh=1`} /> : null}
-              account={props.user ? <AccountMenu /> : null}
+              account={props.user ? <AccountMenu leagueSettings={{ name: title, href: settings.href, external: settings.external }} espn={props.shell?.espn} /> : null}
             />
           </ConfirmProvider>
         </AccountProvider>
@@ -180,7 +184,6 @@ export function SeasonRoom(props: Props) {
                 <WaiverPanel view={props.view} leagueId={props.leagueId} writeConsented={props.writeConsented} />
               )}
             </div>
-            <Disconnect seasonEmails={props.seasonEmails} />
           </>
         )}
       </div>
@@ -262,66 +265,6 @@ function Problem({ flags, problem, espnUrl }: { flags: PublicFlags; problem: Sea
   return (
     <p className={`${s.panel} ${s.note}`} role="status">
       {text}
-    </p>
-  );
-}
-
-/** Deletes the stored ESPN login (10.2). Every connected league stops updating until the user reconnects. */
-function Disconnect({ seasonEmails }: { seasonEmails: boolean | null }) {
-  const [phase, setPhase] = useState<"idle" | "confirm" | "working" | "done" | "failed">("idle");
-  async function disconnect() {
-    setPhase("working");
-    const res = await fetch("/api/espn/login", { method: "DELETE" }).catch(() => null);
-    setPhase(res?.ok ? "done" : "failed");
-  }
-  return (
-    <footer className={s.footer}>
-      {phase === "done" ? (
-        <p role="status">Disconnected. Draft Room has deleted your ESPN login.</p>
-      ) : phase === "confirm" || phase === "working" ? (
-        <p>
-          Delete your ESPN login from Draft Room? Your leagues stop updating until you connect again.{" "}
-          <button type="button" className={`${s.textButton} ${s.danger}`} disabled={phase === "working"} onClick={disconnect}>
-            Disconnect ESPN
-          </button>{" "}
-          ·{" "}
-          <button type="button" className={s.textButton} onClick={() => setPhase("idle")}>
-            Keep it
-          </button>
-        </p>
-      ) : (
-        <p>
-          Draft Room reads your leagues with your ESPN login.{" "}
-          <button type="button" className={s.textButton} onClick={() => setPhase("confirm")}>
-            Disconnect ESPN
-          </button>
-          {phase === "failed" && <span className={s.metaStale}> Couldn&apos;t disconnect. Try again.</span>}
-        </p>
-      )}
-      {seasonEmails !== null && <SeasonEmails initial={seasonEmails} />}
-    </footer>
-  );
-}
-
-/** The Sunday job's email (11.3): on unless the user turns it off here or from the email. */
-function SeasonEmails({ initial }: { initial: boolean }) {
-  const [on, setOn] = useState(initial);
-  const [failed, setFailed] = useState(false);
-  async function toggle(next: boolean) {
-    setOn(next);
-    setFailed(false);
-    const res = await fetch("/api/season/emails", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: next }) }).catch(() => null);
-    if (!res?.ok) {
-      setOn(!next);
-      setFailed(true);
-    }
-  }
-  return (
-    <p>
-      <label className={s.check}>
-        <input type="checkbox" checked={on} onChange={(e) => toggle(e.target.checked)} /> Email me when my Sunday AI lineup is ready
-      </label>
-      {failed && <span className={s.metaStale}> Couldn&apos;t save that. Try again.</span>}
     </p>
   );
 }

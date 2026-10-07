@@ -49,7 +49,7 @@ export function SyncChip({ time, stale, href }: { time: string; stale: boolean; 
   return (
     <a className={s.sync} href={href} data-stale={stale} aria-label={label} title={label}>
       <span className={s.syncLabel}>{stale ? "Last sync" : "Synced"}</span>
-      {time && <span>{time}</span>}
+      {time && <span className={s.syncTime}>{time}</span>}
       <svg viewBox="0 0 16 16" aria-hidden focusable="false">
         <path d="M13.5 6.5A5.5 5.5 0 0 0 3.2 4.8M2.5 9.5a5.5 5.5 0 0 0 10.3 1.7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         <path d="M3 1.8v3.3h3.3M13 14.2v-3.3H9.7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />

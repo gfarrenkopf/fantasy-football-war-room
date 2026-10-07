@@ -13,3 +13,13 @@ export function espnLeaguePage({ espnLeagueId, season }: { espnLeagueId: string;
   const q = new URLSearchParams({ leagueId: espnLeagueId, seasonId: String(season) });
   return `https://fantasy.espn.com/football/league/standings?${q}`;
 }
+
+/**
+ * A league's settings on ESPN (Epic 15). A league that follows ESPN takes its settings from there, so
+ * Draft Room's League settings opens this instead of its own dialog. ESPN's app claims this path,
+ * which suits it: on a phone, settings open where they can be changed.
+ */
+export function espnSettingsPage({ espnLeagueId, season }: { espnLeagueId: string; season: number }): string {
+  const q = new URLSearchParams({ leagueId: espnLeagueId, seasonId: String(season) });
+  return `https://fantasy.espn.com/football/league/settings?${q}`;
+}
