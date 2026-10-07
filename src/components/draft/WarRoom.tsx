@@ -18,7 +18,7 @@ import { Board, matchesQuery, useBoardColumns } from "./Board";
 import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
-import { EspnLeagueBar, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider } from "./EspnSync";
+import { EspnLeagueBar, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider, useEspnSync } from "./EspnSync";
 import { EspnAutopickAlert } from "./EspnAutopickAlert";
 import { EspnTakeover } from "./EspnTakeover";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
@@ -31,7 +31,7 @@ import { SeasonLinksProvider, useHasSeasonPage, useSeasonPrompt, useShell } from
 import type { ShellData } from "@/lib/server/shell";
 import { DraftBook } from "./DraftBook";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
-import { Header, leagueSummary } from "./Header";
+import { Header, leagueSummary, type DraftTool } from "./Header";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { NeedsStrip } from "./NeedsStrip";
@@ -109,7 +109,7 @@ function WarRoomView() {
   const { prefs, setPrefs } = usePrefs();
   const { configured, active, leagues, switchLeague } = useLeague();
   const welcomeHold = useWelcomeHold();
-  const { draftWithIntent, intentFrom, undo } = useDraftActions();
+  const { draftWithIntent, intentFrom, undo, reset } = useDraftActions();
   const toast = useToast();
   const columns = useBoardColumns();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -139,6 +139,29 @@ function WarRoomView() {
   const openSettings = () => setSetup("edit");
   // A league that follows ESPN takes its settings from ESPN, so its League settings goes there.
   const espnSettings = shell.leagues.find((l) => l.id === active?.id)?.espnSettings ?? null;
+
+  /* ---- the draft tools menu (Epic 15): only what applies to this draft now ---- */
+  const espnSync = useEspnSync();
+  // A finished draft that came from ESPN is ESPN's record: nothing here should rewrite it.
+  const syncedDone = model.done && hasSeasonPage;
+  // A finished draft has nothing left to mock, so mock mode stays off once every pick is in.
+  const mocking = prefs.mockOn && !model.done;
+  const tools: DraftTool[] = [
+    ...(espnSync.status === "waiting" && !model.done ? [{ label: "Sync ESPN draft", href: "/espn", external: true }] : []),
+    ...(!model.done
+      ? [
+          {
+            label: "Mock draft",
+            checked: prefs.mockOn,
+            onToggle: () => {
+              if (prefs.mockOn) sim.stop();
+              setPrefs({ mockOn: !prefs.mockOn });
+            },
+          },
+        ]
+      : []),
+    ...(!syncedDone ? [{ label: "Reset draft", danger: true, onSelect: () => void reset() }] : []),
+  ];
   // The season page's League settings and + New league land here as `?settings=1` and `?new=1`,
   // once `?league=` (LeagueProvider) has switched to the league they're for.
   useEffect(() => {
@@ -301,24 +324,16 @@ function WarRoomView() {
         hint={hint}
         arrival={arrival}
         needs={<NeedsStrip />}
+        status={<EspnSyncChip />}
+        tools={tools}
+        canUndo={!syncedDone}
         actions={
-          <>
-            <EspnSyncChip />
-            <button
-              className={cx("btn", prefs.mockOn && "on")}
-              title="Mock draft mode: CPU teams make the other picks"
-              aria-pressed={prefs.mockOn}
-              onClick={() => {
-                if (prefs.mockOn) sim.stop();
-                setPrefs({ mockOn: !prefs.mockOn });
-              }}
-            >
-              Mock draft
-            </button>
+          // Once every pick is in there's no turn left to plan.
+          model.done ? null : (
             <button className={cx("btn", "plan")} onClick={() => setDrawer((tab) => tab ?? "live")}>
               Turn plan
             </button>
-          </>
+          )
         }
       >
         <div className={s.seg} role="tablist" aria-label="View">
@@ -334,10 +349,10 @@ function WarRoomView() {
       <EspnTakeover />
       <EspnPickBar />
       <EspnPlanPublisher planOdds={planStale ? null : planOdds} />
-      {prefs.mockOn && <MockBar onReport={() => void openReport()} reportMocks={REPORT_MOCKS} />}
+      {mocking && <MockBar onReport={() => void openReport()} reportMocks={REPORT_MOCKS} />}
       {!hydrated ? (
         <div className={s.loading}>Loading your draft…</div>
-      ) : prefs.view === "focus" && model.done && !prefs.mockOn ? (
+      ) : prefs.view === "focus" && model.done ? (
         <DraftBook />
       ) : prefs.view === "focus" ? (
         <FocusView arrival={arrival} planOdds={planOdds} planStale={planStale} onOpenAiPlan={() => setDrawer("ai")} />

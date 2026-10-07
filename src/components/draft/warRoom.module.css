@@ -2467,6 +2467,79 @@ a.btn {
 .actions {
   order: 1;
 }
+/* The draft tools menu (Epic 15): setting up ESPN sync, mock mode and reset, behind one button. */
+.toolsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.toolsBtn svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: currentColor;
+  color: var(--color-muted);
+}
+.toolsSheet {
+  min-width: 210px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--color-line2);
+  border-radius: 8px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+}
+.toolsSheet:popover-open {
+  display: grid;
+  gap: 2px;
+}
+@supports (position-area: bottom) {
+  .toolsSheet {
+    position-area: bottom span-left;
+    margin-top: 6px;
+  }
+}
+@supports not (position-area: bottom) {
+  .toolsSheet {
+    inset: auto;
+    top: 120px;
+    right: 14px;
+  }
+}
+.toolsItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.toolsItem:hover {
+  background: var(--color-hover);
+}
+.toolsItem:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+.toolsItem.toolsDanger {
+  color: var(--color-soft-red);
+}
+.toolsState {
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+.toolsItem[aria-checked="true"] .toolsState {
+  color: var(--color-mine);
+}
 
 /* ---------- browser surfaces ---------- */
 .root ::selection {
@@ -2598,7 +2671,7 @@ a.btn {
 @media (max-width: 767px) {
   .root {
     /* Reserved for the fixed action bar; every view sits above it. */
-    --bar-h: 64px;
+    --bar-h: 72px;
     padding-bottom: calc(var(--bar-h) + env(safe-area-inset-bottom));
   }
 
@@ -2683,49 +2756,75 @@ a.btn {
   }
 
   /* ----- the bottom bar ----- */
+  /*
+   * The season page's floating bar, in the same hand (Epic 15): inset from the edges, translucent
+   * over what scrolls under it, one row that never scrolls. The view switch and the two actions
+   * every pick needs stay; the rest wait in the tools sheet.
+   */
   .bar {
     display: flex;
     position: fixed;
-    inset: auto 0 0 0;
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: calc(10px + env(safe-area-inset-bottom));
     z-index: 18;
     align-items: center;
-    gap: 8px;
-    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
-      max(10px, env(safe-area-inset-left));
-    background: var(--color-panel);
-    border-top: 1px solid var(--color-line);
-    /* It floats over the board, so it casts — directional, like the drawer. */
-    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.35);
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--color-line2);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-panel) 94%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
   }
   .bar > .seg {
     flex: none;
+    border: 0;
   }
   .actions {
     order: 1;
-    margin-left: 0;
-    flex: 1 1 auto;
+    margin-left: auto;
+    flex: 0 1 auto;
     flex-wrap: nowrap;
-    justify-content: flex-start;
+    justify-content: flex-end;
     min-width: 0;
-    gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    gap: 4px;
   }
-  .actions::-webkit-scrollbar {
+  .actions > .btn {
+    min-height: 44px;
+  }
+  /* The menu's button keeps only its icon here; the sheet rises from the bar, gutter to gutter. */
+  .toolsBtn {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .toolsBtn svg {
+    width: 16px;
+    height: 16px;
+    color: currentColor;
+  }
+  .toolsLabel {
     display: none;
+  }
+  .toolsSheet {
+    position-area: none;
+    inset: auto max(12px, env(safe-area-inset-right)) calc(var(--bar-h) + 6px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    width: auto;
+    margin: 0;
+  }
+  .toolsItem {
+    min-height: 44px;
   }
   .actions > * {
     flex: none;
   }
-  /* Thumb order: the two you reach for mid-draft first, the destructive one last. */
+  /* Thumb order: the two you reach for mid-draft first, then the tools sheet. */
   .btn.undo {
     order: -2;
   }
   .btn.plan {
     order: -1;
-  }
-  .btn.danger {
-    order: 2;
   }
 
   /* ----- board ----- */

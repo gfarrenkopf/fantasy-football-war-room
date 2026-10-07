@@ -354,7 +354,10 @@ const CHIP: Record<Exclude<LiveStatus, "waiting">, { label: string; title: strin
   complete: { label: "ESPN draft done", title: "Your ESPN draft is complete." },
 };
 
-/** Header control: the sync state, or the way to set it up. */
+/**
+ * Header status: the sync state while it's set up. Setting it up ("Sync ESPN draft") is a row in the
+ * draft tools menu instead (Epic 15), so a waiting sync shows nothing here.
+ */
 export function EspnSyncChip() {
   const { status, link, degraded, sessions, serverClient } = useEspnSync();
   if (status === "off") return null;
@@ -372,13 +375,7 @@ export function EspnSyncChip() {
       </span>
     );
   }
-  if (status === "waiting") {
-    return (
-      <a className={cx("btn")} href="/espn" target="_blank" rel="noreferrer" title="Have picks from your ESPN draft land on this board automatically">
-        Sync ESPN draft
-      </a>
-    );
-  }
+  if (status === "waiting") return null;
   if (serverClient?.state === "holding" && status === "live") {
     return (
       <span className={cx("btn", "on")} title="Draft Room holds your ESPN draft connection: draft here, on any device. Your ESPN draft is disconnected until you hand back." role="status">
