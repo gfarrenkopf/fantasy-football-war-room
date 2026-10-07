@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { seasonProjections } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
-import type { PlayerCall, ProjectionAccuracy, ProjectionCall } from "@/lib/season/accuracy";
+import type { CallRecord, PlayerCall, ProjectionAccuracy, ProjectionCall } from "@/lib/season/accuracy";
 import { matchupDecided } from "@/lib/season/gameday";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 
@@ -88,27 +88,39 @@ export async function projectionAccuracy(db: Db, leagueId: string, view: SeasonV
       .from(seasonProjections)
       .where(and(here, eq(seasonProjections.week, view.currentWeek))),
     db
-      .select({ projected: seasonProjections.projected, actual: seasonProjections.actual })
+      .select({ subject: seasonProjections.subject, projected: seasonProjections.projected, actual: seasonProjections.actual })
       .from(seasonProjections)
-      .where(and(here, lt(seasonProjections.week, view.currentWeek), eq(seasonProjections.subject, `team:${view.myTeamId}`), isNotNull(seasonProjections.actual))),
+      .where(and(here, lt(seasonProjections.week, view.currentWeek), isNotNull(seasonProjections.actual))),
   ]);
   const call = (subject: string): ProjectionCall | null => {
     const row = week.find((r) => r.subject === subject);
     return row ? { projected: row.projected, actual: row.actual } : null;
   };
   const players: PlayerCall[] = week.filter((r) => r.subject.startsWith("player:")).map((r) => ({ playerId: Number(r.subject.slice(7)), projected: r.projected, actual: r.actual }));
-  const misses = past.map((r) => (r.actual ?? 0) - r.projected);
+  const misses = (subject: string) => past.filter((r) => r.subject === subject).map((r) => (r.actual ?? 0) - r.projected);
+  const team = misses(`team:${view.myTeamId}`);
+  // Player rows are only ever the user's own, each settled once his game was final.
+  const playerIds = [...new Set(past.flatMap((r) => (r.subject.startsWith("player:") ? [Number(r.subject.slice(7))] : [])))];
   return {
     me: call(`team:${view.myTeamId}`),
     them: view.matchup ? call(`team:${view.matchup.them.teamId}`) : null,
     players,
-    season: misses.length
+    season: team.length
       ? {
-          weeks: misses.length,
-          meanMiss: round(misses.reduce((sum, m) => sum + Math.abs(m), 0) / misses.length),
-          meanBias: round(misses.reduce((sum, m) => sum + m, 0) / misses.length),
+          ...record(team),
+          overcalled: team.filter((m) => m < 0).length,
+          players: playerIds.map((playerId) => ({ playerId, ...record(misses(`player:${playerId}`)) })),
         }
       : null,
+  };
+}
+
+/** The average miss and lean of a run of misses (scored minus projected); `misses` must not be empty. */
+function record(misses: number[]): CallRecord {
+  return {
+    weeks: misses.length,
+    meanMiss: round(misses.reduce((sum, m) => sum + Math.abs(m), 0) / misses.length),
+    meanBias: round(misses.reduce((sum, m) => sum + m, 0) / misses.length),
   };
 }
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { biggestSurprises, type ProjectionAccuracy, type ProjectionCall } from "@/lib/season/accuracy";
+import { biggestSurprises, trackRecord, type ProjectionAccuracy, type ProjectionCall, type SeasonCalls } from "@/lib/season/accuracy";
 import { gameProgress, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type Pace } from "@/lib/season/gameday";
 import { compareLineups } from "@/lib/season/lineup";
+import { weekRecap } from "@/lib/season/recap";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { MatchupMoment } from "./MatchupMoment";
 import { PlayerLine, posLabel, pts, signed, SLOT_LABEL } from "./parts";
@@ -21,12 +22,15 @@ const PACE_TEXT: Record<Pace, string> = {
  * Game day (APE-226, APE-228): the matchup as a scoreboard, then every player on the user's team,
  * starters and bench alike, with what he's scored set large on the right and his projection under it.
  * A thin meter shows how much of his projection he has, and a tick where the game clock says he should be.
+ * Between weeks (APE-306) the scoreboard previews the next matchup, and ESPN's season on the user's
+ * team and last week's result come before the players.
  */
 export function GameDayPanel({
   leagueId,
   view,
   phase,
   accuracy,
+  previous,
   onLineupTools,
 }: {
   leagueId: string;
@@ -34,6 +38,8 @@ export function GameDayPanel({
   phase: GameDayPhase;
   /** ESPN's pre-game projections against what was scored (APE-229); null when none were read. */
   accuracy: ProjectionAccuracy | null;
+  /** Last week and ESPN's calls on it, between weeks. */
+  previous?: { view: SeasonView; accuracy: ProjectionAccuracy | null };
   onLineupTools(): void;
 }) {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
@@ -45,34 +51,46 @@ export function GameDayPanel({
   const bench = mine.roster.filter((p) => p.slot === "BN").sort((a, b) => (b.actual ?? -1) - (a.actual ?? -1) || b.points - a.points);
   const benchPoints = bench.reduce((sum, p) => sum + (p.actual ?? 0), 0);
 
+  const offDay = phase === "lineup";
+  const startersPanel = (
+    <section className={s.panel} aria-labelledby="starters-title">
+      <div className={s.panelHead}>
+        <h2 id="starters-title" className={s.panelTitle}>
+          Starters
+        </h2>
+        <span className={s.panelNote}>As set on ESPN</span>
+      </div>
+      <ul className={s.scoreList}>
+        {starters.map(({ key, player }, i) =>
+          player ? (
+            <ScoreRow key={player.playerId} player={player} slot={SLOT_LABEL[key]} />
+          ) : (
+            <li key={`empty-${i}`} className={s.scoreRow} data-pace="pre">
+              <span className={s.scoreSlot}>{SLOT_LABEL[key]}</span>
+              <span className={s.fine}>Empty on ESPN</span>
+            </li>
+          ),
+        )}
+      </ul>
+    </section>
+  );
+
   return (
     <div className={s.lineup}>
       <div className={s.stack}>
         {view.matchup &&
           (phase === "results" && matchupDecided(view) ? <MatchupMoment leagueId={leagueId} view={view} accuracy={accuracy} /> : <Scoreboard view={view} phase={phase} />)}
-        <section className={s.panel} aria-labelledby="starters-title">
-          <div className={s.panelHead}>
-            <h2 id="starters-title" className={s.panelTitle}>
-              Starters
-            </h2>
-            <span className={s.panelNote}>As set on ESPN</span>
-          </div>
-          <ul className={s.scoreList}>
-            {starters.map(({ key, player }, i) =>
-              player ? (
-                <ScoreRow key={player.playerId} player={player} slot={SLOT_LABEL[key]} />
-              ) : (
-                <li key={`empty-${i}`} className={s.scoreRow} data-pace="pre">
-                  <span className={s.scoreSlot}>{SLOT_LABEL[key]}</span>
-                  <span className={s.fine}>Empty on ESPN</span>
-                </li>
-              ),
-            )}
-          </ul>
-        </section>
+        {offDay ? (
+          <>
+            {accuracy?.season && <TrackRecord view={view} season={accuracy.season} />}
+            {previous && <LastWeek view={previous.view} accuracy={previous.accuracy} />}
+          </>
+        ) : (
+          startersPanel
+        )}
       </div>
       <div className={s.stack}>
-        {accuracy && <EspnCall view={view} accuracy={accuracy} />}
+        {offDay ? startersPanel : accuracy && <EspnCall view={view} accuracy={accuracy} />}
         <section className={s.panel} aria-labelledby="gameday-bench-title">
           <div className={s.panelHead}>
             <h2 id="gameday-bench-title" className={s.panelTitle}>
@@ -99,6 +117,106 @@ export function GameDayPanel({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * ESPN's season on the user's team (APE-306), for the days between weeks: how far its call has run
+ * from the score, which way it leans, how often it called the team too high, and the rostered
+ * players it has read most and least closely.
+ */
+function TrackRecord({ view, season }: { view: SeasonView; season: SeasonCalls }) {
+  const names = new Map(view.teams.find((t) => t.id === view.myTeamId)?.roster.map((p) => [p.playerId, p.name]));
+  const record = trackRecord(season, new Set(names.keys()));
+  const leans = Math.abs(season.meanBias) >= 0.5;
+  return (
+    <section className={s.panel} aria-labelledby="track-title">
+      <div className={s.panelHead}>
+        <h2 id="track-title" className={s.panelTitle}>
+          ESPN on your team
+        </h2>
+        <span className={s.panelNote}>
+          {season.weeks} {season.weeks === 1 ? "week" : "weeks"}
+        </span>
+      </div>
+      <ul className={s.callList}>
+        <li className={s.callRow}>
+          <span className={s.callWho}>Misses by</span>
+          <span>
+            <b className="tabular-nums">{pts(season.meanMiss)}</b> a week
+            {leans && (
+              <>
+                {" · "}
+                <span className={s.callGap} data-sign={season.meanBias > 0 ? "over" : "under"}>
+                  calls you {season.meanBias > 0 ? "low" : "high"}
+                </span>
+              </>
+            )}
+          </span>
+        </li>
+        <li className={s.callRow}>
+          <span className={s.callWho}>Called high</span>
+          <span>
+            <b className="tabular-nums">{season.overcalled}</b> of {season.weeks} {season.weeks === 1 ? "week" : "weeks"}
+          </span>
+        </li>
+        {record && (
+          <>
+            <li className={s.callRow}>
+              <span className={s.callWho}>Surest read</span>
+              <span>
+                {names.get(record.surest.playerId)} · off <b className="tabular-nums">{pts(record.surest.meanMiss)}</b> a week
+              </span>
+            </li>
+            <li className={s.callRow}>
+              <span className={s.callWho}>Shakiest</span>
+              <span>
+                {names.get(record.shakiest.playerId)} · off <b className="tabular-nums">{pts(record.shakiest.meanMiss)}</b> a week
+              </span>
+            </li>
+          </>
+        )}
+      </ul>
+    </section>
+  );
+}
+
+/** Last week's result between weeks (APE-306): the final, the margin, and the star. */
+function LastWeek({ view, accuracy }: { view: SeasonView; accuracy: ProjectionAccuracy | null }) {
+  const recap = weekRecap(view, accuracy);
+  if (!recap) return null;
+  const star = recap.star?.player;
+  return (
+    <section className={s.panel} aria-labelledby="last-week-title">
+      <div className={s.panelHead}>
+        <h2 id="last-week-title" className={s.panelTitle}>
+          Week {recap.week}
+        </h2>
+        <span className={s.panelNote}>Final</span>
+      </div>
+      <p className={s.lastResult} data-result={recap.result}>
+        <b>{recap.result === "win" ? "Won" : recap.result === "loss" ? "Lost" : "Tied"}</b>{" "}
+        <span className="tabular-nums">
+          {pts(recap.me)}–{pts(recap.them)}
+        </span>{" "}
+        <span className={s.lastOpponent}>vs {recap.opponent}</span>
+      </p>
+      {star && (
+        <ul className={s.callList}>
+          <li className={s.callRow}>
+            <span className={s.callWho}>Star</span>
+            <span>
+              {star.name} <b className="tabular-nums">{pts(star.points)}</b>{" "}
+              {recap.star?.beat && (
+                <span className={s.callGap} data-sign="over">
+                  {signed(star.points - star.projected)}
+                </span>
+              )}
+            </span>
+          </li>
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -131,10 +249,17 @@ function Scoreboard({ view, phase }: { view: SeasonView; phase: GameDayPhase }) 
     return (
       <div className={s.scoreSide} data-mine={mine}>
         <span className={s.sideName}>{name}</span>
-        <b className={`${s.scoreBig} tabular-nums`}>{pts(team.points)}</b>
+        {/* Before kickoff the projection is the number: a pair of zeros says nothing. */}
+        <b className={`${s.scoreBig} tabular-nums`}>{pts(started ? team.points : team.projected)}</b>
         <span className={s.sideSub}>
-          proj <span className="tabular-nums">{pts(team.projected)}</span>
-          {!decided && ` · ${left ? `${left} to play` : "done"}`}
+          {started ? (
+            <>
+              proj <span className="tabular-nums">{pts(team.projected)}</span>
+              {!decided && ` · ${left ? `${left} to play` : "done"}`}
+            </>
+          ) : (
+            "projected"
+          )}
         </span>
       </div>
     );

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
-import { biggestSurprises } from "@/lib/season/accuracy";
+import { biggestSurprises, trackRecord, type SeasonCalls } from "@/lib/season/accuracy";
 import type { GameState } from "@/lib/season/scoreboard";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
@@ -81,7 +81,9 @@ describe("recording ESPN's projections", () => {
     await recordProjections(db, leagueId, done(3, 120, 130));
     await recordProjections(db, leagueId, done(4, 110, 104));
     const calls = await projectionAccuracy(db, leagueId, { ...week({ qb: "pre", wr: "pre", theirs: "pre" }, { qb: 19, me: 120, them: 110 }), currentWeek: 5 });
-    expect(calls.season).toEqual({ weeks: 2, meanMiss: 8, meanBias: 2 });
+    expect(calls.season).toMatchObject({ weeks: 2, meanMiss: 8, meanBias: 2, overcalled: 1 });
+    // The QB was called 120 then 110 and scored 20 both weeks.
+    expect(calls.season?.players.find((p) => p.playerId === 1)).toEqual({ playerId: 1, weeks: 2, meanMiss: 95, meanBias: -95 });
     expect(calls.me).toBeNull();
   });
 });
@@ -96,5 +98,25 @@ describe("biggestSurprises", () => {
     expect(best?.playerId).toBe(1);
     expect(worst?.playerId).toBe(2);
     expect(biggestSurprises([{ playerId: 1, projected: 10, actual: 8 }]).best).toBeNull();
+  });
+});
+
+describe("trackRecord", () => {
+  const season = (players: SeasonCalls["players"]): SeasonCalls => ({ weeks: 4, meanMiss: 10, meanBias: 0, overcalled: 2, players });
+  it("names the rostered players ESPN has read most and least closely, over two weeks or more", () => {
+    const record = trackRecord(
+      season([
+        { playerId: 1, weeks: 4, meanMiss: 2.1, meanBias: 0.4 },
+        { playerId: 2, weeks: 4, meanMiss: 9.8, meanBias: -6 },
+        { playerId: 3, weeks: 1, meanMiss: 0.2, meanBias: 0.2 },
+        { playerId: 4, weeks: 3, meanMiss: 14, meanBias: 3 },
+      ]),
+      new Set([1, 2, 3]),
+    );
+    expect(record?.surest.playerId).toBe(1);
+    expect(record?.shakiest.playerId).toBe(2);
+  });
+  it("says nothing with fewer than two players to compare", () => {
+    expect(trackRecord(season([{ playerId: 1, weeks: 3, meanMiss: 2, meanBias: 0 }]), new Set([1]))).toBeNull();
   });
 });

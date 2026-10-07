@@ -44,6 +44,8 @@ type Props = {
       view: SeasonView;
       /** Last week, while its result is still up after ESPN has moved on (APE-251); game day shows it. */
       result?: SeasonView;
+      /** Last week between weeks, and ESPN's calls on it, for the recap game day keeps (APE-306). */
+      previous?: { view: SeasonView; accuracy: ProjectionAccuracy | null };
       fetchedAt: string;
       stale: boolean;
       projectionsMissing: boolean;
@@ -57,7 +59,7 @@ type Props = {
       writeConsented: boolean;
       /** Game day (APE-227), worked out on the server when ESPN was read. */
       phase: GameDayPhase;
-      /** ESPN's pre-game projections against the scores (APE-229); null off game day. */
+      /** ESPN's pre-game projections against the scores (APE-229), and its season on the user's team. */
       accuracy: ProjectionAccuracy | null;
     }
 );
@@ -139,7 +141,7 @@ export function SeasonRoom(props: Props) {
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "gameday" ? (
-                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTab("lineup")} />
+                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} previous={props.previous} onLineupTools={() => setTab("lineup")} />
               ) : tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : tab === "trade" ? (

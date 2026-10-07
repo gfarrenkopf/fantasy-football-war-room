@@ -2523,6 +2523,25 @@ li + li > .pickerOption {
   color: var(--color-reach-ink);
   font-weight: 700;
 }
+/* Last week's final between weeks: the result word in its tone, the score, the opponent quiet. */
+.lastResult {
+  margin: 0;
+  padding: 12px 14px 4px;
+  font-size: 15px;
+  color: var(--color-text);
+}
+.lastResult b {
+  font-weight: 800;
+}
+.lastResult[data-result="win"] b {
+  color: var(--color-mine);
+}
+.lastResult[data-result="loss"] b {
+  color: var(--color-muted);
+}
+.lastOpponent {
+  color: var(--color-muted);
+}
 .callFoot {
   margin: 0;
   padding: 8px 14px 12px;
