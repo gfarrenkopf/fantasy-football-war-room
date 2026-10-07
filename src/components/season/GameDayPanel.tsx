@@ -4,6 +4,7 @@ import { biggestSurprises, trackRecord, type ProjectionAccuracy, type Projection
 import { gameProgress, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type Pace } from "@/lib/season/gameday";
 import { compareLineups } from "@/lib/season/lineup";
 import { weekRecap } from "@/lib/season/recap";
+import type { MatchupSide } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import type { ArchiveWeek } from "@/lib/season/leagueRecap";
 import { MatchupMoment } from "./MatchupMoment";
@@ -94,6 +95,7 @@ export function GameDayPanel({
             ) : (
               <Scoreboard view={view} phase={phase} />
             ))}
+          {phase === "live" && <AroundTheLeague view={view} />}
           {offDay ? (
             <>
               {accuracy?.season && <TrackRecord view={view} season={accuracy.season} />}
@@ -133,6 +135,43 @@ export function GameDayPanel({
       </div>
       {phase !== "live" && <RecapArchive weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
     </>
+  );
+}
+
+/**
+ * The league's other matchups while games are on (APE-309): one small card each, both teams' short
+ * names and live scores, the leader bright. Scrolls sideways; nothing to tap.
+ */
+function AroundTheLeague({ view }: { view: SeasonView }) {
+  const mine = new Set(view.matchup ? [view.matchup.me.teamId, view.matchup.them.teamId] : [view.myTeamId]);
+  const others = view.matchups.flatMap(({ home, away }) => (away && !mine.has(home.teamId) ? [{ home, away }] : []));
+  if (!others.length) return null;
+  const team = (id: number) => view.teams.find((t) => t.id === id);
+  const side = (one: MatchupSide, other: MatchupSide) => {
+    const t = team(one.teamId);
+    return (
+      <span className={s.aroundSide} data-lead={one.points > other.points} title={t?.name}>
+        <span className={s.aroundTeam}>{t?.abbrev || t?.name || `Team ${one.teamId}`}</span>
+        <b className="tabular-nums">{pts(one.points)}</b>
+      </span>
+    );
+  };
+  return (
+    <section aria-label="Around the league">
+      <ul className={s.aroundList}>
+        {others.map(({ home, away }) => {
+          const left = leftToPlay(view, home.teamId) + leftToPlay(view, away.teamId);
+          const label = `${team(home.teamId)?.name ?? "Home"} ${pts(home.points)}, ${team(away.teamId)?.name ?? "Away"} ${pts(away.points)}, ${left ? `${left} to play` : "done"}`;
+          return (
+            <li key={home.teamId} className={s.aroundCard} aria-label={label}>
+              {side(home, away)}
+              {side(away, home)}
+              <span className={s.aroundLeft}>{left ? `${left} to play` : "Done"}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

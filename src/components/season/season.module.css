@@ -3554,6 +3554,59 @@ li + li > .pickerOption {
   accent-color: var(--color-mine);
 }
 
+/* ------------------------------------------------------------------ around the league (APE-309) */
+
+/* The other matchups, live: a quiet row of small cards that scrolls sideways under the scoreboard. */
+.aroundList {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 2px;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.aroundList::-webkit-scrollbar {
+  display: none;
+}
+.aroundCard {
+  flex: none;
+  display: grid;
+  gap: 2px;
+  min-width: 124px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-panel);
+  scroll-snap-align: start;
+}
+.aroundSide {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+.aroundSide b {
+  font-weight: 700;
+}
+.aroundSide[data-lead="true"] {
+  color: var(--color-text);
+}
+.aroundTeam {
+  overflow: hidden;
+  max-width: 9ch;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.aroundLeft {
+  margin-top: 2px;
+  color: var(--color-dim);
+  font-size: 11px;
+}
+
 /* ------------------------------------------------------------------ the recap archive (APE-250) */
 
 .archive {
