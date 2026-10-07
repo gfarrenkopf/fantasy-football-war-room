@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly recaps, once ESPN's stat corrections for the week are in
+
+[Timer]
+# Wednesday morning, Eastern: a day and a half after Monday night's game, and before game day's
+# result gives way to the next week at 9 AM. Eastern time, so daylight saving doesn't move it.
+OnCalendar=Wed *-*-* 07:00:00 America/New_York
+# A missed run still has a week worth keeping.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

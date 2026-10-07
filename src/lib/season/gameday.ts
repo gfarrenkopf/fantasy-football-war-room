@@ -98,6 +98,15 @@ export function matchupDecided(view: SeasonView): boolean {
   return games.length > 0 && games.every((g) => g.state === "post");
 }
 
+/**
+ * Whether the week is over for the whole league: every starter on every team whose game the
+ * scoreboard knows has finished (APE-308). False when it knows none.
+ */
+export function weekFinal(view: SeasonView): boolean {
+  const games = view.teams.flatMap((t) => starting(t.roster).flatMap((p) => (p.game ? [p.game] : [])));
+  return games.length > 0 && games.every((g) => g.state === "post");
+}
+
 /** Whether any game on either side of the matchup is under way, which is when the page keeps itself fresh. */
 export function matchupLive(view: SeasonView): boolean {
   const ids = view.matchup ? [view.matchup.me.teamId, view.matchup.them.teamId] : [view.myTeamId];

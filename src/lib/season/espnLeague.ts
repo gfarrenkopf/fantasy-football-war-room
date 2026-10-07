@@ -3,7 +3,7 @@ import { SLOT_BY_ESPN_ID } from "@/lib/espn/league";
 import { ESPN_POSITIONS, PRO_TEAMS } from "@/lib/espn/proTeams";
 import { parseScoringItems } from "./scoring";
 import { summarizeStats } from "./statLine";
-import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupSide, PendingClaim, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, StatLine, Waivers } from "./types";
+import type { FreeAgent, LineupSlot, LineupSlotCount, Matchup, MatchupResult, MatchupSide, PendingClaim, PendingTrade, RosterEntry, SeasonLeague, SeasonTeam, Standing, StatLine, Waivers } from "./types";
 
 /**
  * Reading ESPN's league document (`mTeam`, `mRoster`, `mSettings`, `mStatus`) for in-season use.
@@ -247,6 +247,30 @@ export function parseMatchups(raw: unknown, week?: number): Matchup[] {
   });
 }
 
+const WINNER: Readonly<Record<string, MatchupResult["winner"]>> = { HOME: "home", AWAY: "away", TIE: "tie" };
+
+/**
+ * Every matchup on ESPN's schedule (`mMatchupScore`) that ESPN has decided, oldest period first,
+ * with its period's NFL weeks from `mSettings` (one week a period when ESPN doesn't say).
+ */
+export function parseResults(raw: unknown): MatchupResult[] {
+  if (!isObject(raw) || !Array.isArray(raw.schedule)) return [];
+  const schedule = isObject(raw.settings) ? raw.settings.scheduleSettings : undefined;
+  const periods = isObject(schedule) && isObject(schedule.matchupPeriods) ? schedule.matchupPeriods : {};
+  const side = (s: unknown) => (isObject(s) && typeof s.teamId === "number" ? { teamId: s.teamId, points: Math.round(num(s.totalPoints) * 100) / 100 } : null);
+  return raw.schedule
+    .flatMap((m): MatchupResult[] => {
+      if (!isObject(m) || typeof m.matchupPeriodId !== "number" || typeof m.winner !== "string") return [];
+      const winner = WINNER[m.winner];
+      const home = side(m.home);
+      if (!winner || !home) return [];
+      const listed = periods[String(m.matchupPeriodId)];
+      const weeks = Array.isArray(listed) && listed.every((w) => typeof w === "number") ? listed : [m.matchupPeriodId];
+      return [{ weeks, home, away: side(m.away), winner }];
+    })
+    .sort((a, b) => a.weeks[0] - b.weeks[0]);
+}
+
 /** The matchup period whose weeks include `week`, from `mSettings`; undefined when ESPN doesn't say. */
 function periodOf(raw: Record<string, unknown>, week: number): number | undefined {
   const schedule = isObject(raw.settings) ? raw.settings.scheduleSettings : undefined;
@@ -339,6 +363,7 @@ export function parseSeasonLeague(raw: unknown, espnLeagueId: string): { ok: tru
       draftOrder: parseDraftOrder(settings.draftSettings),
       tradeDeadline: isObject(settings.tradeSettings) ? isoOf(settings.tradeSettings.deadlineDate) : null,
       matchups: parseMatchups(raw, currentWeek),
+      results: parseResults(raw),
       waivers: parseWaivers(settings, raw.teams),
     },
   };

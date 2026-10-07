@@ -10,8 +10,10 @@ import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
 import { backfillEspnDraft } from "@/lib/server/espn/draftImport";
 import { listSeasonLinks, markSeasonViewed } from "@/lib/server/espn/seasonLinks";
-import { loadSeasonView } from "@/lib/server/espn/seasonView";
+import { loadSeasonView, loadWeekView } from "@/lib/server/espn/seasonView";
 import { projectionAccuracy, recordProjections } from "@/lib/server/seasonProjections";
+import { keepWeeks, listWeeks } from "@/lib/server/seasonRecaps";
+import { archiveWeek } from "@/lib/season/leagueRecap";
 import { wantsSeasonEmails, writeConsent } from "@/lib/server/seasonPrefs";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
@@ -55,19 +57,33 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
     const espnUrl = link ? espnLeaguePage(link) : undefined;
     return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} espnUrl={espnUrl} />;
   }
-  const { view, result } = load;
+  const { view, result, previous } = load;
   // ESPN's projections as they stand, kept for game day's "ESPN's call" (APE-229); last week's too
-  // while its result is up, so ESPN's stat corrections still land (APE-251).
-  for (const v of result ? [view, result] : [view]) {
+  // while its result or recap is up, so ESPN's stat corrections still land (APE-251).
+  for (const v of [view, result ?? previous].filter((v) => v !== undefined)) {
     after(() => recordProjections(db, leagueId, v).catch((err: unknown) => console.warn(`[espn-season] couldn't record projections: ${(err as Error).message}`)));
   }
-  const [ai, emails, consented, , accuracy] = await Promise.all([
+  // The weeks that are over go into the recap archive (APE-308): the one on show, and a few older
+  // ones a visit fills in, so the archive builds up without one page view reading the whole season.
+  const shown = load.phase === "results" ? (result ?? view) : previous;
+  const over = shown?.currentWeek ?? view.currentWeek - 1;
+  after(() =>
+    keepWeeks(db, leagueId, {
+      season: view.season,
+      throughWeek: over,
+      loadWeek: (week) => (week === shown?.currentWeek ? Promise.resolve(shown) : loadWeekView(db, key, user.userId, leagueId, week)),
+      limit: 3,
+    }).catch((err: unknown) => console.warn(`[espn-season] couldn't keep the recaps: ${(err as Error).message}`)),
+  );
+  const [ai, emails, consented, , accuracy, previousAccuracy, kept] = await Promise.all([
     seasonAiState(db, user, league, view),
     // Only offered when the Sunday job can send email at all.
     config.seasonJobEnabled && config.emailAuthEnabled ? wantsSeasonEmails(db, user.userId) : null,
     writeConsent(db, user.userId),
     markSeasonViewed(db, user.userId, leagueId),
-    load.phase === "lineup" ? null : projectionAccuracy(db, leagueId, result ?? view),
+    projectionAccuracy(db, leagueId, result ?? view),
+    previous ? projectionAccuracy(db, leagueId, previous) : null,
+    listWeeks(db, leagueId),
   ]);
 
   return (
@@ -78,6 +94,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       leagues={leagues}
       view={view}
       result={result}
+      previous={previous ? { view: previous, accuracy: previousAccuracy } : undefined}
       fetchedAt={load.fetchedAt.toISOString()}
       stale={load.stale}
       projectionsMissing={load.projectionsMissing}
@@ -87,6 +104,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       writeConsented={(consented ?? 0) >= ESPN_WRITE_VERSION}
       phase={load.phase}
       accuracy={accuracy}
+      archive={kept.map(archiveWeek)}
     />
   );
 }

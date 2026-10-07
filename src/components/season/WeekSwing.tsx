@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 import type { WeekSwing as Swing } from "@/lib/season/swing";
 import { pts, signed } from "./parts";
 import s from "./season.module.css";
@@ -11,6 +11,8 @@ import s from "./season.module.css";
  * a player says whose he was and what he scored against his projection.
  */
 export function WeekSwing({ swing, result }: { swing: Swing; result: "win" | "loss" | "tie" }) {
+  // Game day's result card and the recap archive can both show one.
+  const titleId = useId();
   const steps = [
     ...swing.swings.map((w) => ({
       key: `p${w.playerId}`,
@@ -31,9 +33,9 @@ export function WeekSwing({ swing, result }: { swing: Swing; result: "win" | "lo
   const track = { "--zero": at(0) } as CSSProperties;
 
   return (
-    <section className={s.swing} aria-labelledby="swing-title">
+    <section className={s.swing} aria-labelledby={titleId}>
       <div className={s.swingHead}>
-        <h3 id="swing-title" className={s.swingTitle}>
+        <h3 id={titleId} className={s.swingTitle}>
           {result === "win" ? "Why you won" : result === "loss" ? "Why you lost" : "Why it ended level"}
         </h3>
         <span className={s.swingNote}>Your lead, kickoff to final</span>

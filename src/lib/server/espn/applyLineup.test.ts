@@ -61,6 +61,7 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
     draftOrder: [],
     tradeDeadline: null,
     matchups: [],
+    results: [],
     waivers: { budget: null, teams: [] },
   };
 }

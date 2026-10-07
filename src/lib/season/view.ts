@@ -1,7 +1,7 @@
 import { optimalLineup, type LineupPlan } from "./lineup";
 import type { GameState, Scoreboard } from "./scoreboard";
 import { restOfSeason, weeklyPoints } from "./scoring";
-import type { LineupSlot, LineupSlotCount, MatchupSide, PendingClaim, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
+import type { LineupSlot, LineupSlotCount, Matchup, MatchupResult, MatchupSide, PendingClaim, PendingTrade, PlayerProjections, RosterEntry, SeasonLeague, Standing } from "./types";
 
 /**
  * Everything the season page shows, computed on the server from ESPN's league and projections and
@@ -51,6 +51,10 @@ export interface SeasonView {
   tradeDeadlinePassed: boolean;
   /** The user's fantasy matchup this week, their side first; null on a bye or when ESPN didn't say. */
   matchup: { me: MatchupSide; them: MatchupSide } | null;
+  /** Every fantasy matchup this week, the user's included (APE-307). */
+  matchups: Matchup[];
+  /** Every matchup ESPN has decided this season, for standings week by week. */
+  results: MatchupResult[];
   /** The user's place in waivers (APE-212): their rank, and FAAB left when the league bids. */
   waiver: { rank: number | null; budget: number | null; left: number | null };
   /** The user's waiver claims pending on ESPN (13.4). */
@@ -131,6 +135,8 @@ export function buildSeasonView(
     tradeDeadline: league.tradeDeadline,
     tradeDeadlinePassed: !!league.tradeDeadline && now > Date.parse(league.tradeDeadline),
     matchup: myMatchup(league, myTeamId),
+    matchups: league.matchups,
+    results: league.results,
     waiver: myWaiver(league, myTeamId),
     warRoomMoves: moves.filter((m) => mine.some((p) => p.playerId === m.playerId && p.slot === m.slot)),
     claims: league.pendingClaims
