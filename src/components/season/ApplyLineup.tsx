@@ -241,21 +241,19 @@ function Results({ moves, line }: { moves: Landed; line: (m: LineupMove) => Reac
 /** Who's on IR, and who could go there: players ESPN lists as out or on injured reserve (13.2). */
 export function IrPicker({ roster, ir, irSlots, onToggle }: { roster: readonly ViewPlayer[]; ir: readonly number[]; irSlots: number; onToggle: (id: number, on: boolean) => void }) {
   const candidates = roster.filter((p) => p.slot === "IR" || (irEligible(p) && !p.locked));
+  // A healthy team has nothing to move, so the bench doesn't carry an empty IR section (APE-295).
+  if (!candidates.length) return null;
   return (
     <fieldset className={s.irPicker}>
       <legend className={s.seatKey}>
         IR · {ir.length} of {irSlots}
       </legend>
-      {candidates.length ? (
-        candidates.map((p) => (
-          <label key={p.playerId} className={s.check}>
-            <input type="checkbox" checked={ir.includes(p.playerId)} disabled={p.locked} onChange={(e) => onToggle(p.playerId, e.target.checked)} />
-            {p.name} <span className={s.fine}>· {p.injuryStatus === "INJURY_RESERVE" ? "injured reserve" : p.injuryStatus.toLowerCase()}</span>
-          </label>
-        ))
-      ) : (
-        <p className={s.fine}>No one on your team is out or on injured reserve.</p>
-      )}
+      {candidates.map((p) => (
+        <label key={p.playerId} className={s.check}>
+          <input type="checkbox" checked={ir.includes(p.playerId)} disabled={p.locked} onChange={(e) => onToggle(p.playerId, e.target.checked)} />
+          {p.name} <span className={s.fine}>· {p.injuryStatus === "INJURY_RESERVE" ? "injured reserve" : p.injuryStatus.toLowerCase()}</span>
+        </label>
+      ))}
     </fieldset>
   );
 }

@@ -1041,13 +1041,6 @@
     position-area: bottom span-left;
   }
 }
-.menu {
-  gap: 10px;
-  padding: 12px 14px;
-}
-.menu:popover-open {
-  display: grid;
-}
 
 .pickerHead {
   margin: 0 14px 6px;
@@ -1057,10 +1050,6 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.menu .pickerHead {
-  margin: 0;
-}
-
 .pickerList {
   list-style: none;
   margin: 0;
@@ -2800,6 +2789,21 @@ li + li > .pickerOption {
   font-size: 12px;
 }
 
+/* A strip of tools inside a panel (APE-295): under the head, or closing the panel after its rows. */
+.panelTools {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--color-row-line);
+}
+.rows + .panelTools {
+  border-top: 1px solid var(--color-row-line);
+  border-bottom: 0;
+}
+.panelTools .irPicker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .seatKey {
   color: var(--color-muted);
   font-size: 12px;
@@ -3224,7 +3228,7 @@ li + li > .pickerOption {
   gap: 10px;
 }
 
-.picker {
+.rosterPicker {
   margin: 0;
   padding: 0;
   border: 1px solid var(--color-line);
@@ -3233,7 +3237,7 @@ li + li > .pickerOption {
   min-width: 0;
 }
 
-.pickerHead {
+.rosterPickerHead {
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -3242,12 +3246,12 @@ li + li > .pickerOption {
   font-size: 12px;
   font-weight: 700;
 }
-.pickerHead span {
+.rosterPickerHead span {
   color: var(--color-muted);
   font-weight: 600;
 }
 
-.pickerList {
+.rosterPickerList {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -3873,7 +3877,7 @@ li + li > .pickerOption {
   .trades {
     grid-template-columns: minmax(0, 1fr);
   }
-  .pickerList {
+  .rosterPickerList {
     max-height: 520px;
   }
 }
@@ -4024,8 +4028,7 @@ li + li > .pickerOption {
   }
 
   /* A slot's choices rise from the bottom, in thumb reach. */
-  .picker,
-  .menu {
+  .picker {
     position-area: none;
     inset: auto 0 0 0;
     width: auto;
@@ -4090,10 +4093,10 @@ li + li > .pickerOption {
   .pickers {
     grid-template-columns: minmax(0, 1fr);
   }
-  .picker[data-hidden="true"] {
+  .rosterPicker[data-hidden="true"] {
     display: none;
   }
-  .pickerList {
+  .rosterPickerList {
     max-height: none;
     min-height: 0;
   }
