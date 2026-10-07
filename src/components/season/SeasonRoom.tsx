@@ -62,7 +62,7 @@ type Props = {
     }
 );
 
-type Tab = "lineup" | "trade" | "waivers";
+type Tab = "gameday" | "lineup" | "trade" | "waivers";
 
 export interface SeasonLeagueLink {
   id: string;
@@ -74,14 +74,13 @@ export interface SeasonLeagueLink {
  * week sits above the fold; on a phone the tabs move to a bar in the thumb zone.
  */
 export function SeasonRoom(props: Props) {
-  const [tab, setTab] = useState<Tab>("lineup");
+  const phase = "view" in props ? props.phase : "lineup";
+  // Game day leads while games are on or the week's result is up; between weeks the lineup does.
+  const [tab, setTab] = useState<Tab>(phase === "lineup" ? "lineup" : "gameday");
   const title = "view" in props ? props.view.name : (props.leagueName ?? "Your season");
   const view = "view" in props ? props.view : null;
   const ai = "view" in props ? props.ai : null;
   const checkout = useCheckoutReturn(ai, "view" in props ? props.checkout : null);
-  const phase = "view" in props ? props.phase : "lineup";
-  // On game day the first tab is the scoreboard; the lineup tools are a tap away for players still to play.
-  const [tools, setTools] = useState(false);
   useLivePolling(!!view && matchupLive(view));
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
@@ -103,8 +102,11 @@ export function SeasonRoom(props: Props) {
           </div>
           {view && (
             <div className={s.tabs} role="tablist" aria-label="Season tools">
+              <TabButton id="gameday" tab={tab} onSelect={setTab}>
+                Game day
+              </TabButton>
               <TabButton id="lineup" tab={tab} onSelect={setTab}>
-                {phase === "lineup" ? "Lineup" : "Game day"}
+                Lineup
               </TabButton>
               <TabButton id="trade" tab={tab} onSelect={setTab}>
                 Trades
@@ -136,17 +138,10 @@ export function SeasonRoom(props: Props) {
               </p>
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-              {tab === "lineup" && props.phase !== "lineup" && !tools ? (
-                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTools(true)} />
+              {tab === "gameday" ? (
+                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} onLineupTools={() => setTab("lineup")} />
               ) : tab === "lineup" ? (
-                <>
-                  {props.phase !== "lineup" && (
-                    <button type="button" className={`${s.button} ${s.backToGame}`} onClick={() => setTools(false)}>
-                      Back to game day
-                    </button>
-                  )}
-                  <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
-                </>
+                <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : tab === "trade" ? (
                 <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : (

@@ -31,7 +31,7 @@ export function GameDayPanel({
 }: {
   leagueId: string;
   view: SeasonView;
-  phase: Exclude<GameDayPhase, "lineup">;
+  phase: GameDayPhase;
   /** ESPN's pre-game projections against what was scored (APE-229); null when none were read. */
   accuracy: ProjectionAccuracy | null;
   onLineupTools(): void;
@@ -106,15 +106,25 @@ export function GameDayPanel({
  * The matchup as the page's hero: both scores at 44px, the lead between them in tone, each side's
  * projection and starters still to play, and ESPN's win probability as a split bar.
  */
-function Scoreboard({ view, phase }: { view: SeasonView; phase: Exclude<GameDayPhase, "lineup"> }) {
+function Scoreboard({ view, phase }: { view: SeasonView; phase: GameDayPhase }) {
   const { me, them } = view.matchup!;
   const opponent = view.teams.find((t) => t.id === them.teamId)?.name ?? "Your opponent";
   const lead = me.points - them.points;
   const decided = matchupDecided(view);
   const theirLeft = leftToPlay(view, them.teamId);
   const toPlay = leftToPlay(view, me.teamId) + theirLeft;
+  // Before the matchup's first kickoff (Wednesday to Thursday night) it's a preview: no score to tie.
+  const started = view.teams.some((t) => (t.id === me.teamId || t.id === them.teamId) && t.roster.some((p) => p.slot !== "BN" && p.slot !== "IR" && p.game && p.game.state !== "pre"));
   // Live while a game is on; between games (Sunday night, before Monday's) it says what's left.
-  const status = matchupLive(view) ? "Live" : decided ? "Final" : phase === "live" ? `${toPlay} to play` : `${theirLeft} left for ${opponent}`;
+  const status = matchupLive(view)
+    ? "Live"
+    : decided
+      ? "Final"
+      : phase === "results"
+        ? `${theirLeft} left for ${opponent}`
+        : started
+          ? `${toPlay} to play`
+          : "Up next";
   const win = me.winProbability === null ? null : Math.round(me.winProbability * 100);
   const side = (name: string, team: typeof me, mine: boolean) => {
     const left = leftToPlay(view, team.teamId);
@@ -140,7 +150,7 @@ function Scoreboard({ view, phase }: { view: SeasonView; phase: Exclude<GameDayP
       <div className={s.scoreSides}>
         {side("You", me, true)}
         <span className={s.scoreLead} role="status">
-          {lead === 0 ? "Tied" : `${lead > 0 ? (decided ? "Won by" : "Up") : decided ? "Lost by" : "Down"} ${pts(Math.abs(lead))}`}
+          {lead === 0 ? (started ? "Tied" : "vs") : `${lead > 0 ? (decided ? "Won by" : "Up") : decided ? "Lost by" : "Down"} ${pts(Math.abs(lead))}`}
         </span>
         {side(opponent, them, false)}
       </div>

@@ -208,9 +208,10 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-width: 108px;
+  min-width: 96px;
   justify-content: center;
   padding: 7px 14px;
+  white-space: nowrap;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -2530,10 +2531,6 @@ li + li > .pickerOption {
 .callFoot b {
   color: var(--color-text);
 }
-.backToGame {
-  margin-bottom: 14px;
-}
-
 @media (max-width: 767px) {
   .scoreBig {
     font-size: 34px;
@@ -2541,8 +2538,7 @@ li + li > .pickerOption {
   .scoreSides {
     padding: 12px 14px 8px;
   }
-  .lineupTools,
-  .backToGame {
+  .lineupTools {
     min-height: 44px;
     width: 100%;
   }
@@ -3590,9 +3586,13 @@ li + li > .pickerOption {
     backdrop-filter: blur(10px);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
   }
+  /* Four tabs share a phone's width evenly; the labels stay on one line. */
   .tab {
     flex: 1;
+    min-width: 0;
     min-height: 44px;
+    padding: 7px 4px;
+    gap: 5px;
   }
 
   /* Finishing War Room's lineup is a thumb's reach away. */
