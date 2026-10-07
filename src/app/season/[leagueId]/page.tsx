@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { after, connection } from "next/server";
+import { espnTeamPage } from "@/lib/espn/pages";
 import { SeasonRoom, type SeasonProblem } from "@/components/season/SeasonRoom";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
@@ -48,7 +49,12 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
     backfillEspnDraft(db, key, user.userId, leagueId).catch((err: unknown) => console.warn(`[espn-season] draft backfill failed: ${(err as Error).message}`)),
   );
   const load = await loadSeasonView(db, key, user.userId, leagueId, { refresh });
-  if (load.kind !== "ok") return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} />;
+  if (load.kind !== "ok") {
+    // Reconnecting starts on the user's ESPN league page (APE-301).
+    const link = links.find((l) => l.leagueId === leagueId);
+    const espnUrl = link ? espnTeamPage(link) : undefined;
+    return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} espnUrl={espnUrl} />;
+  }
   const { view, result } = load;
   // ESPN's projections as they stand, kept for game day's "ESPN's call" (APE-229); last week's too
   // while its result is up, so ESPN's stat corrections still land (APE-251).

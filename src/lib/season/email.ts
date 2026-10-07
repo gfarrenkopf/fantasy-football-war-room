@@ -127,19 +127,24 @@ export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: League
   return { subject, html, text };
 }
 
-/** ESPN signed War Room out, so the Sunday lineup couldn't be written. */
-export function renderReconnectEmail({ url, unsubscribeUrl }: { url: string; unsubscribeUrl: string }): SeasonEmail {
+/**
+ * ESPN signed War Room out, so the Sunday lineup couldn't be written. The button opens the user's
+ * team page on ESPN, where the bookmark reconnects them (APE-301); `helpUrl` is for a device without it.
+ */
+export function renderReconnectEmail({ espnUrl, helpUrl, unsubscribeUrl }: { espnUrl: string; helpUrl: string; unsubscribeUrl: string }): SeasonEmail {
   const subject = "Reconnect ESPN for your Sunday lineup";
-  const body = "ESPN signed War Room out, which it does every so often, so this morning's AI lineup couldn't be written. Open your league on ESPN and use the War Room bookmark to reconnect, on your phone or a computer.";
+  const body = "ESPN signed War Room out, which it does every so often, so this morning's AI lineup couldn't be written. Open your league on ESPN, use your War Room bookmark there, then Connect my season. It works on your phone or a computer.";
+  const help = "No War Room bookmark on this device?";
   const html = shell({
     title: subject,
     preheader: "One tap on ESPN and you're back.",
     headline: "Reconnect ESPN.",
     body: `<tr><td style="padding:10px 32px 0;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">${escape(body)}</td></tr>
-        <tr><td style="padding:20px 32px 0;">${button(url, "How to reconnect")}</td></tr>`,
+        <tr><td style="padding:20px 32px 0;">${button(espnUrl, "Open your league on ESPN")}</td></tr>
+        <tr><td style="padding:14px 32px 0;font-family:${FONT};font-size:13px;line-height:20px;color:${C.muted};">${escape(help)} <a href="${escape(helpUrl)}" target="_blank" style="color:${C.muted};">Add it</a>.</td></tr>`,
     footer: footer(unsubscribeUrl),
   });
-  return { subject, html, text: [subject, "", body, "", url, "", `Stop these emails: ${unsubscribeUrl}`, ""].join("\n") };
+  return { subject, html, text: [subject, "", body, "", espnUrl, "", `${help} ${helpUrl}`, "", `Stop these emails: ${unsubscribeUrl}`, ""].join("\n") };
 }
 
 /**

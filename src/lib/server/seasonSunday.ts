@@ -1,5 +1,6 @@
 import type { PlanModel } from "@/lib/ai/provider";
 import type { Db } from "@/lib/db/types";
+import { espnTeamPage } from "@/lib/espn/pages";
 import { lineupMoves, renderReconnectEmail, renderSundayEmail, type LeagueSummary } from "@/lib/season/email";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { seasonAiAccess } from "./seasonAi";
@@ -55,11 +56,11 @@ export async function runSundayJob(db: Db, deps: SundayDeps, { dryRun = false }:
 
   for (const [userId, list] of byUser) {
     const lineups: LeagueSummary[] = [];
-    let reconnect = false;
+    let reconnect: JobLeague | null = null;
     for (const league of list) {
       const outcome = await runLeague(db, deps, league, { dryRun, lineups });
       if (outcome === "disconnected") {
-        reconnect = true;
+        reconnect = league;
         break; // one ESPN login covers all of a user's leagues
       }
       summary[outcome]++;
@@ -68,7 +69,7 @@ export async function runSundayJob(db: Db, deps: SundayDeps, { dryRun = false }:
     if (dryRun || !to) continue;
     const unsubscribe = unsubscribeUrl(deps, userId);
     if (lineups.length && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "lineup", now }, renderSundayEmail({ leagues: lineups, unsubscribeUrl: unsubscribe })))) summary.emails++;
-    if (reconnect && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "reconnect", now }, renderReconnectEmail({ url: new URL("/espn", deps.baseUrl).toString(), unsubscribeUrl: unsubscribe })))) summary.reconnects++;
+    if (reconnect && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "reconnect", now }, renderReconnectEmail({ espnUrl: espnTeamPage(reconnect), helpUrl: new URL("/espn", deps.baseUrl).toString(), unsubscribeUrl: unsubscribe })))) summary.reconnects++;
   }
   return summary;
 }
