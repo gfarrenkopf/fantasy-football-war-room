@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { AppBar } from "@/components/shell/AppBar";
 import s from "@/components/season/season.module.css";
 import { config } from "@/lib/config";
 
@@ -17,12 +18,10 @@ export default async function Unsubscribe({ searchParams }: PageProps<"/season/u
   const action = typeof u === "string" && typeof t === "string" ? `/api/season/unsubscribe?${new URLSearchParams({ u, t, from: "page" })}` : null;
   return (
     <main className={s.root}>
+      <AppBar />
       <div className={s.frame}>
         <header className={s.top}>
           <div className={s.titleBlock}>
-            <a href="/draft" className={s.brand}>
-              Draft Room
-            </a>
             <h1 className={s.title}>Email settings</h1>
           </div>
         </header>

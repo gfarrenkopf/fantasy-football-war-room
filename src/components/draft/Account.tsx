@@ -6,6 +6,7 @@ import { signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
 import { farewellMood, gatherFarewell, getStores, saveFarewell, soonestDraft, type Farewell, type FarewellMood, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
+import bar from "@/components/shell/appBar.module.css";
 import { cx, s } from "./cx";
 import { useConfirm } from "./Feedback";
 import { useFlags } from "./Flags";
@@ -66,6 +67,7 @@ export function AccountMenu() {
   const [signInNotice, setSignInNotice] = useState<string | undefined>();
   const signInBtn = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
 
   // A sign-in link that failed (used, expired, cancelled) lands here with `?error=`: reopen the
   // dialog saying what happened. Signed in already, there's nothing to recover, so just tidy up.
@@ -100,7 +102,7 @@ export function AccountMenu() {
     if (!flags.emailAuthEnabled && !flags.googleAuthEnabled) return null;
     return (
       <>
-        <button ref={signInBtn} className={s.btn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
+        <button ref={signInBtn} className={bar.textBtn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">
           Sign in
         </button>
         {showSignIn && <SignInDialog onClose={closeSignIn} notice={signInNotice} />}
@@ -148,28 +150,37 @@ export function AccountMenu() {
     action();
   };
 
-  // One button, not three: the header's action row is the draft's, and identity sat in it wide
-  // enough to push the roster needs under the buttons. The popover is native (Esc, light dismiss).
+  // The app bar's account (Epic 15): the user's initial in a ring, opening a native popover menu.
   return (
     <>
-      <button className={cx("btn", "accountBtn")} popoverTarget="account-menu" aria-haspopup="menu" title={label}>
-        <span className={s.accountInitial} aria-hidden="true">
+      <button className={bar.avatarBtn} popoverTarget="account-menu" aria-haspopup="menu" aria-expanded={open} aria-label={`Account: ${label}`} title={label}>
+        <span className={bar.avatar} aria-hidden="true">
           {(user.email ?? "?").charAt(0)}
         </span>
-        Account
       </button>
-      <div ref={menuRef} id="account-menu" popover="auto" role="menu" aria-label="Account" className={s.accountMenu}>
-        <span className={s.accountEmail} title={label}>
-          {label}
-        </span>
-        {paymentsEnabled && (
-          <button className={cx("btn")} role="menuitem" onClick={pick(() => setShowPurchases(true))}>
-            Purchases
+      <div
+        ref={menuRef}
+        id="account-menu"
+        popover="auto"
+        role="menu"
+        aria-label="Account"
+        className={bar.menu}
+        data-align="end"
+        onToggle={(e) => setOpen(e.newState === "open")}
+      >
+        <div className={bar.group}>
+          <span className={bar.email} title={label}>
+            {label}
+          </span>
+          {paymentsEnabled && (
+            <button className={bar.item} role="menuitem" onClick={pick(() => setShowPurchases(true))}>
+              <span>Purchases</span>
+            </button>
+          )}
+          <button className={bar.item} role="menuitem" onClick={pick(() => void signOut())}>
+            <span>Sign out</span>
           </button>
-        )}
-        <button className={cx("btn")} role="menuitem" onClick={pick(() => void signOut())}>
-          Sign out
-        </button>
+        </div>
       </div>
       {showPurchases && <PurchasesDialog onClose={() => setShowPurchases(false)} />}
     </>

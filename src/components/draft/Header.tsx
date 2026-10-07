@@ -1,7 +1,6 @@
 "use client";
 
 import { forwardRef } from "react";
-import { parseDraftAt } from "@/lib/draft/draftDay";
 import { formatRoundPick, isMyPick, nextMyPick, roundOf } from "@/lib/draft/snake";
 import { cx, s } from "./cx";
 import { useModel } from "./DraftModel";
@@ -11,18 +10,7 @@ import { useHasSeasonPage } from "./SeasonLinks";
 import { useDraftActions } from "./useDraftActions";
 import { useDraftClock } from "./useDraftClock";
 
-/** Option value in the league switcher that opens the new-league dialog instead of switching. */
-const NEW_LEAGUE = "__new__";
-
 const SCORING_LABEL = { ppr: "Full-PPR", half: "Half-PPR", std: "Standard" } as const;
-
-/** A league's draft date in the switcher, "· 9/27", or nothing when it has none. */
-const draftDate = (raw: string | null | undefined) => {
-  const d = parseDraftAt(raw);
-  if (!d) return "";
-  const at = d.kind === "time" ? d.at : new Date(d.year, d.month - 1, d.day);
-  return ` · ${at.toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}`;
-};
 
 export const leagueSummary = (league: { scoring: keyof typeof SCORING_LABEL; teams: number; mySlot: number }) =>
   `${SCORING_LABEL[league.scoring]}, ${league.teams} teams, slot ${formatRoundPick(league.mySlot, league.teams)}`;
@@ -33,24 +21,21 @@ interface HeaderProps {
   onQueryKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void;
   hint: string;
   onOpenLeague(): void;
-  onNewLeague(): void;
   /** Bumped each time a pick puts the user on the clock; replays the pick box and turn banner's arrival. */
   arrival: number;
   /** Controls rendered after the brand (view switch). */
   children?: React.ReactNode;
   /** Buttons rendered at the start of the action group. */
   actions?: React.ReactNode;
-  /** Sign-in state, rendered after the draft actions. */
-  account?: React.ReactNode;
   /** Roster needs strip, rendered after search. */
   needs?: React.ReactNode;
 }
 
 /** Pick box, turn state, click-mode hint, search and draft actions. Ported from renderHeader(). */
-export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, onNewLeague, arrival, children, actions, account, needs }, searchRef) {
+export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header({ query, onQueryChange, onQueryKeyDown, hint, onOpenLeague, arrival, children, actions, needs }, searchRef) {
   const model = useModel();
   const { undo, reset } = useDraftActions();
-  const { leagues, active, switchLeague } = useLeague();
+  const { active } = useLeague();
   const hasSeasonPage = useHasSeasonPage(active?.id);
   const { current: cur, total, done, onClock, league } = model;
   // Before the first pick, the turn line also says when the draft starts: on a phone, whose
@@ -120,27 +105,6 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
 
   return (
     <header className={s.header}>
-      <div className={s.brand}>
-        <b>Draft Room</b>
-        {active ? (
-          <select
-            className={s.leagueSelect}
-            aria-label="League"
-            title={leagueSummary(league)}
-            value={active.id}
-            onChange={(e) => (e.target.value === NEW_LEAGUE ? onNewLeague() : switchLeague(e.target.value))}
-          >
-            {leagues.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-                {draftDate(l.draftAt)}
-              </option>
-            ))}
-            <option value={NEW_LEAGUE}>+ New league…</option>
-          </select>
-        ) : null}
-        <span>{leagueSummary(league)}</span>
-      </div>
       {/*
        * The view switch and the draft actions are wrapped together so mobile can lift the pair
        * into a fixed bottom bar in one move. On desktop `.bar` is display:contents, so both stay
@@ -165,7 +129,6 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
           <button className={cx("btn", "danger")} onClick={() => void reset()}>
             Reset draft
           </button>
-          {account}
         </div>
       </div>
       {/* data-pickbox: where OpeningNight's stage irises down to when the draft starts. */}

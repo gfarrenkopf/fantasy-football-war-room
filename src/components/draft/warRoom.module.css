@@ -30,19 +30,6 @@
   background: var(--color-panel);
   border-bottom: 1px solid var(--color-line);
 }
-.brand {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-  min-width: 140px;
-}
-.brand b {
-  font-size: 15px;
-}
-.brand span {
-  color: var(--color-muted);
-  font-size: 11px;
-}
 .seg {
   display: flex;
   border: 1px solid var(--color-line);
@@ -2349,28 +2336,6 @@
   color: var(--color-text);
 }
 
-/* ---------- league switcher ---------- */
-.leagueSelect {
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 1px 2px;
-  margin: 2px 0 1px -3px;
-  max-width: 200px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-.leagueSelect:hover,
-.leagueSelect:focus-visible {
-  border-color: var(--color-line);
-  background: var(--color-panel2);
-}
 .staleNote {
   color: var(--color-warn);
 }
@@ -2378,83 +2343,6 @@
   white-space: nowrap;
 }
 
-/* ---------- account ---------- */
-.accountEmail {
-  color: var(--color-muted);
-  font-size: 11.5px;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Signed in, identity is one button; email, Purchases and Sign out live in its popover. */
-.accountBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding-left: 6px;
-  anchor-name: --account;
-}
-.accountBtn::after {
-  content: "";
-  width: 6px;
-  height: 6px;
-  margin: -3px 1px 0 1px;
-  border: solid var(--color-muted);
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
-}
-.accountInitial {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--color-chip);
-  border: 1px solid var(--color-line2);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-.accountMenu {
-  position: fixed;
-  position-anchor: --account;
-  inset: auto;
-  top: anchor(bottom);
-  right: anchor(right);
-  margin: 6px 0 0;
-  width: max-content;
-  min-width: 200px;
-  max-width: min(280px, calc(100vw - 20px));
-  padding: 6px;
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--color-text);
-  background: var(--color-panel);
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.4);
-}
-.accountMenu:popover-open {
-  display: flex;
-}
-.accountMenu .accountEmail {
-  max-width: none;
-  padding: 4px 6px 6px;
-  border-bottom: 1px solid var(--color-line);
-  margin-bottom: 2px;
-}
-.accountMenu .btn {
-  text-align: left;
-  white-space: nowrap;
-}
-@supports not (anchor-name: --a) {
-  .accountMenu {
-    top: 56px;
-    right: 14px;
-  }
-}
 a.btn {
   text-decoration: none;
   display: inline-flex;
@@ -2674,8 +2562,7 @@ a.btn {
     height: 36px;
   }
   .input,
-  .simSelect,
-  .leagueSelect {
+  .simSelect {
     min-height: 40px;
   }
   .simbar .btn {
@@ -2721,22 +2608,7 @@ a.btn {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 6px 8px;
-    padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 8px
-      max(10px, env(safe-area-inset-left));
-  }
-  .brand {
-    grid-area: 1 / 1;
-    min-width: 0;
-  }
-  .brand b {
-    font-size: 13px;
-  }
-  /* The league summary lives in the League dialog; the switcher stays. */
-  .brand > span {
-    display: none;
-  }
-  .leagueSelect {
-    max-width: 100%;
+    padding: 8px max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left));
   }
   .pickbox {
     grid-area: 1 / 2;
@@ -2753,7 +2625,7 @@ a.btn {
    * and WebKit didn't always re-match `:has()` after a view switch, so the board lost them too.)
    */
   .turn {
-    grid-area: 2 / 1 / 3 / 3;
+    grid-area: 1 / 1;
     min-width: 0;
     padding: 5px 10px;
   }
@@ -2781,7 +2653,7 @@ a.btn {
     display: none;
   }
   .search {
-    grid-area: 3 / 1 / 4 / 3;
+    grid-area: 2 / 1 / 3 / 3;
     flex: none;
     min-width: 0;
     max-width: none;
@@ -2791,7 +2663,6 @@ a.btn {
    * refresh by accident. 16px on every phone control keeps the viewport still; pinch zoom stays on.
    */
   .search input,
-  .leagueSelect,
   .input,
   .simSelect {
     font-size: 16px;
@@ -2802,7 +2673,7 @@ a.btn {
     transform: translateY(-50%);
   }
   .needs {
-    grid-area: 4 / 1 / 5 / 3;
+    grid-area: 3 / 1 / 4 / 3;
     min-width: 0;
     max-width: none;
     flex-wrap: nowrap;
@@ -2846,27 +2717,12 @@ a.btn {
   .actions > * {
     flex: none;
   }
-  .accountMenu {
-    top: auto;
-    bottom: anchor(top);
-    margin: 0 0 6px;
-  }
-  @supports not (anchor-name: --a) {
-    .accountMenu {
-      top: auto;
-      bottom: calc(64px + env(safe-area-inset-bottom));
-      right: 10px;
-    }
-  }
   /* Thumb order: the two you reach for mid-draft first, the destructive one last. */
   .btn.undo {
     order: -2;
   }
   .btn.plan {
     order: -1;
-  }
-  .accountBtn {
-    order: 1;
   }
   .btn.danger {
     order: 2;
@@ -3077,7 +2933,7 @@ a.btn {
 @media (max-width: 899px) and (max-height: 500px) {
   .header {
     gap: 4px 8px;
-    padding-top: max(4px, env(safe-area-inset-top));
+    padding-top: 4px;
     padding-bottom: 4px;
   }
   .needs {

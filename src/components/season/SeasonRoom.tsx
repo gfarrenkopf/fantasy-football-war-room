@@ -5,13 +5,19 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import type { PublicFlags } from "@/lib/config";
+import type { SessionUser } from "@/lib/auth/types";
+import { AccountMenu, AccountProvider } from "@/components/draft/Account";
+import { ConfirmProvider } from "@/components/draft/Feedback";
+import { FlagsProvider } from "@/components/draft/Flags";
+import { AppBar, SyncChip } from "@/components/shell/AppBar";
+import { LeagueMenu } from "@/components/shell/LeagueMenu";
 import type { ProjectionAccuracy } from "@/lib/season/accuracy";
 import type { ArchiveWeek } from "@/lib/season/leagueRecap";
 import { matchupLive, type GameDayPhase } from "@/lib/season/gameday";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
 import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
-import { ArrowLeft, ChevronDown, Refresh } from "./Icons";
+import { ArrowLeft } from "./Icons";
 import { LineupPanel } from "./LineupPanel";
 import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
@@ -31,6 +37,8 @@ export type SeasonProblem =
 
 type Props = {
   flags: PublicFlags;
+  /** The signed-in user, for the app bar's account menu; absent when signed out. */
+  user?: SessionUser;
   leagueId: string;
   leagueName?: string;
   /** The user's leagues that follow ESPN (APE-194), to switch between; absent when signed out. */
@@ -87,23 +95,42 @@ export function SeasonRoom(props: Props) {
   const ai = "view" in props ? props.ai : null;
   const checkout = useCheckoutReturn(ai, "view" in props ? props.checkout : null);
   useLivePolling(!!view && matchupLive(view));
+  const router = useRouter();
+  const time = useLocalTime("view" in props ? props.fetchedAt : null);
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
   return (
     <main className={s.root}>
+      <FlagsProvider flags={props.flags}>
+        <AccountProvider user={props.user ?? null}>
+          <ConfirmProvider>
+            <AppBar
+              league={
+                props.user ? (
+                  <LeagueMenu
+                    leagues={props.leagues ?? [{ id: props.leagueId, name: title }]}
+                    currentId={props.leagueId}
+                    currentName={title}
+                    onPick={(id) => router.push(`/season/${encodeURIComponent(id)}`)}
+                  />
+                ) : null
+              }
+              sync={"view" in props ? <SyncChip time={time} stale={props.stale} href={`/season/${props.leagueId}?refresh=1`} /> : null}
+              account={props.user ? <AccountMenu /> : null}
+            />
+          </ConfirmProvider>
+        </AccountProvider>
+      </FlagsProvider>
       <div className={s.frame}>
         <header className={s.top}>
           <div className={s.titleBlock}>
             <nav className={s.crumbs} aria-label="Draft Room">
-              <a href="/draft" className={s.brand}>
-                Draft Room
-              </a>
               <a href={`/draft?league=${encodeURIComponent(props.leagueId)}`} className={s.draftDoor}>
                 <ArrowLeft /> Draft room
               </a>
             </nav>
-            {props.leagues && props.leagues.length > 1 ? <LeagueSwitcher leagues={props.leagues} current={props.leagueId} title={title} /> : <h1 className={s.title}>{title}</h1>}
-            {"view" in props && <Freshness view={props.view} fetchedAt={props.fetchedAt} stale={props.stale} leagueId={props.leagueId} />}
+            <h1 className={s.title}>{title}</h1>
+            {"view" in props && <Freshness view={props.view} />}
           </div>
           {view && (
             <div className={s.tabs} role="tablist" aria-label="Season tools">
@@ -161,34 +188,6 @@ export function SeasonRoom(props: Props) {
   );
 }
 
-/**
- * The page title, as a menu of the user's ESPN-linked leagues: picking one opens its season page.
- * The select sits over the title, so it reads as the heading and opens as a native menu everywhere.
- */
-function LeagueSwitcher({ leagues, current, title }: { leagues: SeasonLeagueLink[]; current: string; title: string }) {
-  const router = useRouter();
-  return (
-    <h1 className={`${s.title} ${s.switcher}`}>
-      <span className={s.switcherLabel} aria-hidden>
-        {title}
-        <ChevronDown />
-      </span>
-      <select
-        className={s.switcherSelect}
-        aria-label="League"
-        value={current}
-        onChange={(e) => router.push(`/season/${encodeURIComponent(e.target.value)}`)}
-      >
-        {leagues.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.name}
-          </option>
-        ))}
-      </select>
-    </h1>
-  );
-}
-
 function TabButton({ id, tab, onSelect, children }: { id: Tab; tab: Tab; onSelect: (tab: Tab) => void; children: React.ReactNode }) {
   return (
     <button type="button" role="tab" id={`tab-${id}`} aria-selected={tab === id} aria-controls={`panel-${id}`} className={s.tab} onClick={() => onSelect(id)}>
@@ -199,13 +198,8 @@ function TabButton({ id, tab, onSelect, children }: { id: Tab; tab: Tab; onSelec
 
 const noSubscription = () => () => {};
 
-function Freshness({ view, fetchedAt, stale, leagueId }: { view: SeasonView; fetchedAt: string; stale: boolean; leagueId: string }) {
-  // Formatted in the browser only: the server's time zone isn't the reader's.
-  const time = useSyncExternalStore(
-    noSubscription,
-    () => new Date(fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-    () => "",
-  );
+/** The user's week and record under the title; ESPN's sync time is the app bar's chip. */
+function Freshness({ view }: { view: SeasonView }) {
   const standing = view.teams.find((t) => t.id === view.myTeamId)?.standing;
   return (
     <p className={s.meta}>
@@ -216,14 +210,16 @@ function Freshness({ view, fetchedAt, stale, leagueId }: { view: SeasonView; fet
           <span className="tabular-nums">{pts(standing.pointsAgainst)}</span> against
         </span>
       )}
-      <span className={stale ? s.metaStale : undefined}>
-        {stale ? "ESPN isn't answering; showing your last sync" : "Synced with ESPN"}
-        {time && ` at ${time}`}
-      </span>
-      <a className={s.refresh} href={`/season/${leagueId}?refresh=1`}>
-        <Refresh /> Refresh
-      </a>
     </p>
+  );
+}
+
+/** When ESPN was last read, as the reader's local time. Formatted in the browser only: the server's time zone isn't the reader's. */
+function useLocalTime(iso: string | null) {
+  return useSyncExternalStore(
+    noSubscription,
+    () => (iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""),
+    () => "",
   );
 }
 

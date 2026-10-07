@@ -6,6 +6,8 @@ import type { PublicFlags } from "@/lib/config";
 import { DATASET_ID } from "@/lib/data";
 import { totalPicks } from "@/lib/draft/snake";
 import { configureStores } from "@/lib/storage";
+import { AppBar } from "@/components/shell/AppBar";
+import { LeagueMenu } from "@/components/shell/LeagueMenu";
 import { AccountMenu, AccountProvider } from "./Account";
 import { AiPlanProvider } from "./AiPlan";
 import { CheckoutReturn } from "./Checkout";
@@ -28,7 +30,7 @@ import { FlagsProvider } from "./Flags";
 import { SeasonLinksProvider } from "./SeasonLinks";
 import { DraftBook } from "./DraftBook";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
-import { Header } from "./Header";
+import { Header, leagueSummary } from "./Header";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
 import { NeedsStrip } from "./NeedsStrip";
@@ -104,7 +106,7 @@ function WarRoomView() {
   const { state, hydrated } = useDraft();
   const model = useModel();
   const { prefs, setPrefs } = usePrefs();
-  const { configured, active } = useLeague();
+  const { configured, active, leagues, switchLeague } = useLeague();
   const welcomeHold = useWelcomeHold();
   const { draftWithIntent, intentFrom, undo } = useDraftActions();
   const toast = useToast();
@@ -239,6 +241,21 @@ function WarRoomView() {
 
   return (
     <div className={s.root}>
+      <AppBar
+        league={
+          active ? (
+            <LeagueMenu
+              leagues={leagues}
+              currentId={active.id}
+              currentName={active.name}
+              title={leagueSummary(model.league)}
+              onPick={switchLeague}
+              onNewLeague={() => setSetup("create")}
+            />
+          ) : null
+        }
+        account={<AccountMenu />}
+      />
       <Header
         ref={searchRef}
         query={query}
@@ -246,7 +263,6 @@ function WarRoomView() {
         onQueryKeyDown={onQueryKeyDown}
         hint={hint}
         onOpenLeague={() => setSetup("edit")}
-        onNewLeague={() => setSetup("create")}
         arrival={arrival}
         needs={<NeedsStrip />}
         actions={
@@ -268,7 +284,6 @@ function WarRoomView() {
             </button>
           </>
         }
-        account={<AccountMenu />}
       >
         <div className={s.seg} role="tablist" aria-label="View">
           {(["focus", "board"] as const).map((v) => (

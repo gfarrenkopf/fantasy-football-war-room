@@ -55,7 +55,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
     // Reconnecting starts on the user's ESPN league page (APE-301).
     const link = links.find((l) => l.leagueId === leagueId);
     const espnUrl = link ? espnLeaguePage(link) : undefined;
-    return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} espnUrl={espnUrl} />;
+    return <SeasonRoom flags={publicFlags} user={user} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} espnUrl={espnUrl} />;
   }
   const { view, result, previous } = load;
   // ESPN's projections as they stand, kept for game day's "ESPN's call" (APE-229); last week's too
@@ -89,6 +89,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   return (
     <SeasonRoom
       flags={publicFlags}
+      user={user}
       leagueId={leagueId}
       leagueName={league.name}
       leagues={leagues}
