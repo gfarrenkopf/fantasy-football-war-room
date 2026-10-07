@@ -6,6 +6,7 @@ import { SignIn } from "@/components/landing/SignIn";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import type { PublicFlags } from "@/lib/config";
 import type { ProjectionAccuracy } from "@/lib/season/accuracy";
+import type { ArchiveWeek } from "@/lib/season/leagueRecap";
 import { matchupLive, type GameDayPhase } from "@/lib/season/gameday";
 import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
@@ -59,6 +60,8 @@ type Props = {
       writeConsented: boolean;
       /** Game day (APE-227), worked out on the server when ESPN was read. */
       phase: GameDayPhase;
+      /** Every kept week, told for the recap archive (APE-250). */
+      archive: ArchiveWeek[];
       /** ESPN's pre-game projections against the scores (APE-229), and its season on the user's team. */
       accuracy: ProjectionAccuracy | null;
     }
@@ -141,7 +144,7 @@ export function SeasonRoom(props: Props) {
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "gameday" ? (
-                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} previous={props.previous} onLineupTools={() => setTab("lineup")} />
+                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} previous={props.previous} archive={props.archive} onLineupTools={() => setTab("lineup")} />
               ) : tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : tab === "trade" ? (

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
 import { parseResults } from "./espnLeague";
-import { leagueRecap } from "./leagueRecap";
+import { archiveWeek, leagueRecap } from "./leagueRecap";
 import type { MatchupResult } from "./types";
 import { standingsAfter, toWeekFacts, WEEK_FACTS_VERSION, type FactPlayer, type WeekFacts } from "./weekFacts";
 
@@ -86,13 +86,34 @@ describe("leagueRecap", () => {
   it("calls a tie a tie", () => {
     const r = leagueRecap(facts({ matchups: [{ home: { teamId: 1, points: 96 }, away: { teamId: 2, points: 96 } }] }));
     expect(r.mine?.result).toBe("tie");
-    expect(r.story).toMatch(/^A dead heat: 96\.0 apiece with Rival\./);
+    expect(r.story).toMatch(/^A dead heat with Rival, to the tenth of a point\./);
   });
 
   it("writes the week from what happened", () => {
-    expect(leagueRecap(facts()).story).toBe("ESPN had Rival by 10.3. You won anyway, 100.0–96.0. Puka Nacua blew past ESPN's 15.0 with 30.0. That's 6–0, and first in the league.");
-    const lost = facts({ matchups: [{ home: { teamId: 1, points: 95 }, away: { teamId: 2, points: 96 } }], standings: [{ teamId: 1, rank: 3, wins: 3, losses: 3, ties: 0, pointsFor: 600 }] });
-    expect(leagueRecap(lost).story).toBe("Brutal. Rival got you by 1.0, 96.0–95.0. Puka Nacua blew past ESPN's 15.0 with 30.0. That's 3–3, 3rd in the league.");
+    expect(leagueRecap(facts()).story).toBe(
+      "ESPN had Rival by 10.3. You won anyway. Puka Nacua blew past ESPN's 15.0 with 30.0. That's 6–0, and first in the league.",
+    );
+    const lost = facts({
+      matchups: [{ home: { teamId: 1, points: 95 }, away: { teamId: 2, points: 96 } }],
+      standings: [{ teamId: 1, rank: 3, wins: 3, losses: 3, ties: 0, pointsFor: 600 }],
+    });
+    expect(leagueRecap(lost).story).toBe("Brutal. Rival got you by 1.0. Puka Nacua blew past ESPN's 15.0 with 30.0. That's 3–3, 3rd in the league.");
+  });
+});
+
+describe("archiveWeek", () => {
+  it("tells a kept week's swing from its facts, the way game day told it", () => {
+    const { recap, swing } = archiveWeek(facts());
+    expect(recap.week).toBe(6);
+    // ESPN had the user down 10.3 (85 against 95.3); they won by 4.
+    expect(swing).toMatchObject({ projected: -10.3, final: 4 });
+    expect(swing?.swings[0]).toMatchObject({ playerId: 11, side: "me", delta: 15 });
+    // The bench's 28 doesn't beat either starter, so no better lineup was there to set.
+    expect(swing?.hindsight).toBeNull();
+  });
+
+  it("has no swing in a bye week", () => {
+    expect(archiveWeek(facts({ matchups: [{ home: { teamId: 1, points: 100 }, away: null }] })).swing).toBeNull();
   });
 });
 
@@ -141,7 +162,9 @@ describe("toWeekFacts", () => {
     const bench = at("BN", player("Bench Guy", "RB", 9, { playerId: 2, actual: null }));
     const view = {
       ...seasonView([bench, qb], [at("QB", player("Their QB", "QB", 20, { playerId: 9, actual: 11 }))]),
-      matchups: [{ home: { teamId: 1, points: 24.12, projected: 24.12, winProbability: null }, away: { teamId: 2, points: 11, projected: 11, winProbability: null } }],
+      matchups: [
+        { home: { teamId: 1, points: 24.12, projected: 24.12, winProbability: null }, away: { teamId: 2, points: 11, projected: 11, winProbability: null } },
+      ],
     };
     const f = toWeekFacts(view, new Map([[1, 21.5]]));
     expect(f.week).toBe(5);

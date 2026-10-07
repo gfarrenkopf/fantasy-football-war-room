@@ -12,7 +12,8 @@ import { backfillEspnDraft } from "@/lib/server/espn/draftImport";
 import { listSeasonLinks, markSeasonViewed } from "@/lib/server/espn/seasonLinks";
 import { loadSeasonView, loadWeekView } from "@/lib/server/espn/seasonView";
 import { projectionAccuracy, recordProjections } from "@/lib/server/seasonProjections";
-import { keepWeeks } from "@/lib/server/seasonRecaps";
+import { keepWeeks, listWeeks } from "@/lib/server/seasonRecaps";
+import { archiveWeek } from "@/lib/season/leagueRecap";
 import { wantsSeasonEmails, writeConsent } from "@/lib/server/seasonPrefs";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
@@ -74,7 +75,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       limit: 3,
     }).catch((err: unknown) => console.warn(`[espn-season] couldn't keep the recaps: ${(err as Error).message}`)),
   );
-  const [ai, emails, consented, , accuracy, previousAccuracy] = await Promise.all([
+  const [ai, emails, consented, , accuracy, previousAccuracy, kept] = await Promise.all([
     seasonAiState(db, user, league, view),
     // Only offered when the Sunday job can send email at all.
     config.seasonJobEnabled && config.emailAuthEnabled ? wantsSeasonEmails(db, user.userId) : null,
@@ -82,6 +83,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
     markSeasonViewed(db, user.userId, leagueId),
     projectionAccuracy(db, leagueId, result ?? view),
     previous ? projectionAccuracy(db, leagueId, previous) : null,
+    listWeeks(db, leagueId),
   ]);
 
   return (
@@ -102,6 +104,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       writeConsented={(consented ?? 0) >= ESPN_WRITE_VERSION}
       phase={load.phase}
       accuracy={accuracy}
+      archive={kept.map(archiveWeek)}
     />
   );
 }

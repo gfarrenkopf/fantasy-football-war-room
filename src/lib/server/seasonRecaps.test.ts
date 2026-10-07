@@ -15,14 +15,26 @@ beforeAll(async () => {
 });
 afterAll(() => close());
 
-const game = (state: GameState["state"]): GameState => ({ state, detail: "", opponent: "NYJ", home: true, kickoff: null, period: 0, clockSeconds: 0, score: null });
+const game = (state: GameState["state"]): GameState => ({
+  state,
+  detail: "",
+  opponent: "NYJ",
+  home: true,
+  kickoff: null,
+  period: 0,
+  clockSeconds: 0,
+  score: null,
+});
 
 /** Week `week`: the user's QB scoring `scored` against the other team's QB, every game in `state`. */
 function week(w: number, scored: number, state: GameState["state"] = "post"): SeasonView {
   const qb = at("QB", player("QB", "QB", 19, { playerId: 1, game: game(state), actual: scored }));
   const theirs = at("QB", player("Their QB", "QB", 18, { playerId: 3, game: game(state), actual: 12 }));
   const view = seasonView([qb], [theirs]);
-  const sides = { home: { teamId: 1, points: scored, projected: scored, winProbability: null }, away: { teamId: 2, points: 12, projected: 12, winProbability: null } };
+  const sides = {
+    home: { teamId: 1, points: scored, projected: scored, winProbability: null },
+    away: { teamId: 2, points: 12, projected: 12, winProbability: null },
+  };
   return { ...view, currentWeek: w, matchups: [sides], matchup: { me: sides.home, them: sides.away } };
 }
 

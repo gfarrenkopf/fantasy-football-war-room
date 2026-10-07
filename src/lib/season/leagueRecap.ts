@@ -1,4 +1,5 @@
-import type { FactPlayer, FactStanding, WeekFacts } from "./weekFacts";
+import { weekSwing, type WeekSwing } from "./swing";
+import { factsView, type FactPlayer, type FactStanding, type WeekFacts } from "./weekFacts";
 
 /**
  * A week told as the whole league's story (APE-307), after ESPN's matchup recap: the user's result
@@ -58,6 +59,18 @@ export interface LeagueRecap {
   falseStarters: RecapPlayer[];
 }
 
+/** A kept week as the archive shows it (APE-250): its recap, and how the user's matchup swung. */
+export interface ArchiveWeek {
+  season: number;
+  week: number;
+  recap: LeagueRecap;
+  swing: WeekSwing | null;
+}
+
+export function archiveWeek(facts: WeekFacts): ArchiveWeek {
+  return { season: facts.season, week: facts.week, recap: leagueRecap(facts), swing: weekSwing(factsView(facts), null) };
+}
+
 const TOP_SCORERS = 5;
 const BENCHWARMERS = 3;
 const FALSE_STARTERS = 3;
@@ -75,7 +88,9 @@ const fmt = (n: number) => n.toFixed(1);
 export function leagueRecap(facts: WeekFacts): LeagueRecap {
   const teams = new Map(facts.teams.map((t) => [t.id, t]));
   const nameOf = (id: number) => teams.get(id)?.name ?? `Team ${id}`;
-  const everyone: RecapPlayer[] = facts.teams.flatMap((t) => t.players.map((p) => ({ ...p, teamId: t.id, teamName: t.name, gap: round1(p.points - p.projected) })));
+  const everyone: RecapPlayer[] = facts.teams.flatMap((t) =>
+    t.players.map((p) => ({ ...p, teamId: t.id, teamName: t.name, gap: round1(p.points - p.projected) })),
+  );
   const starters = everyone.filter(isStarter);
   const byPlayer = (a: RecapPlayer, b: RecapPlayer) => a.playerId - b.playerId;
 
@@ -142,22 +157,22 @@ function gameChanger(facts: WeekFacts, starters: readonly RecapPlayer[], nameOf:
 
 /** A few sentences on the user's week: how it went, who carried it, and where it leaves them. */
 function story(facts: WeekFacts, w: MyWeek): string {
-  const score = (a: number, b: number) => `${fmt(a)}–${fmt(b)}`;
   const highest = Math.max(...facts.matchups.flatMap((m) => [m.home.points, m.away?.points ?? 0]));
   const lines: string[] = [];
 
-  if (w.result === "tie") lines.push(`A dead heat: ${fmt(w.me)} apiece with ${w.opponent}.`);
+  // The score sits right above the story, so the story says what the score can't.
+  if (w.result === "tie") lines.push(`A dead heat with ${w.opponent}, to the tenth of a point.`);
   else if (w.result === "win") {
     const underdog = w.projected.them - w.projected.me;
-    if (w.margin < CLOSE) lines.push(`Survived. You edged ${w.opponent} ${score(w.me, w.them)}, a ${fmt(w.margin)}-point finish nobody's heart needed.`);
-    else if (underdog >= CLOSE) lines.push(`ESPN had ${w.opponent} by ${fmt(underdog)}. You won anyway, ${score(w.me, w.them)}.`);
-    else if (w.margin >= ROUT) lines.push(`No contest. You ran ${w.opponent} off the field, ${score(w.me, w.them)}.`);
-    else lines.push(`You beat ${w.opponent} ${score(w.me, w.them)}.`);
+    if (w.margin < CLOSE) lines.push(`Survived. A ${fmt(w.margin)}-point finish nobody's heart needed.`);
+    else if (underdog >= CLOSE) lines.push(`ESPN had ${w.opponent} by ${fmt(underdog)}. You won anyway.`);
+    else if (w.margin >= ROUT) lines.push(`No contest. You ran ${w.opponent} off the field by ${fmt(w.margin)}.`);
+    else lines.push(`A ${fmt(w.margin)}-point win over ${w.opponent}.`);
   } else {
-    if (w.margin < CLOSE) lines.push(`Brutal. ${w.opponent} got you by ${fmt(w.margin)}, ${score(w.them, w.me)}.`);
-    else if (w.them === highest) lines.push(`You ran into the week's best score: ${w.opponent} won ${score(w.them, w.me)}.`);
-    else if (w.margin >= ROUT) lines.push(`Rough one. ${w.opponent} won ${score(w.them, w.me)}.`);
-    else lines.push(`${w.opponent} took this one, ${score(w.them, w.me)}.`);
+    if (w.margin < CLOSE) lines.push(`Brutal. ${w.opponent} got you by ${fmt(w.margin)}.`);
+    else if (w.them === highest) lines.push(`You ran into the week's best score.`);
+    else if (w.margin >= ROUT) lines.push(`Rough one. ${w.opponent} won by ${fmt(w.margin)}.`);
+    else lines.push(`${w.opponent} took this one by ${fmt(w.margin)}.`);
   }
 
   const star = w.star?.player;

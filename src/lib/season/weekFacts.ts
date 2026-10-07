@@ -1,6 +1,7 @@
 import type { Position } from "@/lib/draft/types";
-import type { LineupSlot, LineupSlotCount, MatchupResult } from "./types";
-import type { SeasonView } from "./view";
+import { optimalLineup } from "./lineup";
+import type { LineupSlot, LineupSlotCount, MatchupResult, MatchupSide } from "./types";
+import type { SeasonView, ViewPlayer } from "./view";
 
 /**
  * A finished week as it's kept (APE-307, APE-308): every team's players with what they scored and
@@ -134,4 +135,67 @@ export function standingsAfter(results: readonly MatchupResult[], week: number, 
   return [...rows.values()]
     .sort((a, b) => share(b) - share(a) || b.pointsFor - a.pointsFor || a.teamId - b.teamId)
     .map((r, i) => ({ ...r, pointsFor: round(r.pointsFor), rank: i + 1 }));
+}
+
+/**
+ * A kept week as a season view, as far as the facts go: every player at his points and projection,
+ * the user's matchup, and nothing live. For the views that tell the user's week (weekRecap(),
+ * weekSwing()), so an archived week is told the way game day told it.
+ */
+export function factsView(facts: WeekFacts): SeasonView {
+  const toPlayer = (p: FactPlayer): ViewPlayer => ({
+    playerId: p.playerId,
+    name: p.name,
+    pos: p.pos,
+    team: p.team,
+    slot: p.slot,
+    espnSlotId: 0,
+    locked: true,
+    injuryStatus: "ACTIVE",
+    actual: p.points,
+    statLine: p.statLine,
+    ownership: null,
+    news: null,
+    weekly: { [facts.week]: p.projected },
+    points: p.projected,
+    ros: p.projected,
+    projected: true,
+    game: null,
+  });
+  const teams = facts.teams.map((t) => ({ id: t.id, name: t.name, abbrev: t.abbrev, standing: null, roster: t.players.map(toPlayer) }));
+  const projectedOf = (teamId: number) =>
+    teams
+      .find((t) => t.id === teamId)
+      ?.roster.filter((p) => p.slot !== "BN" && p.slot !== "IR")
+      .reduce((sum, p) => sum + p.points, 0) ?? 0;
+  const side = (s: FactSide): MatchupSide => ({ teamId: s.teamId, points: s.points, projected: projectedOf(s.teamId), winProbability: null });
+  const mine = facts.matchups.find((m) => m.away && (m.home.teamId === facts.myTeamId || m.away.teamId === facts.myTeamId));
+  const matchups = facts.matchups.map((m) => ({ home: side(m.home), away: m.away && side(m.away) }));
+  return {
+    name: "",
+    espnLeagueId: "",
+    season: facts.season,
+    currentWeek: facts.week,
+    finalWeek: facts.week,
+    playoffStartWeek: null,
+    starters: facts.starters,
+    benchSize: 0,
+    irSlots: 0,
+    myTeamId: facts.myTeamId,
+    teams,
+    lineup: optimalLineup(teams.find((t) => t.id === facts.myTeamId)?.roster ?? [], facts.starters),
+    pendingTrades: [],
+    tradeDeadline: null,
+    tradeDeadlinePassed: false,
+    matchup: mine?.away
+      ? mine.home.teamId === facts.myTeamId
+        ? { me: side(mine.home), them: side(mine.away) }
+        : { me: side(mine.away), them: side(mine.home) }
+      : null,
+    matchups,
+    results: [],
+    waiver: { rank: null, budget: null, left: null },
+    claims: [],
+    warRoomMoves: [],
+  };
 }

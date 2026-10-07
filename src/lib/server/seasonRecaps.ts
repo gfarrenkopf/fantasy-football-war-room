@@ -19,11 +19,23 @@ import { activeLeagues, jobError } from "./seasonJobs";
  * page showing a stale read can't undo the Wednesday job's. ESPN's pre-kickoff calls on the user's
  * players come from season_projections.
  */
-export async function saveWeek(db: Db, leagueId: string, view: SeasonView, { settle = false, now = new Date() }: { settle?: boolean; now?: Date } = {}): Promise<void> {
+export async function saveWeek(
+  db: Db,
+  leagueId: string,
+  view: SeasonView,
+  { settle = false, now = new Date() }: { settle?: boolean; now?: Date } = {},
+): Promise<void> {
   const rows = await db
     .select({ subject: seasonProjections.subject, projected: seasonProjections.projected })
     .from(seasonProjections)
-    .where(and(eq(seasonProjections.leagueId, leagueId), eq(seasonProjections.season, view.season), eq(seasonProjections.week, view.currentWeek), like(seasonProjections.subject, "player:%")));
+    .where(
+      and(
+        eq(seasonProjections.leagueId, leagueId),
+        eq(seasonProjections.season, view.season),
+        eq(seasonProjections.week, view.currentWeek),
+        like(seasonProjections.subject, "player:%"),
+      ),
+    );
   const calls = new Map(rows.map((r) => [Number(r.subject.slice(7)), r.projected]));
   const facts = toWeekFacts(view, calls);
   await db
@@ -63,7 +75,11 @@ export interface KeepOptions {
  * Saves the league's finished weeks that aren't kept yet (or, settling, aren't settled yet), newest
  * first, up to `limit`. A week ESPN can't read is skipped and counted.
  */
-export async function keepWeeks(db: Db, leagueId: string, { season, throughWeek, loadWeek, settle = false, limit = Infinity, now = new Date() }: KeepOptions): Promise<{ saved: number; failed: number }> {
+export async function keepWeeks(
+  db: Db,
+  leagueId: string,
+  { season, throughWeek, loadWeek, settle = false, limit = Infinity, now = new Date() }: KeepOptions,
+): Promise<{ saved: number; failed: number }> {
   const kept = await db
     .select({ week: seasonRecaps.week, settledAt: seasonRecaps.settledAt, version: seasonRecaps.version })
     .from(seasonRecaps)
