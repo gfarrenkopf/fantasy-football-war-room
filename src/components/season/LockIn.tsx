@@ -186,19 +186,23 @@ export function LockIn({
  * The rest of the week, once War Room's lineup is on ESPN (APE-294): the verdict keeps the reward,
  * still. The points War Room's moves banked lead in green, the ✓ sits beside "Your lineup is set", and
  * the moves that earned them are listed. No sweep, no count: the user sees this every visit.
+ *
+ * With no moves on record (set before War Room kept them, or by hand on ESPN to the same lineup), it
+ * still says so in green, led by the week's total, so it agrees with the apply panel beside it.
  */
 export function Banked({ moves, total, week, name, className }: { moves: readonly WarRoomMove[]; total: number; week: number; name: (id: number) => string; className?: string }) {
   const banked = moves.reduce((sum, m) => sum + m.gain, 0);
+  const none = banked < 0.05;
   return (
     <div className={`${s.gain} ${s.lockIn} ${s.lockSettled} ${className ?? ""}`} data-level={lineupEmphasis(banked)} data-sign="gain" role="status">
       <div className={s.gainLead}>
         <p className={s.gainNumber}>
-          <span className="tabular-nums">{signed(banked)}</span>
+          <span className="tabular-nums">{none ? pts(total) : signed(banked)}</span>
           <span className={s.gainUnit}>pts</span>
         </p>
         <p className={s.gainShift}>
-          <b className="tabular-nums">{pts(total)}</b>
-          <span className={s.gainShiftNote}>on ESPN · week {week}</span>
+          {!none && <b className="tabular-nums">{pts(total)}</b>}
+          <span className={s.gainShiftNote}>{none ? "projected" : "on ESPN"} · week {week}</span>
         </p>
       </div>
       <p className={`${s.gainHeadline} ${s.lockHead}`}>
@@ -208,17 +212,21 @@ export function Banked({ moves, total, week, name, className }: { moves: readonl
         Your lineup is set
       </p>
       <div className={s.gainDetail}>
-        <ul className={s.gainMoves}>
-          {moves.map((m) => (
-            <li key={m.playerId}>
-              <span className={s.gainMoveText}>
-                <b>{name(m.playerId)}</b> in at {SLOT_LABEL[m.slot]}
-              </span>
-              <b className={`${s.gainMoveGain} tabular-nums`}>{signed(m.gain)}</b>
-            </li>
-          ))}
-        </ul>
-        <p className={s.lockFoot}>War Room&apos;s moves banked these points. Check back before kickoff: injury news can change it.</p>
+        {!none && (
+          <ul className={s.gainMoves}>
+            {moves.map((m) => (
+              <li key={m.playerId}>
+                <span className={s.gainMoveText}>
+                  <b>{name(m.playerId)}</b> in at {SLOT_LABEL[m.slot]}
+                </span>
+                <b className={`${s.gainMoveGain} tabular-nums`}>{signed(m.gain)}</b>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className={s.lockFoot}>
+          {none ? "ESPN has War Room's lineup." : "War Room's moves banked these points."} Check back before kickoff: injury news can change it.
+        </p>
       </div>
     </div>
   );

@@ -114,7 +114,11 @@ describe("runSundayJob", () => {
     expect(alice[0].email.text).toContain("Alice home (+14.0 pts)\n- Start Bench Back at FLEX\n");
     expect(alice[0].email.text).toContain("https://draftroom.example/season/");
     expect(sent.filter((m) => m.to.startsWith("carol"))[0].email.subject).toBe("Your Sunday lineup is ready");
-    expect(sent.filter((m) => m.to.startsWith("dave"))[0].email.subject).toBe("Reconnect ESPN for your Sunday lineup");
+    const dave = sent.filter((m) => m.to.startsWith("dave"))[0].email;
+    expect(dave.subject).toBe("Reconnect ESPN for your Sunday lineup");
+    // Reconnecting starts on Dave's league on ESPN, on a page the ESPN app doesn't take over (APE-301, APE-303).
+    expect(dave.text).toMatch(/https:\/\/fantasy\.espn\.com\/football\/league\/standings\?leagueId=\d+&seasonId=2026/);
+    expect(dave.text).toContain("https://draftroom.example/espn");
     expect(sent.some((m) => m.to.startsWith("bob"))).toBe(false);
 
     // The unsubscribe link works without signing in, and one-click unsubscribe is offered.

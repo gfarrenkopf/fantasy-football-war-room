@@ -15,6 +15,9 @@ export interface JobLeague {
   leagueId: string;
   name: string;
   leagueSeason: number;
+  /** The ESPN league it follows, for linking to the league on ESPN (APE-301). */
+  espnLeagueId: string;
+  season: number;
 }
 
 /** Connected leagues opened in the last two weeks, by user, and how many were left out as idle. */
@@ -26,6 +29,8 @@ export async function activeLeagues(db: Db, now: Date): Promise<{ total: number;
       leagueId: espnSeasonLinks.leagueId,
       name: leagues.name,
       leagueSeason: leagues.season,
+      espnLeagueId: espnSeasonLinks.espnLeagueId,
+      season: espnSeasonLinks.season,
       lastViewedAt: espnSeasonLinks.lastViewedAt,
     })
     .from(espnSeasonLinks)

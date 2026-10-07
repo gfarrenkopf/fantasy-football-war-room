@@ -35,7 +35,11 @@ type Props = {
   /** The user's leagues that follow ESPN (APE-194), to switch between; absent when signed out. */
   leagues?: SeasonLeagueLink[];
 } & (
-  | { problem: SeasonProblem }
+  | {
+      problem: SeasonProblem;
+      /** The league's page on ESPN, where reconnecting starts (APE-301); absent when the league isn't linked. */
+      espnUrl?: string;
+    }
   | {
       view: SeasonView;
       /** Last week, while its result is still up after ESPN has moved on (APE-251); game day shows it. */
@@ -118,7 +122,7 @@ export function SeasonRoom(props: Props) {
         </header>
 
         {"problem" in props ? (
-          <Problem flags={props.flags} problem={props.problem} />
+          <Problem flags={props.flags} problem={props.problem} espnUrl={props.espnUrl} />
         ) : (
           <>
             {checkout && (
@@ -223,7 +227,7 @@ function Freshness({ view, fetchedAt, stale, leagueId }: { view: SeasonView; fet
   );
 }
 
-function Problem({ flags, problem }: { flags: PublicFlags; problem: SeasonProblem }) {
+function Problem({ flags, problem, espnUrl }: { flags: PublicFlags; problem: SeasonProblem; espnUrl?: string }) {
   useEffect(() => (problem.kind === "signed-out" ? listenForSignIn(() => location.reload()) : undefined), [problem.kind]);
   if (problem.kind === "signed-out") {
     return (
@@ -232,7 +236,18 @@ function Problem({ flags, problem }: { flags: PublicFlags; problem: SeasonProble
       </section>
     );
   }
-  const reconnect = (
+  const reconnect = espnUrl ? (
+    <>
+      <a className={s.link} href={espnUrl} target="_blank" rel="noopener noreferrer">
+        Open your league on ESPN
+      </a>
+      , use your War Room bookmark there, then Connect my season. No bookmark on this device?{" "}
+      <a className={s.link} href="/espn">
+        Add it
+      </a>
+      .
+    </>
+  ) : (
     <>
       Open your league on ESPN, use the{" "}
       <a className={s.link} href="/espn">

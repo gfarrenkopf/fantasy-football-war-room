@@ -156,6 +156,34 @@ From probes on 2026-09-24 (NFL week 3) against leagues 110222051 and 704343562, 
 
 - **A private league refuses anonymous reads:** `401` with `type: "AUTH_LEAGUE_NOT_VISIBLE"`. With `espn_s2` + `SWID` as cookies, every view below works from Node.
 - **`espn_s2` is not `HttpOnly`.** On `fantasy.espn.com`, `document.cookie` includes both `espn_s2` (294 characters in this sample) and `SWID`, so code running in the user's ESPN tab (the bookmarklet) can read them.
+- **The pair is the whole session (APE-296, 2026-10-06).**
+  - **What's sent:** no other cookie, header or token is needed, and nothing ties the session to an IP.
+  - **`SWID`:** the account's permanent id.
+  - **`espn_s2`:** the session. It lasts until ESPN ends it.
+- **Reads don't renew `espn_s2`.** On a read with a working pair, nothing re-sets it:
+  - `lm-api-reads.fantasy.espn.com` returns no `Set-Cookie`.
+  - `fantasy.espn.com/football/team` sets only `region` and `_dcf` (7-day expiry).
+
+  So a stored login can't be refreshed by using it. It lives exactly as long as the cookie ESPN issued at sign-in.
+- **`espn_s2` outlasts the season.** In desktop Chrome on 2026-10-06, its `Expires` was 2027-11-10. That is exactly 400 days out, which is Chrome's cap on cookie lifetimes, so ESPN asks for at least that long.
+  - The browser's expiry is never what ends a stored login: War Room deletes it on Feb 1 (`loginExpiry()`).
+  - What can end it early is ESPN ending that session itself, for instance a password change.
+  - Signing out of ESPN elsewhere doesn't end it. On 2026-10-06, a sign-out on one device signed out a second device that shared its session, but War Room's stored login and another saved session still read the league afterwards. So ESPN ends only the session that was signed out, not every session on the account.
+  - Warning users before the cookie expires isn't worth building.
+- **Official access:** there isn't any; see [espn-official-access.md](espn-official-access.md).
+- **ESPN's app takes over most league links on iPhone (APE-303).** `fantasy.espn.com/.well-known/apple-app-site-association` gives the ESPN Fantasy app these paths, among others:
+  - `/*/team`
+  - `/*/league`
+  - `/*/league/settings`
+  - `/*/league/draftrecap`
+  - `/*/players/add`
+  - `/*/fantasycast`
+
+  A tap on any of them opens the app, where the bookmark can't run. These don't open the app:
+  - `/football/league/standings?leagueId=…` (a league page the bookmark recognizes)
+  - `www.espn.com/fantasy/football/` (for signing in)
+
+  Links War Room sends phone users to ESPN use those (`src/lib/espn/pages.ts`).
 
 ### Reads
 

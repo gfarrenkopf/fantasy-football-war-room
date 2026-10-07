@@ -1,0 +1,1 @@
+ALTER TABLE "espn_logins" ADD COLUMN "disconnected_at" timestamp with time zone;
