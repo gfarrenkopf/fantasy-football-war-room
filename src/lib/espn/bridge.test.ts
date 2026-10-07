@@ -78,10 +78,17 @@ class FakeEl {
   }
 }
 
+/** A phone showing ESPN's desktop page zoomed out: its visual viewport, in page pixels, and its screen. */
+interface Phone {
+  viewport: { width: number; height: number; offsetLeft: number; offsetTop: number };
+  screen: { width: number; height: number };
+}
+
 function page({
   href = "https://fantasy.espn.com/football/draft?leagueId=704343562&seasonId=2026&teamId=1",
   stored = null as string | null,
   cookie = "",
+  phone = null as Phone | null,
 } = {}) {
   const url = new URL(href);
   const storage = new Map<string, string>(stored ? [["warroom-bridge:704343562", stored]] : []);
@@ -127,6 +134,17 @@ function page({
     EventTarget,
     Event,
   };
+  const viewportListeners: (() => void)[] = [];
+  if (phone) {
+    context.visualViewport = { ...phone.viewport, addEventListener: (_type: string, fn: () => void) => viewportListeners.push(fn) };
+    context.screen = phone.screen;
+    context.matchMedia = (query: string) => ({ matches: query === "(pointer: coarse)" });
+  }
+  /** The phone's visible area moving (a pinch or a scroll). */
+  const moveViewport = (to: Partial<Phone["viewport"]>) => {
+    Object.assign(context.visualViewport as object, to);
+    viewportListeners.forEach((fn) => fn());
+  };
   context.window = context;
   vm.createContext(context);
   const load = () => vm.runInContext(SOURCE, context);
@@ -140,7 +158,7 @@ function page({
     fetch.mock.calls
       .filter(([url, init]) => init && init.body && String(url).endsWith("/frames"))
       .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number; handoverVersion?: number });
-  return { load, bridge, decode, Socket, postMessage, fetch, open, assign, popup, storage, shadow, bodies, press };
+  return { load, bridge, decode, Socket, postMessage, fetch, open, assign, popup, storage, shadow, bodies, press, moveViewport };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -962,5 +980,32 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     p.load();
     expect(p.bridge()).toMatchObject({ onSeasonPage: false });
     expect(p.shadow.querySelector(".sc").hidden).toBe(true);
+  });
+});
+
+describe("the overlay on a phone (APE-304)", () => {
+  const LEAGUE_PAGE = "https://fantasy.espn.com/football/league/standings?leagueId=704343562&seasonId=2026";
+  // An iPhone showing ESPN's desktop page at a third of its size: 1170 page pixels across a 390-wide screen.
+  const PHONE: Phone = { viewport: { width: 1170, height: 2532, offsetLeft: 0, offsetTop: 0 }, screen: { width: 390, height: 844 } };
+
+  it("scales the box back up to the screen's size and pins it to the corner on screen", () => {
+    const p = page({ href: LEAGUE_PAGE, phone: PHONE });
+    p.load();
+    const box = p.shadow.querySelector(".box");
+    expect(box.style.transform).toBe("translate(36px, 2496px) scale(3)");
+    expect(box.style.width).toBe("366px");
+  });
+
+  it("follows the visible area when the user pinches or scrolls", () => {
+    const p = page({ href: LEAGUE_PAGE, phone: PHONE });
+    p.load();
+    p.moveViewport({ width: 585, height: 1266, offsetLeft: 100, offsetTop: 400 });
+    expect(p.shadow.querySelector(".box").style.transform).toBe("translate(118px, 1648px) scale(1.5)");
+  });
+
+  it("leaves the box to the stylesheet on a computer", () => {
+    const p = page({ href: LEAGUE_PAGE });
+    p.load();
+    expect(p.shadow.querySelector(".box").style.transform).toBe("");
   });
 });

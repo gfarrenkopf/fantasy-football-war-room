@@ -991,6 +991,33 @@
     dotEl.style.color = heldByWarRoom ? "#7cb7ff" : token && sockets && status !== "offline" ? "#5fd38d" : "#e0a100";
     renderPlan();
     renderHandover();
+    fitToScreen();
+  }
+
+  /**
+   * ESPN serves phones its desktop page, zoomed out to fit (often to a third), and the overlay's
+   * pixels shrink with it until it's unreadable (APE-304). On a touch screen, undo that zoom: scale
+   * the box by how many page pixels span one screen pixel, and pin it to the corner of what's on
+   * screen, which pinching and scrolling move. Elsewhere the stylesheet's own placement stands.
+   */
+  const boxEl = /** @type {HTMLElement} */ (root.querySelector(".box"));
+  function fitToScreen() {
+    const vv = w.visualViewport;
+    const touch = typeof w.matchMedia === "function" && w.matchMedia("(pointer: coarse)").matches;
+    const screenWidth = w.screen && vv ? (vv.width > vv.height ? Math.max(w.screen.width, w.screen.height) : Math.min(w.screen.width, w.screen.height)) : 0;
+    const k = vv && touch && screenWidth > 0 ? vv.width / screenWidth : 1;
+    if (!vv || k < 1.05) {
+      Object.assign(boxEl.style, { top: "", left: "", bottom: "", width: "", transform: "", transformOrigin: "" });
+      return;
+    }
+    const margin = 12 * k;
+    Object.assign(boxEl.style, { top: "0px", left: "0px", bottom: "auto", width: `${Math.min(380, screenWidth - 24)}px`, transformOrigin: "0 0" });
+    const height = boxEl.offsetHeight || 0;
+    boxEl.style.transform = `translate(${vv.offsetLeft + margin}px, ${vv.offsetTop + vv.height - margin - height * k}px) scale(${k})`;
+  }
+  if (w.visualViewport) {
+    w.visualViewport.addEventListener("resize", fitToScreen);
+    w.visualViewport.addEventListener("scroll", fitToScreen);
   }
 
   (document.body || document.documentElement).appendChild(host);
