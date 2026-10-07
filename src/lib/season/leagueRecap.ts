@@ -1,3 +1,4 @@
+import type { WeekRecap } from "./recap";
 import { weekSwing, type WeekSwing } from "./swing";
 import { factsView, type FactPlayer, type FactStanding, type WeekFacts } from "./weekFacts";
 
@@ -65,6 +66,27 @@ export interface ArchiveWeek {
   week: number;
   recap: LeagueRecap;
   swing: WeekSwing | null;
+}
+
+/** A kept week as the user's own result, the shape the recap card draws (APE-310); null without a matchup. */
+export function asWeekRecap(week: number, mine: MyWeek | null): WeekRecap | null {
+  if (!mine) return null;
+  const starters = mine.starters.flatMap((p) =>
+    p.slot === "BN" || p.slot === "IR"
+      ? []
+      : [{ slot: p.slot, playerId: p.playerId, name: p.name, pos: p.pos, team: p.team, points: p.points, projected: p.projected }],
+  );
+  const star = mine.star && starters.find((p) => p.playerId === mine.star!.player.playerId);
+  return {
+    week,
+    result: mine.result,
+    me: mine.me,
+    them: mine.them,
+    margin: mine.margin,
+    opponent: mine.opponent,
+    starters,
+    star: star ? { player: star, beat: mine.star!.beat } : null,
+  };
 }
 
 export function archiveWeek(facts: WeekFacts): ArchiveWeek {

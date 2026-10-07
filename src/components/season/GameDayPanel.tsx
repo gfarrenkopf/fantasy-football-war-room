@@ -133,7 +133,7 @@ export function GameDayPanel({
           </button>
         </div>
       </div>
-      {phase !== "live" && <RecapArchive weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
+      {phase !== "live" && <RecapArchive league={view.name} weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
     </>
   );
 }

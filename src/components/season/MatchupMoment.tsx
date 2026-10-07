@@ -9,7 +9,7 @@ import type { SeasonView } from "@/lib/season/view";
 import { hasPlayedMoment, markMomentPlayed, momentKey } from "@/lib/storage/moments";
 import { pts, signed } from "./parts";
 import s from "./season.module.css";
-import { saveWinCard } from "./winCard";
+import { useRecapCard } from "./recapCard";
 import { WeekSwing } from "./WeekSwing";
 import { WinNight } from "./WinNight";
 
@@ -52,7 +52,6 @@ export function MatchupMoment({ leagueId, view, accuracy }: { leagueId: string; 
   const [first] = useState(() => !startedThisVisit.has(key));
   const [dismissed, setDismissed] = useState(false);
   const [replay, setReplay] = useState(false);
-  const [saving, setSaving] = useState<"idle" | "drawing" | "saved" | "failed">("idle");
   const win = recap.result === "win";
   const open = win && ((!played && first && !dismissed) || replay);
 
@@ -63,12 +62,7 @@ export function MatchupMoment({ leagueId, view, accuracy }: { leagueId: string; 
     startedThisVisit.add(key);
   }, [key, played]);
 
-  const keep = async () => {
-    if (saving === "drawing") return;
-    setSaving("drawing");
-    const how = await saveWinCard(recap, view.name).catch(() => "failed" as const);
-    setSaving(how === "failed" ? "failed" : how === "cancelled" ? "idle" : "saved");
-  };
+  const card = useRecapCard(recap, view.name);
 
   const star = recap.star;
   return (
@@ -110,16 +104,16 @@ export function MatchupMoment({ leagueId, view, accuracy }: { leagueId: string; 
           </p>
         )}
         {swing && <WeekSwing swing={swing} result={recap.result} />}
-        {win && (
-          <div className={s.momentActions}>
+        <div className={s.momentActions}>
+          {win && (
             <button type="button" className={`${s.button} ${s.momentReplay}`} onClick={() => setReplay(true)}>
               Watch it again
             </button>
-            <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={() => void keep()} disabled={saving === "drawing"}>
-              {saving === "drawing" ? "Drawing…" : saving === "saved" ? "Win card saved" : saving === "failed" ? "Couldn't save. Try again" : "Save win card"}
-            </button>
-          </div>
-        )}
+          )}
+          <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={card.keep} disabled={card.drawing}>
+            {card.label}
+          </button>
+        </div>
       </section>
       {open && (
         <WinNight

@@ -3739,6 +3739,9 @@ li + li > .pickerOption {
   font-size: 14px;
   line-height: 1.55;
 }
+.recapActions {
+  margin-top: 6px !important;
+}
 .archive .swing {
   margin: 0;
   padding: 14px;

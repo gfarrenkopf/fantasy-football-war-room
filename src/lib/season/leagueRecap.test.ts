@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
 import { parseResults } from "./espnLeague";
-import { archiveWeek, leagueRecap } from "./leagueRecap";
+import { archiveWeek, asWeekRecap, leagueRecap } from "./leagueRecap";
 import type { MatchupResult } from "./types";
 import { standingsAfter, toWeekFacts, WEEK_FACTS_VERSION, type FactPlayer, type WeekFacts } from "./weekFacts";
 
@@ -110,6 +110,17 @@ describe("archiveWeek", () => {
     expect(swing?.swings[0]).toMatchObject({ playerId: 11, side: "me", delta: 15 });
     // The bench's 28 doesn't beat either starter, so no better lineup was there to set.
     expect(swing?.hindsight).toBeNull();
+  });
+
+  it("hands the recap card a kept week in the shape game day's result uses", () => {
+    const card = asWeekRecap(6, leagueRecap(facts()).mine);
+    expect(card).toMatchObject({ week: 6, result: "win", me: 100, them: 96, margin: 4, opponent: "Rival" });
+    expect(card?.starters.map((p) => [p.slot, p.playerId, p.points, p.projected])).toEqual([
+      ["WR", 11, 30, 15],
+      ["WR", 12, 70, 70],
+    ]);
+    expect(card?.star).toMatchObject({ player: { playerId: 11 }, beat: true });
+    expect(asWeekRecap(6, null)).toBeNull();
   });
 
   it("has no swing in a bye week", () => {

@@ -6,7 +6,7 @@ import { CountUp, StageConfetti, useReducedMotion } from "@/components/draft/sta
 import type { WeekRecap } from "@/lib/season/recap";
 import { pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
-import { saveWinCard } from "./winCard";
+import { saveRecapCard } from "./recapCard";
 
 const POS_HUE: Record<string, string> = {
   QB: "var(--color-qb)",
@@ -158,7 +158,7 @@ export function WinNight({ recap, league, onDone }: { recap: WeekRecap; league: 
     if (saving === "drawing") return;
     setSaving("drawing");
     try {
-      const how = await saveWinCard(recap, league);
+      const how = await saveRecapCard(recap, league);
       setSaving(how === "cancelled" ? "idle" : "saved");
     } catch {
       setSaving("failed");

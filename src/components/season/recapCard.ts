@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { stage } from "@/components/draft/stageFont";
 import { alpha, fit, saveTeamCard } from "@/components/draft/teamCard";
 import type { Position } from "@/lib/draft/types";
 import type { WeekRecap } from "@/lib/season/recap";
 
 /**
- * The keepsake from a win (APE-230): a 1080×1350 poster for the league's group chat, drawn on the
- * draft room's stage in its face and colors. A giant W, the final, the margin on the green slab, the
- * starters as they scored, and the star of the week. Nothing leaves the device.
+ * The week's keepsake (APE-230, APE-310): a 1080×1350 poster for the league's group chat, drawn on
+ * the draft room's stage in its face and colors. A giant W, L or T, the final, the margin on the
+ * slab, the starters as they scored, and the star of the week. A win is lit green; a loss is the same
+ * stage with the lights down, a bright spot for its star, and a dry word at the foot. Nothing leaves
+ * the device.
  */
 
 const W = 1080;
@@ -24,12 +27,22 @@ const POS_VAR: Record<Position, string> = {
 
 const SLOT: Record<string, string> = { DST: "D/ST", SUPERFLEX: "OP" };
 
-export async function drawWinCard(recap: WeekRecap, meta: { league: string; stageFamily: string }): Promise<Blob> {
+/** The loss card's last word, by how it went. */
+function shrug(margin: number): string {
+  if (margin < 3) return "lost by a rounding error";
+  if (margin >= 40) return "we don't talk about this one";
+  return "every contender drops one";
+}
+
+export async function drawRecapCard(recap: WeekRecap, meta: { league: string; stageFamily: string }): Promise<Blob> {
+  const win = recap.result === "win";
   const root = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => root.getPropertyValue(name).trim() || fallback;
   const sans = getComputedStyle(document.body).fontFamily || "system-ui, sans-serif";
   const stage = meta.stageFamily;
-  await Promise.all([document.fonts.load(`900 120px ${stage}`), document.fonts.load(`800 40px ${stage}`), document.fonts.load(`700 34px ${sans}`)]).catch(() => []);
+  await Promise.all([document.fonts.load(`900 120px ${stage}`), document.fonts.load(`800 40px ${stage}`), document.fonts.load(`700 34px ${sans}`)]).catch(
+    () => [],
+  );
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -41,16 +54,19 @@ export async function drawWinCard(recap: WeekRecap, meta: { league: string; stag
   const mine = v("--color-mine", "#3ddc91");
   const mineInk = v("--color-mine-ink", "#0d1a14");
   const reach = v("--color-reach-ink", "#ff8a8a");
+  // A win is the user's night, in green; anything else plays under work lights.
+  const tone = win ? mine : muted;
+  const toneInk = win ? mineInk : "#0b0d10";
 
-  // The stage, lit green from the floor: this is the user's night.
+  // The stage, lit from the floor: green for a win.
   const ground = ctx.createRadialGradient(W / 2, H * 0.36, 40, W / 2, H * 0.36, H * 0.85);
-  ground.addColorStop(0, "#121a17");
+  ground.addColorStop(0, win ? "#121a17" : "#14171b");
   ground.addColorStop(1, "#06080a");
   ctx.fillStyle = ground;
   ctx.fillRect(0, 0, W, H);
   const floor = ctx.createRadialGradient(W / 2, H * 1.04, 20, W / 2, H * 1.04, W * 0.85);
-  floor.addColorStop(0, alpha(mine, 0.22));
-  floor.addColorStop(1, alpha(mine, 0));
+  floor.addColorStop(0, alpha(tone, win ? 0.22 : 0.1));
+  floor.addColorStop(1, alpha(tone, 0));
   ctx.fillStyle = floor;
   ctx.fillRect(0, 0, W, H);
   for (const [x, lean] of [
@@ -58,7 +74,7 @@ export async function drawWinCard(recap: WeekRecap, meta: { league: string; stag
     [W + 80, -1],
   ] as const) {
     const beam = ctx.createLinearGradient(x, H, W / 2, 0);
-    beam.addColorStop(0, "rgba(255,255,255,0.12)");
+    beam.addColorStop(0, `rgba(255,255,255,${win ? 0.12 : 0.05})`);
     beam.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = beam;
     ctx.beginPath();
@@ -69,19 +85,19 @@ export async function drawWinCard(recap: WeekRecap, meta: { league: string; stag
     ctx.fill();
   }
 
-  // Week, the W, the final.
+  // Week, the letter, the final.
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = sky;
+  ctx.fillStyle = win ? sky : muted;
   ctx.font = `800 38px ${stage}`;
   ctx.letterSpacing = "8px";
   ctx.fillText(`WEEK ${recap.week} · FINAL`, W / 2, 112);
   ctx.letterSpacing = "0px";
-  ctx.fillStyle = mine;
+  ctx.fillStyle = tone;
   ctx.font = `900 300px ${stage}`;
   ctx.shadowColor = alpha(mine, 0.55);
-  ctx.shadowBlur = 60;
-  ctx.fillText("W", W / 2, 380);
+  ctx.shadowBlur = win ? 60 : 0;
+  ctx.fillText(win ? "W" : recap.result === "loss" ? "L" : "T", W / 2, 380);
   ctx.shadowBlur = 0;
 
   ctx.font = `900 108px ${stage}`;
@@ -106,15 +122,15 @@ export async function drawWinCard(recap: WeekRecap, meta: { league: string; stag
   ctx.save();
   ctx.translate(W / 2, slabY);
   ctx.transform(1, 0, -0.16, 1, 0, 0);
-  ctx.fillStyle = mine;
+  ctx.fillStyle = tone;
   ctx.fillRect(-250, -40, 500, 70);
   ctx.restore();
-  ctx.fillStyle = mineInk;
+  ctx.fillStyle = toneInk;
   ctx.font = `900 52px ${stage}`;
-  ctx.fillText(`WON BY ${recap.margin.toFixed(1)}`, W / 2, slabY + 16);
+  ctx.fillText(win ? `WON BY ${recap.margin.toFixed(1)}` : recap.result === "loss" ? `LOST BY ${recap.margin.toFixed(1)}` : "DEAD HEAT", W / 2, slabY + 16);
   ctx.fillStyle = muted;
   ctx.font = `600 28px ${sans}`;
-  ctx.fillText(fit(ctx, `over ${recap.opponent} · ${meta.league}`, W - PAD * 2), W / 2, slabY + 76);
+  ctx.fillText(fit(ctx, `${win ? "over" : recap.result === "loss" ? "to" : "with"} ${recap.opponent} · ${meta.league}`, W - PAD * 2), W / 2, slabY + 76);
 
   // The starters as they scored.
   const top = 700;
@@ -126,7 +142,7 @@ export async function drawWinCard(recap: WeekRecap, meta: { league: string; stag
     const mid = y + rowH / 2;
     const hue = v(POS_VAR[p.pos], text);
     const star = p.playerId === starId;
-    ctx.fillStyle = star ? alpha(mine, 0.14) : "rgba(255,255,255,0.035)";
+    ctx.fillStyle = star ? alpha(tone, 0.14) : "rgba(255,255,255,0.035)";
     ctx.beginPath();
     ctx.roundRect(PAD, y + 3, W - PAD * 2, rowH - 6, 9);
     ctx.fill();
@@ -156,20 +172,22 @@ export async function drawWinCard(recap: WeekRecap, meta: { league: string; stag
     ctx.save();
     ctx.translate(W / 2, y);
     ctx.transform(1, 0, -0.16, 1, 0, 0);
-    ctx.fillStyle = mine;
+    ctx.fillStyle = tone;
     ctx.fillRect(-290, -38, 580, 64);
     ctx.restore();
-    ctx.fillStyle = mineInk;
+    ctx.fillStyle = toneInk;
     ctx.textAlign = "center";
     ctx.font = `900 46px ${stage}`;
-    ctx.fillText("STAR OF THE WEEK", W / 2, y + 14);
+    ctx.fillText(win ? "STAR OF THE WEEK" : "BRIGHT SPOT", W / 2, y + 14);
     ctx.fillStyle = text;
     ctx.font = `900 70px ${stage}`;
     ctx.fillText(fit(ctx, player.name.toUpperCase(), W - PAD * 2), W / 2, y + 104);
     ctx.fillStyle = muted;
     ctx.font = `600 27px ${sans}`;
     ctx.fillText(
-      beat ? `${player.points.toFixed(1)} points · +${(player.points - player.projected).toFixed(1)} over ESPN's call` : `${player.points.toFixed(1)} points, the most of your starters`,
+      beat
+        ? `${player.points.toFixed(1)} points · +${(player.points - player.projected).toFixed(1)} over ESPN's call`
+        : `${player.points.toFixed(1)} points, the most of your starters`,
       W / 2,
       y + 148,
     );
@@ -178,14 +196,35 @@ export async function drawWinCard(recap: WeekRecap, meta: { league: string; stag
   ctx.textAlign = "center";
   ctx.fillStyle = alpha(muted, 0.8);
   ctx.font = `600 22px ${sans}`;
-  ctx.fillText("Fantasy War Room", W / 2, H - 28);
+  ctx.fillText(recap.result === "loss" ? `Fantasy War Room · ${shrug(recap.margin)}` : "Fantasy War Room", W / 2, H - 28);
 
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't draw the win card"))), "image/png"));
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't draw the recap card"))), "image/png"));
 }
 
-/** Draws the win card and hands it to the OS share sheet, or downloads it. */
-export async function saveWinCard(recap: WeekRecap, league: string): Promise<"shared" | "saved" | "cancelled"> {
-  const blob = await drawWinCard(recap, { league, stageFamily: stage.style.fontFamily });
-  const slug = league.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "league";
-  return saveTeamCard(blob, `${slug}-week-${recap.week}-win.png`, `Week ${recap.week} win`);
+const RESULT_WORD = { win: "win", loss: "loss", tie: "tie" } as const;
+
+/** Draws the week's card and hands it to the OS share sheet, or downloads it. */
+export async function saveRecapCard(recap: WeekRecap, league: string): Promise<"shared" | "saved" | "cancelled"> {
+  const blob = await drawRecapCard(recap, { league, stageFamily: stage.style.fontFamily });
+  const slug =
+    league
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "league";
+  const word = RESULT_WORD[recap.result];
+  return saveTeamCard(blob, `${slug}-week-${recap.week}-${word}.png`, `Week ${recap.week} ${word}`);
+}
+
+/** A save-the-card button's state and label: idle, drawing, saved, or failed and ready to retry. */
+export function useRecapCard(recap: WeekRecap | null, league: string) {
+  const [saving, setSaving] = useState<"idle" | "drawing" | "saved" | "failed">("idle");
+  const keep = async () => {
+    if (!recap || saving === "drawing") return;
+    setSaving("drawing");
+    const how = await saveRecapCard(recap, league).catch(() => "failed" as const);
+    setSaving(how === "failed" ? "failed" : how === "cancelled" ? "idle" : "saved");
+  };
+  const idle = recap?.result === "win" ? "Save win card" : "Save recap card";
+  const label = saving === "drawing" ? "Drawing…" : saving === "saved" ? "Card saved" : saving === "failed" ? "Couldn't save. Try again" : idle;
+  return { keep: () => void keep(), drawing: saving === "drawing", label };
 }

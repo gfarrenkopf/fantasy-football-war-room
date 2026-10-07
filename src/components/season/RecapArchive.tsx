@@ -2,8 +2,9 @@
 
 import { useId, useState } from "react";
 import { stage } from "@/components/draft/stageFont";
-import type { ArchiveWeek, RecapPlayer } from "@/lib/season/leagueRecap";
+import { asWeekRecap, type ArchiveWeek, type MyWeek, type RecapPlayer } from "@/lib/season/leagueRecap";
 import { posLabel, pts, signed } from "./parts";
+import { useRecapCard } from "./recapCard";
 import s from "./season.module.css";
 import { WeekSwing } from "./WeekSwing";
 
@@ -14,7 +15,7 @@ import { WeekSwing } from "./WeekSwing";
  * the most valuable benchwarmers and the false starters. A season menu appears only once there's a
  * second season to pick.
  */
-export function RecapArchive({ weeks }: { weeks: ArchiveWeek[] }) {
+export function RecapArchive({ weeks, league }: { weeks: ArchiveWeek[]; league: string }) {
   const seasons = [...new Set(weeks.map((w) => w.season))].sort((a, b) => b - a);
   const [season, setSeason] = useState(seasons[0]);
   const inSeason = weeks.filter((w) => w.season === season).sort((a, b) => a.week - b.week);
@@ -83,6 +84,7 @@ export function RecapArchive({ weeks }: { weeks: ArchiveWeek[] }) {
                   <span className={s.recapOpponent}>vs {mine.opponent}</span>
                 </p>
                 <p className={s.recapStory}>{recap.story}</p>
+                <SaveCard key={`${shown.season}-${shown.week}`} week={recap.week} mine={mine} league={league} />
               </>
             ) : (
               <h3 className={s.recapResult}>Bye week</h3>
@@ -160,6 +162,18 @@ export function RecapArchive({ weeks }: { weeks: ArchiveWeek[] }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The week's card, to save or share (APE-310); one per week, so a saved one doesn't say so for the next. */
+function SaveCard({ week, mine, league }: { week: number; mine: MyWeek; league: string }) {
+  const card = useRecapCard(asWeekRecap(week, mine), league);
+  return (
+    <p className={s.recapActions}>
+      <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={card.keep} disabled={card.drawing}>
+        {card.label}
+      </button>
+    </p>
   );
 }
 
