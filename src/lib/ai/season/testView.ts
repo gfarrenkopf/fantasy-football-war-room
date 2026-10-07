@@ -66,6 +66,8 @@ export function seasonView(mine: ViewPlayer[], theirs: ViewPlayer[] = []): Seaso
     tradeDeadline: null,
     tradeDeadlinePassed: false,
     matchup: null,
+    matchups: [],
+    results: [],
     waiver: { rank: null, budget: null, left: null },
   };
 }

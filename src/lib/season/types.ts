@@ -108,6 +108,19 @@ export interface Matchup {
   away: MatchupSide | null;
 }
 
+/**
+ * A decided fantasy matchup from any period of the season (`mMatchupScore`'s whole schedule), which
+ * the weekly standings are counted from (APE-307).
+ */
+export interface MatchupResult {
+  /** The NFL weeks of its matchup period: one in the regular season, sometimes two in the playoffs. */
+  weeks: number[];
+  home: { teamId: number; points: number };
+  /** Null for a bye. */
+  away: { teamId: number; points: number } | null;
+  winner: "home" | "away" | "tie";
+}
+
 /** An ESPN league as the in-season engine needs it, read from `mSettings`, `mStatus`, `mRoster` and `mTeam`. */
 export interface SeasonLeague {
   espnLeagueId: string;
@@ -136,6 +149,8 @@ export interface SeasonLeague {
   tradeDeadline: string | null;
   /** This matchup period's fantasy matchups (APE-211). Empty when ESPN sent no schedule. */
   matchups: Matchup[];
+  /** Every matchup ESPN has decided this season, oldest first. */
+  results: MatchupResult[];
   /** How the league runs waivers (APE-212), and each team's place in them. */
   waivers: Waivers;
 }

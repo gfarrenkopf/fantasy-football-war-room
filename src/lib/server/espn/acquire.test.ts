@@ -59,6 +59,7 @@ function league(roster: RosterEntry[], theirs: RosterEntry[] = [], more: Partial
     draftOrder: [],
     tradeDeadline: null,
     matchups: [],
+    results: [],
     waivers: { budget: null, teams: [] },
     ...more,
   };
