@@ -51,6 +51,7 @@ export async function storeLogin(db: Db, key: Buffer, userId: string, login: Esp
     consentVersion: extras.consentVersion,
     status: "connected" as const,
     verifiedAt: null,
+    disconnectedAt: null,
     updatedAt: now,
     expiresAt: loginExpiry(extras.season),
   };
@@ -87,9 +88,12 @@ export async function markVerified(db: Db, userId: string, now = new Date()): Pr
     .where(and(eq(espnLogins.userId, userId), eq(espnLogins.status, "connected")));
 }
 
-/** ESPN refused the login (401/403): stop using it until the user connects again. */
+/** ESPN refused the login (401/403): stop using it until the user connects again. Notes when, the first time. */
 export async function markDisconnected(db: Db, userId: string, now = new Date()): Promise<void> {
-  await db.update(espnLogins).set({ status: "disconnected", updatedAt: now }).where(eq(espnLogins.userId, userId));
+  await db
+    .update(espnLogins)
+    .set({ status: "disconnected", disconnectedAt: now, updatedAt: now })
+    .where(and(eq(espnLogins.userId, userId), eq(espnLogins.status, "connected")));
 }
 
 /** Forgets the user's login. Returns whether there was one. */

@@ -308,6 +308,8 @@ export const espnLogins = pgTable(
     status: text("status").$type<EspnLoginStatus>().notNull().default("connected"),
     /** When ESPN last accepted it. */
     verifiedAt: timestamp("verified_at", { withTimezone: true, mode: "date" }),
+    /** When ESPN refused it and it was marked `disconnected`; null while connected. Measures how long ESPN sessions last (APE-300). */
+    disconnectedAt: timestamp("disconnected_at", { withTimezone: true, mode: "date" }),
     ...timestamps,
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
   },

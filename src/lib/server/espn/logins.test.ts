@@ -45,10 +45,15 @@ describe("ESPN logins", () => {
     await markDisconnected(db, userId, now);
     expect((await loginStatus(db, userId, now))?.status).toBe("disconnected");
     expect(await loadLogin(db, KEY, userId, now)).toBeNull();
+    // When it happened is kept from the first refusal, so session lifetimes can be measured.
+    await markDisconnected(db, userId, new Date(now.getTime() + 60_000));
+    const disconnectedAt = async () => (await db.select({ at: espnLogins.disconnectedAt }).from(espnLogins).where(eq(espnLogins.userId, userId)))[0].at;
+    expect(await disconnectedAt()).toEqual(now);
 
     // Connecting again replaces it and reconnects.
     await storeLogin(db, KEY, userId, LOGIN, extras, now);
     expect(await loginStatus(db, userId, now)).toMatchObject({ status: "connected", verifiedAt: null });
+    expect(await disconnectedAt()).toBeNull();
   });
 
   it("deletes on disconnect, with the account, and once the season is over", async () => {
