@@ -26,7 +26,7 @@ export function SignIn({
   title = "Already have leagues here?",
   primary = false,
   autoFocus = false,
-  fine = "Signing in syncs your leagues across devices. It never changes how the draft room works.",
+  fine = "Signing in syncs your leagues across devices. It never changes how your board works.",
   initialEmail = "",
   describedBy,
   next,
@@ -201,7 +201,7 @@ function Sent({
           Open {mailbox.name} →
         </a>
       )}
-      <p className={s.sentHelp}>Not there after a minute? Check spam or junk for a subject with &ldquo;war room&rdquo; in it.</p>
+      <p className={s.sentHelp}>Not there after a minute? Check spam or junk for a subject with &ldquo;Draft Room&rdquo; in it.</p>
       <div className={s.sentActions}>
         <button type="button" className={s.linkBtn} onClick={again} disabled={pending || wait > 0}>
           {pending ? "Sending…" : wait > 0 ? `Send another link in ${wait}s` : "Send another link"}

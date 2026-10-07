@@ -180,7 +180,7 @@ export async function drawTeamCard(wrap: DraftWrap, meta: TeamCardMeta): Promise
   ctx.fillStyle = muted;
   ctx.font = `600 24px ${sans}`;
   const bench = wrap.bench.length ? `${wrap.bench.length} on the bench · ` : "";
-  ctx.fillText(`${bench}${wrap.beat.k} of ${wrap.beat.n} picks beat consensus · Fantasy War Room`, W / 2, H - 44);
+  ctx.fillText(`${bench}${wrap.beat.k} of ${wrap.beat.n} picks beat consensus · Draft Room`, W / 2, H - 44);
 
   function roundRect(x: number, y: number, w: number, h: number, r: number) {
     ctx.beginPath();

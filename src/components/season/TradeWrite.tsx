@@ -57,7 +57,7 @@ export function TradeWrite({
       return setConsenting(false);
     }
     if (res && (res.status === 409 || res.status === 502)) setAgreed(true);
-    setFailed({ error: answer?.error ?? "Can't reach War Room right now. Nothing was sent to ESPN.", details: answer?.changed ?? answer?.problems ?? answer?.refused ?? [] });
+    setFailed({ error: answer?.error ?? "Can't reach Draft Room right now. Nothing was sent to ESPN.", details: answer?.changed ?? answer?.problems ?? answer?.refused ?? [] });
   }
 
   return (

@@ -16,7 +16,7 @@ async function league(name = "Moves") {
   return createTestLeague(db, userId, name);
 }
 
-describe("War Room's lineup moves (APE-256)", () => {
+describe("Draft Room's lineup moves (APE-256)", () => {
   it("keeps each week's moves for its own league, oldest first", async () => {
     const mine = await league();
     const other = await league("Other");

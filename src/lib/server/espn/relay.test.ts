@@ -156,7 +156,7 @@ describe("relay", () => {
     expect(await relay.ingest(scope, "s1", 0, ["CLOCK 0 1", "CLOCK 0 2", "CLOCK 0 3", "CLOCK 0 4"])).toEqual({ status: 413 });
   });
 
-  describe("picks made from War Room", () => {
+  describe("picks made from Draft Room", () => {
     const ME = "{00000000-0000-0000-0000-000000000000}";
     /** The draft with the user's team (1) on the clock. */
     async function onTheClock() {
@@ -278,7 +278,7 @@ describe("ESPN's own league settings (8.8)", () => {
   it("passes on a refusal rather than a half-built league", async () => {
     const { relay } = setup();
     relay.setLeague(scope, { ...SETTINGS, draftSettings: { type: "AUCTION", pickOrder: [1] } });
-    expect(relay.snapshot("u1", "L1").espnLeague).toEqual({ ok: false, error: "War Room doesn't do auction drafts yet." });
+    expect(relay.snapshot("u1", "L1").espnLeague).toEqual({ ok: false, error: "Draft Room doesn't do auction drafts yet." });
   });
 
   it("forgets them when the bridge pairs to a different ESPN league", async () => {
@@ -342,7 +342,7 @@ describe("when ESPN's protocol drifts (8.6)", () => {
   });
 });
 
-describe("relay with War Room holding the ESPN connection (9.3)", () => {
+describe("relay with Draft Room holding the ESPN connection (9.3)", () => {
   const player = (espnPlayerId: number | undefined, name = `P${espnPlayerId}`) => ({ playerId: name, espnPlayerId, name, pos: "RB" as const, team: "DET", bye: 8, badge: "90%" });
   const plan = {
     picks: [5],
@@ -363,7 +363,7 @@ describe("relay with War Room holding the ESPN connection (9.3)", () => {
     return { ...s, sender };
   }
 
-  it("sends a War Room pick on ESPN's socket at once, and ESPN's echo confirms it", async () => {
+  it("sends a Draft Room pick on ESPN's socket at once, and ESPN's echo confirms it", async () => {
     const { relay, sender, events } = await holding();
     const result = relay.requestPick("u1", "L1", { playerId: "p2", espnPlayerId: 2 });
     expect(result).toMatchObject({ ok: true, request: { state: "sent" } });
@@ -426,11 +426,11 @@ describe("relay with War Room holding the ESPN connection (9.3)", () => {
   });
 });
 
-describe("one source at a time while War Room holds the connection (APE-168)", () => {
+describe("one source at a time while Draft Room holds the connection (APE-168)", () => {
   const sender = () => ({ select: vi.fn(() => true), setQueue: vi.fn(() => true), setAutopick: vi.fn(() => true) });
   const DRAFT = [...PRE, "SELECTED 4 1 2", "SELECTING 1 60000"];
 
-  it("folds the draft from War Room's session alone, never both copies of it", async () => {
+  it("folds the draft from Draft Room's session alone, never both copies of it", async () => {
     const { relay } = setup();
     await relay.ingest(scope, "tab1", 0, DRAFT);
     relay.attachSender("u1", "L1", sender(), "srv1");
@@ -444,7 +444,7 @@ describe("one source at a time while War Room holds the connection (APE-168)", (
     ]);
   });
 
-  it("falls back to the bridge's copy when War Room hands the connection back", async () => {
+  it("falls back to the bridge's copy when Draft Room hands the connection back", async () => {
     const { relay } = setup();
     await relay.ingest(scope, "tab1", 0, DRAFT);
     const detach = relay.attachSender("u1", "L1", sender(), "srv1");
@@ -457,7 +457,7 @@ describe("one source at a time while War Room holds the connection (APE-168)", (
     expect(relay.snapshot("u1", "L1").picks.map((p) => p.espnPlayerId)).toEqual([1, 2]);
   });
 
-  it("tells a live bridge to stand down before War Room joins, and only then", async () => {
+  it("tells a live bridge to stand down before Draft Room joins, and only then", async () => {
     const { relay } = setup();
     expect((await relay.ingest(scope, "tab1", 0, DRAFT)) as { held?: true }).not.toHaveProperty("held");
     expect(relay.requestHold("u1", "L1")).toEqual({ bridgeLive: true });
@@ -494,7 +494,7 @@ describe("ESPN's autopick on the user's team", () => {
     ]);
   });
 
-  it("turns it off only through War Room's own connection", () => {
+  it("turns it off only through Draft Room's own connection", () => {
     const { relay } = setup();
     expect(relay.setAutopick("u1", "L1", false)).toBe(false);
     const sender = { select: vi.fn(() => true), setQueue: vi.fn(() => true), setAutopick: vi.fn(() => true) };

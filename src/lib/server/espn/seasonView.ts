@@ -54,7 +54,7 @@ export async function loadSeasonView(db: Db, key: Buffer, userId: string, league
     }),
     getEspnScoreboard({ season: season.season, week: season.currentWeek, ...fresh }),
     listLineupMoves(db, leagueId, season.season, season.currentWeek).catch((err: Error) => {
-      console.warn(`[espn-season] War Room's moves unavailable: ${err.message}`);
+      console.warn(`[espn-season] Draft Room's moves unavailable: ${err.message}`);
       return [];
     }),
   ]);

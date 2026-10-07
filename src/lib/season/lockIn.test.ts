@@ -16,7 +16,7 @@ const suggested = [
 ];
 
 describe("lockIn", () => {
-  it("banks every War Room move when the whole lineup lands", () => {
+  it("banks every Draft Room move when the whole lineup lands", () => {
     const m = lockIn({
       landed: [...swapWr, ...swapTe],
       suggested,
@@ -34,7 +34,7 @@ describe("lockIn", () => {
     expect(m?.warRoom.map((x) => x.playerId)).toEqual([1, 3]);
   });
 
-  it("keeps the user's own moves beside War Room's, whichever way they go", () => {
+  it("keeps the user's own moves beside Draft Room's, whichever way they go", () => {
     const own = [{ playerId: 9, to: "FLEX" as const, delta: -1.2 }];
     const m = lockIn({
       landed: [...swapWr, ...swapTe, { playerId: 9, from: "BN", to: "FLEX", landed: true }],

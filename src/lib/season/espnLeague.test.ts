@@ -152,7 +152,7 @@ describe("parseSeasonLeague", () => {
     expect(ESPN_SLOT_ID).toMatchObject({ QB: 0, RB: 2, WR: 4, TE: 6, FLEX: 23, SUPERFLEX: 7, DST: 16, K: 17, BN: 20, IR: 21 });
   });
 
-  it("puts a player on IR in the IR slot, and leaves off positions War Room doesn't play", () => {
+  it("puts a player on IR in the IR slot, and leaves off positions Draft Room doesn't play", () => {
     const entry = (lineupSlotId: number, defaultPositionId: number) => ({
       playerId: lineupSlotId * 100 + defaultPositionId,
       lineupSlotId,
@@ -163,7 +163,7 @@ describe("parseSeasonLeague", () => {
     expect(parsed.ok && parsed.league.teams[0].roster).toEqual([expect.objectContaining({ slot: "IR", locked: true, injuryStatus: "OUT" })]);
   });
 
-  it("refuses a lineup slot War Room can't represent, and a document that isn't a league", () => {
+  it("refuses a lineup slot Draft Room can't represent, and a document that isn't a league", () => {
     const idp = { ...league, settings: { ...league.settings, rosterSettings: { lineupSlotCounts: { "0": 1, "11": 1 } } } };
     expect(parseSeasonLeague(idp, "1")).toMatchObject({ ok: false, error: expect.stringContaining("slot 11") });
     expect(parseSeasonLeague({}, "1").ok).toBe(false);
@@ -291,7 +291,7 @@ describe("parseMatchups", () => {
 });
 
 describe("parseFreeAgents", () => {
-  it("reads available players, when a waiver claim clears, and leaves out what War Room doesn't play", () => {
+  it("reads available players, when a waiver claim clears, and leaves out what Draft Room doesn't play", () => {
     const player = (id: number, status: string, defaultPositionId = 2, extra = {}) => ({
       id,
       status,

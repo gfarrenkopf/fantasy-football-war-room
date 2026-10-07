@@ -33,7 +33,7 @@ describe("parseScoreboard", () => {
     expect(games.get("LAR")).toMatchObject({ score: { team: 3, opponent: 7 } });
   });
 
-  it("leaves out malformed events, unknown states and teams War Room doesn't know", () => {
+  it("leaves out malformed events, unknown states and teams Draft Room doesn't know", () => {
     const games = parseScoreboard({ events: [null, { status: {} }, event("delayed", "Delayed", [9]), event("in", "Halftime", [999, 12])] });
     expect([...games.keys()]).toEqual(["KC"]);
     expect(parseScoreboard(null).size).toBe(0);

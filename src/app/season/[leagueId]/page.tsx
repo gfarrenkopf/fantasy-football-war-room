@@ -18,7 +18,7 @@ import { wantsSeasonEmails, writeConsent } from "@/lib/server/seasonPrefs";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
 
-export const metadata: Metadata = { title: "Your season · Fantasy War Room" };
+export const metadata: Metadata = { title: "Your season · Draft Room" };
 
 /**
  * A league's in-season page (10.5): this week's recommended lineup, and trades (10.6), plus in-season

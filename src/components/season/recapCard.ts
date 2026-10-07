@@ -196,7 +196,7 @@ export async function drawRecapCard(recap: WeekRecap, meta: { league: string; st
   ctx.textAlign = "center";
   ctx.fillStyle = alpha(muted, 0.8);
   ctx.font = `600 22px ${sans}`;
-  ctx.fillText(recap.result === "loss" ? `Fantasy War Room · ${shrug(recap.margin)}` : "Fantasy War Room", W / 2, H - 28);
+  ctx.fillText(recap.result === "loss" ? `Draft Room · ${shrug(recap.margin)}` : "Draft Room", W / 2, H - 28);
 
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't draw the recap card"))), "image/png"));
 }

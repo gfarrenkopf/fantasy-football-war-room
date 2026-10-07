@@ -24,7 +24,7 @@ import type { GuardedOutcome } from "./guardedWrite";
 export async function consentGate(db: Db, userId: string, consentVersion: number | null): Promise<Response | null> {
   if (((await writeConsent(db, userId)) ?? 0) >= ESPN_WRITE_VERSION) return null;
   if (consentVersion !== ESPN_WRITE_VERSION) {
-    return json(409, { error: "Agree to War Room changing your team on ESPN first", consent: { version: ESPN_WRITE_VERSION, lines: ESPN_WRITE_DISCLOSURE } });
+    return json(409, { error: "Agree to Draft Room changing your team on ESPN first", consent: { version: ESPN_WRITE_VERSION, lines: ESPN_WRITE_DISCLOSURE } });
   }
   await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
   return null;
@@ -49,7 +49,7 @@ export function writeResponse<Landed>(out: GuardedOutcome<Landed>, { what, alert
       return applied(out.landed);
     case "unverified":
       alert(`ESPN ${what} unverified: ${out.detail}`);
-      return json(502, { error: "War Room sent your change, but couldn't read ESPN back to check it. Check your team on ESPN.", unverified: true, ...unverified });
+      return json(502, { error: "Draft Room sent your change, but couldn't read ESPN back to check it. Check your team on ESPN.", unverified: true, ...unverified });
     case "changed":
       return json(409, { error: "Your team changed on ESPN since this page loaded. Nothing was sent.", changed: out.changes });
     case "refused":
@@ -67,8 +67,8 @@ export function writeResponse<Landed>(out: GuardedOutcome<Landed>, { what, alert
 
 const PROBLEM: Record<string, string> = {
   "not-linked": "This league isn't connected to ESPN.",
-  "no-login": "War Room needs your ESPN connection again. Nothing was sent.",
-  disconnected: "ESPN signed War Room out. Reconnect with the bookmarklet, then try again. Nothing was sent.",
+  "no-login": "Draft Room needs your ESPN connection again. Nothing was sent.",
+  disconnected: "ESPN signed Draft Room out. Reconnect with the bookmarklet, then try again. Nothing was sent.",
   unavailable: "Couldn't reach ESPN to check your team first, so nothing was sent. Try again in a minute.",
-  invalid: "ESPN sent something War Room couldn't read, so nothing was sent.",
+  invalid: "ESPN sent something Draft Room couldn't read, so nothing was sent.",
 };

@@ -9,8 +9,8 @@ type Ctx = RouteContext<"/api/leagues/[id]/espn/server-client">;
 
 const REFUSALS = {
   unavailable: [404, "Drafting without an ESPN tab isn't available here"],
-  "no-credential": [409, "Run the War Room bookmark in your ESPN draft room and let War Room draft for you first"],
-  busy: [503, "War Room is holding too many drafts right now. Draft in ESPN."],
+  "no-credential": [409, "Run the Draft Room bookmark in your ESPN draft and let Draft Room draft for you first"],
+  busy: [503, "Draft Room is holding too many drafts right now. Draft in ESPN."],
 } as const;
 
 /**

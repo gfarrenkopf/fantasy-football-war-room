@@ -121,7 +121,7 @@ export const Header = forwardRef<HTMLInputElement, HeaderProps>(function Header(
   return (
     <header className={s.header}>
       <div className={s.brand}>
-        <b>Fantasy War Room</b>
+        <b>Draft Room</b>
         {active ? (
           <select
             className={s.leagueSelect}

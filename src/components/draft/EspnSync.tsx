@@ -249,7 +249,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
         body: JSON.stringify({ playerId }),
       }).catch(() => null);
       setSending(false);
-      if (!res) return toast("Couldn't reach War Room. Make this pick in ESPN.");
+      if (!res) return toast("Couldn't reach Draft Room. Make this pick in ESPN.");
       if (res.status === 202) {
         const { request: sent } = (await res.json()) as { request: PickRequestView };
         return setSnapshot((cur) => cur && { ...cur, request: sent });
@@ -281,7 +281,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }).catch(() => null);
-      if (!res) return "Couldn't reach War Room. Try again.";
+      if (!res) return "Couldn't reach Draft Room. Try again.";
       if (res.ok) return null;
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       return data.error ?? "That didn't work. Try again.";
@@ -317,7 +317,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     if (serverClient?.state !== "lost") return void (toldLost.current = null);
     if (toldLost.current) return;
     toldLost.current = serverClient.reason ?? "lost";
-    toast(serverClient.reason ?? "War Room's connection to ESPN ended.");
+    toast(serverClient.reason ?? "Draft Room's connection to ESPN ended.");
   }, [serverClient, toast]);
 
   const value = useMemo<EspnSyncValue>(() => {
@@ -350,7 +350,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
 
 const CHIP: Record<Exclude<LiveStatus, "waiting">, { label: string; title: string }> = {
   live: { label: "● ESPN live", title: "Picks from your ESPN draft land here as they're made. Logging picks by hand is paused." },
-  "bridge-offline": { label: "ESPN tab closed", title: "Your ESPN draft tab stopped checking in. Log picks by hand, or reopen the tab and click the War Room bookmark." },
+  "bridge-offline": { label: "ESPN tab closed", title: "Your ESPN draft tab stopped checking in. Log picks by hand, or reopen the tab and click the Draft Room bookmark." },
   complete: { label: "ESPN draft done", title: "Your ESPN draft is complete." },
 };
 
@@ -367,7 +367,7 @@ export function EspnSyncChip() {
   }
   if (link === "retrying" || link === "lost") {
     return (
-      <span className={s.btn} title={link === "retrying" ? "Reaching War Room again. Your board still works." : "War Room's live connection dropped. Reload to try again."} role="status">
+      <span className={s.btn} title={link === "retrying" ? "Reaching Draft Room again. Your board still works." : "Draft Room's live connection dropped. Reload to try again."} role="status">
         {link === "retrying" ? "Reconnecting…" : "Sync disconnected"}
       </span>
     );
@@ -381,8 +381,8 @@ export function EspnSyncChip() {
   }
   if (serverClient?.state === "holding" && status === "live") {
     return (
-      <span className={cx("btn", "on")} title="War Room holds your ESPN draft connection: draft here, on any device. Your ESPN draft room is disconnected until you hand back." role="status">
-        ● Drafting via War Room
+      <span className={cx("btn", "on")} title="Draft Room holds your ESPN draft connection: draft here, on any device. Your ESPN draft is disconnected until you hand back." role="status">
+        ● Drafting via Draft Room
       </span>
     );
   }

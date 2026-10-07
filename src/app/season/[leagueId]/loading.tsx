@@ -7,7 +7,7 @@ export default function Loading() {
       <div className={s.frame}>
         <header className={s.top}>
           <div className={s.titleBlock}>
-            <span className={s.brand}>Fantasy War Room</span>
+            <span className={s.brand}>Draft Room</span>
             <p className={s.title}>Reading your league from ESPN…</p>
             <p className={s.meta}>Rosters, lineups and trades. ESPN can take a few seconds.</p>
           </div>

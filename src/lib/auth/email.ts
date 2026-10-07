@@ -52,16 +52,16 @@ const unlinked = (s: string) => escape(s).replace(/([.@])/g, "$1&#8203;");
 export function renderSignInEmail({ url, email, isNew, hours }: SignInEmailInput): SignInEmail {
   const copy = isNew
     ? {
-        subject: "Your seat in the war room is ready",
+        subject: "Your seat in the Draft Room is ready",
         preheader: "One tap and your board is saved to your account.",
         headline: "Your seat is ready.",
         body: "Tap below to finish signing up. Your leagues sync to your account and follow you to every device you sign in on.",
-        cta: "Enter the war room",
+        cta: "Enter the Draft Room",
       }
     : {
-        subject: "Back to the war room",
+        subject: "Back to the Draft Room",
         preheader: "Your sign-in link is inside.",
-        headline: "Back to the war room.",
+        headline: "Back to the Draft Room.",
         body: "Tap below to sign in. Your leagues sync to every device you sign in on.",
         cta: "Sign in",
       };
@@ -83,7 +83,7 @@ export function renderSignInEmail({ url, email, isNew, hours }: SignInEmailInput
 <tr><td align="center" style="padding:40px 16px;">
   <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:480px;">
     <tr><td style="padding:0 4px 14px;font-family:${FONT};font-size:12px;font-weight:700;letter-spacing:2px;color:${C.muted};">
-      <span style="color:${C.mine};">&#9679;</span>&nbsp; FANTASY WAR ROOM
+      <span style="color:${C.mine};">&#9679;</span>&nbsp; DRAFT ROOM
     </td></tr>
     <tr><td bgcolor="${C.panel}" style="background:${C.panel};border:1px solid ${C.line};border-radius:10px;overflow:hidden;">
       <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
@@ -130,7 +130,7 @@ export function renderSignInEmail({ url, email, isNew, hours }: SignInEmailInput
     `This link signs in ${email}. It works once and expires in ${life}.`,
     "Didn't ask for this? Ignore it. Nobody gets in without the link.",
     "",
-    "Fantasy War Room",
+    "Draft Room",
     "",
   ].join("\n");
 

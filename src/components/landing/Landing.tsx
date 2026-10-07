@@ -126,7 +126,7 @@ export function Landing({ flags, farewell = false }: { flags: PublicFlags; farew
             <article className={s.persona}>
               <h3>Already drafted on ESPN?</h3>
               <p>
-                Connect your ESPN league once and War Room sets your best lineup every week and checks any trade against both teams&apos; real rosters,
+                Connect your ESPN league once and Draft Room sets your best lineup every week and checks any trade against both teams&apos; real rosters,
                 for the rest of the season. Free.
               </p>
             </article>
@@ -146,7 +146,7 @@ export function Landing({ flags, farewell = false }: { flags: PublicFlags; farew
 
       <footer className={s.footer}>
         <div className={s.footerMain}>
-          <b>Fantasy War Room</b>
+          <b>Draft Room</b>
           <p>
             The board, the practice drafts and the pick-by-pick plan are free.
             {planForSale ? " A season pass adds the AI-written plan for one league." : ""} An account keeps your leagues in sync on every device.

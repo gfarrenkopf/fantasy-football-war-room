@@ -22,7 +22,7 @@ export const POST = withUser<unknown>(async (request, _ctx, { db, userId, email 
   const code = (read.body as { claim?: unknown } | null)?.claim;
   if (typeof code !== "string" || !/^[A-Za-z0-9_-]{20,100}$/.test(code)) return error(400, "Invalid claim");
   const claim = await openClaim(db, config.espnCodeKey, code);
-  if (!claim) return error(410, "That link has expired. Tap the War Room bookmark on your ESPN league page again.");
+  if (!claim) return error(410, "That link has expired. Tap the Draft Room bookmark on your ESPN league page again.");
   const result = await connectSeason(db, config.espnCodeKey, userId, {
     espnLeagueId: claim.espnLeagueId,
     season: claim.season,

@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import s from "@/components/season/season.module.css";
 import { config } from "@/lib/config";
 
-export const metadata: Metadata = { title: "Email settings · Fantasy War Room" };
+export const metadata: Metadata = { title: "Email settings · Draft Room" };
 
 /**
  * Where an email's "Stop these emails" link lands (11.3). A button, not the link itself, turns the
@@ -21,7 +21,7 @@ export default async function Unsubscribe({ searchParams }: PageProps<"/season/u
         <header className={s.top}>
           <div className={s.titleBlock}>
             <a href="/draft" className={s.brand}>
-              Fantasy War Room
+              Draft Room
             </a>
             <h1 className={s.title}>Email settings</h1>
           </div>

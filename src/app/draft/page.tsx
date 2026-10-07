@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
 
-export const metadata: Metadata = { title: "Fantasy War Room" };
+export const metadata: Metadata = { title: "Draft Room" };
 
 /**
  * A first sign-in always lands here (Auth.js's pages.newUser), with where it was headed as

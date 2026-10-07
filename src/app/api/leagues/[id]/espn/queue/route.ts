@@ -28,7 +28,7 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
   if (!read.ok) return read.response;
   const sync = (read.body as { sync?: unknown } | null)?.sync;
   if (sync !== undefined && typeof sync !== "boolean") return error(400, "Invalid request");
-  if (!clientFor(userId, id)?.joined()) return json(409, { error: "War Room isn't holding your ESPN draft connection" });
+  if (!clientFor(userId, id)?.joined()) return json(409, { error: "Draft Room isn't holding your ESPN draft connection" });
 
   const relay = getRelay();
   const ids = sync === undefined ? relay.pushQueue(userId, id) : relay.setQueueSync(userId, id, sync);

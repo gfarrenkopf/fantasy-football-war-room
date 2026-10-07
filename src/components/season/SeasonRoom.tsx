@@ -94,9 +94,9 @@ export function SeasonRoom(props: Props) {
       <div className={s.frame}>
         <header className={s.top}>
           <div className={s.titleBlock}>
-            <nav className={s.crumbs} aria-label="War Room">
+            <nav className={s.crumbs} aria-label="Draft Room">
               <a href="/draft" className={s.brand}>
-                Fantasy War Room
+                Draft Room
               </a>
               <a href={`/draft?league=${encodeURIComponent(props.leagueId)}`} className={s.draftDoor}>
                 <ArrowLeft /> Draft room
@@ -232,7 +232,7 @@ function Problem({ flags, problem, espnUrl }: { flags: PublicFlags; problem: Sea
   if (problem.kind === "signed-out") {
     return (
       <section className={`${s.panel} ${s.note}`}>
-        <SignIn flags={flags} title="Sign in to see your season" fine="Your lineup and trade help live in your War Room account." autoFocus />
+        <SignIn flags={flags} title="Sign in to see your season" fine="Your lineup and trade help live in your Draft Room account." autoFocus />
       </section>
     );
   }
@@ -241,7 +241,7 @@ function Problem({ flags, problem, espnUrl }: { flags: PublicFlags; problem: Sea
       <a className={s.link} href={espnUrl} target="_blank" rel="noopener noreferrer">
         Open your league on ESPN
       </a>
-      , use your War Room bookmark there, then Connect my season. No bookmark on this device?{" "}
+      , use your Draft Room bookmark there, then Connect my season. No bookmark on this device?{" "}
       <a className={s.link} href="/espn">
         Add it
       </a>
@@ -251,15 +251,15 @@ function Problem({ flags, problem, espnUrl }: { flags: PublicFlags; problem: Sea
     <>
       Open your league on ESPN, use the{" "}
       <a className={s.link} href="/espn">
-        War Room bookmark
+        Draft Room bookmark
       </a>
       , then Connect my season.
     </>
   );
   const text = {
     "not-linked": <>This league isn&apos;t connected to ESPN yet. {reconnect}</>,
-    "no-login": <>War Room needs your ESPN connection for this. {reconnect}</>,
-    disconnected: <>ESPN signed War Room out, which it does every so often. {reconnect}</>,
+    "no-login": <>Draft Room needs your ESPN connection for this. {reconnect}</>,
+    disconnected: <>ESPN signed Draft Room out, which it does every so often. {reconnect}</>,
     unavailable: <>Couldn&apos;t reach ESPN just now. Try again in a minute.</>,
     invalid: <>{problem.kind === "invalid" ? problem.error : ""}</>,
   }[problem.kind];
@@ -281,10 +281,10 @@ function Disconnect({ seasonEmails }: { seasonEmails: boolean | null }) {
   return (
     <footer className={s.footer}>
       {phase === "done" ? (
-        <p role="status">Disconnected. War Room has deleted your ESPN login.</p>
+        <p role="status">Disconnected. Draft Room has deleted your ESPN login.</p>
       ) : phase === "confirm" || phase === "working" ? (
         <p>
-          Delete your ESPN login from War Room? Your leagues stop updating until you connect again.{" "}
+          Delete your ESPN login from Draft Room? Your leagues stop updating until you connect again.{" "}
           <button type="button" className={`${s.textButton} ${s.danger}`} disabled={phase === "working"} onClick={disconnect}>
             Disconnect ESPN
           </button>{" "}
@@ -295,7 +295,7 @@ function Disconnect({ seasonEmails }: { seasonEmails: boolean | null }) {
         </p>
       ) : (
         <p>
-          War Room reads your leagues with your ESPN login.{" "}
+          Draft Room reads your leagues with your ESPN login.{" "}
           <button type="button" className={s.textButton} onClick={() => setPhase("confirm")}>
             Disconnect ESPN
           </button>

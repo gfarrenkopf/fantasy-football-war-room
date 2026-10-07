@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { peekClaim } from "@/lib/server/espn/loginClaims";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 
-export const metadata: Metadata = { title: "Connect your season · Fantasy War Room" };
+export const metadata: Metadata = { title: "Connect your season · Draft Room" };
 
 /**
  * Where the ESPN bridge sends its tab from a league page (10.3, APE-298), with a one-time claim for

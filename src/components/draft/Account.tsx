@@ -263,7 +263,7 @@ export function SignInDialog({ onClose, notice }: { onClose(): void; notice?: st
       <div className={s.scrim} onClick={onClose} />
       <div className={cx("dialog", "signIn")} role="dialog" aria-modal="true" aria-labelledby="signin-title" aria-describedby="signin-lead">
         <h3 id="signin-title" className={s.siTitle}>
-          Take your war room everywhere
+          Take your board everywhere
         </h3>
         <p id="signin-lead" className={s.siLead}>
           Sign in and your leagues sync to your account: the same board on your laptop, your phone, and at the draft table. Nothing about how the room works changes.

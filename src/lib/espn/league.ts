@@ -110,7 +110,7 @@ function rosterOf(settings: EspnSettings): { counts: Partial<SlotCounts> } | { e
     const key = SLOT_BY_ESPN_ID[espnId];
     if (!key) {
       const what = UNSUPPORTED[espnId] ?? `slot ${espnId}`;
-      return { error: `This league starts a ${what}, which War Room can't draft for yet.` };
+      return { error: `This league starts a ${what}, which Draft Room can't draft for yet.` };
     }
     out[key] = (out[key] ?? 0) + n;
   }
@@ -141,14 +141,14 @@ function importOf(settings: EspnSettings, espnTeamId: number): EspnImport {
 
   const type = settings.draftSettings?.type;
   if (type && type !== "SNAKE") {
-    return { ok: false, error: type === "AUCTION" ? "War Room doesn't do auction drafts yet." : `War Room doesn't do ${type.toLowerCase()} drafts yet.` };
+    return { ok: false, error: type === "AUCTION" ? "Draft Room doesn't do auction drafts yet." : `Draft Room doesn't do ${type.toLowerCase()} drafts yet.` };
   }
 
   const teams = settings.size;
   if (typeof teams !== "number" || teams < 2) return { ok: false, error: "ESPN didn't say how many teams this league has." };
 
   const mySlot = slotOf(settings, espnTeamId);
-  if (mySlot === null) return { ok: false, error: "ESPN hasn't set the draft order yet. It's drawn when the draft room opens, about an hour before." };
+  if (mySlot === null) return { ok: false, error: "ESPN hasn't set the draft order yet. It's drawn when ESPN opens the draft, about an hour before." };
 
   const roster = rosterOf(settings);
   if ("error" in roster) return { ok: false, error: roster.error };

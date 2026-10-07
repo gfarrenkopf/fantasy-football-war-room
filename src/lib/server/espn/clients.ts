@@ -91,7 +91,7 @@ export async function takeOver(
   const { scope } = stored;
   // After a restart the relay knows nothing about this draft; the settings the bridge handed over say what league it is.
   if (stored.leagueSettings) relay.setLeague(scope, stored.leagueSettings);
-  view(userId, leagueId, resuming ? { state: "connecting", reason: "War Room restarted. Rejoining your ESPN draft room…" } : { state: "connecting" });
+  view(userId, leagueId, resuming ? { state: "connecting", reason: "Draft Room restarted. Rejoining your ESPN draft…" } : { state: "connecting" });
   await setServerClientState(db, userId, leagueId, "holding");
 
   // An ESPN tab left open would reconnect and take the connection straight back. Tell its bridge
@@ -136,7 +136,7 @@ export async function takeOver(
     },
   });
   // A draft never outlives its credential.
-  const hardStop = setTimeout(() => client.stop("War Room's hold on this draft ran out of time."), Math.max(0, stored.expiresAt.getTime() - Date.now()));
+  const hardStop = setTimeout(() => client.stop("Draft Room's hold on this draft ran out of time."), Math.max(0, stored.expiresAt.getTime() - Date.now()));
   running().set(userId, { leagueId, client, hardStop });
   return { ok: true };
 }
@@ -218,6 +218,6 @@ export async function noteCredential(db: Db, userId: string, leagueId: string, {
       ? { state: "stored" }
       : row.state === "released"
         ? { state: "released" }
-        : { state: "lost", reason: row.state === "holding" ? "War Room restarted and isn't holding your ESPN connection." : "War Room's connection to ESPN ended." };
+        : { state: "lost", reason: row.state === "holding" ? "Draft Room restarted and isn't holding your ESPN connection." : "Draft Room's connection to ESPN ended." };
   view(userId, leagueId, next);
 }

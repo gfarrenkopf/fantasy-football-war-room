@@ -94,7 +94,7 @@ export function EspnPair({
       body: JSON.stringify(record),
     }).catch(() => null);
     if (!res?.ok) {
-      setPhase({ kind: "error", message: "Couldn't create that league. Try again, or set one up in War Room first." });
+      setPhase({ kind: "error", message: "Couldn't create that league. Try again, or set one up in Draft Room first." });
       return null;
     }
     return record.id;
@@ -115,7 +115,7 @@ export function EspnPair({
         ...(acknowledged ? {} : { acknowledged: ESPN_DISCLOSURE_VERSION }),
       }),
     }).catch(() => null);
-    if (!res) return setPhase({ kind: "error", message: "Couldn't reach War Room. Check your connection and try again." });
+    if (!res) return setPhase({ kind: "error", message: "Couldn't reach Draft Room. Check your connection and try again." });
     if (res.status === 402) return setPhase({ kind: "error", message: "Live sync comes with this league's season pass.", needsPurchase: true });
     if (res.status === 403) return setPhase({ kind: "error", message: "ESPN live sync isn't available on your account yet. It's in a limited beta." });
     if (res.status === 401 || res.status === 428) return location.reload();
@@ -136,18 +136,18 @@ export function EspnPair({
     <main className="min-h-dvh bg-bg text-text px-5 py-6 font-sans">
       <div className="mx-auto max-w-md space-y-4">
         <header className="space-y-1">
-          <p className="text-xs uppercase tracking-wider text-muted">Fantasy War Room</p>
+          <p className="text-xs uppercase tracking-wider text-muted">Draft Room</p>
           <h1 className="text-xl font-semibold">Connect your ESPN draft</h1>
-          <p className="text-sm text-muted">Picks made in your ESPN draft room will land on your War Room board as they happen.</p>
+          <p className="text-sm text-muted">Picks made in your ESPN draft will land on your Draft Room board as they happen.</p>
         </header>
 
         {!validEspn ? (
           <p className="rounded-card border border-line bg-panel p-4 text-sm">
-            Open this from the War Room bookmark inside your ESPN draft room, so it knows which draft to connect.
+            Open this from the Draft Room bookmark inside your ESPN draft, so it knows which draft to connect.
           </p>
         ) : !signedIn ? (
           <section className="rounded-card border border-line bg-panel p-4">
-            <SignIn flags={flags} title="Sign in to War Room first" fine="Then come back to this window. It picks up your sign-in on its own." autoFocus />
+            <SignIn flags={flags} title="Sign in to Draft Room first" fine="Then come back to this window. It picks up your sign-in on its own." autoFocus />
           </section>
         ) : phase.kind === "done" ? (
           <section className="rounded-card border border-line bg-panel p-4 space-y-2" role="status">
@@ -162,12 +162,12 @@ export function EspnPair({
           <p className="rounded-card border border-line bg-panel p-4 text-sm">
             {imported && !imported.ok ? (
               <>
-                {imported.error} <a className="text-focus underline" href="/draft" target="_blank" rel="noreferrer">Set your league up in War Room</a>, then click Connect
+                {imported.error} <a className="text-focus underline" href="/draft" target="_blank" rel="noreferrer">Set your league up in Draft Room</a>, then click Connect
                 in ESPN again.
               </>
             ) : (
               <>
-                You don&apos;t have a War Room league yet.{" "}
+                You don&apos;t have a Draft Room league yet.{" "}
                 <a className="text-focus underline" href="/draft" target="_blank" rel="noreferrer">
                   Set one up
                 </a>

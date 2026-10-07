@@ -17,7 +17,7 @@ async function fetchWaivers(leagueId: string, refresh: boolean): Promise<Load> {
   const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/season/waivers${refresh ? "?refresh=1" : ""}`).catch(() => null);
   const body = (await res?.json().catch(() => null)) as { pickups?: Pickup[]; considered?: number; error?: string } | null;
   if (res?.ok && body?.pickups) return { kind: "ok", pickups: body.pickups, considered: body.considered ?? 0 };
-  return { kind: "failed", error: body?.error ?? "Can't reach War Room right now. Try again in a moment." };
+  return { kind: "failed", error: body?.error ?? "Can't reach Draft Room right now. Try again in a moment." };
 }
 
 /** "Waiver priority 4 of 12", or FAAB left in a league that bids. */

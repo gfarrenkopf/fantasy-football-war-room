@@ -156,7 +156,7 @@ describe("ESPN relay routes", () => {
     expect((await frames.POST(post(token, { espnLeagueId: "704343562", session: "abc12345", seq: 0, frames: [] }))).status).toBe(404);
   });
 
-  describe("drafting from War Room", () => {
+  describe("drafting from Draft Room", () => {
     const gibbs = parseEspnPlayers(espnPool).find((p) => p.fullName === "Jahmyr Gibbs")!.id;
     const draftFromWarRoom = (pickRoute: Awaited<ReturnType<typeof routes>>["pick"], playerId: string) =>
       pickRoute.POST(

@@ -88,7 +88,7 @@ const handoffPost = (body: unknown, origin = ESPN) =>
 const claimPost = (claim: unknown) =>
   new Request("http://localhost/api/espn/season/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ claim }) });
 
-describe("handing a login from ESPN to War Room", () => {
+describe("handing a login from ESPN to Draft Room", () => {
   const body = { ...SCOPE, ...LOGIN };
   beforeEach(async () => {
     vi.resetModules();

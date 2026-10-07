@@ -62,7 +62,7 @@ function shell({ title, preheader, headline, body, footer }: { title: string; pr
 <tr><td align="center" style="padding:40px 16px;">
   <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:480px;">
     <tr><td style="padding:0 4px 14px;font-family:${FONT};font-size:12px;font-weight:700;letter-spacing:2px;color:${C.muted};">
-      <span style="color:${C.mine};">&#9679;</span>&nbsp; FANTASY WAR ROOM
+      <span style="color:${C.mine};">&#9679;</span>&nbsp; DRAFT ROOM
     </td></tr>
     <tr><td bgcolor="${C.panel}" style="background:${C.panel};border:1px solid ${C.line};border-radius:10px;overflow:hidden;">
       <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
@@ -89,7 +89,7 @@ const button = (href: string, label: string) => `<table role="presentation" bord
           </tr></table>`;
 
 const footer = (unsubscribeUrl: string) =>
-  `You get this because you connected a league to War Room for the season. <a href="${escape(unsubscribeUrl)}" target="_blank" style="color:${C.muted};">Stop these emails</a>.`;
+  `You get this because you connected a league to Draft Room for the season. <a href="${escape(unsubscribeUrl)}" target="_blank" style="color:${C.muted};">Stop these emails</a>.`;
 
 /** "Your Sunday lineup is ready": one section per league, with the moves that matter most. */
 export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: LeagueSummary[]; unsubscribeUrl: string }): SeasonEmail {
@@ -133,8 +133,8 @@ export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: League
  */
 export function renderReconnectEmail({ espnUrl, helpUrl, unsubscribeUrl }: { espnUrl: string; helpUrl: string; unsubscribeUrl: string }): SeasonEmail {
   const subject = "Reconnect ESPN for your Sunday lineup";
-  const body = "ESPN signed War Room out, which it does every so often, so this morning's AI lineup couldn't be written. Open your league on ESPN, use your War Room bookmark there, then Connect my season. It works on your phone or a computer.";
-  const help = "No War Room bookmark on this device?";
+  const body = "ESPN signed Draft Room out, which it does every so often, so this morning's AI lineup couldn't be written. Open your league on ESPN, use your Draft Room bookmark there, then Connect my season. It works on your phone or a computer.";
+  const help = "No Draft Room bookmark on this device?";
   const html = shell({
     title: subject,
     preheader: "One tap on ESPN and you're back.",

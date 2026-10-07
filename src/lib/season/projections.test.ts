@@ -37,7 +37,7 @@ describe("parseProjections", () => {
     expect([...p.weeks]).toEqual([[5, { "53": 5 }]]);
   });
 
-  it("skips players it can't read, and positions War Room doesn't play", () => {
+  it("skips players it can't read, and positions Draft Room doesn't play", () => {
     const raw = { players: [{ player: { id: 2, fullName: "Coach", defaultPositionId: 14 } }, { nope: true }] };
     expect(parseProjections(raw, 2026)).toEqual([]);
     expect(() => parseProjections([], 2026)).toThrow("ESPN projections");
