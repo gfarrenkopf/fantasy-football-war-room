@@ -37,7 +37,7 @@ type Props = {
 } & (
   | {
       problem: SeasonProblem;
-      /** The user's team page on ESPN, where reconnecting starts (APE-301); absent when the league isn't linked. */
+      /** The league's page on ESPN, where reconnecting starts (APE-301); absent when the league isn't linked. */
       espnUrl?: string;
     }
   | {

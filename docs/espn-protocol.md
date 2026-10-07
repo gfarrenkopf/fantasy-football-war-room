@@ -171,6 +171,19 @@ From probes on 2026-09-24 (NFL week 3) against leagues 110222051 and 704343562, 
   - Signing out of ESPN elsewhere doesn't end it. On 2026-10-06, a sign-out on one device signed out a second device that shared its session, but War Room's stored login and another saved session still read the league afterwards. So ESPN ends only the session that was signed out, not every session on the account.
   - Warning users before the cookie expires isn't worth building.
 - **Official access:** there isn't any; see [espn-official-access.md](espn-official-access.md).
+- **ESPN's app takes over most league links on iPhone (APE-303).** `fantasy.espn.com/.well-known/apple-app-site-association` gives the ESPN Fantasy app these paths, among others:
+  - `/*/team`
+  - `/*/league`
+  - `/*/league/settings`
+  - `/*/league/draftrecap`
+  - `/*/players/add`
+  - `/*/fantasycast`
+
+  A tap on any of them opens the app, where the bookmark can't run. These don't open the app:
+  - `/football/league/standings?leagueId=…` (a league page the bookmark recognizes)
+  - `www.espn.com/fantasy/football/` (for signing in)
+
+  Links War Room sends phone users to ESPN use those (`src/lib/espn/pages.ts`).
 
 ### Reads
 

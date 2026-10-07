@@ -128,8 +128,8 @@ export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: League
 }
 
 /**
- * ESPN signed War Room out, so the Sunday lineup couldn't be written. The button opens the user's
- * team page on ESPN, where the bookmark reconnects them (APE-301); `helpUrl` is for a device without it.
+ * ESPN signed War Room out, so the Sunday lineup couldn't be written. The button opens the league's
+ * page on ESPN, where the bookmark reconnects them (APE-301); `helpUrl` is for a device without it.
  */
 export function renderReconnectEmail({ espnUrl, helpUrl, unsubscribeUrl }: { espnUrl: string; helpUrl: string; unsubscribeUrl: string }): SeasonEmail {
   const subject = "Reconnect ESPN for your Sunday lineup";

@@ -116,8 +116,8 @@ describe("runSundayJob", () => {
     expect(sent.filter((m) => m.to.startsWith("carol"))[0].email.subject).toBe("Your Sunday lineup is ready");
     const dave = sent.filter((m) => m.to.startsWith("dave"))[0].email;
     expect(dave.subject).toBe("Reconnect ESPN for your Sunday lineup");
-    // Reconnecting starts on Dave's own team page on ESPN, where his bookmark runs (APE-301).
-    expect(dave.text).toMatch(/https:\/\/fantasy\.espn\.com\/football\/team\?leagueId=\d+&teamId=1&seasonId=2026/);
+    // Reconnecting starts on Dave's league on ESPN, on a page the ESPN app doesn't take over (APE-301, APE-303).
+    expect(dave.text).toMatch(/https:\/\/fantasy\.espn\.com\/football\/league\/standings\?leagueId=\d+&seasonId=2026/);
     expect(dave.text).toContain("https://draftroom.example/espn");
     expect(sent.some((m) => m.to.startsWith("bob"))).toBe(false);
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { after, connection } from "next/server";
-import { espnTeamPage } from "@/lib/espn/pages";
+import { espnLeaguePage } from "@/lib/espn/pages";
 import { SeasonRoom, type SeasonProblem } from "@/components/season/SeasonRoom";
 import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
@@ -52,7 +52,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   if (load.kind !== "ok") {
     // Reconnecting starts on the user's ESPN league page (APE-301).
     const link = links.find((l) => l.leagueId === leagueId);
-    const espnUrl = link ? espnTeamPage(link) : undefined;
+    const espnUrl = link ? espnLeaguePage(link) : undefined;
     return <SeasonRoom flags={publicFlags} leagueId={leagueId} leagueName={league.name} leagues={leagues} problem={load as SeasonProblem} espnUrl={espnUrl} />;
   }
   const { view, result } = load;

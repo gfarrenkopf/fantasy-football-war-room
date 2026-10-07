@@ -15,9 +15,8 @@ export interface JobLeague {
   leagueId: string;
   name: string;
   leagueSeason: number;
-  /** The ESPN league it follows, for linking to the user's team page there (APE-301). */
+  /** The ESPN league it follows, for linking to the league on ESPN (APE-301). */
   espnLeagueId: string;
-  espnTeamId: number;
   season: number;
 }
 
@@ -31,7 +30,6 @@ export async function activeLeagues(db: Db, now: Date): Promise<{ total: number;
       name: leagues.name,
       leagueSeason: leagues.season,
       espnLeagueId: espnSeasonLinks.espnLeagueId,
-      espnTeamId: espnSeasonLinks.espnTeamId,
       season: espnSeasonLinks.season,
       lastViewedAt: espnSeasonLinks.lastViewedAt,
     })

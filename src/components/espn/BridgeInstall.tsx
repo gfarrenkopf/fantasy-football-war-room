@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/components/draft/useMediaQuery";
 import { bookmarkletFor } from "@/lib/espn/bookmarklet";
+import { ESPN_FANTASY_HOME } from "@/lib/espn/pages";
 
 /** A touch screen: no bookmarks bar to drag to, so the bookmark is copied and pasted instead (APE-299). */
 const TOUCH = "(pointer: coarse)";
@@ -44,7 +45,7 @@ const PHONE_STEPS: Record<Phone, { label: string; save: string[]; run: string }>
 };
 
 const SEASON_STEPS = [
-  "Open your league on fantasy.espn.com, signed in to ESPN. Your team page is fine.",
+  "Open your league on ESPN in the browser, signed in to ESPN. The links above open pages ESPN's app doesn't take over.",
   "Use the War Room bookmark there, then tap Connect my season and agree.",
   "War Room opens in the same tab. Sign in if it asks, then tap Connect my season.",
   "That's it for the season: your lineup and trade help are on any device you sign in to War Room on.",
@@ -63,7 +64,13 @@ function detectPhone(): Phone {
 }
 
 /** Setup instructions with the War Room bookmark: dragged on a computer, copied on a phone. See src/app/espn/page.tsx. */
-export function BridgeInstall({ season }: { season: boolean }) {
+/** The user's connected leagues, each linked to its ESPN page that stays in the browser (APE-303). */
+export interface EspnLeagueLink {
+  name: string;
+  url: string;
+}
+
+export function BridgeInstall({ season, leagues }: { season: boolean; leagues: EspnLeagueLink[] }) {
   const touch = useMediaQuery(TOUCH);
   const link = useRef<HTMLAnchorElement>(null);
   // Only ever true on the client (the server renders the desktop layout), so `location` is there.
@@ -126,8 +133,8 @@ export function BridgeInstall({ season }: { season: boolean }) {
               );
             })}
             <p className="text-sm text-muted">
-              Open ESPN in the browser, not the ESPN app: the bookmark only runs in a browser. If a link opens the app, type fantasy.espn.com into the address bar
-              instead.
+              The bookmark only runs in the browser, not the ESPN app. If a link to ESPN opens the app anyway, come back, touch and hold the link, and choose Open
+              in New Tab.
             </p>
           </section>
         ) : (
@@ -142,6 +149,16 @@ export function BridgeInstall({ season }: { season: boolean }) {
         {season && (
           <section className="space-y-2">
             <h2 className="text-lg font-semibold">Connect your season</h2>
+            <div className="flex flex-wrap gap-2">
+              {leagues.map((l) => (
+                <a key={l.url} href={l.url} className="rounded-card border border-line bg-panel px-3 py-2 text-sm font-semibold no-underline">
+                  Open {l.name} on ESPN ↗
+                </a>
+              ))}
+              <a href={ESPN_FANTASY_HOME} className="rounded-card border border-line bg-panel px-3 py-2 text-sm no-underline">
+                {leagues.length ? "Another league: sign in to ESPN Fantasy ↗" : "Sign in to ESPN Fantasy in this browser ↗"}
+              </a>
+            </div>
             <ol className="list-decimal space-y-2 pl-5">
               {SEASON_STEPS.map((step) => (
                 <li key={step}>{step}</li>
