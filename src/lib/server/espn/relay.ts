@@ -66,6 +66,11 @@ export interface RelayOptions {
    * unofficial: when it changes, the picks we *can* read are suspect too.
    */
   driftLimit?: number;
+  /**
+   * ESPN said the draft is over (APE-325). Called once per draft a channel folds, with the
+   * snapshot as of then; the caller makes the board final and then calls `announceFinal`.
+   */
+  onComplete?: (scope: RelayScope, snapshot: LiveSnapshot) => void;
 }
 
 /** A War Room pick for the bridge to make: send `SELECT <select>` on ESPN's socket. */
@@ -145,6 +150,8 @@ interface Channel {
   unreadableLogged: number;
   /** Keep ESPN's queue set to the turn plan (9.3). Only while War Room holds the connection. */
   queueSync: boolean;
+  /** `onComplete` has been called for this draft. */
+  completed: boolean;
   /** ESPN's pick queue as last set from the turn plan, so an unchanged plan isn't sent again. */
   queueSent: string;
 }
@@ -189,6 +196,8 @@ export interface Relay {
   setQueueSync(userId: string, leagueId: string, on: boolean): number[] | null;
   /** Switches ESPN's autopick for the user's team through War Room's connection. False with nothing holding it. */
   setAutopick(userId: string, leagueId: string, on: boolean): boolean;
+  /** Tells every war room watching that the board is now final (APE-325). */
+  announceFinal(userId: string, leagueId: string): void;
 }
 
 /** ESPN's queue from a turn plan: targets, then fallbacks, then the best on the board, each once, none already drafted. */
@@ -213,6 +222,7 @@ export function createRelay({
   expireAfterMs = 10_000,
   newId = () => crypto.randomUUID(),
   driftLimit = 20,
+  onComplete,
 }: RelayOptions): Relay {
   const channels = new Map<string, Channel>();
   const crosswalks = new Map<number, Promise<Crosswalk>>();
@@ -268,6 +278,7 @@ export function createRelay({
         unreadableLogged: 0,
         queueSync: false,
         queueSent: "",
+        completed: false,
       };
       channels.set(k, ch);
     }
@@ -381,6 +392,13 @@ export function createRelay({
     return [...ch.sessions].flatMap(([id, log]) => (ch.serverSessions.has(id) ? [] : log));
   }
 
+  /** The draft just finished: hand it on, once. Not while drifting, when the picks can't be trusted. */
+  function checkComplete(ch: Channel) {
+    if (ch.completed || !ch.scope || ch.feed.status !== "complete" || ch.degraded) return;
+    ch.completed = true;
+    onComplete?.(ch.scope, snapshotOf(ch));
+  }
+
   /** Refolds the draft from its source after the source changed, and tells every war room. */
   function rebuild(ch: Channel) {
     ch.feed = foldFrames(sourceFrames(ch));
@@ -389,6 +407,7 @@ export function createRelay({
     // Drift measured over the old source (say, two live copies of the draft) says nothing about this one.
     ch.degraded = null;
     emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
+    checkComplete(ch);
   }
 
   /** The first few frames the feed couldn't read, logged so a drift alert says what changed. Already sanitized. */
@@ -413,6 +432,7 @@ export function createRelay({
     ch.plan = null;
     ch.espnLeague = null;
     ch.degraded = null;
+    ch.completed = false;
   }
 
   return {
@@ -486,6 +506,7 @@ export function createRelay({
         emit(ch, { type: "snapshot", snapshot: snapshotOf(ch) });
       }
       checkDrift(ch, scope);
+      checkComplete(ch);
       expire(ch);
       emitStatus(ch);
       const r = ch.request;
@@ -608,6 +629,11 @@ export function createRelay({
     releaseHold(userId, leagueId) {
       const ch = channels.get(key(userId, leagueId));
       if (ch && !ch.source) ch.holdAt = null;
+    },
+
+    announceFinal(userId, leagueId) {
+      const ch = channels.get(key(userId, leagueId));
+      if (ch) emit(ch, { type: "final" });
     },
 
     setAutopick(userId, leagueId, on) {

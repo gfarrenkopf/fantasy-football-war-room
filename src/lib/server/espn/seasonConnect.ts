@@ -16,8 +16,8 @@ import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
  * they're looking at. Checked against ESPN before anything is stored: the login must read the
  * league, and the user must own a team in it. Then the login is stored, and the ESPN league is
  * linked to a war room league: the one already following it, the one last paired with it for the
- * draft, or a new one built from ESPN's settings. A draft ESPN has finished comes onto that league's
- * board if it's empty (APE-193), so the draft room shows the draft that happened.
+ * draft, or a new one built from ESPN's settings. A draft ESPN has finished becomes that league's
+ * board, final (APE-193, APE-325), so the draft room shows the draft that happened.
  */
 
 export interface ConnectRequest extends EspnLogin {
@@ -59,7 +59,7 @@ export async function connectSeason(
   const link = { espnLeagueId: req.espnLeagueId, espnTeamId, season: req.season };
   const existing = await findSeasonLinkByEspn(db, userId, req.espnLeagueId, req.season);
   const remembered = existing?.leagueId ?? (await lastPairedLeague(db, userId, req.espnLeagueId));
-  // Never fails the connect: the board can be filled later (backfillEspnDraft()).
+  // Never fails the connect: the board can be made final later (reconcileEspnDraft()).
   const withDraft = async (leagueId: string) => {
     try {
       await importEspnDraft(db, userId, leagueId, read.data, { espnTeamId, season: req.season }, { crosswalkFor });

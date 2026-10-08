@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Crosswalk } from "@/lib/espn/crosswalk";
 import type { LiveEvent } from "@/lib/espn/live";
-import { createRelay, queueFromPlan, type RelayScope } from "./relay";
+import { createRelay, queueFromPlan, type RelayOptions, type RelayScope } from "./relay";
 
 /** Players 1 and 2 are on the board; everything else is off it. */
 const crosswalk: Crosswalk = (id) =>
   id === 1 || id === 2 ? { kind: "matched", playerId: `p${id}` } : { kind: "offBoard", player: { name: `ESPN ${id}`, pos: "RB", team: "DET" } };
 const fallback: Crosswalk = (id) => ({ kind: "offBoard", player: { name: `ESPN player ${id}`, pos: null, team: null } });
 
-function setup(opts: { crosswalkFor?: (season: number) => Promise<Crosswalk> } = {}) {
+function setup(opts: { crosswalkFor?: (season: number) => Promise<Crosswalk>; onComplete?: RelayOptions["onComplete"] } = {}) {
   let t = 1_000_000;
   let ids = 0;
   const crosswalkFor = vi.fn(opts.crosswalkFor ?? (async () => crosswalk));
-  const relay = createRelay({ now: () => t, crosswalkFor, fallbackCrosswalk: fallback, newId: () => `r${++ids}` });
+  const relay = createRelay({ now: () => t, crosswalkFor, fallbackCrosswalk: fallback, newId: () => `r${++ids}`, onComplete: opts.onComplete });
   const events: LiveEvent[] = [];
   const advance = (ms: number) => (t += ms);
   return { relay, events, advance, crosswalkFor };
@@ -99,6 +99,32 @@ describe("relay", () => {
     relay.subscribe("u1", "L1", (e) => events.push(e));
     await relay.ingest(scope, "s1", 0, [...PRE, "SELECTED 4 1 2", "STATE 2"]);
     expect(events.at(-1)).toEqual({ type: "status", status: "complete", draft: "complete" });
+  });
+
+  it("hands on a finished draft once, again after a restart, and not while drifting (APE-325)", async () => {
+    const onComplete = vi.fn();
+    const { relay, events } = setup({ onComplete });
+    relay.subscribe("u1", "L1", (e) => events.push(e));
+    await relay.ingest(scope, "s1", 0, [...PRE, "SELECTED 4 1 2"]);
+    expect(onComplete).not.toHaveBeenCalled();
+    await relay.ingest(scope, "s1", 4, ["STATE 2"]);
+    await relay.ingest(scope, "s1", 5, []);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith(scope, expect.objectContaining({ draft: "complete", anchored: true, picks: [expect.objectContaining({ espnPlayerId: 1 })] }));
+
+    relay.announceFinal("u1", "L1");
+    expect(events.at(-1)).toEqual({ type: "final" });
+
+    // A restarted process: the bridge resends everything, and the draft is handed on again.
+    const restarted = vi.fn();
+    const again = setup({ onComplete: restarted });
+    await again.relay.ingest(scope, "s1", 0, [...PRE, "SELECTED 4 1 2", "STATE 2"]);
+    expect(restarted).toHaveBeenCalledTimes(1);
+
+    const drifting = vi.fn();
+    const bad = setup({ onComplete: drifting });
+    await bad.relay.ingest(scope, "s1", 0, [...PRE, ...Array.from({ length: 20 }, () => "NONSENSE frame"), "STATE 2"]);
+    expect(drifting).not.toHaveBeenCalled();
   });
 
   it("starts over when the league is paired to a different ESPN league", async () => {

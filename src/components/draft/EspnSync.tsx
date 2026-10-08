@@ -98,7 +98,7 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
   const flags = useFlags();
   const user = useAccount();
   const toast = useToast();
-  const { state, hydrated, syncExternal } = useDraft();
+  const { state, hydrated, syncExternal, reload } = useDraft();
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   // Stamped on arrival, so the countdown runs on this device's clock.
   const [clock, setClock] = useState<ClockDeadline | null>(null);
@@ -166,6 +166,8 @@ export function EspnSyncProvider({ leagueId, league, children }: { leagueId: str
     on("degraded", ({ degraded }) => setSnapshot((cur) => cur && { ...cur, degraded }));
     on("serverClient", ({ serverClient }) => setSnapshot((cur) => cur && { ...cur, serverClient }));
     on("autopick", ({ autopick }) => setSnapshot((cur) => cur && { ...cur, autopick }));
+    // The server locked the board to ESPN's finished draft (APE-325).
+    on("final", () => void reload());
 
     let retry: ReturnType<typeof setTimeout> | undefined;
     source.onopen = () => {
@@ -508,6 +510,78 @@ export function EspnLeagueFollower() {
   }, [espnDraftAt]);
 
   return null;
+}
+
+/** What `POST /api/leagues/:id/espn/reconcile` did (src/lib/server/espn/draftImport.ts). */
+type Reconciled = { kind: "imported" | "already-final" | "not-finished" | "no-login" | "no-league" } | { kind: "mismatch"; reason: string };
+
+/**
+ * A connected league's finished draft, made ESPN's (APE-325). The server locks the board when ESPN
+ * says the draft is over; this catches every other way a draft finishes: a draft room opened after
+ * it (or before this existed), or a live feed that couldn't vouch for every pick. Asked once per
+ * league per visit, and only once the draft may have happened. Without a way to read ESPN's
+ * record, it offers to connect the season, which brings one.
+ */
+export function EspnFinalDraft() {
+  const user = useAccount();
+  const { active } = useLeague();
+  const { state, hydrated, reload } = useDraft();
+  const model = useModel();
+  const { status } = useEspnSync();
+  const toast = useToast();
+  const [result, setResult] = useState<Reconciled | null>(null);
+  const asked = useRef<string | null>(null);
+  /** Bumped to ask again once a live draft has finished. */
+  const [retry, setRetry] = useState(0);
+
+  const leagueId = active?.espn ? active.id : null;
+  const draftAt = active?.draftAt ? Date.parse(active.draftAt) : NaN;
+  const ask = !!user && hydrated && !!leagueId && !state.final;
+  const over = model.done || status === "complete";
+
+  const reconcile = useEffectEvent(async (id: string) => {
+    const res = await fetch(`/api/leagues/${encodeURIComponent(id)}/espn/reconcile`, { method: "POST" }).catch(() => null);
+    const body = res?.ok ? ((await res.json().catch(() => null)) as { result?: Reconciled } | null) : null;
+    if (!body?.result || asked.current !== id) return;
+    setResult(body.result);
+    if (body.result.kind === "imported") {
+      await reload();
+      toast("Your board now matches your ESPN draft");
+    } else if (body.result.kind === "mismatch") {
+      toast(`Your ESPN draft doesn't fit this league's board: ${body.result.reason}.`);
+    }
+  });
+  useEffect(() => {
+    // Not before the draft could have happened: a draft day still ahead means there's nothing to read.
+    if (!ask || !leagueId || asked.current === leagueId || (!over && draftAt > Date.now())) return;
+    asked.current = leagueId;
+    setResult(null);
+    void reconcile(leagueId);
+  }, [ask, leagueId, over, draftAt, retry]);
+
+  // A live feed that just finished: the server locks the board itself when it can. If it hasn't
+  // shortly after, ask again, which says what's missing.
+  useEffect(() => {
+    if (status !== "complete" || state.final || !leagueId) return;
+    const t = setTimeout(() => {
+      asked.current = null;
+      setRetry((n) => n + 1);
+    }, 20_000);
+    return () => clearTimeout(t);
+  }, [status, state.final, leagueId]);
+
+  if (!ask || result?.kind !== "no-login" || !over) return null;
+  return (
+    <div className={s.espnArm} role="region" aria-label="Final ESPN draft results">
+      <span className={s.espnArmText}>
+        Lock in your ESPN draft
+        <small>Connect your ESPN league for the season, and Draft Room makes this board your ESPN draft, pick for pick.</small>
+      </span>
+      <a className={cx("btn", "espnGo")} href="/espn" target="_blank" rel="noreferrer">
+        Sync final results from ESPN
+      </a>
+    </div>
+  );
 }
 
 /**
