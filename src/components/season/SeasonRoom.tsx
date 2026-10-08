@@ -118,6 +118,7 @@ export function SeasonRoom(props: Props) {
                       settings,
                     ]}
                     onNewLeague={() => router.push("/draft?new=1")}
+                    onManage={() => router.push("/draft?manage=1")}
                   />
                 ) : null
               }

@@ -318,6 +318,40 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+/* The list's label, with Manage (APE-324) at its end, in sky: the menu's action voice, so it reads as a control beside the muted label. */
+.groupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.manage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin-right: 2px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--color-sky);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+.manage svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.manage:hover {
+  background: color-mix(in srgb, var(--color-sky) 12%, var(--color-panel));
+}
+.manage:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
 /* A long list of leagues scrolls on its own, so this league's actions never drop out of reach. */
 .leagues {
   display: grid;
@@ -499,6 +533,12 @@
   .create,
   .go {
     min-height: 44px;
+  }
+  /* Sits in the label's row, so it stops short of a full row; still sized for a thumb. */
+  .manage {
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 13px;
   }
   .email {
     font-size: 13px;

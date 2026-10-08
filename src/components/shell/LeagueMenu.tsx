@@ -15,7 +15,8 @@ export type MenuAction = { label: string; href: string; external?: boolean } | {
  * The league menu (Epic 15): the league you're in, as the app bar's title, opening onto this
  * league's actions (an inset block of places to go), every league you have (a list to pick from),
  * and starting a new one (a button). Each kind of row has its own shape, so the three never blur. At most those three groups, text rows
- * only, and an action shows only when it applies; the page decides which ones do.
+ * only, and an action shows only when it applies; the page decides which ones do. Manage, beside
+ * the list's label, opens every league for deleting (APE-324).
  */
 export function LeagueMenu({
   leagues,
@@ -24,6 +25,7 @@ export function LeagueMenu({
   onPick,
   actions = [],
   onNewLeague,
+  onManage,
   title,
 }: {
   leagues: readonly MenuLeague[];
@@ -32,6 +34,8 @@ export function LeagueMenu({
   onPick(id: string): void;
   actions?: readonly MenuAction[];
   onNewLeague?(): void;
+  /** Opens the list of every league, where any can be deleted (APE-324). */
+  onManage?(): void;
   /** A longer description of the league, for the trigger's tooltip. */
   title?: string;
 }) {
@@ -85,9 +89,21 @@ export function LeagueMenu({
         )}
         {/* Which league you're in: a plain list, the current one checked. */}
         <div className={s.switchGroup} role="group" aria-labelledby={`${id}-leagues`}>
-          <span id={`${id}-leagues`} className={s.groupLabel}>
-            Switch league
-          </span>
+          <div className={s.groupHead}>
+            <span id={`${id}-leagues`} className={s.groupLabel}>
+              Switch league
+            </span>
+            {onManage && (
+              <button type="button" role="menuitem" className={s.manage} onClick={pick(onManage)}>
+                <svg viewBox="0 0 16 16" aria-hidden focusable="false">
+                  <path d="M2.5 4.5h5.7M11.8 4.5h1.7M2.5 11.5h1.7M7.8 11.5h5.7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="10" cy="4.5" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  <circle cx="6" cy="11.5" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                Manage
+              </button>
+            )}
+          </div>
           <div className={s.leagues}>
             {leagues.map((l) => (
               <button

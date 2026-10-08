@@ -34,6 +34,7 @@ import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./Focu
 import { Header, leagueSummary, PlanIcon, StatusChip, type DraftTool } from "./Header";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
+import { ManageLeaguesDialog } from "./ManageLeaguesDialog";
 import { PickCelebrationProvider } from "./PickCelebration";
 import { PrefsProvider, usePrefs } from "./PrefsProvider";
 import { useAvailability } from "./useAvailability";
@@ -76,24 +77,31 @@ export function WarRoom({ flags, user, shell = null }: { flags: PublicFlags; use
 
 /** Waits for the saved league, then mounts the draft for it. */
 function LeagueGate() {
-  const { league, active, hydrated } = useLeague();
+  const { league, active, hydrated, configured } = useLeague();
+  // Held above the draft's key: deleting the open league switches leagues, and the list stays up.
+  const [manageOpen, setManageOpen] = useState(false);
+  const openManage = useCallback(() => setManageOpen(true), [setManageOpen]);
+  const closeManage = useCallback(() => setManageOpen(false), [setManageOpen]);
   if (!hydrated) return <div className={cx("root", "loading")}>Loading your league…</div>;
   // Keyed by league so switching leagues remounts the draft, model and simulator from scratch.
   return (
-    <DraftProvider key={active?.id ?? "new"} draftKey={active?.id ?? null} totalPicks={totalPicks(league)}>
-      <EspnSyncProvider leagueId={active?.id ?? null} league={league}>
-        <DraftModelProvider league={league}>
-          <SimProvider>
-            <AiPlanProvider leagueId={active?.id ?? null}>
-              <PickCelebrationProvider>
-                <WarRoomView />
-                <DraftFinale />
-              </PickCelebrationProvider>
-            </AiPlanProvider>
-          </SimProvider>
-        </DraftModelProvider>
-      </EspnSyncProvider>
-    </DraftProvider>
+    <>
+      <DraftProvider key={active?.id ?? "new"} draftKey={active?.id ?? null} totalPicks={totalPicks(league)}>
+        <EspnSyncProvider leagueId={active?.id ?? null} league={league}>
+          <DraftModelProvider league={league}>
+            <SimProvider>
+              <AiPlanProvider leagueId={active?.id ?? null}>
+                <PickCelebrationProvider>
+                  <WarRoomView onManage={openManage} />
+                  <DraftFinale />
+                </PickCelebrationProvider>
+              </AiPlanProvider>
+            </SimProvider>
+          </DraftModelProvider>
+        </EspnSyncProvider>
+      </DraftProvider>
+      {manageOpen && configured && <ManageLeaguesDialog onClose={closeManage} />}
+    </>
   );
 }
 
@@ -102,7 +110,7 @@ const isTyping = () => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || (el as HTMLElement).isContentEditable);
 };
 
-function WarRoomView() {
+function WarRoomView({ onManage }: { onManage(): void }) {
   const { state, hydrated } = useDraft();
   const model = useModel();
   const { prefs, setPrefs, hydrated: prefsHydrated } = usePrefs();
@@ -173,22 +181,25 @@ function WarRoomView() {
     ...(!model.done ? [{ label: "How picking works", onSelect: () => setTipAsked(true) }] : []),
     ...(!syncedDone ? [{ label: "Reset draft", danger: true, onSelect: () => void reset() }] : []),
   ];
-  // The season page's League settings and + New league land here as `?settings=1` and `?new=1`,
-  // once `?league=` (LeagueProvider) has switched to the league they're for.
+  // The season page's League settings, + New league and Manage land here as `?settings=1`, `?new=1`
+  // and `?manage=1`, once `?league=` (LeagueProvider) has switched to the league they're for.
   useEffect(() => {
     const url = new URL(window.location.href);
+    const manage = url.searchParams.get("manage") === "1";
     const want = url.searchParams.get("settings") === "1" ? "edit" : url.searchParams.get("new") === "1" ? "create" : null;
-    if (!want || url.searchParams.has("league")) return;
+    if ((!want && !manage) || url.searchParams.has("league")) return;
     // Stripped and acted on together, from a timeout, as AccountMenu does with `?error=`: an effect
     // cleaned up before it fires (StrictMode) leaves the URL to retry.
     const t = setTimeout(() => {
       url.searchParams.delete("settings");
       url.searchParams.delete("new");
+      url.searchParams.delete("manage");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
-      setSetup(want);
+      if (want) setSetup(want);
+      else onManage();
     }, 0);
     return () => clearTimeout(t);
-  }, [active?.id]);
+  }, [active?.id, onManage]);
 
   /* ---- flag picks logged against different player data (e.g. sample data swapped for a live run) ---- */
   const staleWarned = useRef(false);
@@ -331,6 +342,7 @@ function WarRoomView() {
                 espnSettings ? { label: "League settings on ESPN", href: espnSettings, external: true } : { label: "League settings", onSelect: openSettings },
               ]}
               onNewLeague={() => setSetup("create")}
+              onManage={onManage}
             />
           ) : null
         }
