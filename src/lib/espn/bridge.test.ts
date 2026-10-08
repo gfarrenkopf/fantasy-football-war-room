@@ -56,6 +56,10 @@ class FakeEl {
   }
   set innerHTML(_html: string) {}
   setAttribute() {}
+  removed = false;
+  remove() {
+    this.removed = true;
+  }
   attachShadow() {
     return this;
   }
@@ -94,6 +98,13 @@ function page({
   const storage = new Map<string, string>(stored ? [["warroom-bridge:704343562", stored]] : []);
   const windowListeners: Listener[] = [];
   const fetch = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ have: 0 }), { status: 200 }));
+  /** What the bridge told Draft Room about itself (APE-331), kept apart from its real requests. */
+  const beacons: Record<string, string>[] = [];
+  const fetchOrBeacon = (url: string, init: RequestInit) => {
+    if (!String(url).endsWith("/api/espn/bridge/beacon")) return fetch(url, init);
+    beacons.push(JSON.parse(String(init.body)));
+    return Promise.resolve(new Response(null, { status: 204 }));
+  };
   /** The popup the bridge opens, which it answers through postMessage. */
   const popup = { postMessage: vi.fn() };
   const open = vi.fn(() => popup);
@@ -101,6 +112,8 @@ function page({
   const assign = vi.fn<(url: string) => void>();
   const shadow = new FakeEl();
   const keyListeners: ((e: { key: string; preventDefault(): void }) => void)[] = [];
+  const errorListeners: ((e: { error?: unknown; filename?: string }) => void)[] = [];
+  const posted: unknown[] = [];
   const document = {
     currentScript: { src: `${WAR_ROOM}/espn-bridge.js` },
     // The overlay's host attaches the shared shadow root; everything else is a fresh element.
@@ -112,18 +125,26 @@ function page({
     addEventListener: (type: string, fn: (e: { key: string; preventDefault(): void }) => void) => type === "keydown" && keyListeners.push(fn),
   };
   const press = (key: string) => keyListeners.forEach((fn) => fn({ key, preventDefault() {} }));
+  const location = { hostname: url.hostname, pathname: url.pathname, search: url.search, assign };
   const context: Record<string, unknown> = {
     document,
-    location: { hostname: url.hostname, pathname: url.pathname, search: url.search, assign },
+    location,
     sessionStorage: {
       getItem: (k: string) => storage.get(k) ?? null,
       setItem: (k: string, v: string) => storage.set(k, v),
       removeItem: (k: string) => storage.delete(k),
     },
-    WebSocket: FakeSocket,
-    fetch,
+    WebSocket: class extends FakeSocket {},
+    fetch: fetchOrBeacon,
     open,
-    addEventListener: (type: string, fn: Listener) => type === "message" && windowListeners.push(fn),
+    addEventListener: (type: string, fn: Listener) => {
+      if (type === "message") windowListeners.push(fn);
+      if (type === "error") errorListeners.push(fn as (typeof errorListeners)[number]);
+    },
+    removeEventListener: (type: string, fn: unknown) => {
+      if (type === "error") errorListeners.splice(errorListeners.indexOf(fn as (typeof errorListeners)[number]) >>> 0, 1);
+    },
+    postMessage: (data: unknown) => posted.push(data),
     URL,
     URLSearchParams,
     Response,
@@ -158,7 +179,17 @@ function page({
     fetch.mock.calls
       .filter(([url, init]) => init && init.body && String(url).endsWith("/frames"))
       .map(([, init]) => JSON.parse(String(init.body)) as { espnLeagueId: string; session: string; seq: number; frames: string[]; planVersion: number; handoverVersion?: number });
-  return { load, bridge, decode, Socket, postMessage, fetch, open, assign, popup, storage, shadow, bodies, press, moveViewport };
+  /** ESPN moving to another page in place, without loading a new one. */
+  const navigate = (href: string) => {
+    const next = new URL(href);
+    Object.assign(location, { hostname: next.hostname, pathname: next.pathname, search: next.search });
+  };
+  /** The window's error event, as a browser fires it for an uncaught throw in this script. */
+  const fireError = (error: unknown) => [...errorListeners].forEach((fn) => fn({ error, filename: `${WAR_ROOM}/espn-bridge.js?t=1` }));
+  return {
+    load, bridge, decode, Socket, postMessage, fetch, open, assign, popup, storage, shadow, bodies, press, moveViewport,
+    beacons, navigate, fireError, errorListeners, posted, document, context,
+  };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -349,7 +380,7 @@ describe("ESPN bridge", () => {
     p.load();
     await vi.advanceTimersByTimeAsync(300);
     expect(p.bridge()).toMatchObject({ onDraftPage: false, paired: false });
-    expect(p.shadow.querySelector(".s").textContent).toContain("Open your ESPN draft");
+    expect(p.shadow.querySelector(".s").textContent).toContain("Open your ESPN league or draft");
   });
 
   describe("picks made from Draft Room", () => {
@@ -988,11 +1019,11 @@ describe("the overlay on a phone (APE-304)", () => {
   // An iPhone showing ESPN's desktop page at a third of its size: 1170 page pixels across a 390-wide screen.
   const PHONE: Phone = { viewport: { width: 1170, height: 2532, offsetLeft: 0, offsetTop: 0 }, screen: { width: 390, height: 844 } };
 
-  it("scales the box back up to the screen's size and pins it to the corner on screen", () => {
+  it("scales the box back up to the screen's size and pins it across the top of what's on screen", () => {
     const p = page({ href: LEAGUE_PAGE, phone: PHONE });
     p.load();
     const box = p.shadow.querySelector(".box");
-    expect(box.style.transform).toBe("translate(36px, 2496px) scale(3)");
+    expect(box.style.transform).toBe("translate(36px, 36px) scale(3)");
     expect(box.style.width).toBe("366px");
   });
 
@@ -1000,12 +1031,188 @@ describe("the overlay on a phone (APE-304)", () => {
     const p = page({ href: LEAGUE_PAGE, phone: PHONE });
     p.load();
     p.moveViewport({ width: 585, height: 1266, offsetLeft: 100, offsetTop: 400 });
-    expect(p.shadow.querySelector(".box").style.transform).toBe("translate(118px, 1648px) scale(1.5)");
+    expect(p.shadow.querySelector(".box").style.transform).toBe("translate(118px, 418px) scale(1.5)");
   });
 
   it("leaves the box to the stylesheet on a computer", () => {
     const p = page({ href: LEAGUE_PAGE });
     p.load();
     expect(p.shadow.querySelector(".box").style.transform).toBe("");
+  });
+});
+
+describe("never leaving the user with nothing to see (APE-331)", () => {
+  const LEAGUE_PAGE = "https://fantasy.espn.com/football/league/standings?leagueId=704343562&seasonId=2026";
+  const DRAFT_PAGE = "https://fantasy.espn.com/football/draft?leagueId=704343562&seasonId=2026&teamId=1";
+  const text = (p: ReturnType<typeof page>) => p.shadow.querySelector(".s").textContent;
+
+  it("follows ESPN to the draft when the bookmark is clicked again there", () => {
+    const p = page({ href: LEAGUE_PAGE });
+    p.load();
+    expect(p.shadow.querySelector(".sc").hidden).toBe(false);
+    p.navigate(DRAFT_PAGE);
+    p.load();
+    expect(p.bridge()).toMatchObject({ onDraftPage: true, onSeasonPage: false });
+    expect(p.shadow.querySelector(".go").hidden).toBe(false);
+    expect(p.shadow.querySelector(".sc").hidden).toBe(true);
+    expect(text(p)).toBe("Connect this draft to your Draft Room board.");
+  });
+
+  it("follows ESPN to another page by itself, without another click", async () => {
+    const p = page({ href: LEAGUE_PAGE });
+    p.load();
+    p.navigate(DRAFT_PAGE);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.bridge()).toMatchObject({ onDraftPage: true });
+  });
+
+  it("starts over for a different league: its own pairing, frame log and session", async () => {
+    const p = page({ stored: "tok-1" });
+    p.load();
+    const ws = new (p.Socket())(DRAFT_URL);
+    ws.emit("SELECTED 1 1 1");
+    await vi.advanceTimersByTimeAsync(300);
+    const first = p.bodies()[0].session;
+    p.navigate("https://fantasy.espn.com/football/draft?leagueId=555&seasonId=2026&teamId=2");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.bridge()).toMatchObject({ paired: false, frames: 0 });
+    p.postMessage({ type: "warroom-bridge-paired", token: "tok-2" });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(p.storage.get("warroom-bridge:555")).toBe("tok-2");
+    const last = p.bodies().at(-1)!;
+    expect(last).toMatchObject({ espnLeagueId: "555", seq: 0 });
+    expect(last.session).not.toBe(first);
+  });
+
+  it("puts the overlay back on top of the page when clicked again", () => {
+    const p = page();
+    const append = vi.spyOn(p.document.body, "appendChild");
+    p.load();
+    p.load();
+    expect(append).toHaveBeenCalledTimes(2);
+  });
+
+  it("dims the page until the user has connected, then stays out of the way", () => {
+    const p = page();
+    p.load();
+    expect(p.shadow.querySelector(".bg").hidden).toBe(false);
+    p.postMessage({ type: "warroom-bridge-paired", token: "tok-1" });
+    expect(p.shadow.querySelector(".bg").hidden).toBe(true);
+    expect(p.shadow.querySelector(".box").className).toBe("box");
+  });
+
+  it("hides to a pill that opens again with a tap, and a click of the bookmark opens it too", () => {
+    const p = page({ href: LEAGUE_PAGE });
+    p.load();
+    p.shadow.querySelector(".x").onclick!();
+    const box = p.shadow.querySelector(".box");
+    expect(box.className).toBe("box pill");
+    expect(p.shadow.querySelector(".bg").hidden).toBe(true);
+    expect(p.shadow.querySelector(".pl").textContent).toBe("Tap to open");
+    box.onclick!();
+    expect(box.className).toBe("box");
+    p.shadow.querySelector(".x").onclick!();
+    p.load();
+    expect(box.className).toBe("box");
+  });
+
+  it("shrinks to a pill on a phone once the draft is connected", () => {
+    const phone: Phone = { viewport: { width: 1170, height: 2532, offsetLeft: 0, offsetTop: 0 }, screen: { width: 390, height: 844 } };
+    const p = page({ phone });
+    p.load();
+    p.shadow.querySelector(".go").onclick!();
+    p.postMessage({ type: "warroom-bridge-paired", token: "tok-1" });
+    expect(p.shadow.querySelector(".box").className).toBe("box pill");
+    expect(p.shadow.querySelector(".pl").textContent).toBe("Connected");
+  });
+
+  describe("pairing", () => {
+    it("opens Draft Room's window in the middle of the ESPN window and waits for it, front and center", () => {
+      const p = page();
+      Object.assign(p.context, { screenX: 100, screenY: 50, outerWidth: 1440, outerHeight: 900 });
+      p.load();
+      p.shadow.querySelector(".go").onclick!();
+      expect(p.open).toHaveBeenCalledWith(expect.any(String), "warroom-pair", "popup,width=520,height=720,left=560,top=140");
+      expect(p.shadow.querySelector(".box").className).toBe("box center");
+      expect(p.shadow.querySelector(".bg").hidden).toBe(false);
+      expect(text(p)).toBe("Finish connecting in the Draft Room window.");
+      expect(p.shadow.querySelector(".go").hidden).toBe(true);
+      p.shadow.querySelector(".pa").onclick!();
+      expect(p.open).toHaveBeenCalledTimes(2);
+      expect(p.beacons.filter((b) => b.event === "pair").map((b) => b.outcome)).toEqual(["opened", "opened"]);
+    });
+
+    it("says so when the browser blocks the window, and opens it on a tap", () => {
+      const p = page();
+      p.open.mockReturnValueOnce(null as unknown as ReturnType<typeof p.open>);
+      p.load();
+      p.shadow.querySelector(".go").onclick!();
+      expect(text(p)).toBe("Your browser blocked the Draft Room window. Tap Open it to finish connecting.");
+      expect(p.shadow.querySelector(".pa").textContent).toBe("Open it");
+      p.shadow.querySelector(".pa").onclick!();
+      expect(p.beacons.filter((b) => b.event === "pair").map((b) => b.outcome)).toEqual(["blocked", "opened"]);
+    });
+
+    it("can be cancelled, and reports when it's done", () => {
+      const p = page();
+      p.load();
+      p.shadow.querySelector(".go").onclick!();
+      p.shadow.querySelector(".x").onclick!();
+      expect(p.shadow.querySelector(".go").hidden).toBe(false);
+      p.shadow.querySelector(".go").onclick!();
+      p.postMessage({ type: "warroom-bridge-paired", token: "tok-1" });
+      expect(p.beacons.filter((b) => b.event === "pair").map((b) => b.outcome)).toEqual(["opened", "opened", "paired"]);
+      expect(p.shadow.querySelector(".box").className).toBe("box");
+    });
+  });
+
+  it("tells Draft Room it loaded, where, and on what", () => {
+    const p = page({ href: LEAGUE_PAGE });
+    p.load();
+    p.load();
+    expect(p.beacons).toEqual([
+      { event: "load", mode: "season", platform: "desktop", espnLeagueId: "704343562" },
+      { event: "load", mode: "season", platform: "desktop", espnLeagueId: "704343562", again: "1" },
+    ]);
+  });
+
+  it("says something blocked it when the page won't let it listen to the draft, rather than waiting forever", () => {
+    const p = page();
+    Object.defineProperty((p.context.WebSocket as typeof FakeSocket).prototype, "send", { value: () => {}, writable: false });
+    p.load();
+    expect(text(p)).toContain("Something on this page blocked Draft Room");
+    expect(p.shadow.querySelector(".go").hidden).toBe(true);
+    expect(p.beacons).toContainEqual(expect.objectContaining({ event: "error", error: "TypeError" }));
+  });
+
+  it("shows a plain message and reports it if starting up throws, and stops listening once it's up", () => {
+    const p = page();
+    p.load();
+    expect(p.errorListeners).toHaveLength(0);
+
+    const broken = page();
+    broken.document.createElement = () => {
+      throw new TypeError("no DOM");
+    };
+    expect(() => broken.load()).toThrow();
+    const append = vi.spyOn(broken.document.body, "appendChild");
+    broken.document.createElement = () => Object.assign(new FakeEl(), { attachShadow: () => broken.shadow });
+    broken.fireError(new TypeError("no DOM"));
+    expect(append).toHaveBeenCalledTimes(1);
+    expect(append.mock.calls[0][0].textContent).toContain("Something on this page blocked Draft Room");
+    expect(broken.beacons).toContainEqual(expect.objectContaining({ event: "error", error: "TypeError" }));
+    expect(broken.errorListeners).toHaveLength(0);
+  });
+
+  it("on Draft Room's own site, says the bookmark works and tells the setup steps, without touching sockets", async () => {
+    const p = page({ href: `${WAR_ROOM}/espn` });
+    const Before = p.context.WebSocket;
+    p.load();
+    expect(p.context.WebSocket).toBe(Before);
+    expect(text(p)).toContain("Your bookmark works");
+    expect(p.posted).toEqual([{ type: "warroom-bridge-ready" }]);
+    expect(p.beacons[0]).toMatchObject({ event: "load", mode: "own-site" });
+    await vi.advanceTimersByTimeAsync(2600);
+    expect(p.bridge()).toMatchObject({ onDraftPage: false });
   });
 });

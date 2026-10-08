@@ -5,7 +5,8 @@
 #
 #   warroom-alerts.sh scan            # warroom-alerts.timer, every 5 minutes: new server errors
 #                                     # ("[server-error]" lines from src/instrumentation.ts),
-#                                     # ESPN protocol drift ("[espn-sync] protocol-drift") and
+#                                     # ESPN protocol drift ("[espn-sync] protocol-drift"), the
+#                                     # ESPN bookmark failing in a user's tab ("[espn-bridge] problem") and
 #                                     # crashes of warroom.service since the last scan
 #   warroom-alerts.sh failed <unit>   # warroom-alert-failed@.service, via OnFailure=: a unit failed
 #   warroom-alerts.sh test            # sends a test email
@@ -44,8 +45,9 @@ scan() {
   cp "$cursor" "$cursor.next"
   lines="$(journalctl -u "$unit" --cursor-file="$cursor.next" -q -o short-iso --no-pager)"
   # [espn-sync] covers protocol drift: ESPN changing its unofficial draft feed under us, which we
-  # only ever find out about during someone's live draft.
-  matches="$(grep -E '\[server-error\]|\[espn-sync\] protocol-drift|Main process exited, code=' <<<"$lines" || true)"
+  # only ever find out about during someone's live draft. [espn-bridge] problem is the bookmark
+  # failing to start in someone's ESPN tab, which they'd otherwise see as it doing nothing.
+  matches="$(grep -E '\[server-error\]|\[espn-sync\] protocol-drift|\[espn-bridge\] problem|Main process exited, code=' <<<"$lines" || true)"
   if [[ -z "$matches" ]]; then
     mv "$cursor.next" "$cursor"
     return 0

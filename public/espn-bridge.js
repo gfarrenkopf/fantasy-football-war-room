@@ -23,6 +23,11 @@
  *   after the user agrees in War Room's own popup, and only when that popup asks, it hands the popup
  *   the user's ESPN login cookies, so War Room can read their leagues during the season.
  *
+ * - It never leaves the user with nothing to see (APE-331): every click reads the page afresh and puts
+ *   the overlay back on top, a failure to start still shows a message, and it tells Draft Room it
+ *   loaded or failed (a beacon with the page kind and phone browser, nothing from ESPN but the league
+ *   id). On Draft Room's own site it only says the bookmark works, for the setup steps.
+ *
  * Plain script, no build step, so what's tested (src/lib/espn/bridge.test.ts) is exactly what ships.
  * The frame grammar is documented in docs/espn-protocol.md.
  */
@@ -35,6 +40,8 @@
   /** @type {any} */
   const w = window;
   if (w.__warRoomBridge) {
+    // Clicked again: ESPN may have moved to another page in place since the first click, or taken
+    // the overlay off the page. show() reads the page afresh and puts the overlay back on top.
     w.__warRoomBridge.show();
     return;
   }
@@ -42,29 +49,117 @@
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
   /** War Room's origin: wherever this script was loaded from. */
   const ORIGIN = script && script.src ? new URL(script.src).origin : "https://draftroom.online";
+
+  /**
+   * Phone or computer, and which phone browser: only for the load beacon, so a failure can be told
+   * apart by where it happens. Nothing else about the browser is sent.
+   */
+  const PLATFORM = (() => {
+    const nav = w.navigator;
+    const ua = String((nav && nav.userAgent) || "");
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && nav && nav.maxTouchPoints > 1)) return /CriOS/.test(ua) ? "ios-chrome" : "ios-safari";
+    if (/Android/.test(ua)) return "android";
+    return "desktop";
+  })();
+  const TOUCH = typeof w.matchMedia === "function" && w.matchMedia("(pointer: coarse)").matches;
+
+  const BLOCKED = "Something on this page blocked Draft Room. Try again in Safari or Chrome without content blockers.";
+
+  /**
+   * Tells Draft Room the bridge loaded, failed, or how pairing went (APE-331), so a bookmark that
+   * "does nothing" shows up somewhere. A plain-text no-cors post, so no preflight; never awaited,
+   * never retried, and it carries no ESPN data beyond the league id.
+   * @param {string} event @param {Record<string, string>} [extra]
+   */
+  function beacon(event, extra) {
+    try {
+      const body = JSON.stringify({ event, mode: pageMode(), platform: PLATFORM, espnLeagueId, ...extra });
+      void fetch(`${ORIGIN}/api/espn/bridge/beacon`, { method: "POST", mode: "no-cors", credentials: "omit", keepalive: true, headers: { "content-type": "text/plain" }, body }).catch(() => {});
+    } catch {
+      /* telemetry never gets in the way */
+    }
+  }
+
+  /**
+   * The last line of defence: anything this script throws while starting up still leaves the user
+   * a message rather than silence, and Draft Room a beacon. A plain box, no shadow DOM, since
+   * whatever failed may have been the overlay itself. Removed once the bridge is up.
+   * @param {{ error?: unknown, filename?: string }} e
+   */
+  function onStartupError(e) {
+    if (w.__warRoomBridge || (e.filename && !String(e.filename).includes("/espn-bridge.js"))) return;
+    if (typeof w.removeEventListener === "function") w.removeEventListener("error", onStartupError);
+    beacon("error", { error: errorName(e.error) });
+    try {
+      const box = document.createElement("div");
+      box.setAttribute("data-warroom-bridge", "");
+      box.setAttribute("style", "position:fixed;top:12px;left:12px;right:12px;z-index:2147483647;font:15px/1.4 system-ui,sans-serif;color:#e8edf2;background:#10161d;border:1px solid #2b3a48;border-radius:12px;padding:14px 16px");
+      box.textContent = BLOCKED;
+      (document.body || document.documentElement).appendChild(box);
+    } catch {
+      /* nothing left to show it with */
+    }
+  }
+  if (typeof w.addEventListener === "function") w.addEventListener("error", onStartupError);
+
+  /** @param {unknown} err */
+  function errorName(err) {
+    const name = err && typeof err === "object" && "name" in err ? String(err.name) : "Error";
+    return /^[A-Za-z]{1,40}$/.test(name) ? name : "Error";
+  }
   const ESPN_SOCKET = /^wss:\/\/fantasydraft\.espn\.com\//;
   const ZERO_GUID = "{00000000-0000-0000-0000-000000000000}";
   const FLUSH_MS = 250;
   const HEARTBEAT_MS = 5000;
   const MAX_BATCH = 500;
 
-  const params = new URLSearchParams(location.search);
-  const onDraftPage = location.hostname === "fantasy.espn.com" && location.pathname.startsWith("/football/draft");
-  const espnLeagueId = params.get("leagueId") || "";
-  const espnTeamId = Number(params.get("teamId")) || 0;
-  // ESPN's league pages usually leave seasonId out. A season's playoffs run into January, so before
-  // July the season that's on is last year's.
-  const now = new Date();
-  const season = Number(params.get("seasonId")) || (now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear());
+  /*
+   * What page this is. ESPN's site moves between pages in place, without loading a new page, so these
+   * are read again whenever the address changes and on every click of the bookmark (APE-331), not
+   * just once: a bridge first clicked on a league page must offer the draft once the user is there.
+   */
+  /** Draft Room's own site: the bookmark is being tried out, in the setup steps. */
+  const onOwnSite = location.hostname === new URL(ORIGIN).hostname;
+  let pageKey = "";
+  let onDraftPage = false;
+  let espnLeagueId = "";
+  let espnTeamId = 0;
+  let season = 0;
   /** An ESPN league or team page outside the draft: where "Connect my season" is offered (10.3). */
-  const onSeasonPage = !onDraftPage && location.hostname === "fantasy.espn.com" && location.pathname.startsWith("/football/") && /^\d+$/.test(espnLeagueId);
-  const TOKEN_KEY = `warroom-bridge:${espnLeagueId}`;
-  const HANDOVER_KEY = `warroom-handover:${espnLeagueId}`;
+  let onSeasonPage = false;
+  let TOKEN_KEY = "";
+  let HANDOVER_KEY = "";
   /**
    * This page load's id. A reloaded ESPN tab starts a fresh frame log; the session id tells War Room
    * it's a new log continuing the same draft, not a gap in the old one.
    */
-  const session = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  let session = "";
+  const newSession = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  /** Reads the page's address. True when it names a different league than before. */
+  function readPage() {
+    pageKey = location.pathname + location.search;
+    const params = new URLSearchParams(location.search);
+    const before = espnLeagueId;
+    onDraftPage = location.hostname === "fantasy.espn.com" && location.pathname.startsWith("/football/draft");
+    espnLeagueId = params.get("leagueId") || "";
+    espnTeamId = Number(params.get("teamId")) || 0;
+    // ESPN's league pages usually leave seasonId out. A season's playoffs run into January, so before
+    // July the season that's on is last year's.
+    const now = new Date();
+    season = Number(params.get("seasonId")) || (now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear());
+    onSeasonPage = !onDraftPage && location.hostname === "fantasy.espn.com" && location.pathname.startsWith("/football/") && /^\d+$/.test(espnLeagueId);
+    TOKEN_KEY = `warroom-bridge:${espnLeagueId}`;
+    HANDOVER_KEY = `warroom-handover:${espnLeagueId}`;
+    return espnLeagueId !== before;
+  }
+  readPage();
+  session = newSession();
+
+  /** @returns {"own-site" | "draft" | "season" | "other"} */
+  function pageMode() {
+    return onOwnSite ? "own-site" : onDraftPage ? "draft" : onSeasonPage ? "season" : "other";
+  }
 
   /** Sanitized frames since the bridge attached, in order. */
   const log = /** @type {string[]} */ ([]);
@@ -368,26 +463,39 @@
     render();
   }
 
-  // Sockets opened before the click are caught on their next send (ESPN pings every 15s)...
-  const proto = w.WebSocket.prototype;
-  const send = proto.send;
-  proto.send = function (/** @type {any} */ data) {
-    attach(this);
-    if (typeof data === "string" && attached.has(this)) newline = data.endsWith("\n");
-    return send.call(this, data);
-  };
-  // ...and sockets opened after it, e.g. when ESPN reconnects, from their first frame.
   const Native = w.WebSocket;
-  w.WebSocket = class extends Native {
-    /** @param {string | URL} url @param {string | string[]} [protocols] */
-    constructor(url, protocols) {
-      // War Room holds the connection: ESPN's page gets a socket that never connects, so it can't
-      // take the connection back. It closes when War Room hands back, and the page reconnects for real.
-      if (heldByWarRoom && ESPN_SOCKET.test(String(url))) return standIn(String(url));
-      super(url, protocols);
-      attach(/** @type {WebSocket} */ (/** @type {unknown} */ (this)));
+  const send = Native.prototype.send;
+  /**
+   * Why the page wouldn't let the bridge listen to its sockets, if it wouldn't (a content blocker or
+   * another extension got there first). The overlay says so instead of waiting for a draft it can't hear.
+   * @type {string | null}
+   */
+  let relayBroken = null;
+  // Not on Draft Room's own site, where the bookmark is only being tried out.
+  if (!onOwnSite) {
+    try {
+      // Sockets opened before the click are caught on their next send (ESPN pings every 15s)...
+      Native.prototype.send = function (/** @type {any} */ data) {
+        attach(this);
+        if (typeof data === "string" && attached.has(this)) newline = data.endsWith("\n");
+        return send.call(this, data);
+      };
+      // ...and sockets opened after it, e.g. when ESPN reconnects, from their first frame.
+      w.WebSocket = class extends Native {
+        /** @param {string | URL} url @param {string | string[]} [protocols] */
+        constructor(url, protocols) {
+          // War Room holds the connection: ESPN's page gets a socket that never connects, so it can't
+          // take the connection back. It closes when War Room hands back, and the page reconnects for real.
+          if (heldByWarRoom && ESPN_SOCKET.test(String(url))) return standIn(String(url));
+          super(url, protocols);
+          attach(/** @type {WebSocket} */ (/** @type {unknown} */ (this)));
+        }
+      };
+    } catch (err) {
+      relayBroken = errorName(err);
+      beacon("error", { error: relayBroken });
     }
-  };
+  }
 
   /** A socket for ESPN's page that stays connecting until War Room hands the connection back. @param {string} url */
   function standIn(url) {
@@ -630,6 +738,7 @@
   }
 
   function tick() {
+    if (location.pathname + location.search !== pageKey) followPage();
     if (!token) return;
     if (failures && Date.now() - lastPost < Math.min(30_000, HEARTBEAT_MS * failures)) return;
     void flush();
@@ -648,6 +757,34 @@
       flushQueued = false;
       tick();
     }, 0);
+  }
+
+  /**
+   * The page's address changed under the bridge, or the user clicked the bookmark again: read the
+   * page afresh. A different league is a different draft, so its frame log, plan and pairing start over.
+   */
+  function followPage() {
+    if (readPage()) {
+      log.length = 0;
+      sent = 0;
+      session = newSession();
+      token = readToken();
+      status = token ? "listening" : "unpaired";
+      plan = null;
+      planVersion = 0;
+      settingsToSend = null;
+      settingsSent = "";
+      lastSettings = null;
+      handoverOffer = null;
+      handover = readSession(HANDOVER_KEY) ? "done" : "none";
+      takenEspn.clear();
+      armed = null;
+      draftingName = null;
+      pairStep = "idle";
+    }
+    if (!onSeasonPage) seasonStep = "idle";
+    if (onDraftPage && token) void readLeagueSettings();
+    render();
   }
 
   setInterval(tick, FLUSH_MS);
@@ -737,9 +874,26 @@
 
   /* ---------------- pairing ---------------- */
 
+  /**
+   * Where pairing is: the Draft Room window is open and the user hasn't finished there yet, or the
+   * browser blocked it. Either way the overlay says so in the middle of the screen (APE-331), since a
+   * popup that opened behind the ESPN window, or not at all, otherwise looks like nothing happened.
+   * @type {"idle" | "waiting" | "blocked"}
+   */
+  let pairStep = "idle";
+
   function pair() {
     const url = `${ORIGIN}/espn/pair?league=${encodeURIComponent(espnLeagueId)}&team=${espnTeamId}&season=${season}`;
-    w.open(url, "warroom-pair", "popup,width=520,height=720");
+    // Centered over the ESPN window on a computer. A phone opens it as a tab and ignores the size.
+    const width = 520;
+    const height = 720;
+    const left = Math.max(0, Math.round((w.screenX || 0) + ((w.outerWidth || width) - width) / 2));
+    const top = Math.max(0, Math.round((w.screenY || 0) + ((w.outerHeight || height) - height) / 2));
+    const opened = w.open(url, "warroom-pair", `popup,width=${width},height=${height},left=${left},top=${top}`);
+    pairStep = opened ? "waiting" : "blocked";
+    collapsed = false;
+    beacon("pair", { outcome: opened ? "opened" : "blocked" });
+    render();
   }
 
   w.addEventListener("message", (/** @type {MessageEvent} */ e) => {
@@ -755,6 +909,10 @@
     }
     if (e.data.type !== "warroom-bridge-paired" || typeof e.data.token !== "string") return;
     writeToken(e.data.token);
+    if (pairStep !== "idle") beacon("pair", { outcome: "paired" });
+    pairStep = "idle";
+    // Connected: on a phone, get out of the way of ESPN's draft and leave a pill to tap.
+    collapsed = TOUCH;
     status = sockets ? "live" : "listening";
     lastPost = 0;
     render();
@@ -767,15 +925,25 @@
   const host = document.createElement("div");
   host.setAttribute("data-warroom-bridge", "");
   const root = host.attachShadow({ mode: "open" });
+  /*
+   * The overlay is a step the user has to take, so until they've taken it it sits across the top of
+   * the screen over a dimmed page (APE-331): ESPN's own bars, banners and ads crowd the corners, where
+   * it used to sit, and covered it. Once the draft is connected it gets out of the way: a plain panel
+   * on a computer, a pill on a phone, which opens the panel again when tapped.
+   */
   root.innerHTML = `<style>
-    .box{position:fixed;left:16px;bottom:16px;z-index:2147483647;font:13px/1.35 system-ui,sans-serif;color:#e8edf2;
-      background:#10161d;border:1px solid #2b3a48;border-radius:10px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.35);
-      width:min(360px,calc(100vw - 32px));box-sizing:border-box}
-    .t{font-weight:700;letter-spacing:.02em;margin-bottom:2px}.t i{font-style:normal;color:#5fd38d}
-    .s{color:#aab7c4}.row{display:flex;gap:8px;margin-top:8px}
-    button{font:inherit;border-radius:6px;border:1px solid #2b3a48;background:#1b2530;color:inherit;padding:4px 10px;cursor:pointer}
-    button.go,button.ha,button.sc,button.sy{background:#2e7d4f;border-color:#2e7d4f}[hidden]{display:none}
-    .plan{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px}
+    .bg{position:fixed;inset:0;z-index:2147483646;background:rgba(4,7,10,.62)}
+    .box{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;font:15px/1.4 system-ui,sans-serif;color:#e8edf2;
+      background:#10161d;border:1px solid #2b3a48;border-radius:12px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.5);
+      width:min(520px,calc(100vw - 24px));box-sizing:border-box;max-height:calc(100vh - 24px);overflow:auto}
+    .box.center{top:50%;transform:translate(-50%,-50%)}
+    .box.pill{width:auto;max-width:calc(100vw - 24px);padding:6px 14px;border-radius:999px;cursor:pointer;font-size:13px}
+    .box.pill>:not(.t){display:none}.box.pill .t{margin:0}
+    .t{font-weight:700;letter-spacing:.02em;margin-bottom:4px}.t i{font-style:normal;color:#5fd38d}.t span{font-weight:400;color:#aab7c4;margin-left:6px}
+    .s{color:#c9d3dc}.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    button{font:inherit;border-radius:8px;border:1px solid #2b3a48;background:#1b2530;color:inherit;padding:8px 14px;cursor:pointer}
+    button.go,button.ha,button.sc,button.sy,button.pa{background:#2e7d4f;border-color:#2e7d4f;font-weight:700}[hidden]{display:none}
+    .plan{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px;font-size:13px}
     .ph{display:flex;align-items:baseline;gap:8px}.ph b{flex:1}.ph span{color:#8f9aa8;font-size:12px}
     .ph button{padding:1px 8px;font-size:12px}
     .rows{max-height:45vh;overflow:auto;margin-top:4px}
@@ -787,18 +955,18 @@
     .g{font-size:11px;padding:1px 5px;border-radius:4px}.g.value{color:#5ee39a;border:1px solid #2e7d4f}.g.reach{color:#ff8a8a;border:1px solid #8a3434}
     .d{padding:2px 8px;font-size:12px}.d.on{background:#3ddc91;border-color:#3ddc91;color:#0d1a14;font-weight:700}
     .note,.hn{color:#8f9aa8;font-size:12px;margin-top:6px}
-    .ho,.so{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px}.ho b,.so b{display:block;margin-bottom:4px}
-    .ho ul,.so ul{margin:0;padding-left:18px;color:#aab7c4;font-size:12px}.ho li,.so li{margin-top:3px}
+    .ho,.so{margin-top:10px;border-top:1px solid #2b3a48;padding-top:10px}.ho b,.so b{display:block;margin-bottom:4px}
+    .ho ul,.so ul{margin:0;padding-left:18px;color:#aab7c4;font-size:13px}.ho li,.so li{margin-top:3px}
     .so ul{max-height:40vh;overflow:auto}
-    @media (pointer:coarse){button{padding:8px 12px}.row{flex-wrap:wrap}}
-  </style><div class="box"><div class="t">Draft Room <i>●</i></div><div class="s"></div>
+    @media (pointer:coarse){button{padding:10px 16px}.row button{flex:1 1 auto}}
+  </style><div class="bg" hidden></div><div class="box"><div class="t">Draft Room <i>●</i><span class="pl"></span></div><div class="s"></div>
   <div class="plan" hidden><div class="ph"><b class="pt"></b><span class="pr"></span><button class="more" type="button">More</button></div>
   <div class="rows"></div><div class="note"></div></div>
   <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="hn"></div>
   <div class="row"><button class="ha" type="button">Let Draft Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
   <div class="so" hidden><b>Before you connect</b><ul></ul>
   <div class="row"><button class="sy" type="button">I understand, connect</button><button class="sn" type="button">Not now</button></div></div>
-  <div class="row"><button class="go" type="button">Connect to Draft Room</button><button class="sc" type="button" hidden>Connect my season</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
+  <div class="row"><button class="go" type="button">Connect to Draft Room</button><button class="pa" type="button" hidden>Open it again</button><button class="sc" type="button" hidden>Connect my season</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
   const goEl = /** @type {HTMLButtonElement} */ (root.querySelector(".go"));
@@ -838,7 +1006,17 @@
     seasonStep = "idle";
     render();
   };
-  hideEl.onclick = () => (host.hidden = true);
+  /** The user put the overlay away: it shrinks to a pill rather than vanishing, so it's one tap back. */
+  let collapsed = false;
+  hideEl.onclick = () => {
+    if (pairStep !== "idle") pairStep = "idle";
+    else collapsed = true;
+    render();
+  };
+  const backdropEl = /** @type {HTMLElement} */ (root.querySelector(".bg"));
+  const pillEl = /** @type {HTMLElement} */ (root.querySelector(".pl"));
+  const againEl = /** @type {HTMLButtonElement} */ (root.querySelector(".pa"));
+  againEl.onclick = pair;
   moreEl.onclick = () => {
     expanded = !expanded;
     render();
@@ -956,9 +1134,13 @@
 
   function render() {
     if (armed !== null && !myTurn()) armed = null;
-    const needsPairing = !token && onDraftPage;
+    const pairing = pairStep !== "idle" && onDraftPage && !token && !relayBroken;
+    const needsPairing = !token && onDraftPage && !relayBroken && !pairing;
     goEl.hidden = !needsPairing;
     goEl.textContent = status === "expired" ? "Connect again" : "Connect to Draft Room";
+    againEl.hidden = !pairing;
+    againEl.textContent = pairStep === "blocked" ? "Open it" : "Open it again";
+    hideEl.textContent = pairing ? "Cancel" : "Hide";
     let text;
     const offering = seasonStep === "offer" || seasonStep === "sending";
     seasonEl.hidden = !onSeasonPage || offering;
@@ -967,7 +1149,16 @@
     seasonOfferEl.hidden = !onSeasonPage || !offering || !seasonOffer;
     if (!seasonOfferEl.hidden && seasonOffer) seasonListEl.replaceChildren(...seasonOffer.lines.map((line) => el("li", undefined, line)));
     seasonYesEl.disabled = seasonStep === "sending";
-    if (onSeasonPage)
+    if (onOwnSite) text = "✓ Your bookmark works. Next, open your league on ESPN and tap it there.";
+    else if (relayBroken) text = BLOCKED;
+    else if (pairing)
+      text =
+        pairStep === "blocked"
+          ? "Your browser blocked the Draft Room window. Tap Open it to finish connecting."
+          : TOUCH
+            ? "Finish connecting in the Draft Room tab, then come back to this one."
+            : "Finish connecting in the Draft Room window.";
+    else if (onSeasonPage)
       text =
         seasonStep === "sending"
           ? "Opening Draft Room…"
@@ -976,7 +1167,7 @@
             : seasonStep === "failed"
               ? "Couldn't reach Draft Room. Check your connection and try again."
               : "Get Draft Room's weekly lineup and trade help for this league.";
-    else if (!onDraftPage) text = "Open your ESPN draft, then click the Draft Room bookmark again.";
+    else if (!onDraftPage) text = "Open your ESPN league or draft, then tap the Draft Room bookmark again.";
     else if (status === "expired") text = "Your Draft Room connection expired.";
     else if (status === "denied") text = "ESPN live sync isn't available on this Draft Room account yet.";
     else if (status === "purchase") text = "This league needs a Draft Room season pass for live sync.";
@@ -991,47 +1182,85 @@
     dotEl.style.color = heldByWarRoom ? "#7cb7ff" : token && sockets && status !== "offline" ? "#5fd38d" : "#e0a100";
     renderPlan();
     renderHandover();
+    // Connected to a draft is the only state that asks nothing of the user; everything else is a
+    // step to take, in front of a dimmed page.
+    const connected = onDraftPage && !!token && !relayBroken && status !== "purchase";
+    const pill = collapsed && !pairing;
+    pillEl.textContent = pill ? pillText(connected) : "";
+    boxEl.className = `box${pill ? " pill" : pairing ? " center" : ""}`;
+    backdropEl.hidden = pill || (connected && !pairing);
     fitToScreen();
+  }
+
+  /** @param {boolean} connected */
+  function pillText(connected) {
+    if (!connected) return "Tap to open";
+    if (heldByWarRoom) return "Drafting for you";
+    if (status === "offline") return "Reconnecting…";
+    return sockets ? `Live · ${picks()} picks` : "Connected";
   }
 
   /**
    * ESPN serves phones its desktop page, zoomed out to fit (often to a third), and the overlay's
    * pixels shrink with it until it's unreadable (APE-304). On a touch screen, undo that zoom: scale
-   * the box by how many page pixels span one screen pixel, and pin it to the corner of what's on
-   * screen, which pinching and scrolling move. Elsewhere the stylesheet's own placement stands.
+   * the box by how many page pixels span one screen pixel, and place it across the top (or in the
+   * middle, while pairing) of what's on screen, which pinching and scrolling move. Elsewhere the
+   * stylesheet's own placement stands.
    */
   const boxEl = /** @type {HTMLElement} */ (root.querySelector(".box"));
+  boxEl.onclick = () => {
+    if (!collapsed) return;
+    collapsed = false;
+    render();
+  };
   function fitToScreen() {
     const vv = w.visualViewport;
-    const touch = typeof w.matchMedia === "function" && w.matchMedia("(pointer: coarse)").matches;
     const screenWidth = w.screen && vv ? (vv.width > vv.height ? Math.max(w.screen.width, w.screen.height) : Math.min(w.screen.width, w.screen.height)) : 0;
-    const k = vv && touch && screenWidth > 0 ? vv.width / screenWidth : 1;
+    const k = vv && TOUCH && screenWidth > 0 ? vv.width / screenWidth : 1;
     if (!vv || k < 1.05) {
-      Object.assign(boxEl.style, { top: "", left: "", bottom: "", width: "", transform: "", transformOrigin: "" });
+      Object.assign(boxEl.style, { top: "", left: "", width: "", maxHeight: "", transform: "", transformOrigin: "" });
       return;
     }
-    const margin = 12 * k;
-    Object.assign(boxEl.style, { top: "0px", left: "0px", bottom: "auto", width: `${Math.min(380, screenWidth - 24)}px`, transformOrigin: "0 0" });
+    const pill = boxEl.className.includes("pill");
+    const width = Math.min(520, screenWidth - 24);
+    Object.assign(boxEl.style, { top: "0px", left: "0px", width: pill ? "auto" : `${width}px`, maxHeight: `${Math.round(vv.height / k) - 24}px`, transformOrigin: "0 0" });
+    const boxWidth = (pill && boxEl.offsetWidth) || width;
     const height = boxEl.offsetHeight || 0;
-    boxEl.style.transform = `translate(${vv.offsetLeft + margin}px, ${vv.offsetTop + vv.height - margin - height * k}px) scale(${k})`;
+    const x = vv.offsetLeft + (vv.width - boxWidth * k) / 2;
+    const y = boxEl.className.includes("center") ? vv.offsetTop + (vv.height - height * k) / 2 : vv.offsetTop + 12 * k;
+    boxEl.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
   }
   if (w.visualViewport) {
     w.visualViewport.addEventListener("resize", fitToScreen);
     w.visualViewport.addEventListener("scroll", fitToScreen);
   }
 
-  (document.body || document.documentElement).appendChild(host);
+  /** On top of the page: appended last, so it's above anything ESPN added at the same z-index since. */
+  const mount = () => (document.body || document.documentElement).appendChild(host);
+  mount();
   render();
   if (token) void flush();
+  beacon("load");
+  /** On Draft Room's own site: tell the setup steps the bookmark worked, then step aside for them. */
+  function triedOut() {
+    if (!onOwnSite) return;
+    if (typeof w.postMessage === "function") w.postMessage({ type: "warroom-bridge-ready" }, ORIGIN);
+    setTimeout(() => host.remove(), 2500);
+  }
+  triedOut();
 
   w.__warRoomBridge = {
     show() {
-      host.hidden = false;
-      render();
+      collapsed = false;
+      mount();
+      followPage();
+      beacon("load", { again: "1" });
+      triedOut();
     },
     /** For tests and support: what the bridge is doing. */
     state: () => ({ status, sent, frames: log.length, sockets, paired: !!token, onDraftPage, onSeasonPage, seasonStep, planVersion, armed, drafting: draftingName, handover, held: heldByWarRoom, standIns: standIns.size }),
     /** Exposed so the INIT decoder can be run against blobs recorded from real drafts (8.12). */
     decodeInitPicks,
   };
+  if (typeof w.removeEventListener === "function") w.removeEventListener("error", onStartupError);
 })();
