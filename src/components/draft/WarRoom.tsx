@@ -18,7 +18,7 @@ import { Board, matchesQuery, useBoardColumns } from "./Board";
 import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
-import { EspnFinalDraft, EspnLeagueFollower, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider, useEspnSync } from "./EspnSync";
+import { EspnDraftDay, EspnFinalDraft, EspnLeagueFollower, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider, useEspnSync } from "./EspnSync";
 import { EspnAutopickAlert } from "./EspnAutopickAlert";
 import { EspnTakeover } from "./EspnTakeover";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
@@ -381,6 +381,7 @@ function WarRoomView({ onManage }: { onManage(): void }) {
       </Header>
       <EspnAutopickAlert />
       <EspnLeagueFollower />
+      <EspnDraftDay />
       <EspnFinalDraft />
       <EspnTakeover />
       <EspnPickBar />

@@ -513,6 +513,47 @@ export function EspnLeagueFollower() {
   return null;
 }
 
+const MINUTE = 60 * 1000;
+
+/**
+ * Draft day for a league connected to ESPN (APE-336): from when ESPN opens the draft room, an hour
+ * before the draft, until a little after it starts, and while the draft isn't connected yet, a
+ * banner says it's time to tap the bookmark in ESPN's draft. The email says the same to anyone away
+ * from Draft Room (src/lib/server/seasonDraftDay.ts). Only for a draft time with a time of day.
+ */
+export function EspnDraftDay() {
+  const user = useAccount();
+  const { active } = useLeague();
+  const { state } = useDraft();
+  const { status } = useEspnSync();
+  const at = active?.espn && active.draftAt?.includes("T") ? Date.parse(active.draftAt) : NaN;
+  const pending = !!user && Number.isFinite(at) && !state.picks.length && !state.final && (status === "off" || status === "waiting");
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    if (!pending) return;
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const every = setInterval(tick, 30_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+    };
+  }, [pending]);
+
+  if (!pending || !active || now === null || now < at - 60 * MINUTE || now > at + 30 * MINUTE) return null;
+  return (
+    <div className={s.espnArm} role="region" aria-label="Your ESPN draft room is open">
+      <span className={s.espnArmText}>
+        Your ESPN draft room is open
+        <small>Open your draft on ESPN and tap your Draft Room bookmark there, so every pick lands on this board as it happens.</small>
+      </span>
+      <a className={cx("btn", "espnGo")} href={espnSetup("draft", active.id)} target="_blank" rel="noreferrer">
+        Connect your ESPN draft
+      </a>
+    </div>
+  );
+}
+
 /** What `POST /api/leagues/:id/espn/reconcile` did (src/lib/server/espn/draftImport.ts). */
 type Reconciled = { kind: "imported" | "already-final" | "not-finished" | "no-login" | "no-league" } | { kind: "mismatch"; reason: string };
 

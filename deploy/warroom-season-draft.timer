@@ -1,0 +1,12 @@
+[Unit]
+Description=Draft-day reminders: a connected ESPN league's draft room has opened
+
+[Timer]
+# Every 15 minutes, on the quarter hour: each draft falls in exactly one run's 45-60 minute window
+# (src/lib/server/seasonDraftDay.ts), so the run must start on time.
+OnCalendar=*:00/15
+AccuracySec=1s
+# No Persistent=: a reminder that arrives after the draft starts is worth nothing.
+
+[Install]
+WantedBy=timers.target

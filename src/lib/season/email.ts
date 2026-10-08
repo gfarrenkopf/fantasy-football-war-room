@@ -199,3 +199,57 @@ export function kickoffLabel(at: number): string {
   const time = new Date(at).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
   return `${day}'s ${time} ET kickoff`;
 }
+
+/**
+ * "Your ESPN draft room is open" (APE-336): sent when ESPN opens the draft room, an hour before the
+ * draft, to a user who connected their season but not this draft yet. Connecting the draft takes a
+ * tap of the bookmark inside ESPN's draft, the only place its picks can be read.
+ */
+export function renderDraftDayEmail({
+  leagues,
+  helpUrl,
+  unsubscribeUrl,
+}: {
+  leagues: { name: string; draftUrl: string; time: string }[];
+  helpUrl: string;
+  unsubscribeUrl: string;
+}): SeasonEmail {
+  const subject = leagues.length === 1 ? `Your ESPN draft room is open: ${leagues[0].name}` : "Your ESPN draft rooms are open";
+  const lead = "Open your draft on ESPN, tap your Draft Room bookmark there, then Connect to Draft Room. Your picks land on your Draft Room board as they happen.";
+  const help = "No Draft Room bookmark on this device?";
+  const sections = leagues
+    .map(
+      (l) => `<tr><td style="padding:22px 32px 0;">
+          <div style="font-family:${FONT};font-size:15px;line-height:20px;font-weight:700;color:${C.text};">${escape(l.name)}</div>
+          <div style="padding-top:2px;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">Drafts at ${escape(l.time)}</div>
+          <div style="padding-top:12px;">${button(l.draftUrl, "Open your ESPN draft")}</div>
+        </td></tr>`,
+    )
+    .join("\n");
+  const html = shell({
+    title: subject,
+    preheader: "One tap of your bookmark and your board follows the draft.",
+    headline: "Your ESPN draft room is open.",
+    body: `<tr><td style="padding:10px 32px 0;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">${escape(lead)}</td></tr>
+        ${sections}
+        <tr><td style="padding:14px 32px 0;font-family:${FONT};font-size:13px;line-height:20px;color:${C.muted};">${escape(help)} <a href="${escape(helpUrl)}" target="_blank" style="color:${C.muted};">Add it</a>.</td></tr>`,
+    footer: footer(unsubscribeUrl),
+  });
+  const text = [
+    subject,
+    "",
+    lead,
+    ...leagues.flatMap((l) => ["", `${l.name} (drafts at ${l.time})`, l.draftUrl]),
+    "",
+    `${help} ${helpUrl}`,
+    "",
+    `Stop these emails: ${unsubscribeUrl}`,
+    "",
+  ].join("\n");
+  return { subject, html, text };
+}
+
+/** A draft's start as the email names it, in Eastern time: "8:00 PM ET". */
+export function draftTimeLabel(at: number): string {
+  return `${new Date(at).toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })} ET`;
+}

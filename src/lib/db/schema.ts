@@ -515,7 +515,8 @@ export const userPrefs = pgTable("user_prefs", {
 });
 
 /** Which email a season job sent: the Sunday lineups, a request to reconnect ESPN, or an early-kickoff alert (11.4). */
-export type SeasonEmailKind = "lineup" | "reconnect" | "early";
+/** "draft" is the draft-day reminder (APE-336): its slot is the draft time. */
+export type SeasonEmailKind = "lineup" | "reconnect" | "early" | "draft";
 
 /**
  * Emails the season jobs have sent (11.3, 11.4), one per user, kind, day and slot, so a rerun never

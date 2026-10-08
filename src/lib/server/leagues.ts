@@ -122,19 +122,21 @@ export async function connectEspn(
   userId: string,
   leagueId: string,
   espn: EspnConnection,
-  { settings, name }: { settings?: Omit<LeagueSettings, "valueThreshold">; name?: string } = {},
+  { settings, name, draftAt }: { settings?: Omit<LeagueSettings, "valueThreshold">; name?: string; draftAt?: string } = {},
   now = new Date(),
 ): Promise<boolean> {
   const row = await findLeague(db, userId, leagueId);
   if (!row) return false;
   const next = settings ? { ...settings, valueThreshold: row.settings.valueThreshold } : row.settings;
   const nextName = name ?? row.name;
+  // ESPN's draft time, when the caller has it (APE-336): what the draft-day reminder goes by.
+  const nextDraftAt = draftAt ?? row.draftAt;
   const sameEspn = row.espn?.espnLeagueId === espn.espnLeagueId && row.espn.espnTeamId === espn.espnTeamId && row.espn.season === espn.season;
-  if (sameEspn && !leagueChanged(row.settings, next) && nextName === row.name) return true;
+  if (sameEspn && !leagueChanged(row.settings, next) && nextName === row.name && nextDraftAt === row.draftAt) return true;
   const updatedAt = new Date(Math.max(now.getTime(), row.updatedAt.getTime() + 1));
   await db
     .update(leagues)
-    .set({ espn: { espnLeagueId: espn.espnLeagueId, espnTeamId: espn.espnTeamId, season: espn.season }, settings: next, name: nextName, updatedAt })
+    .set({ espn: { espnLeagueId: espn.espnLeagueId, espnTeamId: espn.espnTeamId, season: espn.season }, settings: next, name: nextName, draftAt: nextDraftAt, updatedAt })
     .where(owned(userId, leagueId));
   return true;
 }
