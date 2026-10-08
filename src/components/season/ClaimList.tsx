@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import type { SeasonView, ViewClaim } from "@/lib/season/view";
+import { LocalTime } from "./LocalTime";
 import s from "./season.module.css";
 import { WriteConsent } from "./WriteConsent";
 
@@ -57,7 +58,7 @@ export function ClaimList({ view, leagueId, agreed: agreedAtLoad, onNotice }: { 
               {c.processesAt && (
                 <span className={s.fine}>
                   {" "}
-                  · processes <span suppressHydrationWarning>{new Date(c.processesAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span>
+                  · processes <LocalTime iso={c.processesAt} />
                 </span>
               )}
             </span>

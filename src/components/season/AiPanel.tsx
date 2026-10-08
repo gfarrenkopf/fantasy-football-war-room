@@ -9,6 +9,7 @@ import type { AiTradeWriteup } from "@/lib/ai/season/trade";
 import type { Trade } from "@/lib/season/trade";
 import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView } from "@/lib/season/view";
+import { LocalTime } from "./LocalTime";
 import s from "./season.module.css";
 
 /**
@@ -165,8 +166,8 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
               {status.changedSince && " You've changed your ESPN lineup since this was written, so what it says about the lineup on ESPN is out of date."}
             </p>
           )}
-          <p className={s.fine} suppressHydrationWarning>
-            Written {new Date(stored.createdAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} from the projections then.
+          <p className={s.fine}>
+            Written <LocalTime iso={stored.createdAt} /> from the projections then.
           </p>
           {/* Sunday's lineup came first: the unused mid-week one is a refresh for late news. */}
           {!ai.midweekUsed && !written && (

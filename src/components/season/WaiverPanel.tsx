@@ -7,11 +7,10 @@ import { AcquireReview } from "./AcquireReview";
 import { ClaimList } from "./ClaimList";
 import { External, Refresh } from "./Icons";
 import { PlayerLine, signed } from "./parts";
+import { LocalTime } from "./LocalTime";
 import s from "./season.module.css";
 
 type Load = { kind: "loading" } | { kind: "ok"; pickups: Pickup[]; considered: number } | { kind: "failed"; error: string };
-
-const clears = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 async function fetchWaivers(leagueId: string, refresh: boolean): Promise<Load> {
   const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/season/waivers${refresh ? "?refresh=1" : ""}`).catch(() => null);
@@ -102,7 +101,7 @@ export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonVi
                         {player.waiverClears && (
                           <>
                             {" "}
-                            · clears <span suppressHydrationWarning>{clears(player.waiverClears)}</span>
+                            · clears <LocalTime iso={player.waiverClears} />
                           </>
                         )}
                       </>
