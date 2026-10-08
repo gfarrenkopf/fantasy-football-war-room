@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "@/components/draft/useMediaQuery";
 import { bookmarkletFor } from "@/lib/espn/bookmarklet";
-import { ESPN_FANTASY_HOME } from "@/lib/espn/pages";
+import { EspnLeagueCards, type EspnLeagueLink } from "./EspnLeagueCards";
 
 /** A touch screen: no bookmarks bar to drag to, so the bookmark is copied and pasted instead (APE-299). */
 const TOUCH = "(pointer: coarse)";
@@ -64,11 +64,6 @@ function detectPhone(): Phone {
 }
 
 /** Setup instructions with the War Room bookmark: dragged on a computer, copied on a phone. See src/app/espn/page.tsx. */
-/** The user's connected leagues, each linked to its ESPN page that stays in the browser (APE-303). */
-export interface EspnLeagueLink {
-  name: string;
-  url: string;
-}
 
 export function BridgeInstall({ season, leagues }: { season: boolean; leagues: EspnLeagueLink[] }) {
   const touch = useMediaQuery(TOUCH);
@@ -149,16 +144,7 @@ export function BridgeInstall({ season, leagues }: { season: boolean; leagues: E
         {season && (
           <section className="space-y-2">
             <h2 className="text-lg font-semibold">Connect your season</h2>
-            <div className="flex flex-wrap gap-2">
-              {leagues.map((l) => (
-                <a key={l.url} href={l.url} className="rounded-card border border-line bg-panel px-3 py-2 text-sm font-semibold no-underline">
-                  Open {l.name} on ESPN ↗
-                </a>
-              ))}
-              <a href={ESPN_FANTASY_HOME} className="rounded-card border border-line bg-panel px-3 py-2 text-sm no-underline">
-                {leagues.length ? "Another league: sign in to ESPN Fantasy ↗" : "Sign in to ESPN Fantasy in this browser ↗"}
-              </a>
-            </div>
+            <EspnLeagueCards leagues={leagues} />
             <ol className="list-decimal space-y-2 pl-5">
               {SEASON_STEPS.map((step) => (
                 <li key={step}>{step}</li>

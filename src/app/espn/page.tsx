@@ -21,5 +21,5 @@ export default async function EspnSetup() {
   if (!config.espnSyncEnabled) notFound();
   const user = config.espnSeasonEnabled ? await getSessionUser() : null;
   const links = user && mayUseSeason(config.espnSyncAllowlist, user.email) ? await listSeasonLinks(getDb(), user.userId) : [];
-  return <BridgeInstall season={config.espnSeasonEnabled} leagues={links.map((l) => ({ name: l.name, url: espnLeaguePage(l) }))} />;
+  return <BridgeInstall season={config.espnSeasonEnabled} leagues={links.map((l) => ({ name: l.name, season: l.season, url: espnLeaguePage(l) }))} />;
 }

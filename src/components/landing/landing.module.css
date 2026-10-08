@@ -1439,6 +1439,16 @@
 .personaPlus b {
   color: var(--color-sky);
 }
+.personaLink {
+  font-weight: 700;
+  color: var(--color-sky);
+  text-decoration: underline;
+  text-decoration-color: var(--color-sky-line);
+  text-underline-offset: 4px;
+}
+.personaLink:hover {
+  text-decoration-color: var(--color-sky);
+}
 
 /* ---------------------------------------------------------------- verdicts */
 

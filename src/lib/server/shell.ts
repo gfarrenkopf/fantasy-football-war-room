@@ -25,6 +25,8 @@ export interface ShellLeague {
 export interface ShellEspn {
   /** Whether the Sunday lineup email goes out; null when there's no such email to offer. */
   seasonEmails: boolean | null;
+  /** The login's state, or null when there's none yet: the menu then offers to connect (APE-335). */
+  login: "connected" | "disconnected" | null;
 }
 
 export interface ShellData {
@@ -36,7 +38,7 @@ export interface ShellData {
 
 /**
  * What the app bar needs on a page for a signed-in user (Epic 15): every league, each with where
- * picking it lands, and the user's ESPN connection when they have one. Season links only count when
+ * picking it lands, and the user's ESPN connection (or the offer to make one). Season links only count when
  * in-season features are on for this user.
  */
 export async function loadShell(db: Db, user: { userId: string; email?: string | null }): Promise<ShellData> {
@@ -57,8 +59,9 @@ export async function loadShell(db: Db, user: { userId: string; email?: string |
       return { id: r.id, name: r.name, linked, home: leagueHome(r.id, linked, done), espnSettings: r.espn ? espnSettingsPage(r.espn) : link ? espnSettingsPage(link) : null };
     }),
   );
-  const espn = login
-    ? { seasonEmails: config.seasonJobEnabled && config.emailAuthEnabled ? await wantsSeasonEmails(db, user.userId) : null }
+  // Offered whenever in-season help is: to connect when there's no login yet, to manage it when there is.
+  const espn = season
+    ? { seasonEmails: login && config.seasonJobEnabled && config.emailAuthEnabled ? await wantsSeasonEmails(db, user.userId) : null, login: login?.status ?? null }
     : null;
   return { leagues, espn, season };
 }
