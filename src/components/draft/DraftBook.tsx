@@ -14,6 +14,7 @@ import { ordinal, stage } from "./OpeningNight";
 import { posLabel } from "./PlayerCard";
 import { SignInDialog } from "./Account";
 import { useHasSeasonPage, useSeasonPrompt } from "./SeasonLinks";
+import { espnSetup } from "@/lib/espn/pages";
 
 /**
  * The finished draft at rest (APE-225): what the room shows once every pick is in, in place of the
@@ -61,7 +62,7 @@ export function DraftBook() {
           )}
           {/* No season page yet: one quiet way to get one (Epic 15). */}
           {prompt === "connect" && (
-            <a className={cx("btn", "bookDoor")} href="/espn">
+            <a className={cx("btn", "bookDoor")} href={espnSetup("season")}>
               Manage your season: connect ESPN
             </a>
           )}

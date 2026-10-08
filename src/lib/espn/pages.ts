@@ -23,3 +23,18 @@ export function espnSettingsPage({ espnLeagueId, season }: { espnLeagueId: strin
   const q = new URLSearchParams({ leagueId: espnLeagueId, seasonId: String(season) });
   return `https://fantasy.espn.com/football/league/settings?${q}`;
 }
+
+/**
+ * Draft Room's own bookmark setup page (APE-333), opened for what the user came to do: connect the
+ * season, or sync a draft (`league` being the Draft Room league whose ESPN draft it is).
+ */
+export function espnSetup(intent: "season" | "draft", league?: string | null): string {
+  const q = new URLSearchParams({ for: intent, ...(league ? { league } : {}) });
+  return `/espn?${q}`;
+}
+
+/** A league's ESPN draft, where the bookmark syncs it. ESPN opens it an hour before the draft. */
+export function espnDraftPage({ espnLeagueId, espnTeamId, season }: { espnLeagueId: string; espnTeamId: number; season: number }): string {
+  const q = new URLSearchParams({ leagueId: espnLeagueId, teamId: String(espnTeamId), seasonId: String(season) });
+  return `https://fantasy.espn.com/football/draft?${q}`;
+}

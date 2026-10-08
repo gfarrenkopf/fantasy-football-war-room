@@ -7,6 +7,7 @@ import { SignIn } from "@/components/landing/SignIn";
 import type { PublicFlags } from "@/lib/config";
 import { listenForSignIn } from "@/lib/auth/channel";
 import { ESPN_DISCLOSURE, ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
+import { espnSetup } from "@/lib/espn/pages";
 
 type Phase = { kind: "idle" } | { kind: "connecting" } | { kind: "expired" } | { kind: "declined" } | { kind: "error"; message: string };
 
@@ -67,7 +68,7 @@ export function EspnSeasonConnect({
 
   const card = "rounded-card border border-line bg-panel p-4 text-sm space-y-2";
   const howTo = (
-    <Link href="/espn" className="text-focus underline">
+    <Link href={espnSetup("season")} className="text-focus underline">
       How to add the Draft Room bookmark
     </Link>
   );

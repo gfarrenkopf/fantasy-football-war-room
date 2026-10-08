@@ -594,7 +594,8 @@ export function BookmarkScene({ scene, label, className }: { scene: Scene; label
   const clip = useId();
   const desktop = scene.kind === "drag" || scene.kind === "click";
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className={className}>
+    // A computer's window is wider than it is tall: its scene is cropped to it.
+    <svg viewBox={desktop ? `0 34 ${W} 222` : `0 0 ${W} ${H}`} role="img" aria-label={label} className={className}>
       {desktop ? (
         <DesktopScene scene={scene} />
       ) : (

@@ -167,3 +167,11 @@ html[data-leaving] body::after {
     opacity: 0;
   }
 }
+
+/* A setup step arriving (src/components/espn/SetupWizard.tsx): a short rise into place, from visible. */
+@keyframes setup-step {
+  from {
+    transform: translateY(6px);
+    opacity: 0.4;
+  }
+}

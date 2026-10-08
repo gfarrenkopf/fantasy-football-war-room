@@ -19,6 +19,7 @@ import { useLeague } from "./LeagueProvider";
 import { useToast } from "./Feedback";
 import { useFlags } from "./Flags";
 import type { PlanOdds } from "./FocusView";
+import { espnSetup } from "@/lib/espn/pages";
 
 export interface EspnSyncValue {
   leagueId: string | null;
@@ -577,7 +578,7 @@ export function EspnFinalDraft() {
         Lock in your ESPN draft
         <small>Connect your ESPN league for the season, and Draft Room makes this board your ESPN draft, pick for pick.</small>
       </span>
-      <a className={cx("btn", "espnGo")} href="/espn" target="_blank" rel="noreferrer">
+      <a className={cx("btn", "espnGo")} href={espnSetup("season")} target="_blank" rel="noreferrer">
         Sync final results from ESPN
       </a>
     </div>

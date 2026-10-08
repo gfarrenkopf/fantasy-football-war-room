@@ -40,6 +40,7 @@ import { PrefsProvider, usePrefs } from "./PrefsProvider";
 import { useAvailability } from "./useAvailability";
 import { PHONE, useMediaQuery } from "./useMediaQuery";
 import { useDraftActions } from "./useDraftActions";
+import { espnSetup } from "@/lib/espn/pages";
 
 /** Mocks per availability report, as in the prototype. */
 const REPORT_MOCKS = 300;
@@ -157,7 +158,7 @@ function WarRoomView({ onManage }: { onManage(): void }) {
   /** "How picking works" brings the first-run click tip back. */
   const [tipAsked, setTipAsked] = useState(false);
   const tools: DraftTool[] = [
-    ...(espnSync.status === "waiting" && !model.done ? [{ label: "Sync ESPN draft", href: "/espn", external: true }] : []),
+    ...(espnSync.status === "waiting" && !model.done ? [{ label: "Sync ESPN draft", href: espnSetup("draft", active?.id), external: true }] : []),
     ...(!model.done
       ? [
           {
@@ -338,7 +339,7 @@ function WarRoomView({ onManage }: { onManage(): void }) {
               onPick={pickLeague}
               actions={[
                 ...(hasSeasonPage ? [{ label: "Season", href: `/season/${encodeURIComponent(active.id)}` }] : []),
-                ...(connectSeason ? [{ label: "Manage your season", href: "/espn" }] : []),
+                ...(connectSeason ? [{ label: "Manage your season", href: espnSetup("season") }] : []),
                 { label: "League settings", onSelect: openSettings },
               ]}
               onNewLeague={() => setSetup("create")}
