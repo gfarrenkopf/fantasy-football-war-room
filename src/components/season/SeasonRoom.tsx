@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import type { PublicFlags } from "@/lib/config";
@@ -19,6 +19,7 @@ import { listenForSignIn } from "@/lib/auth/channel";
 import type { SeasonView } from "@/lib/season/view";
 import { useCheckoutReturn, type CheckoutOutcome } from "./AiPanel";
 import { LineupPanel } from "./LineupPanel";
+import { useLocalTime } from "./LocalTime";
 import { pts, recordText } from "./parts";
 import { TradePanel } from "./TradePanel";
 import { GameDayPanel } from "./GameDayPanel";
@@ -75,6 +76,8 @@ type Props = {
 
 type Tab = "gameday" | "lineup" | "trade" | "waivers";
 
+const CLOCK_TIME: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+
 /**
  * The season page (src/app/season/[leagueId]/page.tsx). On a desktop everything that decides the
  * week sits above the fold; on a phone the tabs move to a bar in the thumb zone.
@@ -94,7 +97,7 @@ export function SeasonRoom(props: Props) {
   const settings = espnSettings
     ? { label: "League settings on ESPN", href: espnSettings, external: true }
     : { label: "League settings", href: `/draft?league=${encodeURIComponent(props.leagueId)}&settings=1` };
-  const time = useLocalTime("view" in props ? props.fetchedAt : null);
+  const time = useLocalTime("view" in props ? props.fetchedAt : null, CLOCK_TIME);
   const offers = view ? view.pendingTrades.filter((t) => t.status === "proposed" && t.proposerTeamId !== view.myTeamId).length : 0;
 
   return (
@@ -194,8 +197,6 @@ function TabButton({ id, tab, onSelect, children }: { id: Tab; tab: Tab; onSelec
   );
 }
 
-const noSubscription = () => () => {};
-
 /** The week and the user's record, opening the page; ESPN's sync time is the app bar's chip. */
 function Freshness({ view }: { view: SeasonView }) {
   const standing = view.teams.find((t) => t.id === view.myTeamId)?.standing;
@@ -209,15 +210,6 @@ function Freshness({ view }: { view: SeasonView }) {
         </span>
       )}
     </p>
-  );
-}
-
-/** When ESPN was last read, as the reader's local time. Formatted in the browser only: the server's time zone isn't the reader's. */
-function useLocalTime(iso: string | null) {
-  return useSyncExternalStore(
-    noSubscription,
-    () => (iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""),
-    () => "",
   );
 }
 

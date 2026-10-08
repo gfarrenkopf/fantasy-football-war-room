@@ -4,6 +4,7 @@ import { isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot, Standing } from "@/lib/season/types";
 import type { ViewPlayer } from "@/lib/season/view";
 import { Check, Lock, Note } from "./Icons";
+import { LocalTime } from "./LocalTime";
 import s from "./season.module.css";
 
 /** Shared pieces of the season page: the gain verdict and a player's line. */
@@ -106,8 +107,6 @@ export function Gain({
 /** Whether the player's game this week has kicked off, going by ESPN's scoreboard or his points. */
 export const hasStarted = (player: ViewPlayer) => player.actual !== null || player.game?.state === "in" || player.game?.state === "post";
 
-const kickoffTime = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
-
 /**
  * The player's NFL game this week: who it's against (APE-211) and where it stands (APE-196). Before
  * kickoff, the opponent and kickoff in muted ink; while it's on, the score from his team's side and
@@ -136,12 +135,10 @@ export function GameStatus({ player }: { player: ViewPlayer }) {
     <span className={s.pregame}>
       {opponent}
       {opponent && game.kickoff && " · "}
-      {game.kickoff && <span suppressHydrationWarning>{kickoffTime(game.kickoff)}</span>}
+      {game.kickoff && <LocalTime iso={game.kickoff} />}
     </span>
   );
 }
-
-const newsTime = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /**
  * ESPN's outlook for a player this week (APE-213): a small "News" tag beside his name that opens the
@@ -160,8 +157,8 @@ function NewsNote({ player }: { player: ViewPlayer }) {
         <p className={s.newsHead}>
           <b>{player.name}</b>
           {player.news.at && (
-            <span className={s.newsWhen} suppressHydrationWarning>
-              ESPN · {newsTime(player.news.at)}
+            <span className={s.newsWhen}>
+              ESPN · <LocalTime iso={player.news.at} />
             </span>
           )}
         </p>

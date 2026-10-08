@@ -9,6 +9,7 @@ import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiTradeWriteupCard } from "./AiPanel";
 import { Check } from "./Icons";
+import { LocalTime, WEEKDAY_DATE_TIME } from "./LocalTime";
 import { PlayerLine, recordText, signed } from "./parts";
 import s from "./season.module.css";
 import { TradeGain, teamName, tradeHeadline } from "./TradeGain";
@@ -18,8 +19,6 @@ import { TradeWrite } from "./TradeWrite";
 const SLOT_LABEL: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
 
 const byRos = (a: ViewPlayer, b: ViewPlayer) => b.ros - a.ros;
-const day = (iso: string) => new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : null);
 
 /**
  * Trades (10.6, 10.9): the user's offers pending on ESPN, each graded, and a builder for a what-if
@@ -71,7 +70,7 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
     <div className={s.trades}>
       {view.tradeDeadlinePassed && view.tradeDeadline && (
         <p className={`${s.panel} ${s.note} ${s.deadlinePassed}`} role="status">
-          The trade deadline passed <span suppressHydrationWarning>{day(view.tradeDeadline)}</span>. Trades here are what-ifs now: ESPN won&apos;t process new
+          The trade deadline passed <LocalTime iso={view.tradeDeadline} format={WEEKDAY_DATE_TIME} />. Trades here are what-ifs now: ESPN won&apos;t process new
           ones this season.
         </p>
       )}
@@ -91,7 +90,9 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
           )}
           {view.tradeDeadline && !view.tradeDeadlinePassed && (
             <p className={s.fine}>
-              Trade deadline <b suppressHydrationWarning>{day(view.tradeDeadline)}</b>
+              Trade deadline <b>
+                <LocalTime iso={view.tradeDeadline} format={WEEKDAY_DATE_TIME} />
+              </b>
             </p>
           )}
           {view.pendingTrades.length ? (
@@ -265,7 +266,7 @@ function Offer({
   const verdict = evaluateTrade(view.teams, view, trade);
   const [kind, label] =
     pending.status === "accepted" ? ["accepted", "Accepted"] : pending.proposerTeamId === view.myTeamId ? ["mine", "Your offer"] : ["theirs", "Offer"];
-  const time = pending.status === "accepted" ? pending.processesAt && `Goes through ${when(pending.processesAt)}` : pending.expiresAt && `Expires ${when(pending.expiresAt)}`;
+  const [timeLabel, timeAt] = pending.status === "accepted" ? ["Goes through", pending.processesAt] : ["Expires", pending.expiresAt];
   const list = (ids: readonly number[]) => ids.map((id) => names.get(id) ?? `ESPN player ${id}`).join(", ");
   return (
     <li className={s.offer} data-active={active}>
@@ -276,9 +277,9 @@ function Offer({
           </span>
           {partner}
         </h3>
-        {time && (
-          <span className={s.offerWhen} suppressHydrationWarning>
-            {time}
+        {timeAt && (
+          <span className={s.offerWhen}>
+            {timeLabel} <LocalTime iso={timeAt} />
           </span>
         )}
       </div>
