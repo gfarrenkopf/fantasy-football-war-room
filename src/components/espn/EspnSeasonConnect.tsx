@@ -6,16 +6,34 @@ import { useEffect, useState } from "react";
 import { SignIn } from "@/components/landing/SignIn";
 import type { PublicFlags } from "@/lib/config";
 import { listenForSignIn } from "@/lib/auth/channel";
+import { ESPN_DISCLOSURE, ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 
-type Phase = { kind: "idle" } | { kind: "connecting" } | { kind: "expired" } | { kind: "error"; message: string };
+type Phase = { kind: "idle" } | { kind: "connecting" } | { kind: "expired" } | { kind: "declined" } | { kind: "error"; message: string };
 
 /** A claim the bridge handed off, or "expired" when its code is unknown or past its time. */
 export type SeasonClaim = { code: string; espnLeagueId: string; season: number } | "expired" | null;
 
 const BACK_TO_ESPN = "Go back to your ESPN league page and tap the Draft Room bookmark again.";
 
-/** The season connect page's body. See src/app/espn/season/page.tsx. */
-export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: PublicFlags; signedIn: boolean; allowed: boolean; claim: SeasonClaim }) {
+/**
+ * The season connect page's body. See src/app/espn/season/page.tsx. The ESPN disclosure is asked
+ * here, once per account (APE-332): a user who agreed before, here or when pairing a draft, just
+ * connects.
+ */
+export function EspnSeasonConnect({
+  flags,
+  signedIn,
+  allowed,
+  acknowledged,
+  claim,
+}: {
+  flags: PublicFlags;
+  signedIn: boolean;
+  allowed: boolean;
+  /** Already agreed to the current ESPN disclosure; otherwise it's shown before connecting. */
+  acknowledged: boolean;
+  claim: SeasonClaim;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(claim === "expired" ? { kind: "expired" } : { kind: "idle" });
 
@@ -27,14 +45,24 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
     const res = await fetch("/api/espn/season/claim", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ claim: code }),
+      body: JSON.stringify({ claim: code, ...(acknowledged ? {} : { acknowledged: ESPN_DISCLOSURE_VERSION }) }),
     }).catch(() => null);
     if (!res) return setPhase({ kind: "error", message: "Couldn't reach Draft Room. Check your connection and try again." });
-    if (res.status === 401) return location.reload();
+    if (res.status === 401 || res.status === 428) return location.reload();
     if (res.status === 410) return setPhase({ kind: "expired" });
     const body = (await res.json().catch(() => ({}))) as { leagueId?: string; error?: string };
     if (!res.ok || !body.leagueId) return setPhase({ kind: "error", message: body.error ?? "Something went wrong connecting. Try again." });
     router.push(`/season/${body.leagueId}`);
+  }
+
+  /** "Not now": the login the ESPN tab parked here is deleted rather than left to expire. */
+  async function decline(code: string) {
+    await fetch("/api/espn/season/claim", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ claim: code }),
+    }).catch(() => null);
+    setPhase({ kind: "declined" });
   }
 
   const card = "rounded-card border border-line bg-panel p-4 text-sm space-y-2";
@@ -64,6 +92,11 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
             <p className="text-muted">{BACK_TO_ESPN}</p>
             <p>{howTo}</p>
           </div>
+        ) : phase.kind === "declined" ? (
+          <div className={card} role="status">
+            <p className="font-semibold">Nothing was connected.</p>
+            <p className="text-muted">The ESPN login your ESPN tab handed over has been deleted. To connect later, tap the Draft Room bookmark on your ESPN league page again.</p>
+          </div>
         ) : !signedIn ? (
           <section className="rounded-card border border-line bg-panel p-4">
             <SignIn
@@ -81,6 +114,16 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
             <p className="text-sm">
               Connect ESPN league <span className="font-semibold tabular-nums">{claim.espnLeagueId}</span> ({claim.season}) to your Draft Room account.
             </p>
+            {!acknowledged && (
+              <div className="space-y-2 rounded-card border border-line2 bg-panel2 p-3 text-sm">
+                <p className="font-semibold">Before you connect</p>
+                <ul className="list-disc space-y-1 pl-5 text-muted">
+                  {ESPN_DISCLOSURE.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {phase.kind === "error" && (
               <p className="text-sm text-warn-ink" role="alert">
                 {phase.message}
@@ -92,7 +135,15 @@ export function EspnSeasonConnect({ flags, signedIn, allowed, claim }: { flags: 
               disabled={phase.kind === "connecting"}
               onClick={() => connect(claim.code)}
             >
-              {phase.kind === "connecting" ? "Connecting…" : "Connect my season"}
+              {phase.kind === "connecting" ? "Connecting…" : acknowledged ? "Connect my season" : "I understand, connect my season"}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-card border border-line2 px-3 py-2 text-sm text-muted disabled:opacity-60"
+              disabled={phase.kind === "connecting"}
+              onClick={() => decline(claim.code)}
+            >
+              Not now
             </button>
           </section>
         )}

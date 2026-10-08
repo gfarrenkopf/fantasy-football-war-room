@@ -46,8 +46,8 @@ const PHONE_STEPS: Record<Phone, { label: string; save: string[]; run: string }>
 
 const SEASON_STEPS = [
   "Open your league on ESPN in the browser, signed in to ESPN. The links above open pages ESPN's app doesn't take over.",
-  "Use the Draft Room bookmark there, then tap Connect my season and agree.",
-  "Draft Room opens in the same tab. Sign in if it asks, then tap Connect my season.",
+  "Use the Draft Room bookmark there, then tap Connect my season.",
+  "Draft Room opens in the same tab. Sign in if it asks, then tap Connect my season. The first time, it says what connecting does before you agree.",
   "That's it for the season: your lineup and trade help are on any device you sign in to Draft Room on.",
 ];
 
@@ -176,11 +176,13 @@ export function BridgeInstall({ season, leagues }: { season: boolean; leagues: E
             {DRAFT_STEPS.map((step) => (
               <li key={step}>{step}</li>
             ))}
+            {season && <li>Your season connects along with the draft, so your lineup and trade help are ready when it&apos;s done.</li>}
           </ol>
           <p className="text-sm text-dim">
-            For the draft, the bookmark reads draft data from your ESPN tab (picks and the clock), and makes a pick there only when you draft from Draft Room; it never
-            sends Draft Room your ESPN password or cookies. ESPN live sync is unofficial and not endorsed by ESPN, so it can stop working if ESPN changes their draft
-            room. Your board always works by hand.
+            For the draft, the bookmark reads draft data from your ESPN tab (picks and the clock), and makes a pick there only when you draft from Draft Room. It never
+            sends Draft Room your ESPN password
+            {season ? ", and your ESPN login cookies only to connect your season, as above" : " or cookies"}. ESPN live sync is unofficial and not endorsed by ESPN, so it
+            can stop working if ESPN changes their draft room. Your board always works by hand.
           </p>
         </section>
       </div>

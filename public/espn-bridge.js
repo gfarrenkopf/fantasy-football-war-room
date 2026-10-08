@@ -9,7 +9,8 @@
  *   page's own frames say the user's team is on the clock. Otherwise the page's sends pass through untouched.
  * - It forwards draft frames only, and strips what isn't draft data before anything leaves the tab:
  *   INIT (room state) and TOKEN (the user's ESPN id and join code) go as bare frame names, and every
- *   member GUID is zeroed. War Room never sees ESPN cookies or passwords.
+ *   member GUID is zeroed. Draft data never carries ESPN cookies or passwords; the login cookies go
+ *   only to connect the season, below, and never the password.
  * - It authenticates to War Room with a pairing token from a popup on War Room's own site, because
  *   cross-site requests from espn.com don't carry War Room's session cookie.
  * - Only if the user opts in from the overlay (9.1), it hands War Room this draft room's join code
@@ -19,9 +20,11 @@
  *   down: it keeps ESPN's page from reconnecting (the page would take the connection straight back)
  *   until the user hands back, from War Room or with "Draft here instead" in the overlay.
  *
- * - Outside the draft, on an ESPN league or team page, it offers "Connect my season" (10.3). Only
- *   after the user agrees in War Room's own popup, and only when that popup asks, it hands the popup
- *   the user's ESPN login cookies, so War Room can read their leagues during the season.
+ * - Outside the draft, on an ESPN league or team page, it offers "Connect my season" (10.3). On a tap
+ *   it hands Draft Room the user's ESPN login cookies, sealed under a one-time claim, and opens Draft
+ *   Room in this tab, where the signed-in user agrees (once per account) and claims them. Inside the
+ *   draft, once paired, it hands them over the paired token instead, since pairing asked the same
+ *   consent (APE-332). Either way, only so Draft Room can read their leagues during the season.
  *
  * - It never leaves the user with nothing to see (APE-331): every click reads the page afresh and puts
  *   the overlay back on top, a failure to start still shows a message, and it tells Draft Room it
@@ -783,53 +786,35 @@
       pairStep = "idle";
     }
     if (!onSeasonPage) seasonStep = "idle";
-    if (onDraftPage && token) void readLeagueSettings();
+    if (onDraftPage && token) {
+      void readLeagueSettings();
+      void rollInSeason();
+    }
     render();
   }
 
   setInterval(tick, FLUSH_MS);
   // Only once paired: an unpaired bridge has no business calling ESPN's API on the user's behalf.
-  if (onDraftPage && token) void readLeagueSettings();
+  if (onDraftPage && token) {
+    void readLeagueSettings();
+    void rollInSeason();
+  }
 
-  /* ---------------- connecting the season (10.3, APE-298) ---------------- */
+  /* ---------------- connecting the season (10.3, APE-298, APE-332) ---------------- */
 
   /**
-   * Connecting happens in this tab: the user agrees here, the login goes to War Room under a one-time
-   * claim, and this tab opens War Room to claim it. No popup, since on a phone the ESPN tab behind
-   * one can't be counted on to answer.
-   * @type {"idle" | "loading" | "offer" | "sending" | "signed-out" | "failed"}
+   * Connecting from a league page happens in this tab: the login goes to Draft Room under a one-time
+   * claim, sealed, and this tab opens Draft Room to claim it. No popup, since on a phone the ESPN tab
+   * behind one can't be counted on to answer. What the user agrees to is asked there, where Draft
+   * Room knows who they are, so it's asked once per account rather than on every connect (APE-332);
+   * a claim nobody agrees to is deleted, or dies in minutes.
+   * @type {"idle" | "sending" | "signed-out" | "failed"}
    */
   let seasonStep = "idle";
-  /** What War Room asks the user to agree to, from GET /api/espn/season/handoff. */
-  /** @type {{ version: number, lines: string[] } | null} */
-  let seasonOffer = null;
-
-  async function loadSeasonOffer() {
-    const res = await fetch(`${ORIGIN}/api/espn/season/handoff`, { mode: "cors", credentials: "omit" });
-    if (!res.ok) throw new Error(`handoff ${res.status}`);
-    seasonOffer = await res.json();
-  }
 
   async function connectSeason() {
-    if (seasonStep === "loading" || seasonStep === "sending") return;
-    if (!espnLogin()) {
-      seasonStep = "signed-out";
-      return render();
-    }
-    seasonStep = "loading";
-    render();
-    try {
-      await loadSeasonOffer();
-      seasonStep = "offer";
-    } catch {
-      seasonStep = "failed";
-    }
-    render();
-  }
-
-  async function handOffSeason() {
+    if (seasonStep === "sending") return;
     const login = espnLogin();
-    if (!seasonOffer || seasonStep !== "offer") return;
     if (!login) {
       seasonStep = "signed-out";
       return render();
@@ -842,22 +827,53 @@
         mode: "cors",
         credentials: "omit",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ espnLeagueId, season, consentVersion: seasonOffer.version, ...login }),
+        body: JSON.stringify({ espnLeagueId, season, ...login }),
       });
-      if (res.status === 409) {
-        // The wording changed since it was shown: show the current one before anything is stored.
-        await loadSeasonOffer();
-        seasonStep = "offer";
-        return render();
-      }
       const body = res.ok ? await res.json() : null;
       if (!body || typeof body.claim !== "string") throw new Error(`handoff ${res.status}`);
-      // ESPN's page, not ours: a plain navigation to War Room is the only way across.
+      // ESPN's page, not ours: a plain navigation to Draft Room is the only way across.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       location.assign(`${ORIGIN}/espn/season?claim=${encodeURIComponent(body.claim)}`);
     } catch {
       seasonStep = "failed";
       render();
+    }
+  }
+
+  /**
+   * Connecting the draft connects the season too (APE-332): the user agreed to both at once when
+   * pairing, and the login is right here, so this hands it to Draft Room over the paired token, with
+   * no trip away from the draft. Once per league per tab; Draft Room skips it quietly where in-season
+   * help isn't available, and a failure is retried on the next load rather than shown, since the
+   * draft itself is connected either way.
+   */
+  async function rollInSeason() {
+    const key = `warroom-season:${espnLeagueId}`;
+    const login = espnLogin();
+    if (!token || !onDraftPage || !login || readSession(key)) return;
+    try {
+      sessionStorage.setItem(key, "sending");
+    } catch {
+      /* private mode: at worst it's sent again on the next load, which is harmless */
+    }
+    let done = false;
+    try {
+      const res = await fetch(`${ORIGIN}/api/espn/bridge/season`, {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify(login),
+      });
+      done = res.ok;
+    } catch {
+      /* tried again next load */
+    }
+    try {
+      if (done) sessionStorage.setItem(key, "done");
+      else sessionStorage.removeItem(key);
+    } catch {
+      /* as above */
     }
   }
 
@@ -916,7 +932,10 @@
     status = sockets ? "live" : "listening";
     lastPost = 0;
     render();
-    if (onDraftPage) void readLeagueSettings();
+    if (onDraftPage) {
+      void readLeagueSettings();
+      void rollInSeason();
+    }
     void flush();
   });
 
@@ -942,7 +961,7 @@
     .t{font-weight:700;letter-spacing:.02em;margin-bottom:4px}.t i{font-style:normal;color:#5fd38d}.t span{font-weight:400;color:#aab7c4;margin-left:6px}
     .s{color:#c9d3dc}.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
     button{font:inherit;border-radius:8px;border:1px solid #2b3a48;background:#1b2530;color:inherit;padding:8px 14px;cursor:pointer}
-    button.go,button.ha,button.sc,button.sy,button.pa{background:#2e7d4f;border-color:#2e7d4f;font-weight:700}[hidden]{display:none}
+    button.go,button.ha,button.sc,button.pa{background:#2e7d4f;border-color:#2e7d4f;font-weight:700}[hidden]{display:none}
     .plan{margin-top:8px;border-top:1px solid #2b3a48;padding-top:8px;font-size:13px}
     .ph{display:flex;align-items:baseline;gap:8px}.ph b{flex:1}.ph span{color:#8f9aa8;font-size:12px}
     .ph button{padding:1px 8px;font-size:12px}
@@ -955,17 +974,14 @@
     .g{font-size:11px;padding:1px 5px;border-radius:4px}.g.value{color:#5ee39a;border:1px solid #2e7d4f}.g.reach{color:#ff8a8a;border:1px solid #8a3434}
     .d{padding:2px 8px;font-size:12px}.d.on{background:#3ddc91;border-color:#3ddc91;color:#0d1a14;font-weight:700}
     .note,.hn{color:#8f9aa8;font-size:12px;margin-top:6px}
-    .ho,.so{margin-top:10px;border-top:1px solid #2b3a48;padding-top:10px}.ho b,.so b{display:block;margin-bottom:4px}
-    .ho ul,.so ul{margin:0;padding-left:18px;color:#aab7c4;font-size:13px}.ho li,.so li{margin-top:3px}
-    .so ul{max-height:40vh;overflow:auto}
+    .ho{margin-top:10px;border-top:1px solid #2b3a48;padding-top:10px}.ho b{display:block;margin-bottom:4px}
+    .ho ul{margin:0;padding-left:18px;color:#aab7c4;font-size:13px}.ho li{margin-top:3px}
     @media (pointer:coarse){button{padding:10px 16px}.row button{flex:1 1 auto}}
   </style><div class="bg" hidden></div><div class="box"><div class="t">Draft Room <i>●</i><span class="pl"></span></div><div class="s"></div>
   <div class="plan" hidden><div class="ph"><b class="pt"></b><span class="pr"></span><button class="more" type="button">More</button></div>
   <div class="rows"></div><div class="note"></div></div>
   <div class="ho" hidden><b>Draft from your phone?</b><ul></ul><div class="hn"></div>
   <div class="row"><button class="ha" type="button">Let Draft Room draft for me</button><button class="hd" type="button">No thanks</button></div></div>
-  <div class="so" hidden><b>Before you connect</b><ul></ul>
-  <div class="row"><button class="sy" type="button">I understand, connect</button><button class="sn" type="button">Not now</button></div></div>
   <div class="row"><button class="go" type="button">Connect to Draft Room</button><button class="pa" type="button" hidden>Open it again</button><button class="sc" type="button" hidden>Connect my season</button><button class="rel" type="button" hidden>Draft here instead</button><button class="x" type="button">Hide</button></div></div>`;
   const statusEl = /** @type {HTMLElement} */ (root.querySelector(".s"));
   const dotEl = /** @type {HTMLElement} */ (root.querySelector(".t i"));
@@ -997,15 +1013,6 @@
   goEl.onclick = pair;
   const seasonEl = /** @type {HTMLButtonElement} */ (root.querySelector(".sc"));
   seasonEl.onclick = () => void connectSeason();
-  const seasonOfferEl = /** @type {HTMLElement} */ (root.querySelector(".so"));
-  const seasonListEl = /** @type {HTMLElement} */ (root.querySelector(".so ul"));
-  const seasonYesEl = /** @type {HTMLButtonElement} */ (root.querySelector(".sy"));
-  const seasonNoEl = /** @type {HTMLButtonElement} */ (root.querySelector(".sn"));
-  seasonYesEl.onclick = () => void handOffSeason();
-  seasonNoEl.onclick = () => {
-    seasonStep = "idle";
-    render();
-  };
   /** The user put the overlay away: it shrinks to a pill rather than vanishing, so it's one tap back. */
   let collapsed = false;
   hideEl.onclick = () => {
@@ -1142,13 +1149,9 @@
     againEl.textContent = pairStep === "blocked" ? "Open it" : "Open it again";
     hideEl.textContent = pairing ? "Cancel" : "Hide";
     let text;
-    const offering = seasonStep === "offer" || seasonStep === "sending";
-    seasonEl.hidden = !onSeasonPage || offering;
+    seasonEl.hidden = !onSeasonPage;
     seasonEl.textContent = seasonStep === "failed" || seasonStep === "signed-out" ? "Try again" : "Connect my season";
-    seasonEl.disabled = seasonStep === "loading";
-    seasonOfferEl.hidden = !onSeasonPage || !offering || !seasonOffer;
-    if (!seasonOfferEl.hidden && seasonOffer) seasonListEl.replaceChildren(...seasonOffer.lines.map((line) => el("li", undefined, line)));
-    seasonYesEl.disabled = seasonStep === "sending";
+    seasonEl.disabled = seasonStep === "sending";
     if (onOwnSite) text = "✓ Your bookmark works. Next, open your league on ESPN and tap it there.";
     else if (relayBroken) text = BLOCKED;
     else if (pairing)

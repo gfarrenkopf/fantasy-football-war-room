@@ -931,15 +931,14 @@ describe("standing down while Draft Room holds the ESPN connection (APE-168)", (
   });
 });
 
-describe("connecting the season from an ESPN league page (10.3, APE-298)", () => {
+describe("connecting the season from an ESPN league page (10.3, APE-298, APE-332)", () => {
   const LEAGUE_PAGE = "https://fantasy.espn.com/football/team?leagueId=704343562&teamId=2&seasonId=2026";
   const COOKIE = `region=us; espn_s2=AEB%2Fnot-real%3D; SWID=${SWID}; other=1`;
-  const OFFER = { version: 1, lines: ["This tab hands Draft Room your ESPN login cookies (not your password)."] };
 
-  /** A league page whose War Room answers the disclosure GET and the hand-off POST. */
+  /** A league page whose Draft Room answers the hand-off POST. */
   function leaguePage(cookie = COOKIE, handoff: () => Response = () => Response.json({ claim: "c0de-claim_123" })) {
     const p = page({ href: LEAGUE_PAGE, cookie });
-    p.fetch.mockImplementation(async (_url, init) => (init?.method === "POST" ? handoff() : Response.json(OFFER)));
+    p.fetch.mockImplementation(async () => handoff());
     p.load();
     return p;
   }
@@ -947,39 +946,24 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     p.shadow.querySelector(sel).onclick!();
     await vi.advanceTimersByTimeAsync(0);
   };
-  const posts = (p: ReturnType<typeof page>) => p.fetch.mock.calls.filter(([, init]) => init?.method === "POST");
 
-  it("shows what Draft Room asks before anything leaves the page", async () => {
+  it("sends nothing until the user taps Connect my season", async () => {
     const p = leaguePage();
+    await vi.advanceTimersByTimeAsync(300);
     expect(p.bridge()).toMatchObject({ onSeasonPage: true, onDraftPage: false, seasonStep: "idle" });
-    await tap(p, ".sc");
-    expect(p.bridge()).toMatchObject({ seasonStep: "offer" });
-    expect(p.shadow.querySelector(".so").hidden).toBe(false);
-    expect(p.shadow.querySelector(".so ul").textContent).toContain("cookies");
-    expect(p.fetch).toHaveBeenCalledWith(`${WAR_ROOM}/api/espn/season/handoff`, expect.objectContaining({ credentials: "omit" }));
-    expect(posts(p)).toEqual([]);
-    expect(p.open).not.toHaveBeenCalled();
+    expect(p.shadow.querySelector(".sc").hidden).toBe(false);
+    expect(p.fetch).not.toHaveBeenCalled();
   });
 
-  it("hands the login to Draft Room once the user agrees, then opens Draft Room in this tab to claim it", async () => {
+  it("on a tap, parks the login with Draft Room and opens Draft Room in this tab, where the user agrees and claims it", async () => {
     const p = leaguePage();
     await tap(p, ".sc");
-    await tap(p, ".sy");
-    const [[url, init]] = posts(p);
+    const [[url, init]] = p.fetch.mock.calls;
     expect(url).toBe(`${WAR_ROOM}/api/espn/season/handoff`);
     expect(init.credentials).toBe("omit");
-    expect(JSON.parse(String(init.body))).toEqual({ espnLeagueId: "704343562", season: 2026, consentVersion: 1, espnS2: "AEB%2Fnot-real%3D", swid: SWID });
+    expect(JSON.parse(String(init.body))).toEqual({ espnLeagueId: "704343562", season: 2026, espnS2: "AEB%2Fnot-real%3D", swid: SWID });
     expect(p.assign).toHaveBeenCalledWith(`${WAR_ROOM}/espn/season?claim=c0de-claim_123`);
     expect(p.open).not.toHaveBeenCalled();
-  });
-
-  it("sends nothing when the user says not now", async () => {
-    const p = leaguePage();
-    await tap(p, ".sc");
-    await tap(p, ".sn");
-    expect(p.bridge()).toMatchObject({ seasonStep: "idle" });
-    expect(p.shadow.querySelector(".so").hidden).toBe(true);
-    expect(posts(p)).toEqual([]);
   });
 
   it("says when ESPN has no login to give, without asking Draft Room anything", async () => {
@@ -990,19 +974,12 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     expect(p.fetch).not.toHaveBeenCalled();
   });
 
-  it("shows the current wording again when it changed, and says when Draft Room can't be reached", async () => {
-    let first = true;
-    const p = leaguePage(COOKIE, () => {
-      if (first) return (first = false), Response.json({ seasonVersion: 2 }, { status: 409 });
-      return new Response(null, { status: 503 });
-    });
+  it("says when Draft Room can't be reached, and lets the user try again", async () => {
+    const p = leaguePage(COOKIE, () => new Response(null, { status: 503 }));
     await tap(p, ".sc");
-    await tap(p, ".sy");
-    expect(p.bridge()).toMatchObject({ seasonStep: "offer" });
-    expect(p.assign).not.toHaveBeenCalled();
-    await tap(p, ".sy");
     expect(p.bridge()).toMatchObject({ seasonStep: "failed" });
     expect(p.shadow.querySelector(".s").textContent).toContain("Couldn't reach Draft Room");
+    expect(p.shadow.querySelector(".sc").textContent).toBe("Try again");
     expect(p.assign).not.toHaveBeenCalled();
   });
 
@@ -1011,6 +988,49 @@ describe("connecting the season from an ESPN league page (10.3, APE-298)", () =>
     p.load();
     expect(p.bridge()).toMatchObject({ onSeasonPage: false });
     expect(p.shadow.querySelector(".sc").hidden).toBe(true);
+  });
+});
+
+describe("connecting the season along with the draft (APE-332)", () => {
+  const COOKIE = `espn_s2=AEB%2Fnot-real%3D; SWID=${SWID}`;
+  const seasonPosts = (p: ReturnType<typeof page>) => p.fetch.mock.calls.filter(([url]) => String(url).endsWith("/api/espn/bridge/season"));
+
+  it("hands the login over the paired token once the draft is paired, without leaving the draft", async () => {
+    const p = page({ cookie: COOKIE });
+    p.load();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(seasonPosts(p)).toEqual([]);
+    p.postMessage({ type: "warroom-bridge-paired", token: "tok-1" });
+    await vi.advanceTimersByTimeAsync(300);
+    const [[, init]] = seasonPosts(p);
+    expect(init.credentials).toBe("omit");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer tok-1");
+    expect(JSON.parse(String(init.body))).toEqual({ espnS2: "AEB%2Fnot-real%3D", swid: SWID });
+    expect(p.assign).not.toHaveBeenCalled();
+  });
+
+  it("does it once per league in a tab, and again next load if it didn't go through", async () => {
+    const p = page({ cookie: COOKIE, stored: "tok-1" });
+    p.fetch.mockImplementation(async (url) => (String(url).endsWith("/season") ? new Response(null, { status: 503 }) : Response.json({ have: 0 })));
+    p.load();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(seasonPosts(p)).toHaveLength(1);
+    expect(p.storage.has("warroom-season:704343562")).toBe(false);
+    p.fetch.mockImplementation(async (url) => (String(url).endsWith("/season") ? Response.json({ connected: true }) : Response.json({ have: 0 })));
+    p.navigate("https://fantasy.espn.com/football/draft?leagueId=704343562&seasonId=2026&teamId=1&again=1");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(seasonPosts(p)).toHaveLength(2);
+    expect(p.storage.get("warroom-season:704343562")).toBe("done");
+    p.navigate("https://fantasy.espn.com/football/draft?leagueId=704343562&seasonId=2026&teamId=1");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(seasonPosts(p)).toHaveLength(2);
+  });
+
+  it("sends nothing when ESPN has no login on the page", async () => {
+    const p = page({ stored: "tok-1" });
+    p.load();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(seasonPosts(p)).toEqual([]);
   });
 });
 

@@ -1,6 +1,6 @@
 import { DEFAULT_LEAGUE } from "@/lib/data";
 import type { Db } from "@/lib/db/types";
-import { ESPN_SEASON_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import { toSeasonSettings } from "@/lib/espn/league";
 import { ownTeamId, settingsOf } from "@/lib/season/espnLeague";
 import { newLeagueRecord } from "@/lib/storage/newLeague";
@@ -14,7 +14,7 @@ import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
 
 /**
  * Connecting a season (10.3): the user, from ESPN, hands War Room their login and the ESPN league
- * they're looking at. Checked against ESPN before anything is stored: the login must read the
+ * they're looking at, from a league page by way of a claim, or from their draft over its pairing (APE-332). Checked against ESPN before anything is stored: the login must read the
  * league, and the user must own a team in it. Then the login is stored, and the ESPN league is
  * linked to a war room league: the one already following it, the one last paired with it for the
  * draft, or a new one built from ESPN's settings. A draft ESPN has finished becomes that league's
@@ -24,7 +24,7 @@ import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
 export interface ConnectRequest extends EspnLogin {
   espnLeagueId: string;
   season: number;
-  /** The consent version the user agreed to in the bridge overlay. */
+  /** The ESPN disclosure version the user agreed to (src/lib/espn/disclosure.ts). */
   consentVersion: number;
 }
 
@@ -39,8 +39,8 @@ export async function connectSeason(
   req: ConnectRequest,
   { fetchImpl, now = new Date(), crosswalkFor }: { fetchImpl?: typeof fetch; now?: Date } & DraftImportDeps = {},
 ): Promise<ConnectResult> {
-  if (req.consentVersion !== ESPN_SEASON_VERSION) {
-    return { ok: false, status: 409, error: "What Draft Room asks for has changed. Read it again.", seasonVersion: ESPN_SEASON_VERSION };
+  if (req.consentVersion !== ESPN_DISCLOSURE_VERSION) {
+    return { ok: false, status: 409, error: "What Draft Room asks for has changed. Read it again.", seasonVersion: ESPN_DISCLOSURE_VERSION };
   }
 
   const login = { espnS2: req.espnS2, swid: req.swid };
