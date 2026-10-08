@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import league from "@/lib/season/__fixtures__/espn-league-2026.json";
+import { findLeague, putDraft } from "../leagues";
 import { createTestLeague } from "../testLeagues";
 import { loginStatus, storeLogin } from "./logins";
 import { linkSeason } from "./seasonLinks";
@@ -51,6 +52,31 @@ describe("the season loader", () => {
     advance(2000);
     await load(db, KEY, userId, leagueId);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("follows ESPN's settings and name on a fresh read; a final draft keeps its board's shape (APE-330)", async () => {
+    const half = {
+      ...league,
+      settings: {
+        ...league.settings,
+        name: "Renamed on ESPN",
+        scoringSettings: { ...league.settings.scoringSettings, scoringItems: [{ statId: 53, points: 0.5 }] },
+      },
+    };
+    const open = await connectedLeague();
+    const { load } = setup(() => new Response(JSON.stringify(half)));
+    await load(db, KEY, open.userId, open.leagueId);
+    const followed = await findLeague(db, open.userId, open.leagueId);
+    expect(followed).toMatchObject({ name: "Renamed on ESPN", espn: { espnLeagueId: "110222051", espnTeamId: 1, season: 2026 } });
+    expect(followed!.settings).toMatchObject({ teams: 4, scoring: "half", valueThreshold: 10 });
+
+    const final = await connectedLeague();
+    const before = (await findLeague(db, final.userId, final.leagueId))!.settings;
+    await putDraft(db, final.userId, final.leagueId, { version: 1, picks: [], final: { source: "espn", at: "2026-09-06T20:00:00.000Z" } }, 0, { server: true });
+    await setup(() => new Response(JSON.stringify(half))).load(db, KEY, final.userId, final.leagueId);
+    const kept = await findLeague(db, final.userId, final.leagueId);
+    expect(kept!.name).toBe("Renamed on ESPN");
+    expect(kept!.settings).toEqual({ ...before, scoring: "half" });
   });
 
   it("reads ESPN again once the cached copy is older than the caller allows", async () => {

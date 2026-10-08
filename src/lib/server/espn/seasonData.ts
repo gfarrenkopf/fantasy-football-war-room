@@ -5,6 +5,7 @@ import type { SeasonLeague } from "@/lib/season/types";
 import { readEspnLeague } from "./leagueReader";
 import { loadLogin, loginStatus, markVerified } from "./logins";
 import { findSeasonLink } from "./seasonLinks";
+import { followEspnSettings } from "./followSettings";
 import { createSessionCheck } from "./sessionCheck";
 
 /**
@@ -74,6 +75,10 @@ export function createSeasonLoader({
     const entry = { league: parsed.league, espnTeamId: link.espnTeamId, fetchedAt: now() };
     cache.set(cacheKey, entry);
     await markVerified(db, userId, entry.fetchedAt);
+    // Every fresh read carries ESPN's settings: a commissioner's change reaches the league (APE-330).
+    await followEspnSettings(db, userId, leagueId, read.data, link, entry.fetchedAt).catch((err: unknown) =>
+      console.warn(`[espn-season] settings not followed: ${(err as Error).message}`),
+    );
     return { kind: "ok", ...entry, stale: false };
   };
 }
