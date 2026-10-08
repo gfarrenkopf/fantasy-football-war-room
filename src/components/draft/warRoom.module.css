@@ -1619,6 +1619,68 @@
   border-top: 0;
   padding-top: 0;
 }
+/* Manage leagues (APE-324): a row per league, its Delete at the end; the name opens it. */
+.manageLeagues {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.manageLeagues li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid var(--color-line);
+}
+.manageLeagues li:first-child {
+  border-top: 0;
+}
+.manageLeagues .btn {
+  flex: none;
+  margin-left: auto;
+}
+.mlName {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  align-content: center;
+  margin-left: -8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+}
+.mlName:hover {
+  background: var(--color-hover);
+}
+.mlName:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+/* The open league, in the yes-color, as the league menu marks it. */
+.mlName[aria-current="true"] b {
+  color: var(--color-mine);
+}
+.mlName[aria-current="true"]:hover {
+  background: none;
+  cursor: default;
+}
+.mlName b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mlNote {
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
 /* ---------- focus view ---------- */
 .focus {
   display: grid;
