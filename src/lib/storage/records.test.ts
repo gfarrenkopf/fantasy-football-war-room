@@ -67,6 +67,13 @@ describe("migrateDraftState with off-board picks", () => {
     expect(migrateDraftState({ version: 1, picks: [{ playerId: "espn:1", mine: false, label: { name: "Free Agent", pos: null, team: null } }] })).not.toBeNull();
   });
 
+  it("keeps a valid final marker and rejects a malformed one (APE-325)", () => {
+    const final = { source: "espn", at: "2026-09-06T20:00:00.000Z" };
+    expect(migrateDraftState({ version: 1, picks: [], final: { ...final, extra: 1 } })).toEqual({ version: 1, picks: [], final });
+    expect(migrateDraftState({ version: 1, picks: [], final: { ...final, source: "yahoo" } })).toBeNull();
+    expect(migrateDraftState({ version: 1, picks: [], final: { source: "espn" } })).toBeNull();
+  });
+
   it("rejects a draft with a malformed label", () => {
     for (const bad of [{ ...label, pos: "LB" }, { ...label, name: 5 }, { ...label, team: "TOOLONG" }, "WR"]) {
       expect(migrateDraftState({ version: 1, picks: [{ playerId: "espn:1", mine: false, label: bad }] })).toBeNull();

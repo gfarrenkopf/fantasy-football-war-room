@@ -202,6 +202,31 @@ describe("drafts", () => {
     expect(results.map((r) => r.status).sort()).toEqual(["conflict", "ok"]);
   });
 
+  describe("a final draft (APE-325)", () => {
+    const final = { ...draft("a", "b"), final: { source: "espn" as const, at: "2026-09-06T20:00:00.000Z" } };
+
+    it("is written only by the server; a client's `final` is dropped", async () => {
+      await putDraft(db, alice, league.id, final, 0);
+      expect((await getDraft(db, alice, league.id))?.state).toEqual(draft("a", "b"));
+      await putDraft(db, alice, league.id, final, 1, { server: true });
+      expect(await getDraft(db, alice, league.id)).toEqual({ state: final, revision: 2 });
+    });
+
+    it("refuses any client save, even at the current revision, and returns what's stored", async () => {
+      await putDraft(db, alice, league.id, final, 0, { server: true });
+      expect(await putDraft(db, alice, league.id, draft("a"), 1)).toEqual({ status: "final", current: { state: final, revision: 1 } });
+      expect(await putDraft(db, alice, league.id, draft("a", "b"), 1)).toMatchObject({ status: "final" });
+      expect(await putDraft(db, alice, league.id, draft("x"), 0)).toMatchObject({ status: "final" });
+      expect(await getDraft(db, alice, league.id)).toEqual({ state: final, revision: 1 });
+    });
+
+    it("can be replaced by the server", async () => {
+      await putDraft(db, alice, league.id, final, 0, { server: true });
+      const fixed = { ...final, picks: draft("a", "c").picks };
+      expect(await putDraft(db, alice, league.id, fixed, 1, { server: true })).toEqual({ status: "ok", revision: 2 });
+    });
+  });
+
   it("is available from a second device (another session for the same user)", async () => {
     await putDraft(db, alice, league.id, draft("a", "b", "c"), 0);
     // Nothing in the data layer is tied to a device: the same user id sees the same league and draft.

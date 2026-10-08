@@ -82,10 +82,22 @@ export interface DraftPick {
   label?: PickLabel;
 }
 
+/**
+ * A draft that is over and verified against its source (APE-325): the board is ESPN's draft, and
+ * nothing may change it. Written only by the server.
+ */
+export interface DraftFinal {
+  source: "espn";
+  /** ISO timestamp of when the board was verified. */
+  at: string;
+}
+
 /** Synced state of one draft. The pick number of picks[i] is i + 1. */
 export interface DraftState {
   version: number;
   picks: DraftPick[];
+  /** Set once the draft is final; the board is then read-only everywhere. */
+  final?: DraftFinal;
 }
 
 export type CpuStyle =

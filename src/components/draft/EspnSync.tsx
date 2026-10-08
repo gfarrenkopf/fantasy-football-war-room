@@ -356,10 +356,19 @@ const CHIP: Record<Exclude<LiveStatus, "waiting">, { label: string; title: strin
 
 /**
  * Header status: the sync state while it's set up. Setting it up ("Sync ESPN draft") is a row in the
- * draft tools menu instead (Epic 15), so a waiting sync shows nothing here.
+ * draft tools menu instead (Epic 15), so a waiting sync shows nothing here. A final draft (APE-325)
+ * says so, live sync or not: it's why the board can't be edited.
  */
 export function EspnSyncChip() {
   const { status, link, degraded, sessions, serverClient } = useEspnSync();
+  const { state } = useDraft();
+  if (state.final && status !== "live") {
+    return (
+      <span className={s.btn} title="This board is your ESPN draft, pick for pick. It's final, so it can't be edited here." role="status">
+        ESPN draft final
+      </span>
+    );
+  }
   if (status === "off") return null;
   if (degraded) {
     return (

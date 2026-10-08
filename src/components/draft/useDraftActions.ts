@@ -42,11 +42,18 @@ export function useDraftActions() {
     return locked;
   }, [locked, toast, espn.myTurn]);
 
+  /** A final draft (APE-325) is ESPN's record: nothing here changes it. */
+  const final = !!draftCtx.state.final;
+  const lockedFinal = useCallback(() => {
+    if (final) toast("This draft is final: it's your ESPN draft, pick for pick, so it can't be edited.");
+    return final;
+  }, [final, toast]);
+
   /** Logs a pick for an available player, or moves a taken player between rosters. */
   const draft = useCallback(
     async (playerId: string, mine: boolean) => {
       const p = model.player(playerId);
-      if (!p) return;
+      if (!p || lockedFinal()) return;
       // Live ESPN draft and the user's turn: a click arms the player to be drafted in ESPN (8.13).
       if (locked && espn.myTurn && !model.taken.has(playerId)) return espn.arm(playerId);
       if (pausedForEspn()) return;
@@ -98,16 +105,16 @@ export function useDraftActions() {
         total: model.total,
       });
     },
-    [draftCtx, model, toast, confirm, celebrate, pausedForEspn, locked, espn],
+    [draftCtx, model, toast, confirm, celebrate, pausedForEspn, lockedFinal, locked, espn],
   );
 
   const untake = useCallback(
     (playerId: string) => {
-      if (!model.taken.has(playerId) || pausedForEspn()) return;
+      if (!model.taken.has(playerId) || lockedFinal() || pausedForEspn()) return;
       draftCtx.untake(playerId);
       toast(`${model.player(playerId)?.name ?? "Player"} put back on the board`);
     },
-    [draftCtx, model, toast, pausedForEspn],
+    [draftCtx, model, toast, pausedForEspn, lockedFinal],
   );
 
   /** Plain click = whoever is on the clock; Cmd/Ctrl = another team; Shift = mine. */
@@ -122,7 +129,7 @@ export function useDraftActions() {
 
   const undo = useCallback(() => {
     sim.stop();
-    if (pausedForEspn()) return;
+    if (lockedFinal() || pausedForEspn()) return;
     const last = draftCtx.state.picks.at(-1);
     if (!last) {
       toast("Nothing to undo");
@@ -130,11 +137,11 @@ export function useDraftActions() {
     }
     draftCtx.undo();
     toast(`Undid pick ${draftCtx.state.picks.length}: ${model.player(last.playerId)?.name ?? last.label?.name ?? ""}`);
-  }, [draftCtx, model, toast, sim, pausedForEspn]);
+  }, [draftCtx, model, toast, sim, pausedForEspn, lockedFinal]);
 
   const reset = useCallback(async () => {
     sim.stop();
-    if (pausedForEspn()) return;
+    if (lockedFinal() || pausedForEspn()) return;
     const ok = await confirm({
       message: "Reset the entire draft? This clears every pick and your roster.",
       confirmLabel: "Reset draft",
@@ -143,7 +150,7 @@ export function useDraftActions() {
     if (!ok) return;
     draftCtx.reset();
     toast("Draft reset");
-  }, [draftCtx, confirm, toast, sim, pausedForEspn]);
+  }, [draftCtx, confirm, toast, sim, pausedForEspn, lockedFinal]);
 
   return { draft, untake, draftWithIntent, intentFrom, undo, reset };
 }

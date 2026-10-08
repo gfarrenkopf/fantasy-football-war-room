@@ -163,14 +163,29 @@ export type PutDraftResult =
   | { status: "ok"; revision: number }
   /** `baseRevision` is stale: someone saved since. Carries what's stored now. */
   | { status: "conflict"; current: StoredDraft }
+  /** The stored draft is final (APE-325): no client may change it. Carries what's stored. */
+  | { status: "final"; current: StoredDraft }
   | { status: "not-found" };
 
 /**
  * Saves a draft if `baseRevision` is the stored revision (optimistic concurrency).
  * The compare-and-set is a single statement, so two concurrent saves can't both succeed.
+ *
+ * A final draft (APE-325) is read-only to clients: their `final` is ignored, and a save onto a
+ * final draft is refused, checked in the same statement. `{ server: true }` is for server code that verified the board, the only
+ * writer that may set `final` or replace a final draft.
  */
-export async function putDraft(db: Db, userId: string, leagueId: string, state: DraftState, baseRevision: number): Promise<PutDraftResult> {
+export async function putDraft(
+  db: Db,
+  userId: string,
+  leagueId: string,
+  input: DraftState,
+  baseRevision: number,
+  { server = false }: { server?: boolean } = {},
+): Promise<PutDraftResult> {
   if (!(await findLeague(db, userId, leagueId))) return { status: "not-found" };
+  const state: DraftState = server ? input : { version: input.version, picks: input.picks };
+  const notFinal = server ? sql`true` : sql`${drafts.state}->'final' is null`;
 
   const [updated] =
     baseRevision === 0
@@ -182,10 +197,11 @@ export async function putDraft(db: Db, userId: string, leagueId: string, state: 
       : await db
           .update(drafts)
           .set({ state, revision: sql`${drafts.revision} + 1`, updatedAt: new Date() })
-          .where(and(eq(drafts.leagueId, leagueId), eq(drafts.revision, baseRevision)))
+          .where(and(eq(drafts.leagueId, leagueId), eq(drafts.revision, baseRevision), notFinal))
           .returning({ revision: drafts.revision });
   if (updated) return { status: "ok", revision: updated.revision };
 
   const current = await getDraft(db, userId, leagueId);
-  return current ? { status: "conflict", current } : { status: "not-found" };
+  if (!current) return { status: "not-found" };
+  return !server && current.state?.final ? { status: "final", current } : { status: "conflict", current };
 }

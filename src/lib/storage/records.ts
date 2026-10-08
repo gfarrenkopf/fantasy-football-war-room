@@ -1,7 +1,7 @@
 import { isDraftAt } from "@/lib/draft/draftDay";
 import { parseStoredLeague } from "@/lib/draft/league";
 import { DRAFT_STATE_VERSION } from "@/lib/draft/state";
-import type { DraftPick, DraftState, PickLabel } from "@/lib/draft/types";
+import type { DraftFinal, DraftPick, DraftState, PickLabel } from "@/lib/draft/types";
 import type { EspnConnection, LeagueRecord } from "./types";
 
 /**
@@ -23,15 +23,23 @@ const isPick = (p: unknown): p is DraftPick =>
   typeof (p as DraftPick).mine === "boolean" &&
   ((p as DraftPick).label === undefined || isLabel((p as DraftPick).label));
 
+const isFinal = (f: unknown): f is DraftFinal => {
+  const { source, at } = (f ?? {}) as Partial<DraftFinal>;
+  return source === "espn" && typeof at === "string" && !Number.isNaN(Date.parse(at));
+};
+
 /**
  * Validates and upgrades a stored draft. Add a case here when DRAFT_STATE_VERSION changes.
  * Anything unrecognizable is discarded rather than crashing the app.
  */
 export function migrateDraftState(raw: unknown): DraftState | null {
   if (typeof raw !== "object" || raw === null) return null;
-  const { version, picks } = raw as Partial<DraftState>;
+  const { version, picks, final } = raw as Partial<DraftState>;
   if (version !== DRAFT_STATE_VERSION || !Array.isArray(picks) || !picks.every(isPick)) return null;
-  return { version, picks: picks.map(({ playerId, mine, label }) => (label ? { playerId, mine, label: { name: label.name, pos: label.pos, team: label.team } } : { playerId, mine })) };
+  if (final !== undefined && !isFinal(final)) return null;
+  const state: DraftState = { version, picks: picks.map(({ playerId, mine, label }) => (label ? { playerId, mine, label: { name: label.name, pos: label.pos, team: label.team } } : { playerId, mine })) };
+  if (final) state.final = { source: final.source, at: final.at };
+  return state;
 }
 
 export const MAX_LEAGUE_NAME = 60;

@@ -6,7 +6,7 @@ import { mintBridgeToken, purgeExpiredBridgeTokens } from "@/lib/server/espn/bri
 import { acknowledgeDisclosure, hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
 import { purgeExpiredCredentials } from "@/lib/server/espn/serverClients";
 import { error, json, readJson } from "@/lib/server/http";
-import { connectEspn, findLeague } from "@/lib/server/leagues";
+import { connectEspn, findLeague, getDraft } from "@/lib/server/leagues";
 
 interface PairRequest {
   leagueId: string;
@@ -32,8 +32,9 @@ function parsePairRequest(body: unknown): PairRequest | null {
  *
  * Called by the pairing popup the ESPN bridge opens (same-origin, signed in). The token goes back to
  * the bridge, which authenticates its relay requests with it. 404 when ESPN sync is off or the league
- * isn't the user's, 403 outside the beta, 402 when the league needs a season pass, and 428 until the
- * user has acknowledged the current disclosure (src/lib/espn/disclosure.ts), which `acknowledged` does.
+ * isn't the user's, 403 outside the beta, 402 when the league needs a season pass, 409 when the
+ * league's draft is final and this is a different ESPN draft (APE-325), and 428 until the user has
+ * acknowledged the current disclosure (src/lib/espn/disclosure.ts), which `acknowledged` does.
  */
 export const POST = withUser(async (request, _ctx, { db, userId, email }) => {
   if (!config.espnSyncEnabled) return error(404, "Not found");
@@ -41,7 +42,13 @@ export const POST = withUser(async (request, _ctx, { db, userId, email }) => {
   if (!read.ok) return read.response;
   const pair = parsePairRequest(read.body);
   if (!pair) return error(400, "Invalid pairing request");
-  if (!(await findLeague(db, userId, pair.leagueId))) return error(404, "League not found");
+  const league = await findLeague(db, userId, pair.leagueId);
+  if (!league) return error(404, "League not found");
+  // A final draft is one ESPN draft's, for good: another draft gets a league of its own.
+  const elsewhere = league.espn && (league.espn.espnLeagueId !== pair.espnLeagueId || league.espn.season !== pair.season);
+  if (elsewhere && (await getDraft(db, userId, pair.leagueId))?.state?.final) {
+    return error(409, "This league's draft is final. Start a new league for this ESPN draft.");
+  }
   const access = await espnAccess(db, pair.leagueId, email);
   if (access.kind === "not-allowed") return error(403, "ESPN live sync isn't available on this account yet");
   if (access.kind === "needs-purchase") return json(402, { needsPurchase: true });

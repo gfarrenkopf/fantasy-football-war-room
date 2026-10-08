@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import { draftReducer, emptyDraftState, type DraftAction } from "@/lib/draft/state";
 import type { DraftPick, DraftState } from "@/lib/draft/types";
-import { getStores } from "@/lib/storage";
+import { getStores, subscribeSyncIssues } from "@/lib/storage";
 
 interface DraftContextValue {
   state: DraftState;
@@ -54,6 +54,17 @@ export function DraftProvider({
     return () => {
       cancelled = true;
     };
+  }, [draftKey]);
+
+  // The server refused an edit because the draft is final (APE-325): show the board it kept.
+  useEffect(() => {
+    if (draftKey === null) return;
+    return subscribeSyncIssues((issue) => {
+      if (issue.kind !== "final" || issue.leagueId !== draftKey) return;
+      void getStores()
+        .draft.getDraftState(draftKey)
+        .then((saved) => saved && dispatch({ type: "hydrate", state: saved }));
+    });
   }, [draftKey]);
 
   useEffect(() => {

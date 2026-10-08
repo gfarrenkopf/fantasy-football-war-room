@@ -58,7 +58,7 @@ function fakeServer(userId: string): FakeServer {
       if (sub === "draft" && method === "PUT") {
         const result = await api.putDraft(db, userId, id, migrateDraftState(body.state)!, body.baseRevision);
         if (result.status === "ok") return Response.json({ revision: result.revision });
-        if (result.status === "conflict") return Response.json(result.current, { status: 409 });
+        if (result.status === "conflict" || result.status === "final") return Response.json(result.current, { status: 409 });
         return Response.json({}, { status: 404 });
       }
       return new Response(null, { status: 405 });
@@ -181,6 +181,23 @@ describe("server-backed stores", () => {
 
     expect(issues).toContainEqual({ kind: "conflict", leagueId: l.id });
     expect(await api.getDraft(db, userId, l.id)).toEqual({ state: draft("a", "laptop"), revision: 3 });
+  });
+
+  it("a final draft on the server replaces this device's edits, and says so (APE-325)", async () => {
+    const l = league();
+    const phone = device();
+    await phone.stores.league.saveLeague(l);
+    await phone.stores.draft.saveDraftState(l.id, draft("a"));
+    await phone.stores.sync!.flush();
+
+    const final = { ...draft("a", "b"), final: { source: "espn" as const, at: "2026-09-06T20:00:00.000Z" } };
+    await api.putDraft(db, userId, l.id, final, 1, { server: true });
+    await phone.stores.draft.saveDraftState(l.id, draft("a", "edited"));
+    expect(await phone.stores.sync!.flush()).toBe(true);
+
+    expect(issues).toContainEqual({ kind: "final", leagueId: l.id });
+    expect(await phone.stores.draft.getDraftState(l.id)).toEqual(final);
+    expect((await api.getDraft(db, userId, l.id))?.state).toEqual(final);
   });
 
   it("collapses a burst of picks into a few requests", async () => {

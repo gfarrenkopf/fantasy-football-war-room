@@ -64,10 +64,10 @@ The browser syncs through these routes. `src/lib/storage/server.ts` is their onl
 | Route | Does |
 |---|---|
 | `GET /api/leagues` | `{ leagues }`, oldest first. |
-| `PUT /api/leagues/:id` | Creates or updates a league from a `LeagueRecord`. The newest `updatedAt` wins: if the stored league is newer, it's returned with `applied: false`. Accounts are capped at 100 leagues (422). |
+| `PUT /api/leagues/:id` | Creates or updates a league from a `LeagueRecord`. The newest `updatedAt` wins: if the stored league is newer, it's returned with `applied: false`. Accounts are capped at 100 leagues (422). A league connected to ESPN keeps ESPN's settings: its name comes from ESPN too, so the update changes only its draft date and Value/Reach threshold, and `espn` is never taken from the request. |
 | `DELETE /api/leagues/:id` | Soft-deletes the league (204). |
 | `GET /api/leagues/:id/draft` | `{ state, revision }`, where `state` is null and `revision` is 0 before the first save. |
-| `PUT /api/leagues/:id/draft` | `{ state, baseRevision }`. Saves only if `baseRevision` is the stored revision and returns `{ revision }`. Otherwise it returns 409 with what's stored. |
+| `PUT /api/leagues/:id/draft` | `{ state, baseRevision }`. Saves only if `baseRevision` is the stored revision and returns `{ revision }`. Otherwise it returns 409 with what's stored. A final draft (`state.final`, written only by the server once the board matches ESPN's draft) refuses every save with 409, and the client takes the stored board. |
 
 AI game plans use `GET` and `POST /api/leagues/:id/plan` (`src/lib/server/aiPlans.ts`). `POST` with `{ "regenerate": true }` asks for a new version of an up-to-date plan. A league gets its first plan plus 3 rewrites (`FREE_REGENERATIONS`), whether they come from regenerating or from a settings change. Only saved plans count, so retrying a failure is free. The server enforces the limit by counting `ready` rows in `ai_generations`: past it, nothing is queued, and the response is the stored plan with `limitReached: true`. Who may use AI plans at all is decided by `planAccess()` in `src/lib/server/ai`: with payments on, a league needs a season pass (reads return `needsPurchase: true`, and requests get `402`). See [payments.md](payments.md#5-what-the-season-pass-unlocks).
 

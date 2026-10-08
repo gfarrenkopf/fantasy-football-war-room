@@ -148,8 +148,9 @@ function WarRoomView({ onManage }: { onManage(): void }) {
 
   /* ---- the draft tools menu (Epic 15): only what applies to this draft now ---- */
   const espnSync = useEspnSync();
-  // A finished draft that came from ESPN is ESPN's record: nothing here should rewrite it.
-  const syncedDone = model.done && hasSeasonPage;
+  // A finished draft that came from ESPN is ESPN's record: nothing here should rewrite it. A final
+  // one (APE-325) is verified as ESPN's and locked everywhere; a linked one is ESPN's all the same.
+  const syncedDone = !!state.final || (model.done && hasSeasonPage);
   // A finished draft has nothing left to mock, so mock mode stays off once every pick is in.
   const mocking = prefs.mockOn && !model.done;
   const [roomOpen, setRoomOpen] = useState(false);

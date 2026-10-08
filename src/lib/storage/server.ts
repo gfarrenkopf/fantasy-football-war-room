@@ -17,7 +17,8 @@ import type { LeagueRecord, Stores } from "./types";
  *
  * Conflicts: league edits keep the newest updatedAt (decided by the server). For drafts, this
  * device's latest state wins: a 409 means another device saved in between, so we adopt its
- * revision, overwrite, and report it. Real-time merging across devices is out of scope.
+ * revision, overwrite, and report it. Real-time merging across devices is out of scope. The one
+ * exception is a final draft (APE-325): the server's board wins, replacing this device's.
  */
 
 export type SyncIssue =
@@ -28,7 +29,9 @@ export type SyncIssue =
   /** Another device changed this draft since this device last synced; this device's picks replaced it. */
   | { kind: "conflict"; leagueId: string }
   /** The league no longer exists on the server (deleted on another device). */
-  | { kind: "gone"; leagueId: string };
+  | { kind: "gone"; leagueId: string }
+  /** The draft is final on the server (APE-325): this device's edits were dropped for the final board. */
+  | { kind: "final"; leagueId: string };
 
 export interface ServerStoreOptions {
   userId: string;
@@ -227,6 +230,13 @@ export function createServerStores(options: ServerStoreOptions): Stores {
         updateMeta((m) => void (m.drafts[id] = { revision, dirty: !unchanged }));
         if (unchanged) return;
         continue; // picks logged while the request was in flight
+      }
+      const remote = status === 409 ? migrateDraftState((data as { state?: unknown } | null)?.state) : null;
+      if (status === 409 && typeof revision === "number" && remote?.final) {
+        await cache.draft.saveDraftState(id, remote);
+        updateMeta((m) => void (m.drafts[id] = { revision, dirty: false }));
+        report({ kind: "final", leagueId: id });
+        return;
       }
       if (status === 409 && typeof revision === "number") {
         updateMeta((m) => void (m.drafts[id] = { revision, dirty: true }));
