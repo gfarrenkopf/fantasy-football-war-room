@@ -11,7 +11,7 @@ import { LeagueMenu } from "@/components/shell/LeagueMenu";
 import { AccountMenu, AccountProvider } from "./Account";
 import { AiPlanProvider } from "./AiPlan";
 import { CheckoutReturn } from "./Checkout";
-import { MockBar, SimProvider, useSim } from "./Simulator";
+import { MockControls, MockRoom, SimProvider, SPEEDS, useSim } from "./Simulator";
 import { AvailabilityReport, type ReportData } from "./AvailabilityReport";
 import { BestAvailableStrip } from "./BestAvailableStrip";
 import { Board, matchesQuery, useBoardColumns } from "./Board";
@@ -31,10 +31,9 @@ import { SeasonLinksProvider, useHasSeasonPage, useSeasonPrompt, useShell } from
 import type { ShellData } from "@/lib/server/shell";
 import { DraftBook } from "./DraftBook";
 import { FocusView, PlanDrawer, type PlanDrawerTab, type PlanOdds } from "./FocusView";
-import { Header, leagueSummary, type DraftTool } from "./Header";
+import { Header, leagueSummary, PlanIcon, StatusChip, type DraftTool } from "./Header";
 import { LeagueProvider, useLeague } from "./LeagueProvider";
 import { LeagueSetupDialog } from "./LeagueSetupDialog";
-import { NeedsStrip } from "./NeedsStrip";
 import { PickCelebrationProvider } from "./PickCelebration";
 import { PrefsProvider, usePrefs } from "./PrefsProvider";
 import { useAvailability } from "./useAvailability";
@@ -106,7 +105,7 @@ const isTyping = () => {
 function WarRoomView() {
   const { state, hydrated } = useDraft();
   const model = useModel();
-  const { prefs, setPrefs } = usePrefs();
+  const { prefs, setPrefs, hydrated: prefsHydrated } = usePrefs();
   const { configured, active, leagues, switchLeague } = useLeague();
   const welcomeHold = useWelcomeHold();
   const { draftWithIntent, intentFrom, undo, reset } = useDraftActions();
@@ -146,6 +145,9 @@ function WarRoomView() {
   const syncedDone = model.done && hasSeasonPage;
   // A finished draft has nothing left to mock, so mock mode stays off once every pick is in.
   const mocking = prefs.mockOn && !model.done;
+  const [roomOpen, setRoomOpen] = useState(false);
+  /** "How picking works" brings the first-run click tip back. */
+  const [tipAsked, setTipAsked] = useState(false);
   const tools: DraftTool[] = [
     ...(espnSync.status === "waiting" && !model.done ? [{ label: "Sync ESPN draft", href: "/espn", external: true }] : []),
     ...(!model.done
@@ -160,6 +162,15 @@ function WarRoomView() {
           },
         ]
       : []),
+    // The mock draft's occasional controls (APE-322); the sims themselves sit in the bar.
+    ...(mocking
+      ? [
+          { label: "Availability report", onSelect: () => void openReport() },
+          { label: "Sim speed", value: sim.speed, options: SPEEDS.map((o) => ({ value: o.ms, label: o.label })), onChange: sim.setSpeed },
+          { label: "Room setup", checked: roomOpen, onToggle: () => setRoomOpen((o) => !o) },
+        ]
+      : []),
+    ...(!model.done ? [{ label: "How picking works", onSelect: () => setTipAsked(true) }] : []),
     ...(!syncedDone ? [{ label: "Reset draft", danger: true, onSelect: () => void reset() }] : []),
   ];
   // The season page's League settings and + New league land here as `?settings=1` and `?new=1`,
@@ -294,9 +305,18 @@ function WarRoomView() {
     return () => window.removeEventListener("keydown", listener);
   }, []);
 
+  // The first-run tip waits for saved prefs, so a device that dismissed it never sees it flash.
+  const showTip = prefsHydrated && hydrated && configured && !model.done && (tipAsked || !prefs.seenClickTip);
+  const closeTip = () => {
+    setTipAsked(false);
+    if (!prefs.seenClickTip) setPrefs({ seenClickTip: true });
+  };
+  const statusChip = <StatusChip arrival={arrival} compact={phone} tip={showTip} onTipClose={closeTip} />;
+
   return (
     <div className={s.root}>
       <AppBar
+        status={phone ? statusChip : null}
         league={
           active ? (
             <LeagueMenu
@@ -322,16 +342,18 @@ function WarRoomView() {
         onQueryChange={onQueryChange}
         onQueryKeyDown={onQueryKeyDown}
         hint={hint}
-        arrival={arrival}
-        needs={<NeedsStrip />}
-        status={<EspnSyncChip />}
+        phone={phone}
+        status={phone ? null : statusChip}
+        mock={mocking ? <MockControls menu={phone} /> : null}
+        sync={<EspnSyncChip />}
         tools={tools}
         canUndo={!syncedDone}
         actions={
           // Once every pick is in there's no turn left to plan.
           model.done ? null : (
-            <button className={cx("btn", "plan")} onClick={() => setDrawer((tab) => tab ?? "live")}>
-              Turn plan
+            <button className={cx("btn", "plan")} onClick={() => setDrawer((tab) => tab ?? "live")} title="Turn plan">
+              <PlanIcon />
+              <span className={s.btnLabel}>Turn plan</span>
             </button>
           )
         }
@@ -349,7 +371,7 @@ function WarRoomView() {
       <EspnTakeover />
       <EspnPickBar />
       <EspnPlanPublisher planOdds={planStale ? null : planOdds} />
-      {mocking && <MockBar onReport={() => void openReport()} reportMocks={REPORT_MOCKS} />}
+      {mocking && roomOpen && <MockRoom />}
       {!hydrated ? (
         <div className={s.loading}>Loading your draft…</div>
       ) : prefs.view === "focus" && model.done ? (

@@ -107,7 +107,7 @@ export function OpeningNight() {
   const end = useCallback(() => {
     if (leaving) return;
     if (reduced) return setShow(null);
-    // Iris down onto the header's pick box: the clock the stage just started is the one up there.
+    // Iris down onto the status chip: the clock the stage just started is the one up there.
     const box = document.querySelector<HTMLElement>("[data-pickbox]")?.getBoundingClientRect();
     setLeaving(box ? { x: box.left + box.width / 2, y: box.top + box.height / 2 } : { x: window.innerWidth / 2, y: 40 });
     setTimeout(() => setShow(null), 720);

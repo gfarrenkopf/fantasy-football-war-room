@@ -49,70 +49,175 @@
   color: #fff;
   background: var(--color-seg-on);
 }
-.pickbox {
+/*
+ * The status chip (APE-322): where the draft is, in one place — the pick, the wait for your turn,
+ * the starter slots still open. One row, 36px, read left to right; hairlines part its three facts.
+ */
+.statusWrap {
+  position: relative;
+  display: flex;
+  flex: none;
+  min-width: 0;
+}
+.status {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 5px 10px;
-  background: var(--color-panel2);
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  overflow: hidden;
   border: 1px solid var(--color-line);
   border-radius: 6px;
+  background: var(--color-panel2);
+  white-space: nowrap;
 }
-.big {
-  font-size: 24px;
+.stPick {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.stNum {
+  display: inline-block;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1;
 }
-.rpText {
-  font-size: 15px;
+.stRp {
+  color: var(--color-muted);
+  font-size: 12px;
   font-weight: 600;
 }
-.lbl {
-  color: var(--color-muted);
-  font-size: 11px;
-  line-height: 1.1;
+.stRule {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  margin: 8px 0;
+  background: var(--color-line);
 }
-.turn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--color-line);
-  background: var(--color-panel2);
-  min-width: 230px;
+.stTurn {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
-.turn b {
-  font-size: 14px;
-}
-.turn small {
-  display: block;
-  color: var(--color-muted);
-  font-size: 11px;
-}
-.turn.near {
-  border-color: var(--color-warn);
-}
-.turn.near b {
-  color: var(--color-warn);
-}
-.turn.onclock {
-  border-color: var(--color-mine);
-  background: color-mix(in srgb, var(--color-mine) 12%, transparent);
-}
-.turn.onclock b {
-  color: var(--color-mine);
-}
-/* ESPN's pick clock (8.17), floated into the turn box: small for other teams, big on the user's turn. */
-.espnClock {
-  float: right;
-  margin-left: 12px;
+.stTurn b {
   font-size: 13px;
   font-weight: 700;
-  line-height: 2.4;
+}
+.stTurn small {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+.status.near {
+  border-color: var(--color-warn);
+}
+.status.near .stTurn b {
+  color: var(--color-warn);
+}
+.status.onclock {
+  border-color: var(--color-mine);
+  background: color-mix(in srgb, var(--color-mine) 12%, var(--color-panel2));
+}
+.status.onclock .stTurn b {
+  color: var(--color-mine);
+}
+/* Open starter slots: the position's label in its hue, a ring per empty slot. */
+.pips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pip {
+  --pos: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--pos) 55%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--pos) 8%, transparent);
+  color: var(--pos);
+}
+.pip[data-pos="QB"] {
+  --pos: var(--color-qb);
+}
+.pip[data-pos="RB"] {
+  --pos: var(--color-rb);
+}
+.pip[data-pos="WR"] {
+  --pos: var(--color-wr);
+}
+.pip[data-pos="TE"] {
+  --pos: var(--color-te);
+}
+.pip[data-pos="K"] {
+  --pos: var(--color-k);
+}
+.pip[data-pos="DST"] {
+  --pos: var(--color-dst);
+}
+.pip b {
+  margin-right: 1px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.pip i {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+/* Late enough to be a problem: the urgent-need ring, moved here from the old needs strip. */
+.pip.urgent {
+  animation: needpulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes needpulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-warn) 0%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warn) 45%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pip.urgent {
+    animation: none;
+  }
+}
+.pipSet {
+  gap: 5px;
+  border-color: transparent;
+  background: none;
+  color: var(--color-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pipSet.full {
+  --pos: var(--color-mine);
+  color: var(--color-mine);
+}
+.pipSet .icon {
+  width: 13px;
+  height: 13px;
+}
+.pipMore {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+/* ESPN's pick clock (8.17), beside the turn in the status chip: small for other teams, big on the user's turn. */
+.espnClock {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
   color: var(--color-muted);
   font-variant-numeric: tabular-nums;
 }
 .espnClock.mine {
-  font-size: 24px;
-  line-height: 1.3;
+  font-size: 18px;
   color: var(--color-mine);
 }
 .espnClock.mine.low {
@@ -132,27 +237,98 @@
     animation: none;
   }
 }
-.clickmode {
-  font-size: 11px;
+
+/* First-run tip (APE-322): how a click logs a pick, hung under the status chip until dismissed. */
+.clickTip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  width: 320px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-line2);
+  border-radius: 8px;
+  background: var(--color-panel);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+  white-space: normal;
+  animation: tipIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.clickTip b {
+  font-size: 12.5px;
+}
+.clickTip p {
+  margin: 0;
   color: var(--color-muted);
-  line-height: 1.2;
-  padding: 4px 10px;
-  border: 1px dashed var(--color-line2);
-  border-radius: 6px;
-}
-.clickmode b {
-  display: block;
   font-size: 12px;
-  color: var(--color-text);
+  line-height: 1.45;
 }
-.clickmode.me b {
-  color: var(--color-mine);
+.clickTip em {
+  color: var(--color-text);
+  font-style: normal;
+  font-weight: 600;
+}
+.clickTip kbd {
+  padding: 0 4px;
+  border: 1px solid var(--color-line2);
+  border-radius: 3px;
+  background: var(--color-panel2);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 11px;
+}
+@keyframes tipIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clickTip {
+    animation: none;
+  }
+}
+/* Icons: one 16px set, 1.6 stroke, in the text's color. */
+.icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.iconFill {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: currentColor;
 }
 .search {
   position: relative;
   flex: 1 1 240px;
-  min-width: 220px;
+  min-width: 200px;
   max-width: 360px;
+}
+/*
+ * Below 1280px the search drops to a row of its own, under the chip and the actions; a mock's sims
+ * join it there when they don't fit beside the chip. Draft tools keeps only its icon.
+ */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .simGroup {
+    order: 2;
+  }
+  .search {
+    order: 3;
+    flex: 1 1 320px;
+    max-width: none;
+  }
+  .toolsBtn .toolsLabel {
+    display: none;
+  }
 }
 .search input {
   width: 100%;
@@ -165,20 +341,21 @@
 .search input::placeholder {
   color: var(--color-dim);
 }
-.search svg {
+.search > .icon {
   position: absolute;
   left: 9px;
-  top: 9px;
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: var(--color-muted);
-  stroke-width: 2;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted);
+}
+.searchClose {
+  display: none;
 }
 .hint {
   position: absolute;
   right: 8px;
-  top: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 11px;
   color: var(--color-muted);
   pointer-events: none;
@@ -197,6 +374,24 @@
 }
 .actions .btn {
   white-space: nowrap;
+}
+/* Buttons that lead with an icon: Turn plan, the sims, the menus. */
+.actions .btn,
+.simGroup .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn .icon {
+  color: var(--color-muted);
+}
+.btn.go .icon,
+.btn.on .icon {
+  color: currentColor;
+}
+/* On a phone only. */
+.searchBtn {
+  display: none;
 }
 .btn {
   padding: 7px 11px;
@@ -1159,7 +1354,7 @@
 }
 
 /* On the clock: one pass of light across the turn banner (and the hero), and the pick number pops. */
-.turn,
+.status,
 .heroState {
   position: relative;
   overflow: hidden;
@@ -1171,7 +1366,7 @@
   background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--color-mine) 40%, transparent) 50%, transparent 80%);
   animation: sweep 1100ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.big.pop {
+.stNum.pop {
   transform-origin: left center;
   animation: pop 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -1254,7 +1449,7 @@
     display: none;
   }
   .pcCheck,
-  .big.pop {
+  .stNum.pop {
     animation: none;
   }
 }
@@ -1424,112 +1619,6 @@
   border-top: 0;
   padding-top: 0;
 }
-/* ---------- needs strip ---------- */
-.needs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  /* A rail: it wraps to its own line rather than squeeze below 360px, and never paints past its
-     own border. */
-  flex: 1 1 360px;
-  min-width: min(360px, 100%);
-  max-width: 760px;
-  overflow: hidden;
-  overflow-x: auto;
-  scrollbar-width: none;
-  container-type: inline-size;
-  padding: 4px 8px;
-  border: 1px solid var(--color-line);
-  border-radius: 6px;
-  background: var(--color-panel2);
-}
-.needs::-webkit-scrollbar {
-  display: none;
-}
-.np {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-  font-size: 11px;
-  color: var(--color-muted);
-  padding: 3px 6px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  white-space: nowrap;
-}
-.np b {
-  font-size: 10.5px;
-  font-weight: 700;
-  margin-right: 2px;
-}
-.np i {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 1.5px solid var(--color-done);
-  display: inline-block;
-  box-sizing: border-box;
-}
-.np i.f {
-  background: var(--color-mine);
-  border-color: var(--color-mine);
-}
-.np i.b {
-  width: 7px;
-  height: 7px;
-  background: color-mix(in srgb, var(--color-mine) 35%, transparent);
-  border-color: color-mix(in srgb, var(--color-mine) 70%, transparent);
-  margin-left: 1px;
-}
-.gap {
-  width: 3px;
-}
-.np.open {
-  border-color: color-mix(in srgb, var(--color-warn) 55%, transparent);
-  color: var(--color-warn-ink);
-  background: color-mix(in srgb, var(--color-warn) 7%, transparent);
-}
-.np.open i:not(.f) {
-  border-color: var(--color-warn);
-}
-.np.urgent {
-  animation: needpulse 1.2s ease-in-out infinite alternate;
-}
-@keyframes needpulse {
-  from {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-warn) 0%, transparent);
-  }
-  to {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warn) 45%, transparent);
-  }
-}
-.nxt {
-  margin-left: auto;
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-warn);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-left: 8px;
-}
-/* Short of room, the summary goes first: the amber chips and the green border say the same. */
-@media (min-width: 768px) {
-  @container (max-width: 520px) {
-    .nxt {
-      display: none;
-    }
-  }
-}
-.needs.done {
-  border-color: color-mix(in srgb, var(--color-mine) 50%, transparent);
-}
-.needs.done .nxt {
-  color: var(--color-mine);
-}
-
 /* ---------- focus view ---------- */
 .focus {
   display: grid;
@@ -1653,8 +1742,7 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero.onclock,
-  .np.urgent {
+  .hero.onclock {
     animation: none;
   }
 }
@@ -1983,28 +2071,36 @@
   color: var(--color-heading);
 }
 
-/* ---------- mock draft bar ---------- */
-.simbar {
-  flex: none;
+/* ---------- mock draft sims, in the control bar (APE-322) ---------- */
+.simGroup {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 4px;
+  padding: 3px 3px 3px 8px;
+  border: 1px solid var(--color-sim-line);
+  border-radius: 6px;
   background: var(--color-sim-bg);
-  border-bottom: 1px solid var(--color-sim-line);
 }
 .simLabel {
-  font-size: 11px;
-  font-weight: 700;
+  margin-right: 4px;
   color: var(--color-sky);
-  letter-spacing: 0.3px;
-  padding: 3px 8px;
-  border: 1px solid var(--color-sim-line);
-  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.simbar .btn {
-  padding: 5px 10px;
+.simGroup .btn {
+  padding: 4px 9px;
+}
+/* Short of room, the sims keep only their icons, so the bar stays one row. */
+@media (max-width: 1499px) {
+  .simGroup .btn {
+    padding: 4px 7px;
+  }
+  .simText {
+    display: none;
+  }
 }
 .btn.go {
   border-color: var(--color-sky-line);
@@ -2014,16 +2110,6 @@
   background: color-mix(in srgb, var(--color-sky) 18%, transparent);
   border-color: var(--color-sky-line);
   color: var(--color-sky);
-}
-.sep {
-  width: 1px;
-  height: 22px;
-  background: var(--color-sim-line);
-  margin: 0 4px;
-}
-.simTxt {
-  font-size: 11px;
-  color: var(--color-muted);
 }
 .simSelect {
   font: inherit;
@@ -2468,16 +2554,12 @@ a.btn {
   order: 1;
 }
 /* The draft tools menu (Epic 15): setting up ESPN sync, mock mode and reset, behind one button. */
-.toolsBtn {
+.menuBtn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
 }
-.toolsBtn svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  fill: currentColor;
+.menuBtn .iconFill {
   color: var(--color-muted);
 }
 .toolsSheet {
@@ -2547,6 +2629,37 @@ a.btn {
 }
 .toolsItem[aria-checked="true"] .toolsState {
   color: var(--color-mine);
+}
+/* A choice row (sim speed): the label, then the values as a small segmented control. */
+.toolsChoice {
+  cursor: default;
+}
+.toolsChoice:hover {
+  background: none;
+}
+.toolsSeg {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 5px;
+}
+.toolsSeg button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-panel2);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.toolsSeg button:last-child {
+  border-right: 0;
+}
+.toolsSeg button[aria-checked="true"] {
+  background: var(--color-seg-on);
+  color: #fff;
 }
 
 /* ---------- browser surfaces ---------- */
@@ -2646,8 +2759,8 @@ a.btn {
   .simSelect {
     min-height: 40px;
   }
-  .simbar .btn {
-    min-height: 44px;
+  .simGroup .btn {
+    min-height: 36px;
   }
 }
 
@@ -2683,61 +2796,75 @@ a.btn {
     padding-bottom: calc(var(--bar-h) + env(safe-area-inset-bottom));
   }
 
-  /* ----- header: pick number, turn state, search, needs. Nothing else. ----- */
+  /*
+   * ----- header: nothing but the search, and only while it's wanted (APE-322) -----
+   * The status chip rides in the app bar and every control in the bottom bar, so the header keeps
+   * no row of its own. The search button in the bar opens the field here, pinned under the app bar.
+   */
   .header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 6px 8px;
+    display: block;
+    padding: 0;
+    border-bottom: 0;
+  }
+  .header.searching {
     padding: 8px max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left));
-  }
-  .pickbox {
-    grid-area: 1 / 2;
-    gap: 8px;
-    padding: 4px 8px;
-  }
-  .big {
-    font-size: 20px;
+    border-bottom: 1px solid var(--color-line);
   }
   /*
-   * The pick box and turn state are the one thing that must never leave the screen. The header
-   * stays put while each view scrolls under it, so they live here in every view. (They used to
-   * hide in focus view behind `.root:has(> .focus)`, but the hero that replaced them scrolls away,
-   * and WebKit didn't always re-match `:has()` after a view switch, so the board lost them too.)
+   * Off screen rather than display:none while closed: the search button focuses it inside the tap,
+   * the only time iOS will raise the keyboard, and a display:none field can't take focus.
    */
-  .turn {
-    grid-area: 1 / 1;
+  .search {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     min-width: 0;
-    padding: 5px 10px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
-  .turn b {
-    font-size: 13px;
+  .searching .search {
+    position: relative;
+    width: auto;
+    height: auto;
+    max-width: none;
+    overflow: visible;
+    clip-path: none;
+    animation: searchIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-  /* The hero and its glow are gone on a phone, so the banner carries the on-clock glow instead. */
-  .turn.onclock {
-    animation: glow 1.6s ease-in-out infinite alternate;
+  .searching .search input {
+    padding-right: 76px;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .turn.onclock {
-      animation: none;
+  .searching .hint {
+    right: 44px;
+    max-width: 40%;
+  }
+  .searchClose {
+    position: absolute;
+    top: 50%;
+    right: 2px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    transform: translateY(-50%);
+    border: 0;
+    background: none;
+    color: var(--color-muted);
+  }
+  .searchClose .icon {
+    width: 16px;
+    height: 16px;
+  }
+  @keyframes searchIn {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
     }
   }
-  .turn small {
-    display: inline;
-    margin-left: 6px;
-  }
-  /*
-   * Modifier-key instructions ("Cmd/Ctrl-click = another team"). There are no modifier keys here;
-   * the always-visible ✕ carries that intent instead.
-   */
-  .clickmode {
-    display: none;
-  }
-  .search {
-    grid-area: 2 / 1 / 3 / 3;
-    flex: none;
-    min-width: 0;
-    max-width: none;
+  @media (prefers-reduced-motion: reduce) {
+    .searching .search {
+      animation: none;
+    }
   }
   /*
    * iOS zooms the page in on focusing any control under 16px, and pinching back out is how people
@@ -2748,19 +2875,50 @@ a.btn {
   .simSelect {
     font-size: 16px;
   }
-  .search svg,
-  .hint {
-    top: 50%;
-    transform: translateY(-50%);
+
+  /* ----- the status chip, in the app bar ----- */
+  .status {
+    gap: 8px;
+    height: 34px;
+    padding: 0 8px;
   }
-  .needs {
-    grid-area: 3 / 1 / 4 / 3;
-    min-width: 0;
-    max-width: none;
-    flex-wrap: nowrap;
+  .stNum {
+    font-size: 18px;
   }
-  .needs .nxt {
-    margin-left: 8px;
+  .stTurn b {
+    font-size: 12.5px;
+  }
+  /* The labels carry it in the app bar; the rings would cost the league's name its room. */
+  .pip {
+    height: 20px;
+    padding: 0 5px;
+  }
+  .compact .pip i {
+    display: none;
+  }
+  /* The focus hero and its glow are gone on a phone, so the chip carries the on-clock glow instead. */
+  .status.onclock {
+    overflow: visible;
+    animation: glow 1.6s ease-in-out infinite alternate;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .status.onclock {
+      animation: none;
+    }
+  }
+  .clickTip {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 58px);
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    width: auto;
+    font-size: 14px;
+  }
+  .clickTip p {
+    font-size: 13.5px;
+  }
+  .clickTip .btn {
+    min-height: 40px;
   }
 
   /* ----- the bottom bar ----- */
@@ -2785,19 +2943,15 @@ a.btn {
     backdrop-filter: blur(10px);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
   }
+  /* The view switch takes whatever the actions leave, half each. */
   .bar > .seg {
-    flex: none;
+    flex: 1 1 auto;
+    min-width: 0;
     border: 0;
   }
-  /* With no actions (a finished draft from ESPN), the view switch takes the whole bar, half each. */
-  .bar:not(:has(.actions > *)) > .seg {
+  .bar > .seg button {
     flex: 1;
-  }
-  .bar:not(:has(.actions > *)) > .seg button {
-    flex: 1;
-  }
-  .bar:not(:has(.actions > *)) > .actions {
-    display: none;
+    padding: 10px 8px;
   }
   .actions {
     order: 1;
@@ -2811,18 +2965,32 @@ a.btn {
   .actions > .btn {
     min-height: 44px;
   }
-  /* The menu's button keeps only its icon here; the sheet rises from the bar, gutter to gutter. */
-  .toolsBtn {
+  /* Icon buttons: the menus, search and Undo keep only their icon here. */
+  .menuBtn,
+  .iconBtn {
     justify-content: center;
     width: 44px;
     padding: 0;
   }
-  .toolsBtn svg {
+  .actions .icon,
+  .actions .iconFill {
     width: 16px;
     height: 16px;
     color: currentColor;
   }
   .toolsLabel {
+    display: none;
+  }
+  .searchBtn {
+    display: inline-flex;
+  }
+  /* While a mock runs, the sims join the bar and every button goes to its icon to make the room. */
+  .iconsOnly .plan {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .iconsOnly .btnLabel {
     display: none;
   }
   /* As tall as its rows, sitting 8px above the floating bar; it scrolls before it reaches the top. */
@@ -2856,12 +3024,21 @@ a.btn {
   .actions > * {
     flex: none;
   }
-  /* Thumb order: the two you reach for mid-draft first, then the tools sheet. */
+  /* Thumb order: search, then the two you reach for mid-draft, then the sims and the tools sheet. */
+  .searchBtn {
+    order: -3;
+  }
   .btn.undo {
     order: -2;
   }
   .btn.plan {
     order: -1;
+  }
+  .simBtn {
+    order: 0;
+  }
+  .toolsBtn {
+    order: 1;
   }
 
   /* ----- board ----- */
@@ -2955,28 +3132,18 @@ a.btn {
     display: none;
   }
 
-  /* ----- mock draft bar -----
-   * Five controls, a speed select and two sentences of explanation wrapped to 183px of vertical
-   * space — most of a phone screen, above the board it exists to run. It becomes one scrolling
-   * rail, like the action bar, and the prose drops. */
-  .simbar,
+  /* ----- mock room: one scrolling rail, like the action bar ----- */
   .room {
     flex-wrap: nowrap;
     overflow-x: auto;
     padding: 6px 10px;
     scrollbar-width: none;
   }
-  .simbar::-webkit-scrollbar,
   .room::-webkit-scrollbar {
     display: none;
   }
-  .simbar > *,
   .room > * {
     flex: none;
-  }
-  .simTxt,
-  .simbar .sep {
-    display: none;
   }
 
   /* ----- overlays ----- */
@@ -3071,9 +3238,6 @@ a.btn {
     gap: 4px 8px;
     padding-top: 4px;
     padding-bottom: 4px;
-  }
-  .needs {
-    display: none;
   }
   .root {
     --bar-h: 52px;

@@ -213,7 +213,7 @@ A near-neutral blue-grey ground carrying six saturated position hues and a small
 ### Primary
 
 - **Signal Green** (`#3ddc91`): the yes-color. It marks running backs, marks picks the user owns (16% fill, 6px left rail, checkmark badge, green name), and drives the on-clock glow. The single loudest color in the system.
-- **Alert Amber** (`#fbbf24`): approach and conflict. Warms the turn box as the pick nears, flags bye-week collisions on player cards (18% fill, 55% border, a ⚠ glyph), pulses the roster-needs strip when a need is urgent.
+- **Alert Amber** (`#fbbf24`): approach and conflict. Warms the status chip as the pick nears, flags bye-week collisions on player cards (18% fill, 55% border, a ⚠ glyph), pulses an open-position pip when a need is urgent.
 
 ### Secondary
 
@@ -239,7 +239,7 @@ The signal layer, used only on verdicts and states.
 
 - **Room Black** (`#1a1e25`): the app ground. Everything sits on it.
 - **Panel Slate** (`#22272f`): every column, card container, and panel.
-- **Raised Slate** (`#282e37`): inputs, buttons, panel headers, the pick box — anything interactive or heading-like.
+- **Raised Slate** (`#282e37`): inputs, buttons, panel headers, the status chip — anything interactive or heading-like.
 - **Hairline** (`#323a45`) and **Hairline Bright** (`#3d4654`): the 1px borders that do all the structural work.
 - **Row Line** (`#2a3039`): the divider between player cards, one step darker than a panel border so 40 stacked rows don't read as a cage.
 - **Paper White** (`#e7ebf0`), **Muted** (`#8f9aa8`), **Dim** (`#5f6a78`): the three-step text ramp. Muted is for secondary facts, Dim for placeholders and null verdicts.
@@ -264,7 +264,7 @@ The signal layer, used only on verdicts and states.
 ### Hierarchy
 
 - **Display** (700, 56px, line-height 1, letter-spacing -1px): the current pick number in the focus view hero. Exactly one instance in the product; its scale is the whole point.
-- **Headline** (700, 24px, line-height 1): the header's pick counter. The only other number given size.
+- **Headline** (700, 22px, line-height 1; 18px on a phone): the status chip's pick number. The only other number given size.
 - **Title** (600, 15px, line-height 1.3): brand name, round/pick text, hero secondary line.
 - **Body** (600, 12.5px): the player name — the most-read string in the product, weighted up rather than sized up, and truncated with ellipsis inside a `minmax(0, 1fr)` grid column.
 - **Label** (400, 11px, line-height 1.2): secondary facts everywhere — team/bye line, panel subtitles, tier metadata, hints, placeholders.
@@ -300,7 +300,7 @@ The app is a single full-height flex column at `100dvh` with `overflow: hidden` 
 
 - **≥1100px — the full board.** Six weighted columns, the header as one wrapping flex row, hover-revealed controls.
 - **768–1099px — the carousel.** The six columns stop fitting, so the board becomes a horizontally snapping track of `46%`-wide pages. The header is unchanged.
-- **≤767px — the phone.** The header keeps only what is read under a clock (pick number, turn state, search, roster needs) as a four-row grid; the view switch and every draft action move to a fixed bottom bar in the thumb zone; the board track goes to `88%` pages so the next column peeks; the focus view's three columns flatten (`.fcol { display: contents }`) into one scrolling column re-ordered by decision value, with the pick log last. Picking comes first there: the turn plan / best available accordion, while My roster, Starter byes and Recent picks fold to one tappable summary line each (a stacked bye week shows ⚠ on the folded line). The header's pick box and turn banner are the one statement of the pick number and turn state, in every view — they sit in the pinned header, so they never scroll away — and the phone drops the focus hero instead. Every phone form control is 16px, the size below which iOS zooms the page on focus; pinch zoom stays enabled. A search on the board replaces the carousel with one consensus-ordered list of matches, whose top row is what Enter drafts, and a tap clears it. Modifier-key instructions are hidden, because there are none.
+- **≤767px — the phone.** The status chip moves into the app bar beside the league's name (the name truncates; the chip drops round.pick and the turn's small line, reads `66 · 14 → 80`, and shows at most two open-position pips, labels only, then "+N"); the view switch, a search button, Undo (icon only) and every draft action move to a fixed bottom bar in the thumb zone, and while a mock runs its sims join as one Sim menu and every bar button goes to its icon. The header keeps no row of its own: the search button opens the field there, pinned under the app bar, and it closes on Enter, ✕, or a blur with nothing typed; the board track goes to `88%` pages so the next column peeks; the focus view's three columns flatten (`.fcol { display: contents }`) into one scrolling column re-ordered by decision value, with the pick log last. Picking comes first there: the turn plan / best available accordion, while My roster, Starter byes and Recent picks fold to one tappable summary line each (a stacked bye week shows ⚠ on the folded line). The status chip is the one statement of the pick number and turn state, in every view — it sits in the pinned app bar, so it never scrolls away — and the phone drops the focus hero instead. Every phone form control is 16px, the size below which iOS zooms the page on focus; pinch zoom stays enabled. A search on the board replaces the carousel with one consensus-ordered list of matches, whose top row is what Enter drafts, and a tap clears it. Modifier-key instructions are hidden, because there are none.
 
 **Touch.** Target sizing switches on `(pointer: coarse), (max-width: 767px)` — either signal earns it, so a touchscreen laptop gets thumb targets without losing its columns, and a phone browser that misreports its pointer still gets them. Rows go to 44px by padding alone; no information is dropped. The `✕` "another team" control leaves `:hover` and becomes permanently visible, because it is the only way to log someone else's pick without a modifier key.
 
@@ -312,7 +312,7 @@ The board layer keeps the app's own density — `font-size: 13px`, `line-height:
 
 The landing route carries its own three breakpoints, and they are the page's, not the app's (`1100 / 900 / 640` against the app's `1100 / 768 / 767`). At ≥1100px the board runs full-bleed behind the centred pair with a 236px column floor, so its last column bleeds off the right edge — the board continues past the window rather than fitting inside it. At ≤900px the pair stacks, clock first, in a fixed 184px slot above the panel (the pick card replaces the banner inside it, so nothing under a thumb moves when a pick lands), the running team list is dropped, the board goes to three columns and the veil turns vertical. At ≤640px the board drops to two columns, the panel goes full width, and the email row stacks.
 
-Anything that must overflow does so as a named, snapping or scrolling rail — the action bar, needs strip, mock bar, best-available strip, board track. The document itself never scrolls sideways at any width. The header wraps into two rows by role: what's read under a clock (brand, view switch, pick box, turn, click mode, search), then roster needs leading and the draft actions trailing. Needs holds a 360px floor and wraps before it squeezes; its text summary is the first thing dropped when the rail is short. Actions wrap as a right-aligned group rather than overflow. The root is `overflow: clip`, not `hidden`, so focus and `scrollIntoView` can't slide the room sideways.
+Anything that must overflow does so as a named, snapping or scrolling rail — the action bar, mock room, best-available strip, board track. The document itself never scrolls sideways at any width. **The control bar is one row at ≥1280px (APE-322):** the view switch, the status chip, a mock's sims while mock mode is on, search, then the draft actions trailing right. Below 1500px the sims keep only their icons. From 768px to 1279px the search drops to a full-width second row (the sims join it when they don't fit beside the chip) and Draft tools keeps only its icon. Actions wrap as a right-aligned group rather than overflow. A finished draft keeps the view switch, search and Undo (when it applies); the chip is gone, since the finale says it. The root is `overflow: clip`, not `hidden`, so focus and `scrollIntoView` can't slide the room sideways.
 
 ### Named Rules
 
@@ -324,7 +324,7 @@ Anything that must overflow does so as a named, snapping or scrolling rail — t
 
 **The Same Board Rule.** Narrow screens re-seat the information architecture; they never reduce it. The phone shows the same six position groups, the same tiers, the same Value/Reach verdicts and the same bye warnings as the 1440px board — as pages you swipe rather than columns you scan. A mobile layout that drops a position, a column, or a verdict has answered the wrong question.
 
-**The Reachable Action Rule.** Below 767px, every control the user touches mid-draft lives in the fixed bottom bar, ordered by how often a thumb needs it: Undo, Turn plan, then the rest, with the destructive Reset last in the rail. Nothing the draft depends on sits in the top-right corner of a phone.
+**The Reachable Action Rule.** Below 767px, every control the user touches mid-draft lives in the fixed bottom bar, ordered by how often a thumb needs it: Search, Undo, Turn plan, a mock's Sim menu, then the draft tools sheet, with the destructive Reset last inside it. Nothing the draft depends on sits in the top-right corner of a phone.
 
 ## Elevation & Depth
 
@@ -346,7 +346,7 @@ The landing route adds no new depth vocabulary. Its entry panel takes the docume
 
 ### Named Rules
 
-**The Glow-Means-Now Rule.** An animated ring means "this concerns your very next action." It is the scarcest signal in the system — two instances product-wide — and adding a third without removing one devalues both. On a phone the on-clock glow moves from the (hidden) hero to the header's turn banner; it is still one on-clock glow, not a second.
+**The Glow-Means-Now Rule.** An animated ring means "this concerns your very next action." It is the scarcest signal in the system — two instances product-wide — and adding a third without removing one devalues both. On a phone the on-clock glow moves from the (hidden) hero to the status chip; it is still one on-clock glow, not a second.
 
 ## Shapes
 
@@ -354,7 +354,7 @@ A restrained, mostly-square form language on a tight radius ladder: **2px** (pos
 
 The rule underneath the ladder is scale-proportional: the smaller the element, the tighter the corner. Nothing exceeds 10px, so no surface ever reads as soft.
 
-Borders are the primary form-maker. Every panel, button, input, chip, tag, and row divider is defined by a 1px hairline rather than by fill contrast alone. Two deviations carry meaning: the **3px left rail** on every player card (6px when the pick is the user's — the one place a border is a statement rather than an edge), and the **1px dashed** border on the click-mode indicator, marking it as a mode annunciator rather than a control.
+Borders are the primary form-maker. Every panel, button, input, chip, tag, and row divider is defined by a 1px hairline rather than by fill contrast alone. Two deviations carry meaning: the **3px left rail** on every player card (6px when the pick is the user's — the one place a border is a statement rather than an edge).
 
 ### Named Rules
 
@@ -411,9 +411,15 @@ Identity is not a draft action, so it takes one slot in the action row: a `.btn`
 
 The only pill in the system (`999px`), `3px 8px` on panel fill with a `line` border. Contains a bold 10px position flag in near-black `#111` on the position hue, plus muted rank text. Hover brightens the border to `line2` and the fill to `hover`.
 
-### Status Pills
+### Status Chip — where the draft is (APE-322)
 
-The turn box and hero state block share one escalation vocabulary across three states: **rest** (neutral `line` border on raised slate) → **near** (amber border, amber bold text, 8% amber fill on the hero) → **on-clock** (green border, green bold text, 12–14% green fill, plus the animated glow ring on the hero).
+One 36px box on raised slate (6px radius, 1px `line` border) replaces the old pick box, turn banner, click-mode hint and needs strip. Three facts, read left to right and parted by inset hairlines: the pick number (Headline) with round.pick in Muted; the turn ("4 to you" over "pick 6", "On the clock" / "next 19", "No picks left", or before the first pick "Draft in 3 days"), with ESPN's pick clock beside it when sync is on; then **open-position pips** — one per starter position still open, its label in the position's hue on an 8% wash with a 55% border at 4px radius, and one hollow ring per empty slot. K and D/ST stay out of the pips until every other starter is filled (or the late rounds make them urgent), then show like any other position. An urgent need pulses the amber ring; with every starter in, the pips collapse to a ✓ "Starters". A visually hidden status line says the whole thing in words, since the chip itself is shorthand.
+
+It shares one escalation vocabulary with the hero's state block: **rest** (neutral `line` border) → **near**, four picks out (amber border, amber turn) → **on-clock** (green border, 12% green fill, green turn; on a phone, the animated glow ring). The hero adds an 8% amber fill when near.
+
+**First-run tip.** How a click logs a pick used to be a permanent dashed hint in the header. It now shows once per device as a small popover under the chip (the menu's lift, 8px radius), worded for mouse or touch, until "Got it"; Draft tools' "How picking works" brings it back.
+
+**Mock sims in the bar.** While mock mode is on, the sims sit in the bar as one recessed sky-lined group — "Mock", then To me, 1 pick, All and (while running) Stop as icon buttons with short labels. Speed (a segmented choice), the availability report and room setup are rows in Draft tools.
 
 ### Pick Card — your pick
 
@@ -424,7 +430,7 @@ The one celebration in the product, for the one moment it builds to: a pick the 
 - **Bye clash:** carried inside the card as an amber callout, with the border and wash turning amber, so the warning can't hide behind the celebration.
 - **Motion:** a 520ms arrival (rise, un-blur, settle), one pass of light across it, the ✓ stamped in; a 2px hairline at its foot shrinks over its life (1.8s back-to-back, 2.6s normal, 4.2s with a clash). No scrim, no focus trap; a tap dismisses. Reduced motion: a fade, no sweep, no stamp.
 
-**On-clock arrival.** When a logged pick puts the user on the clock, the turn banner (and the desktop hero's state block) takes one pass of green light and the header's pick number pops in green; the tab title reads "● Pick N: you're on the clock" for the second-screen user. Not on load, not on undo, not during a full auto mock.
+**On-clock arrival.** When a logged pick puts the user on the clock, the status chip (and the desktop hero's state block) takes one pass of green light and the chip's pick number pops in green; the tab title reads "● Pick N: you're on the clock" for the second-screen user. Not on load, not on undo, not during a full auto mock.
 
 ### Entry Panel — the landing signature (`/` only)
 
@@ -452,7 +458,7 @@ The room is paced like a draft feels, not like a clock: picks far from the visit
 
 ### Opening Night (`/draft`, once per new league)
 
-The first time a new league opens on a device, before any pick is logged — however it was made: the landing page's "Open the war room" (`?new=1`), War Room's own league setup (first run or "+ New league"), or an ESPN import that arrived by sync — the war room goes dark and announces the draft like a broadcast, then gets out of the way. Beats, from the lights going down: two follow-spots sweep the stage from the wings (250ms on); "THE {season}" rises in Terminal Sky and "DRAFT" slams onto the stage from 2.8× scale and blur, and the stage shakes on impact; the league's name follows with "welcome to the war room"; its shape counts onto the board as three tabular numbers — teams, rounds, picks — from the league's own settings; at 2.75s the visitor's slot is called on a skewed Signal Green slab wiped in left to right — "YOU PICK 6TH", or "YOU'RE ON THE CLOCK" from slot 1 — while confetti fires from both bottom corners in the six position hues and amber, and phones that can buzz; then "The clock is running.", the picks until their turn, one line of what to do first, and a filled green "LET'S DRAFT →". At 6.2s, or on the button, any key, a tap after the title, or "Skip", the whole stage irises down (`clip-path: circle()`) onto the header's pick box — the clock it just started is that one. It never runs again for that league on that device: premiered league ids are a device pref, and a device's existing leagues are seeded as premiered the first time it keeps the list. Reduced motion gets the same announcement as a still card, dismissed by the button.
+The first time a new league opens on a device, before any pick is logged — however it was made: the landing page's "Open the war room" (`?new=1`), War Room's own league setup (first run or "+ New league"), or an ESPN import that arrived by sync — the war room goes dark and announces the draft like a broadcast, then gets out of the way. Beats, from the lights going down: two follow-spots sweep the stage from the wings (250ms on); "THE {season}" rises in Terminal Sky and "DRAFT" slams onto the stage from 2.8× scale and blur, and the stage shakes on impact; the league's name follows with "welcome to the war room"; its shape counts onto the board as three tabular numbers — teams, rounds, picks — from the league's own settings; at 2.75s the visitor's slot is called on a skewed Signal Green slab wiped in left to right — "YOU PICK 6TH", or "YOU'RE ON THE CLOCK" from slot 1 — while confetti fires from both bottom corners in the six position hues and amber, and phones that can buzz; then "The clock is running.", the picks until their turn, one line of what to do first, and a filled green "LET'S DRAFT →". At 6.2s, or on the button, any key, a tap after the title, or "Skip", the whole stage irises down (`clip-path: circle()`) onto the status chip — the clock it just started is that one. It never runs again for that league on that device: premiered league ids are a device pref, and a device's existing leagues are seeded as premiered the first time it keeps the list. Reduced motion gets the same announcement as a still card, dismissed by the button.
 
 The display face is **Big Shoulders** (SIL OFL 1.1, weights 700–900), committed at `src/components/draft/fonts/` and loaded with `next/font/local` so no build ever needs the network. It sizes by the viewport's shorter side (`min(30vw, 24vh)` for "DRAFT") so the whole stage fits a laptop screen and a phone alike.
 
@@ -462,7 +468,7 @@ The display face is **Big Shoulders** (SIL OFL 1.1, weights 700–900), committe
 
 Opening Night's bookend, on the same stage, and the bigger of the two. It plays when a real draft goes from open to complete in front of the user — their own last pick (after its pick card lands), an ESPN sync, or the CPU's — and never on reopening a finished draft; a device keeps the leagues it has played for, so an undo and re-log doesn't replay it. Beats, from the lights going down: "THE {season} DRAFT" rises in Terminal Sky; "THAT'S A WRAP" slams in at 550ms and the stage shakes; the league's name, size and "in the books"; then the starting lineup is dealt onto the table in lineup order, one card per 110ms flipping down from its top edge — slot badge in the position hue, name, team and round.pick, and a draft-value number (picks after the consensus rank: Signal Green when he fell, soft red when taken early, a dim dash for K and D/ST, whose ranks are too noisy to judge). Then **Steal of the Draft**: both follow-spots swing onto it, the skewed green slab wipes in, the name rises in Big Shoulders, one plain sentence tells it ("Experts ranked him 38th. You got him 61st."), the gap counts up in tabular green, and the confetti fires. With no pick that fell, the headline is **Best Pick** (the best consensus-ranked player) with no count-up — it never invents praise. A two-line report card follows (how many picks came after the experts' rank; stacked starter bye weeks in amber, or none), then a filled green "SAVE TEAM CARD" and a quiet underlined "Back to the room".
 
-It does not leave on its own: it is the destination. A key or tap mid-show jumps to the finished state; Esc, Close or Back irises it down onto the header's pick box. On laptop-height screens the title shortens so the whole lineup is on stage; on phones it becomes one scrolling column that leads with the steal, with the actions fixed in the thumb zone. Reduced motion gets the finished reveal at once, still.
+It does not leave on its own: it is the destination. A key or tap mid-show jumps to the finished state; Esc, Close or Back irises it down toward the top of the room, where the status chip stood. On laptop-height screens the title shortens so the whole lineup is on stage; on phones it becomes one scrolling column that leads with the steal, with the actions fixed in the thumb zone. Reduced motion gets the finished reveal at once, still.
 
 The team card is a 1080×1350 canvas poster in the stage's face and colors — title, lineup, the steal on its slab, a one-line foot — shared through the OS share sheet where files can be shared, otherwise downloaded. Nothing is uploaded. A finished **mock** gets none of this: a short card in the pick card's place ("MOCK COMPLETE", the steal, the report line) that leaves on its own.
 
@@ -495,7 +501,7 @@ The entry panel's third face: a goodbye with the practice draft still running be
 
 ### Draft Countdown (`/draft`, before the first pick)
 
-A league with a draft date still ahead and no pick logged shows when the room fills: a recessed row in the focus hero ("Draft starts Sun 8:00 PM" and the time left in sky, tabular), which in the last hour turns amber and runs a live mm:ss; and "· draft in 3 days" appended to the turn banner's small line, the phone's only place for it since the phone drops the hero. It ticks once a minute (every second in the last hour), pauses while the tab is hidden, and is gone at the first pick or once the start time passes. It is never an animated ring: the Glow-Means-Now Rule keeps those for the clock itself. The league switcher adds each league's date ("Home league · 9/27").
+A league with a draft date still ahead and no pick logged shows when the room fills: a recessed row in the focus hero ("Draft starts Sun 8:00 PM" and the time left in sky, tabular), which in the last hour turns amber and runs a live mm:ss; and the status chip's turn reading "Draft in 3 days" (with "you pick 6" beside it on a wide screen), the phone's only place for it since the phone drops the hero. It ticks once a minute (every second in the last hour), pauses while the tab is hidden, and is gone at the first pick or once the start time passes. It is never an animated ring: the Glow-Means-Now Rule keeps those for the clock itself. The league switcher adds each league's date ("Home league · 9/27").
 
 **Every league gets a line**, ordered by what matters on the way out: paused drafts first (furthest along first), then finished ones, then ones not drafted yet. Each line has the league's name, its status, and a **round track**: one 14px square per round, the pick track's vocabulary.
 
@@ -596,4 +602,4 @@ The panel it leaves behind is the week's result: "YOU WON" in Big Shoulders on a
 - **Don't** reach for a shadow to separate two app-surface elements. Use a hairline or a tone step — shadows belong to things floating above the app.
 - **Don't** modify `prototype/war_room.html`. It is a frozen behavioral and visual reference.
 - **Don't** put a feature behind a modifier key without a second path. Cmd/Ctrl-click, Shift-click and right-click are desktop accelerators, never the only way to reach an action.
-- **Don't** solve a narrow screen by hiding data. Hide desktop-only *instructions* (modifier-key hints, long prose in the mock bar) and re-seat everything else.
+- **Don't** solve a narrow screen by hiding data. Hide desktop-only *instructions* (modifier-key hints, long prose about the mock) and re-seat everything else.

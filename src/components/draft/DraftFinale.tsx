@@ -105,7 +105,7 @@ function Finale({ show, onDone }: { show: Show; onDone(): void }) {
   const end = useCallback(() => {
     if (leaving) return;
     if (reduced) return onDone();
-    // Iris down onto the header's pick box, the way Opening Night leaves.
+    // Iris down onto the status chip (gone once the draft is done, so the top of the room), the way Opening Night leaves.
     const box = document.querySelector<HTMLElement>("[data-pickbox]")?.getBoundingClientRect();
     setLeaving(box ? { x: box.left + box.width / 2, y: box.top + box.height / 2 } : { x: window.innerWidth / 2, y: 40 });
     setTimeout(onDone, 720);

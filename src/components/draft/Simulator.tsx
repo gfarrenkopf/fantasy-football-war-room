@@ -8,14 +8,15 @@ import { useModel } from "./DraftModel";
 import { useDraft } from "./DraftProvider";
 import { useEspnSync } from "./EspnSync";
 import { useToast } from "./Feedback";
+import { DraftMenu, SimAllIcon, SimOneIcon, SimToMeIcon, StopIcon, type DraftTool } from "./Header";
 import { usePrefs } from "./PrefsProvider";
 
 export type SimMode = "toMe" | "one" | "all";
 
 export const SPEEDS = [
   { ms: 0, label: "Instant" },
-  { ms: 700, label: "1 pick / 0.7s" },
-  { ms: 1500, label: "1 pick / 1.5s" },
+  { ms: 700, label: "0.7s" },
+  { ms: 1500, label: "1.5s" },
 ];
 
 interface SimContextValue {
@@ -119,13 +120,52 @@ export function SimProvider({ children }: { children: React.ReactNode }) {
   return <SimContext.Provider value={value}>{children}</SimContext.Provider>;
 }
 
-/** The mock-draft bar and room setup, shown when mock mode is on. Ported from the prototype's #simbar and #room. */
-export function MockBar({ onReport, reportMocks }: { onReport(): void; reportMocks: number }) {
+/**
+ * The mock draft's sims (APE-322), folded into the control bar: a slim group of icon buttons beside
+ * the status chip on a wide screen, one Sim menu in the phone's bottom bar. Speed, the availability
+ * report and room setup wait in the draft tools menu. Ported from the prototype's #simbar.
+ */
+export function MockControls({ menu }: { menu: boolean }) {
+  const sim = useSim();
+  if (menu) {
+    const items: DraftTool[] = [
+      { label: "Sim to my pick", onSelect: () => sim.run("toMe") },
+      { label: "Sim 1 pick", onSelect: () => sim.run("one") },
+      { label: "Sim full draft (auto-picks for you)", onSelect: () => sim.run("all") },
+      ...(sim.running ? [{ label: "Stop", onSelect: sim.stop }] : []),
+    ];
+    return <DraftMenu label="Mock draft sims" items={items} icon={sim.running ? <StopIcon /> : <SimOneIcon />} className={cx("simBtn", sim.running && "on")} iconOnly />;
+  }
+  return (
+    <div className={s.simGroup} role="group" aria-label="Mock draft">
+      <span className={s.simLabel}>Mock</span>
+      <button className={cx("btn", "go")} onClick={() => sim.run("toMe")} title="Sim every pick up to your next turn" aria-label="Sim to my pick">
+        <SimToMeIcon />
+        <span className={s.simText}>To me</span>
+      </button>
+      <button className={s.btn} onClick={() => sim.run("one")} title="Sim the next pick" aria-label="Sim 1 pick">
+        <SimOneIcon />
+        <span className={s.simText}>1 pick</span>
+      </button>
+      <button className={s.btn} onClick={() => sim.run("all")} title="Sim the full draft, auto-picking for you" aria-label="Sim the full draft">
+        <SimAllIcon />
+        <span className={s.simText}>All</span>
+      </button>
+      {sim.running && (
+        <button className={s.btn} onClick={sim.stop} title="Stop the sim" aria-label="Stop the sim">
+          <StopIcon />
+          <span className={s.simText}>Stop</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The mock room's CPU teams by draft slot, under the bar while it's open from the draft tools. Ported from the prototype's #room. */
+export function MockRoom() {
   const sim = useSim();
   const model = useModel();
   const { prefs, setPrefs } = usePrefs();
-  const [roomOpen, setRoomOpen] = useState(false);
-  const nonCasual = sim.room.filter((st) => st !== "casual").length;
 
   const setStyle = (i: number, style: CpuStyle) => {
     const next = sim.room.slice();
@@ -134,63 +174,23 @@ export function MockBar({ onReport, reportMocks }: { onReport(): void; reportMoc
   };
 
   return (
-    <>
-      <div className={s.simbar}>
-        <span className={s.simLabel}>MOCK</span>
-        <button className={cx("btn", "go")} onClick={() => sim.run("toMe")}>
-          Sim to my pick
-        </button>
-        <button className={s.btn} onClick={() => sim.run("one")}>
-          Sim 1 pick
-        </button>
-        <button className={s.btn} onClick={() => sim.run("all")}>
-          Sim full draft (auto-pick for me)
-        </button>
-        <select className={s.simSelect} value={sim.speed} onChange={(e) => sim.setSpeed(Number(e.target.value))} aria-label="Simulation speed">
-          {SPEEDS.map((o) => (
-            <option key={o.ms} value={o.ms}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        {sim.running && (
-          <button className={s.btn} onClick={sim.stop}>
-            Stop
-          </button>
-        )}
-        <span className={s.sep} />
-        <button className={cx("btn", "go")} onClick={onReport}>
-          Availability report
-        </button>
-        <span className={s.simTxt}>{reportMocks} mocks from the current pick, using this room</span>
-        <span className={s.sep} />
-        <button className={cx("btn", roomOpen && "on")} onClick={() => setRoomOpen((o) => !o)} aria-expanded={roomOpen}>
-          Room setup
-        </button>
-        <span className={s.simTxt}>
-          Room: {nonCasual} non-casual team{nonCasual === 1 ? "" : "s"}
-        </span>
-      </div>
-      {roomOpen && (
-        <div className={s.room}>
-          <span>CPU teams by draft slot:</span>
-          {sim.room.map((style, i) => (
-            <label key={i}>
-              <b>{slotForRoomIndex(i, model.league.mySlot)}</b>
-              <select className={s.simSelect} value={style} onChange={(e) => setStyle(i, e.target.value as CpuStyle)}>
-                {CPU_STYLES.map((k) => (
-                  <option key={k} value={k}>
-                    {STYLES[k].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-          <button className={s.btn} onClick={() => setPrefs({ room: null })} disabled={!prefs.room || prefs.room.join() === defaultRoom(model.league.teams).join()}>
-            Reset room
-          </button>
-        </div>
-      )}
-    </>
+    <div className={s.room}>
+      <span>CPU teams by draft slot:</span>
+      {sim.room.map((style, i) => (
+        <label key={i}>
+          <b>{slotForRoomIndex(i, model.league.mySlot)}</b>
+          <select className={s.simSelect} value={style} onChange={(e) => setStyle(i, e.target.value as CpuStyle)}>
+            {CPU_STYLES.map((k) => (
+              <option key={k} value={k}>
+                {STYLES[k].label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+      <button className={s.btn} onClick={() => setPrefs({ room: null })} disabled={!prefs.room || prefs.room.join() === defaultRoom(model.league.teams).join()}>
+        Reset room
+      </button>
+    </div>
   );
 }
