@@ -7,6 +7,17 @@ import type { DraftState, LeagueSettings, UiPrefs } from "@/lib/draft/types";
  * Every method is async for that reason, even though localStorage is synchronous.
  */
 
+/**
+ * The ESPN draft a league is connected to (APE-325), by live draft sync or for the season. A
+ * connected league is ESPN's: its settings come from ESPN, and once its draft is over, so does its
+ * board. Written only by the server; a client's copy is read-only.
+ */
+export interface EspnConnection {
+  espnLeagueId: string;
+  espnTeamId: number;
+  season: number;
+}
+
 /** A saved league: the engine's settings plus the metadata needed to keep several of them. */
 export interface LeagueRecord {
   id: string;
@@ -21,6 +32,8 @@ export interface LeagueRecord {
    * matters only on the wire, where a record without the key leaves the stored date alone.
    */
   draftAt?: string | null;
+  /** Set once the league is connected to ESPN. Absent for a league that never was. */
+  espn?: EspnConnection;
   /** ISO timestamps. */
   createdAt: string;
   updatedAt: string;

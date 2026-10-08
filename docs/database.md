@@ -36,7 +36,7 @@ The schema lives in `src/lib/db/schema.ts`, written with [Drizzle](https://orm.d
 | Table | Holds |
 |---|---|
 | `users`, `accounts`, `sessions`, `verification_tokens` | Auth.js sign-in data. Their property names must match what `@auth/drizzle-adapter` expects. |
-| `leagues` | One row per league: settings as JSON, the dataset fingerprint, and a soft-delete `deleted_at`. |
+| `leagues` | One row per league: settings as JSON, the dataset fingerprint, the ESPN draft it is connected to (`espn`, written only by the server), and a soft-delete `deleted_at`. |
 | `drafts` | One row per league: the picks as JSON, plus a `revision` that increases on every save. |
 | `entitlements` | What a league has paid for: one row per league and kind, with the Stripe session and amount. Written only by the Stripe webhook (see [payments.md](payments.md)). |
 | `ai_plans` | One row per league: its AI game plan and the background job that writes it. |

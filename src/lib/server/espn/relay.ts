@@ -152,8 +152,8 @@ interface Channel {
 export interface Relay {
   /** `planVersion` is the overlay plan the bridge already has; a newer one comes back with the result. */
   ingest(scope: RelayScope, session: string, seq: number, frames: readonly string[], result?: CommandResult, planVersion?: number): Promise<IngestResult>;
-  /** ESPN's own settings for this draft, as the bridge read them (8.8). */
-  setLeague(scope: RelayScope, settings: unknown): void;
+  /** ESPN's own settings for this draft, as the bridge read them (8.8). Returns them when they changed, else null. */
+  setLeague(scope: RelayScope, settings: unknown): EspnLeague | null;
   /** Publishes the turn plan from a war room for the league's bridge overlay. False when no bridge is connected. */
   publishPlan(userId: string, leagueId: string, plan: OverlayPlan): boolean;
   /** A pick the user made in War Room, for the bridge to make in ESPN. Refused unless ESPN has the user on the clock. */
@@ -498,13 +498,14 @@ export function createRelay({
       const ch = channel(scope.userId, scope.leagueId);
       const imported = toLeagueSettings(settings, scope.espnTeamId);
       const base: EspnLeague = imported.ok ? { ok: true, settings: imported.league } : { ok: false, error: imported.error };
-      // A moved draft is a change worth telling the war room about too.
-      const espnLeague: EspnLeague = imported.draftAt ? { ...base, draftAt: imported.draftAt } : base;
+      // A moved draft, or a renamed league, is a change worth telling the war room about too.
+      const espnLeague: EspnLeague = { ...base, ...(imported.draftAt ? { draftAt: imported.draftAt } : {}), ...(imported.name ? { name: imported.name } : {}) };
       // ESPN redraws the draft order when the lobby opens, so this arrives more than once; only a
       // real change is worth telling the war room about.
-      if (JSON.stringify(espnLeague) === JSON.stringify(ch.espnLeague)) return;
+      if (JSON.stringify(espnLeague) === JSON.stringify(ch.espnLeague)) return null;
       ch.espnLeague = espnLeague;
       emit(ch, { type: "league", espnLeague });
+      return espnLeague;
     },
 
     publishPlan(userId, leagueId, plan) {

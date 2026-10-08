@@ -5,11 +5,13 @@ import { DATASET_ID, LEAGUE_PRESETS } from "@/lib/data";
 import { draftAtFields, draftCountdown, toDraftAt } from "@/lib/draft/draftDay";
 import { leagueChanged, MAX_TEAMS, MIN_TEAMS, rosterFromCounts, SLOT_DEFS, slotCounts, validateLeague } from "@/lib/draft/league";
 import { formatRoundPick, totalPicks } from "@/lib/draft/snake";
+import { espnSettingsPage } from "@/lib/espn/pages";
 import type { Dataset, LeagueSettings, ScoringFormat } from "@/lib/draft/types";
 import { MAX_LEAGUE_NAME } from "@/lib/storage";
 import { cx, s } from "./cx";
 import { useDraft } from "./DraftProvider";
 import { useConfirm, useToast } from "./Feedback";
+import { leagueSummary } from "./Header";
 import { useLeague } from "./LeagueProvider";
 
 const SCORING: { value: ScoringFormat; label: string }[] = [
@@ -24,6 +26,8 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * League settings: name, preset, team count, draft slot, scoring, roster slots and Value/Reach threshold.
  * "create" makes a new league (and opens automatically on first run); "edit" changes the open one.
  * Saving a league that changes the draft's shape resets logged picks (after confirming).
+ * A league connected to ESPN takes its name and settings from ESPN (APE-325): editing it keeps only
+ * what ESPN doesn't have, the Value/Reach threshold, and links to the rest on ESPN.
  */
 export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { dataset: Dataset; onClose(): void; mode: "create" | "edit"; firstRun: boolean }) {
   const { league, leagues, active, updateLeague, createLeague, deleteLeague } = useLeague();
@@ -31,6 +35,7 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
   const confirm = useConfirm();
   const toast = useToast();
   const creating = mode === "create";
+  const espn = creating ? null : (active?.espn ?? null);
   // A new league starts from the open league's settings (or the default league on first run).
   const [form, setForm] = useState<LeagueSettings>(league);
   const [name, setName] = useState(creating ? (leagues.length ? `League ${leagues.length + 1}` : "My league") : (active?.name ?? ""));
@@ -70,6 +75,12 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
     if (creating) {
       createLeague(trimmed, form, draftAt);
       toast(`${trimmed} created`);
+      onClose();
+      return;
+    }
+    if (espn) {
+      updateLeague({ settings: { ...league, valueThreshold: form.valueThreshold } });
+      toast("League settings saved");
       onClose();
       return;
     }
@@ -118,114 +129,135 @@ export function LeagueSetupDialog({ dataset, onClose, mode, firstRun }: { datase
         <div className={s.setupBody}>
           {firstRun && <p className={s.setupIntro}>Tell Draft Room about your draft. You can change this any time from the League button.</p>}
 
-          <label className={s.field}>
-            <span className={s.fieldLabel}>Name</span>
-            <input className={s.input} type="text" value={name} maxLength={MAX_LEAGUE_NAME} onChange={(e) => setName(e.target.value)} autoFocus={creating} />
-          </label>
+          {!espn && (
+            <label className={s.field}>
+              <span className={s.fieldLabel}>Name</span>
+              <input className={s.input} type="text" value={name} maxLength={MAX_LEAGUE_NAME} onChange={(e) => setName(e.target.value)} autoFocus={creating} />
+            </label>
+          )}
 
-          <div className={s.field}>
-            <span className={s.fieldLabel}>Preset</span>
-            <div className={s.seg}>
-              {LEAGUE_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  className={cx(form.teams === p.league.teams && !leagueChanged({ ...p.league, mySlot: form.mySlot }, form) && "on")}
-                  onClick={() => update({ teams: p.league.teams, roster: p.league.roster, scoring: p.league.scoring })}
-                >
-                  {p.league.teams} teams
-                </button>
-              ))}
+          {espn ? (
+            <div className={s.field}>
+              <span className={s.fieldLabel}>
+                League
+                <small>from ESPN</small>
+              </span>
+              <span>
+                <b>{active?.name}</b>
+                <br />
+                {leagueSummary(league)}, {league.roster.length} rounds ·{" "}
+                <a className={s.textBtn} href={espnSettingsPage(espn)} target="_blank" rel="noreferrer">
+                  Change on ESPN
+                </a>
+              </span>
             </div>
-          </div>
-
-          <label className={s.field}>
-            <span className={s.fieldLabel}>Teams</span>
-            <select className={s.input} value={form.teams} onChange={(e) => update({ teams: Number(e.target.value) })}>
-              {Array.from({ length: MAX_TEAMS - MIN_TEAMS + 1 }, (_, i) => MIN_TEAMS + i).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className={s.field}>
-            <span className={s.fieldLabel}>Your draft slot</span>
-            <select className={s.input} value={form.mySlot} onChange={(e) => update({ mySlot: Number(e.target.value) })}>
-              {Array.from({ length: form.teams }, (_, i) => i + 1).map((slot) => (
-                <option key={slot} value={slot}>
-                  {slot} (pick {formatRoundPick(slot, form.teams)})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className={s.field}>
-            <span className={s.fieldLabel}>
-              Draft day
-              <small>optional</small>
-            </span>
-            <div className={s.draftDay}>
-              <input
-                className={s.input}
-                type="date"
-                aria-label="Draft date"
-                value={day.date}
-                onChange={(e) => setDay((d) => ({ date: e.target.value, time: e.target.value ? d.time : "" }))}
-              />
-              <input
-                className={s.input}
-                type="time"
-                aria-label="Draft time (optional)"
-                value={day.time}
-                disabled={!day.date}
-                onChange={(e) => setDay((d) => ({ ...d, time: e.target.value }))}
-              />
-              {day.date && (
-                <button type="button" className={s.textBtn} onClick={() => setDay({ date: "", time: "" })}>
-                  Clear
-                </button>
-              )}
-              <small className={cx("draftDayNote", past && "warn")}>
-                {past ? "That's already passed. Fine if you're logging an old draft." : "Adds a countdown, and a reminder of how close it is when you sign out."}
-              </small>
-            </div>
-          </div>
-
-          <label className={s.field}>
-            <span className={s.fieldLabel}>Scoring</span>
-            <select className={s.input} value={form.scoring} onChange={(e) => update({ scoring: e.target.value as ScoringFormat })}>
-              {SCORING.map((o) => (
-                <option key={o.value} value={o.value} disabled={!dataset.scoring.includes(o.value)}>
-                  {o.label}
-                  {dataset.scoring.includes(o.value) ? "" : " (not in this player data)"}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className={s.field}>
-            <span className={s.fieldLabel}>
-              Roster
-              <small>
-                {form.roster.length} rounds · {totalPicks(form)} picks
-              </small>
-            </span>
-            <div className={s.slotGrid}>
-              {SLOT_DEFS.map((d) => (
-                <div key={d.key} className={s.stepper}>
-                  <span>{d.label}</span>
-                  <button aria-label={`Remove a ${d.label} slot`} onClick={() => setCount(d.key, counts[d.key] - 1)} disabled={counts[d.key] === 0}>
-                    −
+          ) : (
+            <>
+            <div className={s.field}>
+              <span className={s.fieldLabel}>Preset</span>
+              <div className={s.seg}>
+                {LEAGUE_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    className={cx(form.teams === p.league.teams && !leagueChanged({ ...p.league, mySlot: form.mySlot }, form) && "on")}
+                    onClick={() => update({ teams: p.league.teams, roster: p.league.roster, scoring: p.league.scoring })}
+                  >
+                    {p.league.teams} teams
                   </button>
-                  <b aria-label={`${d.label} slots`}>{counts[d.key]}</b>
-                  <button aria-label={`Add a ${d.label} slot`} onClick={() => setCount(d.key, counts[d.key] + 1)}>
-                    +
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+
+            <label className={s.field}>
+              <span className={s.fieldLabel}>Teams</span>
+              <select className={s.input} value={form.teams} onChange={(e) => update({ teams: Number(e.target.value) })}>
+                {Array.from({ length: MAX_TEAMS - MIN_TEAMS + 1 }, (_, i) => MIN_TEAMS + i).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className={s.field}>
+              <span className={s.fieldLabel}>Your draft slot</span>
+              <select className={s.input} value={form.mySlot} onChange={(e) => update({ mySlot: Number(e.target.value) })}>
+                {Array.from({ length: form.teams }, (_, i) => i + 1).map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slot} (pick {formatRoundPick(slot, form.teams)})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className={s.field}>
+              <span className={s.fieldLabel}>
+                Draft day
+                <small>optional</small>
+              </span>
+              <div className={s.draftDay}>
+                <input
+                  className={s.input}
+                  type="date"
+                  aria-label="Draft date"
+                  value={day.date}
+                  onChange={(e) => setDay((d) => ({ date: e.target.value, time: e.target.value ? d.time : "" }))}
+                />
+                <input
+                  className={s.input}
+                  type="time"
+                  aria-label="Draft time (optional)"
+                  value={day.time}
+                  disabled={!day.date}
+                  onChange={(e) => setDay((d) => ({ ...d, time: e.target.value }))}
+                />
+                {day.date && (
+                  <button type="button" className={s.textBtn} onClick={() => setDay({ date: "", time: "" })}>
+                    Clear
+                  </button>
+                )}
+                <small className={cx("draftDayNote", past && "warn")}>
+                  {past ? "That's already passed. Fine if you're logging an old draft." : "Adds a countdown, and a reminder of how close it is when you sign out."}
+                </small>
+              </div>
+            </div>
+
+            <label className={s.field}>
+              <span className={s.fieldLabel}>Scoring</span>
+              <select className={s.input} value={form.scoring} onChange={(e) => update({ scoring: e.target.value as ScoringFormat })}>
+                {SCORING.map((o) => (
+                  <option key={o.value} value={o.value} disabled={!dataset.scoring.includes(o.value)}>
+                    {o.label}
+                    {dataset.scoring.includes(o.value) ? "" : " (not in this player data)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className={s.field}>
+              <span className={s.fieldLabel}>
+                Roster
+                <small>
+                  {form.roster.length} rounds · {totalPicks(form)} picks
+                </small>
+              </span>
+              <div className={s.slotGrid}>
+                {SLOT_DEFS.map((d) => (
+                  <div key={d.key} className={s.stepper}>
+                    <span>{d.label}</span>
+                    <button aria-label={`Remove a ${d.label} slot`} onClick={() => setCount(d.key, counts[d.key] - 1)} disabled={counts[d.key] === 0}>
+                      −
+                    </button>
+                    <b aria-label={`${d.label} slots`}>{counts[d.key]}</b>
+                    <button aria-label={`Add a ${d.label} slot`} onClick={() => setCount(d.key, counts[d.key] + 1)}>
+                      +
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            </>
+          )}
 
           <label className={s.field}>
             <span className={s.fieldLabel}>

@@ -7,6 +7,7 @@ import type { AiTradeIdeas } from "@/lib/ai/season/tradeIdeas";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
+import type { EspnConnection } from "@/lib/storage/types";
 import type { WeekFacts } from "@/lib/season/weekFacts";
 
 /**
@@ -95,6 +96,8 @@ export const leagues = pgTable(
     settings: jsonb("settings").$type<LeagueSettings>().notNull(),
     /** When the league drafts: "YYYY-MM-DD" or an ISO instant (src/lib/draft/draftDay.ts). Null when not set. */
     draftAt: text("draft_at"),
+    /** The ESPN draft the league is connected to (APE-325). Null when it isn't. Written only by the server. */
+    espn: jsonb("espn").$type<EspnConnection>(),
     ...timestamps,
     /** Soft delete: keeps the row (and any entitlement on it) recoverable. */
     deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),

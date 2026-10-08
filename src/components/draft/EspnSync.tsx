@@ -449,16 +449,38 @@ const isTyping = () => {
 };
 
 /**
- * ESPN's league settings against this board's (8.8). Only before the first pick: taking ESPN's
- * teams or draft slot mid-draft would renumber every pick already made, which is worse than the
- * mismatch. Once the draft is under way, a wrong slot shows up as the pick-ownership toast instead.
+ * ESPN's league settings, followed (8.8, APE-325). A league connected to ESPN is ESPN's: when the
+ * bridge reads settings or a name that differ from the board's, the board takes them, keeping only
+ * its own Value/Reach threshold. The server saves them too, so this only keeps the open board in step.
+ * Even mid-draft: the picks come from ESPN, and they mean what ESPN's settings say they mean.
  */
-export function EspnLeagueBar() {
+export function EspnLeagueFollower() {
   const { espnLeague } = useEspnSync();
   const { league, active, updateLeague } = useLeague();
   const { state } = useDraft();
   const toast = useToast();
-  const [dismissed, setDismissed] = useState(false);
+
+  const take = useEffectEvent((settings: Omit<LeagueSettings, "valueThreshold">) => {
+    const differences = leagueDifferences(league, settings);
+    if (!active || !differences.length) return;
+    updateLeague({ settings: { ...settings, valueThreshold: league.valueThreshold } });
+    toast(`League settings updated from ESPN: ${differences.join(", ")}`);
+  });
+  const settings = espnLeague?.ok ? espnLeague.settings : null;
+  const key = settings && JSON.stringify(settings);
+  useEffect(() => {
+    if (settings) take(settings);
+    // `key` stands for `settings`, which is a new object on every snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const espnName = espnLeague?.name;
+  const rename = useEffectEvent((name: string) => {
+    if (active && active.name !== name) updateLeague({ name });
+  });
+  useEffect(() => {
+    if (espnName) rename(espnName);
+  }, [espnName]);
 
   // ESPN is the authority on when a paired league drafts: before the first pick, when the
   // commissioner sets or moves the draft, the board follows without asking. Only on a change from
@@ -476,24 +498,7 @@ export function EspnLeagueBar() {
     follow(espnDraftAt);
   }, [espnDraftAt]);
 
-  if (!espnLeague?.ok || state.picks.length || dismissed) return null;
-  const differences = leagueDifferences(league, espnLeague.settings);
-  if (!differences.length) return null;
-
-  return (
-    <div className={s.espnArm} role="region" aria-label="ESPN league settings">
-      <span className={s.espnArmText}>
-        Your ESPN league is set up differently
-        <small>ESPN says {differences.join(", ")}.</small>
-      </span>
-      <button className={cx("btn", "espnGo")} onClick={() => updateLeague({ settings: { ...espnLeague.settings, valueThreshold: league.valueThreshold } })}>
-        Use ESPN&apos;s settings
-      </button>
-      <button className={s.btn} onClick={() => setDismissed(true)}>
-        Keep mine
-      </button>
-    </div>
-  );
+  return null;
 }
 
 /**

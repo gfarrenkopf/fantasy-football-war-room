@@ -27,6 +27,14 @@ describe("parseLeagueRecord", () => {
     expect(parseLeagueRecord(valid)).not.toHaveProperty("draftAt");
   });
 
+  it("keeps a valid ESPN connection and drops a malformed one", () => {
+    const espn = { espnLeagueId: "704343562", espnTeamId: 4, season: 2026 };
+    expect(parseLeagueRecord({ ...valid, espn: { ...espn, extra: 1 } })?.espn).toEqual(espn);
+    for (const bad of [{ ...espn, espnLeagueId: "abc" }, { ...espn, espnTeamId: 0 }, { ...espn, season: 1999 }, "704343562"]) {
+      expect(parseLeagueRecord({ ...valid, espn: bad })).not.toHaveProperty("espn");
+    }
+  });
+
   it("names an unnamed league", () => {
     expect(parseLeagueRecord({ ...valid, name: "   " })?.name).toBe("Untitled league");
   });

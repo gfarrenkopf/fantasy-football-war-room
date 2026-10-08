@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_LEAGUE } from "@/lib/data";
+import { listenForEspnPaired } from "@/lib/espn/channel";
 import type { LeagueSettings } from "@/lib/draft/types";
 import { getStores, newLeagueRecord, nowIso, type LeagueRecord } from "@/lib/storage";
 import { usePrefs } from "./PrefsProvider";
@@ -55,6 +56,9 @@ export function LeagueProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Pairing connects the league to ESPN on the server (APE-325): read it back, so this board knows.
+  useEffect(() => listenForEspnPaired(() => void reload()), [reload]);
 
   // `/draft?league=<id>` opens that league: the season page's way back to its draft room (APE-194).
   // Read once, at mount.

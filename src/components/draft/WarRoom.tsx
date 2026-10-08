@@ -18,7 +18,7 @@ import { Board, matchesQuery, useBoardColumns } from "./Board";
 import { cx, s } from "./cx";
 import { DraftModelProvider, useModel } from "./DraftModel";
 import { DraftProvider, useDraft } from "./DraftProvider";
-import { EspnLeagueBar, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider, useEspnSync } from "./EspnSync";
+import { EspnLeagueFollower, EspnPickBar, EspnPlanPublisher, EspnSyncChip, EspnSyncProvider, useEspnSync } from "./EspnSync";
 import { EspnAutopickAlert } from "./EspnAutopickAlert";
 import { EspnTakeover } from "./EspnTakeover";
 import { ConfirmProvider, ToastProvider, useToast } from "./Feedback";
@@ -143,9 +143,8 @@ function WarRoomView({ onManage }: { onManage(): void }) {
     if (home?.startsWith("/season/")) window.location.assign(home);
     else switchLeague(id);
   };
+  // A league connected to ESPN takes its settings from ESPN; the dialog keeps what's Draft Room's own (APE-325).
   const openSettings = () => setSetup("edit");
-  // A league that follows ESPN takes its settings from ESPN, so its League settings goes there.
-  const espnSettings = shell.leagues.find((l) => l.id === active?.id)?.espnSettings ?? null;
 
   /* ---- the draft tools menu (Epic 15): only what applies to this draft now ---- */
   const espnSync = useEspnSync();
@@ -339,14 +338,14 @@ function WarRoomView({ onManage }: { onManage(): void }) {
               actions={[
                 ...(hasSeasonPage ? [{ label: "Season", href: `/season/${encodeURIComponent(active.id)}` }] : []),
                 ...(connectSeason ? [{ label: "Manage your season", href: "/espn" }] : []),
-                espnSettings ? { label: "League settings on ESPN", href: espnSettings, external: true } : { label: "League settings", onSelect: openSettings },
+                { label: "League settings", onSelect: openSettings },
               ]}
               onNewLeague={() => setSetup("create")}
               onManage={onManage}
             />
           ) : null
         }
-        account={<AccountMenu leagueSettings={!active ? null : espnSettings ? { name: active.name, href: espnSettings, external: true } : { name: active.name, onSelect: openSettings }} espn={shell.espn} />}
+        account={<AccountMenu leagueSettings={active ? { name: active.name, onSelect: openSettings } : null} espn={shell.espn} />}
       />
       <Header
         ref={searchRef}
@@ -379,7 +378,7 @@ function WarRoomView({ onManage }: { onManage(): void }) {
         </div>
       </Header>
       <EspnAutopickAlert />
-      <EspnLeagueBar />
+      <EspnLeagueFollower />
       <EspnTakeover />
       <EspnPickBar />
       <EspnPlanPublisher planOdds={planStale ? null : planOdds} />

@@ -4,7 +4,7 @@ import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import type { DraftState } from "@/lib/draft/types";
 import type { LeagueRecord } from "@/lib/storage/types";
-import { deleteLeague, getDraft, listLeagues, MAX_LEAGUES_PER_USER, putDraft, upsertLeague } from "./leagues";
+import { connectEspn, deleteLeague, getDraft, listLeagues, MAX_LEAGUES_PER_USER, putDraft, upsertLeague } from "./leagues";
 
 let db: Db;
 let close: () => Promise<void>;
@@ -92,6 +92,54 @@ describe("leagues", () => {
     expect(await upsertLeague(db, alice, { ...a, updatedAt: "2026-09-09T00:00:00.000Z" })).toEqual({ status: "not-found" });
     expect(await getDraft(db, alice, a.id)).toBeNull();
     expect(await putDraft(db, alice, a.id, draft("x"), 0)).toEqual({ status: "not-found" });
+  });
+});
+
+describe("ESPN connection (APE-325)", () => {
+  const espn = { espnLeagueId: "704343562", espnTeamId: 4, season: 2026 };
+  const espnSettings = { teams: 10, mySlot: 7, scoring: "half" as const, roster: standardRoster().slice(0, 15) };
+
+  it("connects a league, takes ESPN's settings but keeps its threshold, and bumps updatedAt", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    expect(await connectEspn(db, alice, a.id, espn, { settings: espnSettings, name: "ESPN name" }, new Date("2026-09-02T00:00:00.000Z"))).toBe(true);
+    const [saved] = await listLeagues(db, alice);
+    expect(saved.espn).toEqual(espn);
+    expect(saved.settings).toEqual({ ...espnSettings, valueThreshold: 10 });
+    expect(saved.name).toBe("ESPN name");
+    expect(saved.updatedAt).toBe("2026-09-02T00:00:00.000Z");
+  });
+
+  it("connects without settings, leaving the league's own until ESPN's arrive", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    await connectEspn(db, alice, a.id, espn);
+    const [saved] = await listLeagues(db, alice);
+    expect(saved).toMatchObject({ espn, settings: a.settings });
+  });
+
+  it("keeps ESPN's settings, name and the connection against a client's edit, taking only the threshold", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    await connectEspn(db, alice, a.id, espn, { settings: espnSettings }, new Date("2026-09-02T00:00:00.000Z"));
+    const edit = { ...a, name: "Renamed", settings: { ...a.settings, teams: 14, valueThreshold: 6 }, updatedAt: "2026-09-03T00:00:00.000Z" };
+    const result = await upsertLeague(db, alice, edit);
+    expect(result).toMatchObject({ status: "ok", applied: true, league: { name: "Home league", espn, settings: { ...espnSettings, valueThreshold: 6 } } });
+  });
+
+  it("never takes a connection from a client", async () => {
+    const a = record({ espn });
+    await upsertLeague(db, alice, a);
+    expect((await listLeagues(db, alice))[0]).not.toHaveProperty("espn");
+  });
+
+  it("is a no-op when nothing changed, and false for another user's league", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    await connectEspn(db, alice, a.id, espn, { settings: espnSettings }, new Date("2026-09-02T00:00:00.000Z"));
+    await connectEspn(db, alice, a.id, espn, { settings: espnSettings }, new Date("2026-09-09T00:00:00.000Z"));
+    expect((await listLeagues(db, alice))[0].updatedAt).toBe("2026-09-02T00:00:00.000Z");
+    expect(await connectEspn(db, bob, a.id, espn)).toBe(false);
   });
 });
 

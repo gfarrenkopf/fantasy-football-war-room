@@ -81,6 +81,8 @@ export interface ServerClientView {
 export type EspnLeague = ({ ok: true; settings: Omit<LeagueSettings, "valueThreshold"> } | { ok: false; error: string }) & {
   /** ESPN's scheduled draft time (ISO instant), when it has one; on both branches (see EspnImport). */
   draftAt?: string;
+  /** The league's name on ESPN, when it has one; on both branches (see EspnImport). */
+  name?: string;
 };
 
 export interface LiveSnapshot {

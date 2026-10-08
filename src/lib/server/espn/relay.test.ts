@@ -262,12 +262,12 @@ describe("ESPN's own league settings (8.8)", () => {
     const { snapshot } = relay.subscribe("u1", "L1", (e) => events.push(e));
     expect(snapshot.espnLeague).toBeNull();
 
-    relay.setLeague(scope, SETTINGS);
+    expect(relay.setLeague(scope, SETTINGS)).toMatchObject({ ok: true });
     // scope's team is 1, second in the pick order.
     expect(relay.snapshot("u1", "L1").espnLeague).toEqual({ ok: true, settings: { teams: 4, mySlot: 2, scoring: "half", roster: expect.any(Array) } });
     expect(events.filter((e) => e.type === "league")).toHaveLength(1);
 
-    relay.setLeague(scope, SETTINGS);
+    expect(relay.setLeague(scope, SETTINGS)).toBeNull();
     expect(events.filter((e) => e.type === "league")).toHaveLength(1);
 
     // The lobby opening redraws the order, which moves the user's slot.

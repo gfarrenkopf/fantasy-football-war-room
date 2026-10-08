@@ -17,7 +17,7 @@ export interface ShellLeague {
   linked: boolean;
   /** The season page when the league is linked and its draft is done; the draft room otherwise. */
   home: string;
-  /** The league's settings on ESPN when it's linked: ESPN owns them, so League settings goes there. */
+  /** The league's settings on ESPN when it's connected to ESPN (APE-325): ESPN owns them, so League settings goes there. */
   espnSettings: string | null;
 }
 
@@ -54,7 +54,7 @@ export async function loadShell(db: Db, user: { userId: string; email?: string |
       // Only a linked league's draft decides anything, so only those are read.
       const draft = linked ? await getDraft(db, user.userId, r.id) : null;
       const done = !!draft?.state && draft.state.picks.length >= totalPicks(r.settings);
-      return { id: r.id, name: r.name, linked, home: leagueHome(r.id, linked, done), espnSettings: link ? espnSettingsPage(link) : null };
+      return { id: r.id, name: r.name, linked, home: leagueHome(r.id, linked, done), espnSettings: r.espn ? espnSettingsPage(r.espn) : link ? espnSettingsPage(link) : null };
     }),
   );
   const espn = login

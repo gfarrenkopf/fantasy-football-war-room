@@ -6,7 +6,7 @@ import { mintBridgeToken, purgeExpiredBridgeTokens } from "@/lib/server/espn/bri
 import { acknowledgeDisclosure, hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
 import { purgeExpiredCredentials } from "@/lib/server/espn/serverClients";
 import { error, json, readJson } from "@/lib/server/http";
-import { findLeague } from "@/lib/server/leagues";
+import { connectEspn, findLeague } from "@/lib/server/leagues";
 
 interface PairRequest {
   leagueId: string;
@@ -53,5 +53,7 @@ export const POST = withUser(async (request, _ctx, { db, userId, email }) => {
   await purgeExpiredCredentials(db);
   const { leagueId, espnLeagueId, espnTeamId, season } = pair;
   const { token, expiresAt } = await mintBridgeToken(db, { userId, leagueId, espnLeagueId, espnTeamId, season });
+  // Pairing makes the league ESPN's (APE-325); its settings follow once the bridge reads ESPN's.
+  await connectEspn(db, userId, leagueId, { espnLeagueId, espnTeamId, season });
   return json(200, { token, expiresAt: expiresAt.toISOString() });
 });

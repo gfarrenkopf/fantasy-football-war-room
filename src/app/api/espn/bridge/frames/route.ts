@@ -7,6 +7,7 @@ import type { CommandResult } from "@/lib/server/espn/relay";
 import { handBack } from "@/lib/server/espn/clients";
 import { deleteCredential } from "@/lib/server/espn/serverClients";
 import { error, json, readJson } from "@/lib/server/http";
+import { connectEspn } from "@/lib/server/leagues";
 
 /** CORS preflight for the bridge's JSON POST with an Authorization header. */
 export function OPTIONS(request: Request) {
@@ -73,7 +74,12 @@ export async function POST(request: Request) {
   const result = await getRelay().ingest(bridge, body.session, body.seq, body.frames, body.result, body.planVersion);
   // After ingest: re-pairing to a different ESPN league resets the channel, and these settings
   // describe the league it just moved to.
-  if (body.settings !== undefined) getRelay().setLeague(bridge, body.settings);
+  const espnLeague = body.settings !== undefined ? getRelay().setLeague(bridge, body.settings) : null;
+  // ESPN's settings and name are the league's (APE-325): saved as they change, so they hold with no war room open.
+  if (espnLeague && (espnLeague.ok || espnLeague.name)) {
+    const { espnLeagueId, espnTeamId, season } = bridge;
+    await connectEspn(getDb(), bridge.userId, bridge.leagueId, { espnLeagueId, espnTeamId, season }, { settings: espnLeague.ok ? espnLeague.settings : undefined, name: espnLeague.name });
+  }
   if (result.status === 413) return withCors(error(413, "Too many frames"), request);
   // The draft is over: a join credential the user handed over has done its job (9.1).
   if (result.status === 200 && body.frames.some((f) => f.startsWith("STATE 2"))) await deleteCredential(getDb(), bridge.userId, bridge.leagueId);

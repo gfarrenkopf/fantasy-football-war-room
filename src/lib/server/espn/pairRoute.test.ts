@@ -3,6 +3,7 @@ import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { grantEntitlement, SEASON_PASS } from "../entitlements";
 import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
+import { findLeague } from "../leagues";
 import { createTestLeague } from "../testLeagues";
 import { verifyBridgeToken } from "./bridgeTokens";
 import { hasAcknowledgedDisclosure } from "./disclosure";
@@ -69,6 +70,8 @@ describe("POST /api/espn/pair", () => {
     const { token, expiresAt } = await res.json();
     expect(Date.parse(expiresAt)).toBeGreaterThan(Date.now());
     expect(await verifyBridgeToken(db, token)).toMatchObject({ userId, leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
+    // Pairing connects the league to ESPN (APE-325).
+    expect((await findLeague(db, userId, leagueId))?.espn).toEqual({ espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
   });
 
   it("requires the disclosure once, and remembers it", async () => {
