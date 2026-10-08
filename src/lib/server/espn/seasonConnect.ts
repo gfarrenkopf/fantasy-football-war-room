@@ -1,12 +1,13 @@
 import { DEFAULT_LEAGUE } from "@/lib/data";
 import type { Db } from "@/lib/db/types";
 import { ESPN_SEASON_VERSION } from "@/lib/espn/disclosure";
-import { toLeagueSettings, toSeasonSettings } from "@/lib/espn/league";
+import { toSeasonSettings } from "@/lib/espn/league";
 import { ownTeamId, settingsOf } from "@/lib/season/espnLeague";
 import { newLeagueRecord } from "@/lib/storage/newLeague";
 import { connectEspn, findLeague, upsertLeague } from "../leagues";
 import { lastPairedLeague } from "./bridgeTokens";
 import { importEspnDraft, type DraftImportDeps } from "./draftImport";
+import { followEspnSettings } from "./followSettings";
 import { readEspnLeague } from "./leagueReader";
 import { markVerified, purgeExpiredLogins, storeLogin, type EspnLogin } from "./logins";
 import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
@@ -71,11 +72,8 @@ export async function connectSeason(
   const row = remembered ? await findLeague(db, userId, remembered) : null;
   if (row) {
     await linkSeason(db, userId, { leagueId: row.id, ...link }, now);
-    // ESPN is the league's source of truth now (APE-325): its settings, before its draft comes in.
-    // A draft order ESPN no longer shows leaves the league's own slot, not slot 1.
-    const order = toLeagueSettings(settingsOf(read.data), espnTeamId);
-    const settings = imported.ok ? { ...imported.league, mySlot: order.ok ? order.league.mySlot : row.settings.mySlot } : undefined;
-    await connectEspn(db, userId, row.id, link, { settings, name: imported.ok ? imported.name : undefined }, now);
+    // ESPN is the league's source of truth now (APE-325): its settings and name, before its draft comes in.
+    await followEspnSettings(db, userId, row.id, read.data, link, now);
     await withDraft(row.id);
     return { ok: true, leagueId: row.id, espnTeamId, created: false };
   }
