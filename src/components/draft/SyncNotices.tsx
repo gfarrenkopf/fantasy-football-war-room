@@ -9,6 +9,7 @@ const MESSAGES: Record<SyncIssue["kind"], string> = {
   "signed-out": "Your session expired. Changes are saved on this device; sign in again to sync them.",
   conflict: "This draft was also changed on another device. This device's picks replaced those changes.",
   gone: "A league was deleted on another device.",
+  final: "This draft is final on ESPN, so changes to it weren't saved.",
 };
 
 /** Shows background sync problems from the server-backed stores as toasts. */

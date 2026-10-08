@@ -3,6 +3,7 @@ import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { grantEntitlement, SEASON_PASS } from "../entitlements";
 import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
+import { findLeague, putDraft } from "../leagues";
 import { createTestLeague } from "../testLeagues";
 import { verifyBridgeToken } from "./bridgeTokens";
 import { hasAcknowledgedDisclosure } from "./disclosure";
@@ -69,6 +70,8 @@ describe("POST /api/espn/pair", () => {
     const { token, expiresAt } = await res.json();
     expect(Date.parse(expiresAt)).toBeGreaterThan(Date.now());
     expect(await verifyBridgeToken(db, token)).toMatchObject({ userId, leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
+    // Pairing connects the league to ESPN (APE-325).
+    expect((await findLeague(db, userId, leagueId))?.espn).toEqual({ espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
   });
 
   it("requires the disclosure once, and remembers it", async () => {
@@ -95,6 +98,18 @@ describe("POST /api/espn/pair", () => {
     await grantEntitlement(db, { leagueId, userId, kind: SEASON_PASS, source: "cs_test", amountTotal: 999, currency: "usd" });
     expect((await POST(pair(body()), ctx)).status).toBe(403);
     state.user = { userId, email: "owner@example.test" };
+    expect((await POST(pair(body()), ctx)).status).toBe(200);
+  });
+
+  it("refuses a different ESPN draft for a league whose draft is final, but not the same one (APE-325)", async () => {
+    const { POST } = await route();
+    await grantEntitlement(db, { leagueId, userId, kind: SEASON_PASS, source: "cs_test", amountTotal: 999, currency: "usd" });
+    expect((await POST(pair(body()), ctx)).status).toBe(200);
+    await putDraft(db, userId, leagueId, { version: 1, picks: [], final: { source: "espn", at: "2026-09-06T20:00:00.000Z" } }, 0, { server: true });
+    const res = await POST(pair({ ...body(), espnLeagueId: "111" }), ctx);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain("final");
+    expect((await POST(pair({ ...body(), season: 2027 }), ctx)).status).toBe(409);
     expect((await POST(pair(body()), ctx)).status).toBe(200);
   });
 

@@ -8,7 +8,7 @@ import { config, publicFlags } from "@/lib/config";
 import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
-import { backfillEspnDraft } from "@/lib/server/espn/draftImport";
+import { reconcileEspnDraft } from "@/lib/server/espn/draftImport";
 import { listSeasonLinks, markSeasonViewed } from "@/lib/server/espn/seasonLinks";
 import { loadSeasonView, loadWeekView } from "@/lib/server/espn/seasonView";
 import { projectionAccuracy, recordProjections } from "@/lib/server/seasonProjections";
@@ -43,10 +43,10 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   if (!league) notFound();
 
   const key = config.espnCodeKey;
-  // A league connected before its draft could be imported (APE-193) gets its board now, after the
+  // A league whose board isn't ESPN's finished draft yet (APE-193, APE-325) gets it now, after the
   // page is sent; the draft room reads it from the server next time it opens.
   after(() =>
-    backfillEspnDraft(db, key, user.userId, leagueId).catch((err: unknown) => console.warn(`[espn-season] draft backfill failed: ${(err as Error).message}`)),
+    reconcileEspnDraft(db, key, user.userId, leagueId).catch((err: unknown) => console.warn(`[espn-season] draft backfill failed: ${(err as Error).message}`)),
   );
   const load = await loadSeasonView(db, key, user.userId, leagueId, { refresh });
   if (load.kind !== "ok") {

@@ -81,6 +81,8 @@ export interface ServerClientView {
 export type EspnLeague = ({ ok: true; settings: Omit<LeagueSettings, "valueThreshold"> } | { ok: false; error: string }) & {
   /** ESPN's scheduled draft time (ISO instant), when it has one; on both branches (see EspnImport). */
   draftAt?: string;
+  /** The league's name on ESPN, when it has one; on both branches (see EspnImport). */
+  name?: string;
 };
 
 export interface LiveSnapshot {
@@ -128,7 +130,9 @@ export type LiveEvent =
   | { type: "league"; espnLeague: EspnLeague }
   | { type: "degraded"; degraded: DriftReport }
   | { type: "serverClient"; serverClient: ServerClientView | null }
-  | { type: "autopick"; autopick: boolean };
+  | { type: "autopick"; autopick: boolean }
+  /** The server made the board ESPN's finished draft and locked it (APE-325): read it again. */
+  | { type: "final" };
 
 /** Resolves the feed's picks from `from` onward (earlier ones are already resolved). */
 export function resolvePicks(feed: DraftFeed, crosswalk: Crosswalk, espnTeamId: number | null, from = 0): LivePick[] {

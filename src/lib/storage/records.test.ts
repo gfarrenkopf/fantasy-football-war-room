@@ -27,6 +27,14 @@ describe("parseLeagueRecord", () => {
     expect(parseLeagueRecord(valid)).not.toHaveProperty("draftAt");
   });
 
+  it("keeps a valid ESPN connection and drops a malformed one", () => {
+    const espn = { espnLeagueId: "704343562", espnTeamId: 4, season: 2026 };
+    expect(parseLeagueRecord({ ...valid, espn: { ...espn, extra: 1 } })?.espn).toEqual(espn);
+    for (const bad of [{ ...espn, espnLeagueId: "abc" }, { ...espn, espnTeamId: 0 }, { ...espn, season: 1999 }, "704343562"]) {
+      expect(parseLeagueRecord({ ...valid, espn: bad })).not.toHaveProperty("espn");
+    }
+  });
+
   it("names an unnamed league", () => {
     expect(parseLeagueRecord({ ...valid, name: "   " })?.name).toBe("Untitled league");
   });
@@ -57,6 +65,13 @@ describe("migrateDraftState with off-board picks", () => {
       picks: [{ playerId: "espn:1", mine: false, label }],
     });
     expect(migrateDraftState({ version: 1, picks: [{ playerId: "espn:1", mine: false, label: { name: "Free Agent", pos: null, team: null } }] })).not.toBeNull();
+  });
+
+  it("keeps a valid final marker and rejects a malformed one (APE-325)", () => {
+    const final = { source: "espn", at: "2026-09-06T20:00:00.000Z" };
+    expect(migrateDraftState({ version: 1, picks: [], final: { ...final, extra: 1 } })).toEqual({ version: 1, picks: [], final });
+    expect(migrateDraftState({ version: 1, picks: [], final: { ...final, source: "yahoo" } })).toBeNull();
+    expect(migrateDraftState({ version: 1, picks: [], final: { source: "espn" } })).toBeNull();
   });
 
   it("rejects a draft with a malformed label", () => {

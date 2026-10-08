@@ -148,6 +148,20 @@
       "when": 1791338176771,
       "tag": "0020_season_recaps",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791480703730,
+      "tag": "0021_league_espn_connection",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791481587161,
+      "tag": "0022_backfill_league_espn",
+      "breakpoints": true
     }
   ]
 }

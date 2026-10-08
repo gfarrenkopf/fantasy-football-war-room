@@ -4,6 +4,7 @@ import type { Db } from "@/lib/db/types";
 import { parseEspnPlayers } from "@/lib/espn/crosswalk";
 import espnPool from "@/lib/espn/__fixtures__/espn-players-2026.json";
 import type { LiveEvent } from "@/lib/espn/live";
+import { findLeague } from "../leagues";
 import { createTestLeague } from "../testLeagues";
 import { mintBridgeToken } from "./bridgeTokens";
 
@@ -90,6 +91,22 @@ describe("ESPN relay routes", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ have: 3 });
     expect(res.headers.get("access-control-allow-origin")).toBe(ESPN);
+  });
+
+  it("saves ESPN's settings and name as the league's, keeping its threshold (APE-325)", async () => {
+    const { frames } = await routes();
+    const settings = {
+      name: "  Sunday Gang  ",
+      size: 4,
+      draftSettings: { type: "SNAKE", pickOrder: [4, 1, 3, 2] },
+      rosterSettings: { lineupSlotCounts: { "0": 1, "2": 2, "4": 2, "20": 3 } },
+      scoringSettings: { scoringItems: [{ statId: 53, points: 0.5 }] },
+    };
+    await frames.POST(post(token, { espnLeagueId: "704343562", session: "abc12345", seq: 0, frames: [], settings }));
+    const row = await findLeague(db, userId, leagueId);
+    expect(row!.espn).toEqual({ espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
+    expect(row!.settings).toMatchObject({ teams: 4, mySlot: 2, scoring: "half", valueThreshold: 10 });
+    expect(row!.name).toBe("Sunday Gang");
   });
 
   it("answers the CORS preflight for ESPN only", async () => {

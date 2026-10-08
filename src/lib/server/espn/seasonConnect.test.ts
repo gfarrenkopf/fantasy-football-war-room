@@ -46,6 +46,7 @@ describe("connectSeason", () => {
     expect(row).toMatchObject({ name: "App Test 8.17" });
     expect(row!.settings).toMatchObject({ teams: 4, scoring: "ppr" });
     expect(await findSeasonLink(db, userId, result.leagueId)).toEqual({ leagueId: result.leagueId, espnLeagueId: "110222051", espnTeamId: 3, season: 2026 });
+    expect(row!.espn).toEqual({ espnLeagueId: "110222051", espnTeamId: 3, season: 2026 });
 
     // Connecting again finds the same league rather than building another.
     expect(await connectSeason(db, KEY, userId, request, { fetchImpl: espn() })).toMatchObject({ ok: true, leagueId: result.leagueId, created: false });
@@ -56,6 +57,19 @@ describe("connectSeason", () => {
     const leagueId = await createTestLeague(db, userId);
     await mintBridgeToken(db, { userId, leagueId, espnLeagueId: "110222051", espnTeamId: 3, season: 2026 });
     expect(await connectSeason(db, KEY, userId, request, { fetchImpl: espn() })).toMatchObject({ ok: true, leagueId, created: false });
+  });
+
+  it("gives a league it links ESPN's settings and name, keeping its own threshold, and its slot when ESPN's order is gone (APE-325)", async () => {
+    const userId = await createTestUser(db);
+    const leagueId = await createTestLeague(db, userId);
+    const before = (await findLeague(db, userId, leagueId))!.settings;
+    await mintBridgeToken(db, { userId, leagueId, espnLeagueId: "110222051", espnTeamId: 3, season: 2026 });
+    const noOrder = { ...espnLeague, settings: { ...league.settings, draftSettings: { ...league.settings.draftSettings, pickOrder: undefined } } };
+    await connectSeason(db, KEY, userId, request, { fetchImpl: espn(200, noOrder) });
+    const row = await findLeague(db, userId, leagueId);
+    expect(row!.espn).toEqual({ espnLeagueId: "110222051", espnTeamId: 3, season: 2026 });
+    expect(row!.settings).toMatchObject({ teams: 4, scoring: "ppr", mySlot: before.mySlot, valueThreshold: before.valueThreshold });
+    expect(row!.name).toBe("App Test 8.17");
   });
 
   it("refuses without storing anything when ESPN won't read the league, or the user has no team in it", async () => {

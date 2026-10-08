@@ -26,8 +26,12 @@ export type DraftAction =
 
 const indexOf = (state: DraftState, playerId: string) => state.picks.findIndex((p) => p.playerId === playerId);
 
-/** Pure draft reducer, ported from the prototype's draft(), untake(), undo and reset handlers. */
+/**
+ * Pure draft reducer, ported from the prototype's draft(), untake(), undo and reset handlers. A
+ * final draft (APE-325) only ever changes by being replaced with `hydrate`.
+ */
 export function draftReducer(state: DraftState, action: DraftAction): DraftState {
+  if (state.final && action.type !== "hydrate") return state;
   switch (action.type) {
     case "draft": {
       if (indexOf(state, action.playerId) >= 0 || state.picks.length >= action.totalPicks) return state;

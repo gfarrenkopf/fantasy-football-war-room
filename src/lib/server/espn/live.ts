@@ -1,8 +1,11 @@
 import "server-only";
+import { config } from "@/lib/config";
 import { dataset } from "@/lib/data";
+import { getDb } from "@/lib/db";
 import type { Db } from "@/lib/db/types";
 import { buildCrosswalk } from "@/lib/espn/crosswalk";
 import { verifyBridgeToken, type VerifiedBridge } from "./bridgeTokens";
+import { finalizeCompletedDraft } from "./draftImport";
 import { getEspnPlayers } from "./players";
 import { createRelay, type Relay } from "./relay";
 
@@ -22,6 +25,14 @@ export function getRelay(): Relay {
   return (g.__espnRelay ??= createRelay({
     crosswalkFor: async (season) => buildCrosswalk(await getEspnPlayers(season), dataset.players),
     fallbackCrosswalk: buildCrosswalk([], dataset.players),
+    // ESPN's draft is over: the board becomes ESPN's and locks, with or without a war room open (APE-325).
+    onComplete: ({ userId, leagueId }, snapshot) =>
+      void finalizeCompletedDraft(getDb(), config.espnCodeKey, userId, leagueId, snapshot)
+        .then((result) => {
+          if (result.kind === "imported") getRelay().announceFinal(userId, leagueId);
+          else if (result.kind !== "already-final") console.warn(`[espn-sync] draft not final league=${leagueId} result=${result.kind}${"reason" in result ? ` ${result.reason}` : ""}`);
+        })
+        .catch((err: unknown) => console.warn(`[espn-sync] finalizing the draft failed: ${(err as Error).message}`)),
   }));
 }
 

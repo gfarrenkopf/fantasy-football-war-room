@@ -74,6 +74,28 @@ describe("draftReducer", () => {
   });
 });
 
+describe("a final draft (APE-325)", () => {
+  const final = { version: 1, picks: [{ playerId: "a", mine: true }, { playerId: "b", mine: false }], final: { source: "espn" as const, at: "2026-09-06T20:00:00.000Z" } };
+
+  it("ignores every edit", () => {
+    const actions: DraftAction[] = [
+      { type: "draft", playerId: "c", mine: true, totalPicks: 10 },
+      { type: "setMine", playerId: "b", mine: true },
+      { type: "untake", playerId: "a" },
+      { type: "undo" },
+      { type: "reset" },
+      { type: "appendPicks", picks: [{ playerId: "c", mine: false }], totalPicks: 10 },
+      { type: "syncExternal", picks: [{ playerId: "c", mine: false }], mode: "replace", totalPicks: 10 },
+    ];
+    for (const action of actions) expect(draftReducer(final, action)).toBe(final);
+  });
+
+  it("is replaced only by hydrate", () => {
+    const next = { version: 1, picks: [] };
+    expect(draftReducer(final, { type: "hydrate", state: next })).toBe(next);
+  });
+});
+
 describe("takenMap", () => {
   it("maps player ids to owner and 1-based pick number", () => {
     const m = takenMap(run(draft("a"), draft("b", true)));

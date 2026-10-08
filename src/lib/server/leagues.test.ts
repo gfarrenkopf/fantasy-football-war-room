@@ -4,7 +4,7 @@ import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import type { DraftState } from "@/lib/draft/types";
 import type { LeagueRecord } from "@/lib/storage/types";
-import { deleteLeague, getDraft, listLeagues, MAX_LEAGUES_PER_USER, putDraft, upsertLeague } from "./leagues";
+import { connectEspn, deleteLeague, getDraft, listLeagues, MAX_LEAGUES_PER_USER, putDraft, upsertLeague } from "./leagues";
 
 let db: Db;
 let close: () => Promise<void>;
@@ -95,6 +95,54 @@ describe("leagues", () => {
   });
 });
 
+describe("ESPN connection (APE-325)", () => {
+  const espn = { espnLeagueId: "704343562", espnTeamId: 4, season: 2026 };
+  const espnSettings = { teams: 10, mySlot: 7, scoring: "half" as const, roster: standardRoster().slice(0, 15) };
+
+  it("connects a league, takes ESPN's settings but keeps its threshold, and bumps updatedAt", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    expect(await connectEspn(db, alice, a.id, espn, { settings: espnSettings, name: "ESPN name" }, new Date("2026-09-02T00:00:00.000Z"))).toBe(true);
+    const [saved] = await listLeagues(db, alice);
+    expect(saved.espn).toEqual(espn);
+    expect(saved.settings).toEqual({ ...espnSettings, valueThreshold: 10 });
+    expect(saved.name).toBe("ESPN name");
+    expect(saved.updatedAt).toBe("2026-09-02T00:00:00.000Z");
+  });
+
+  it("connects without settings, leaving the league's own until ESPN's arrive", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    await connectEspn(db, alice, a.id, espn);
+    const [saved] = await listLeagues(db, alice);
+    expect(saved).toMatchObject({ espn, settings: a.settings });
+  });
+
+  it("keeps ESPN's settings, name and the connection against a client's edit, taking only the threshold", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    await connectEspn(db, alice, a.id, espn, { settings: espnSettings }, new Date("2026-09-02T00:00:00.000Z"));
+    const edit = { ...a, name: "Renamed", settings: { ...a.settings, teams: 14, valueThreshold: 6 }, updatedAt: "2026-09-03T00:00:00.000Z" };
+    const result = await upsertLeague(db, alice, edit);
+    expect(result).toMatchObject({ status: "ok", applied: true, league: { name: "Home league", espn, settings: { ...espnSettings, valueThreshold: 6 } } });
+  });
+
+  it("never takes a connection from a client", async () => {
+    const a = record({ espn });
+    await upsertLeague(db, alice, a);
+    expect((await listLeagues(db, alice))[0]).not.toHaveProperty("espn");
+  });
+
+  it("is a no-op when nothing changed, and false for another user's league", async () => {
+    const a = record();
+    await upsertLeague(db, alice, a);
+    await connectEspn(db, alice, a.id, espn, { settings: espnSettings }, new Date("2026-09-02T00:00:00.000Z"));
+    await connectEspn(db, alice, a.id, espn, { settings: espnSettings }, new Date("2026-09-09T00:00:00.000Z"));
+    expect((await listLeagues(db, alice))[0].updatedAt).toBe("2026-09-02T00:00:00.000Z");
+    expect(await connectEspn(db, bob, a.id, espn)).toBe(false);
+  });
+});
+
 describe("authorization: another user's league looks like no league", () => {
   let league: LeagueRecord;
   beforeEach(async () => {
@@ -152,6 +200,31 @@ describe("drafts", () => {
     await putDraft(db, alice, league.id, draft("a"), 0);
     const results = await Promise.all([putDraft(db, alice, league.id, draft("a", "x"), 1), putDraft(db, alice, league.id, draft("a", "y"), 1)]);
     expect(results.map((r) => r.status).sort()).toEqual(["conflict", "ok"]);
+  });
+
+  describe("a final draft (APE-325)", () => {
+    const final = { ...draft("a", "b"), final: { source: "espn" as const, at: "2026-09-06T20:00:00.000Z" } };
+
+    it("is written only by the server; a client's `final` is dropped", async () => {
+      await putDraft(db, alice, league.id, final, 0);
+      expect((await getDraft(db, alice, league.id))?.state).toEqual(draft("a", "b"));
+      await putDraft(db, alice, league.id, final, 1, { server: true });
+      expect(await getDraft(db, alice, league.id)).toEqual({ state: final, revision: 2 });
+    });
+
+    it("refuses any client save, even at the current revision, and returns what's stored", async () => {
+      await putDraft(db, alice, league.id, final, 0, { server: true });
+      expect(await putDraft(db, alice, league.id, draft("a"), 1)).toEqual({ status: "final", current: { state: final, revision: 1 } });
+      expect(await putDraft(db, alice, league.id, draft("a", "b"), 1)).toMatchObject({ status: "final" });
+      expect(await putDraft(db, alice, league.id, draft("x"), 0)).toMatchObject({ status: "final" });
+      expect(await getDraft(db, alice, league.id)).toEqual({ state: final, revision: 1 });
+    });
+
+    it("can be replaced by the server", async () => {
+      await putDraft(db, alice, league.id, final, 0, { server: true });
+      const fixed = { ...final, picks: draft("a", "c").picks };
+      expect(await putDraft(db, alice, league.id, fixed, 1, { server: true })).toEqual({ status: "ok", revision: 2 });
+    });
   });
 
   it("is available from a second device (another session for the same user)", async () => {

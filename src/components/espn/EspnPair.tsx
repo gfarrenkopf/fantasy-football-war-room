@@ -119,6 +119,10 @@ export function EspnPair({
     if (res.status === 402) return setPhase({ kind: "error", message: "Live sync comes with this league's season pass.", needsPurchase: true });
     if (res.status === 403) return setPhase({ kind: "error", message: "ESPN live sync isn't available on your account yet. It's in a limited beta." });
     if (res.status === 401 || res.status === 428) return location.reload();
+    if (res.status === 409) {
+      const { error } = (await res.json().catch(() => ({}))) as { error?: string };
+      return setPhase({ kind: "error", message: error ?? "This league's draft is final. Start a new league for this ESPN draft." });
+    }
     if (!res.ok) return setPhase({ kind: "error", message: "Something went wrong connecting. Try again." });
     const { token } = (await res.json()) as { token: string };
     const opener = window.opener as Window | null;

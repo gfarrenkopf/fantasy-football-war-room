@@ -48,6 +48,8 @@ const RECEPTION_STAT = 53;
 
 /** The slice of `mSettings` we use. Everything is optional: this is ESPN's shape, not ours. */
 export interface EspnSettings {
+  /** The league's name on ESPN. */
+  name?: string;
   size?: number;
   /** `date` is the scheduled draft, in epoch milliseconds; 0 or missing when the commissioner hasn't set one. */
   draftSettings?: { type?: string; pickOrder?: number[]; date?: number };
@@ -66,7 +68,18 @@ export type EspnImport = (
    * and the date is the one thing worth taking from it. Absent when ESPN has none.
    */
   draftAt?: string;
+  /** The league's name on ESPN, on both branches: a connected league takes it (APE-325). */
+  name?: string;
 };
+
+/** A league name as long as Draft Room keeps one (MAX_LEAGUE_NAME in src/lib/storage/records.ts). */
+const MAX_NAME = 60;
+
+/** ESPN's name for the league, trimmed to fit, or undefined when it has none. */
+export function nameOf(settings: EspnSettings): string | undefined {
+  const name = typeof settings.name === "string" ? settings.name.trim().slice(0, MAX_NAME).trim() : "";
+  return name || undefined;
+}
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
@@ -134,7 +147,8 @@ export function toLeagueSettings(raw: unknown, espnTeamId: number): EspnImport {
   if (!settings) return { ok: false, error: "That doesn't look like an ESPN league." };
   const imported = importOf(settings, espnTeamId);
   const draftAt = draftAtOf(settings);
-  return draftAt ? { ...imported, draftAt } : imported;
+  const name = nameOf(settings);
+  return { ...imported, ...(draftAt ? { draftAt } : {}), ...(name ? { name } : {}) };
 }
 
 function importOf(settings: EspnSettings, espnTeamId: number): EspnImport {
@@ -172,11 +186,11 @@ export function toSeasonSettings(raw: unknown, espnTeamId: number): { ok: true; 
   if ("error" in roster) return { ok: false, error: roster.error.replace("can't draft for yet", "doesn't support yet") };
   const slots = rosterFromCounts(roster.counts);
   if (!slots.length) return { ok: false, error: "ESPN didn't say what this league's roster looks like." };
-  const name = (settings as { name?: unknown }).name;
+  const name = nameOf(settings);
   return {
     ok: true,
     league: { teams, mySlot: slotOf(settings, espnTeamId) ?? 1, scoring: scoringOf(settings), roster: slots },
-    ...(typeof name === "string" && name.trim() ? { name: name.trim().slice(0, 80) } : {}),
+    ...(name ? { name } : {}),
   };
 }
 

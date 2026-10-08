@@ -17,7 +17,8 @@ export const GET = withUser<Ctx>(async (_request, ctx, { db, userId }) => {
 
 /**
  * PUT /api/leagues/:id/draft with { state, baseRevision }
- * → 200 { revision }, or 409 { state, revision } when baseRevision is stale.
+ * → 200 { revision }, or 409 { state, revision } when baseRevision is stale, or when the stored
+ * draft is final (APE-325): then `state.final` is set, and the client takes that state as it is.
  */
 export const PUT = withUser<Ctx>(async (request, ctx, { db, userId }) => {
   const { id } = await ctx.params;
@@ -30,6 +31,6 @@ export const PUT = withUser<Ctx>(async (request, ctx, { db, userId }) => {
 
   const result = await putDraft(db, userId, id, state, baseRevision);
   if (result.status === "not-found") return error(404, "League not found");
-  if (result.status === "conflict") return json(409, result.current);
+  if (result.status === "conflict" || result.status === "final") return json(409, result.current);
   return json(200, { revision: result.revision });
 });

@@ -1,8 +1,9 @@
 import { and, count, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/types";
 import { drafts, leagues } from "@/lib/db/schema";
-import type { DraftState } from "@/lib/draft/types";
-import type { LeagueRecord } from "@/lib/storage/types";
+import { leagueChanged } from "@/lib/draft/league";
+import type { DraftState, LeagueSettings } from "@/lib/draft/types";
+import type { EspnConnection, LeagueRecord } from "@/lib/storage/types";
 
 /**
  * League and draft persistence for signed-in users. Every function takes the session user's id
@@ -24,6 +25,7 @@ const toRecord = (row: LeagueRow): LeagueRecord => ({
   datasetId: row.datasetId,
   settings: row.settings,
   ...(row.draftAt ? { draftAt: row.draftAt } : {}),
+  ...(row.espn ? { espn: row.espn } : {}),
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });
@@ -87,10 +89,13 @@ export async function upsertLeague(db: Db, userId: string, record: LeagueRecord)
     .onConflictDoUpdate({
       target: leagues.id,
       set: {
-        name: values.name,
+        // A connected league's name is ESPN's too (APE-325).
+        name: sql`case when ${leagues.espn} is null then excluded.name else ${leagues.name} end`,
         season: values.season,
         datasetId: values.datasetId,
-        settings: values.settings,
+        // A league connected to ESPN takes its settings from ESPN: a client only sets what ESPN
+        // doesn't have, the Value/Reach threshold (APE-325). `espn` itself is never a client's to set.
+        settings: sql`case when ${leagues.espn} is null then excluded.settings else jsonb_set(${leagues.settings}, '{valueThreshold}', excluded.settings->'valueThreshold') end`,
         // Only when the edit carries it: a record from an older client, which doesn't know the
         // field, must not wipe a draft date set elsewhere.
         ...("draftAt" in record ? { draftAt: values.draftAt } : {}),
@@ -104,6 +109,34 @@ export async function upsertLeague(db: Db, userId: string, record: LeagueRecord)
 
   const current = await findLeague(db, userId, record.id);
   return current ? { status: "ok", league: toRecord(current), applied: false } : { status: "not-found" };
+}
+
+/**
+ * Connects a league to an ESPN draft (APE-325): live draft sync pairing it, or connecting its
+ * season. With ESPN's `settings` (as `toLeagueSettings()` reads them) the league takes them,
+ * keeping its own Value/Reach threshold, and with ESPN's `name` it takes that. Bumps `updatedAt`
+ * so every device's copy is replaced. False if the user has no such league.
+ */
+export async function connectEspn(
+  db: Db,
+  userId: string,
+  leagueId: string,
+  espn: EspnConnection,
+  { settings, name }: { settings?: Omit<LeagueSettings, "valueThreshold">; name?: string } = {},
+  now = new Date(),
+): Promise<boolean> {
+  const row = await findLeague(db, userId, leagueId);
+  if (!row) return false;
+  const next = settings ? { ...settings, valueThreshold: row.settings.valueThreshold } : row.settings;
+  const nextName = name ?? row.name;
+  const sameEspn = row.espn?.espnLeagueId === espn.espnLeagueId && row.espn.espnTeamId === espn.espnTeamId && row.espn.season === espn.season;
+  if (sameEspn && !leagueChanged(row.settings, next) && nextName === row.name) return true;
+  const updatedAt = new Date(Math.max(now.getTime(), row.updatedAt.getTime() + 1));
+  await db
+    .update(leagues)
+    .set({ espn: { espnLeagueId: espn.espnLeagueId, espnTeamId: espn.espnTeamId, season: espn.season }, settings: next, name: nextName, updatedAt })
+    .where(owned(userId, leagueId));
+  return true;
 }
 
 /** Soft-deletes a league. Returns false if the user has no such league. */
@@ -130,14 +163,29 @@ export type PutDraftResult =
   | { status: "ok"; revision: number }
   /** `baseRevision` is stale: someone saved since. Carries what's stored now. */
   | { status: "conflict"; current: StoredDraft }
+  /** The stored draft is final (APE-325): no client may change it. Carries what's stored. */
+  | { status: "final"; current: StoredDraft }
   | { status: "not-found" };
 
 /**
  * Saves a draft if `baseRevision` is the stored revision (optimistic concurrency).
  * The compare-and-set is a single statement, so two concurrent saves can't both succeed.
+ *
+ * A final draft (APE-325) is read-only to clients: their `final` is ignored, and a save onto a
+ * final draft is refused, checked in the same statement. `{ server: true }` is for server code that verified the board, the only
+ * writer that may set `final` or replace a final draft.
  */
-export async function putDraft(db: Db, userId: string, leagueId: string, state: DraftState, baseRevision: number): Promise<PutDraftResult> {
+export async function putDraft(
+  db: Db,
+  userId: string,
+  leagueId: string,
+  input: DraftState,
+  baseRevision: number,
+  { server = false }: { server?: boolean } = {},
+): Promise<PutDraftResult> {
   if (!(await findLeague(db, userId, leagueId))) return { status: "not-found" };
+  const state: DraftState = server ? input : { version: input.version, picks: input.picks };
+  const notFinal = server ? sql`true` : sql`${drafts.state}->'final' is null`;
 
   const [updated] =
     baseRevision === 0
@@ -149,10 +197,11 @@ export async function putDraft(db: Db, userId: string, leagueId: string, state: 
       : await db
           .update(drafts)
           .set({ state, revision: sql`${drafts.revision} + 1`, updatedAt: new Date() })
-          .where(and(eq(drafts.leagueId, leagueId), eq(drafts.revision, baseRevision)))
+          .where(and(eq(drafts.leagueId, leagueId), eq(drafts.revision, baseRevision), notFinal))
           .returning({ revision: drafts.revision });
   if (updated) return { status: "ok", revision: updated.revision };
 
   const current = await getDraft(db, userId, leagueId);
-  return current ? { status: "conflict", current } : { status: "not-found" };
+  if (!current) return { status: "not-found" };
+  return !server && current.state?.final ? { status: "final", current } : { status: "conflict", current };
 }

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react";
 import { draftReducer, emptyDraftState, type DraftAction } from "@/lib/draft/state";
 import type { DraftPick, DraftState } from "@/lib/draft/types";
-import { getStores } from "@/lib/storage";
+import { getStores, subscribeSyncIssues } from "@/lib/storage";
 
 interface DraftContextValue {
   state: DraftState;
@@ -17,6 +17,8 @@ interface DraftContextValue {
   appendPicks(picks: DraftPick[]): void;
   /** Applies picks from an external draft (ESPN live sync). See the syncExternal action. */
   syncExternal(picks: DraftPick[], mode: "replace" | "merge"): void;
+  /** Reads the saved draft again, e.g. once the server has made it final (APE-325). */
+  reload(): Promise<void>;
 }
 
 const DraftContext = createContext<DraftContextValue | null>(null);
@@ -56,6 +58,20 @@ export function DraftProvider({
     };
   }, [draftKey]);
 
+  const reload = useCallback(async () => {
+    if (draftKey === null) return;
+    const saved = await getStores().draft.getDraftState(draftKey);
+    if (saved) dispatch({ type: "hydrate", state: saved });
+  }, [draftKey]);
+
+  // The server refused an edit because the draft is final (APE-325): show the board it kept.
+  useEffect(() => {
+    if (draftKey === null) return;
+    return subscribeSyncIssues((issue) => {
+      if (issue.kind === "final" && issue.leagueId === draftKey) void reload();
+    });
+  }, [draftKey, reload]);
+
   useEffect(() => {
     // Don't overwrite the saved draft with the empty initial state before it has loaded.
     if (!hydrated || draftKey === null) return;
@@ -75,8 +91,9 @@ export function DraftProvider({
       reset: () => act({ type: "reset" }),
       appendPicks: (picks) => act({ type: "appendPicks", picks, totalPicks }),
       syncExternal: (picks, mode) => act({ type: "syncExternal", picks, mode, totalPicks }),
+      reload,
     }),
-    [state, hydrated, act, totalPicks],
+    [state, hydrated, act, totalPicks, reload],
   );
 
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
