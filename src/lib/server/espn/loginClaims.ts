@@ -28,7 +28,10 @@ const context = (tokenHash: string) => `espn-claim:${tokenHash}`;
 export interface ClaimScope {
   espnLeagueId: string;
   season: number;
-  /** The consent version the user agreed to in the bridge overlay. */
+  /**
+   * Unused since APE-332, and 0: the user agrees when they claim it, not before it's handed off, so
+   * the consent that counts is the account's own (src/lib/server/espn/disclosure.ts).
+   */
   consentVersion: number;
 }
 

@@ -26,6 +26,7 @@ import { GameDayPanel } from "./GameDayPanel";
 import { useLivePolling } from "./useLivePolling";
 import { WaiverPanel } from "./WaiverPanel";
 import s from "./season.module.css";
+import { espnSetup } from "@/lib/espn/pages";
 
 /** Why the page can't show a league, from the server's SeasonLoad. */
 export type SeasonProblem =
@@ -229,7 +230,7 @@ function Problem({ flags, problem, espnUrl }: { flags: PublicFlags; problem: Sea
         Open your league on ESPN
       </a>
       , use your Draft Room bookmark there, then Connect my season. No bookmark on this device?{" "}
-      <a className={s.link} href="/espn">
+      <a className={s.link} href={espnSetup("season")}>
         Add it
       </a>
       .
@@ -237,7 +238,7 @@ function Problem({ flags, problem, espnUrl }: { flags: PublicFlags; problem: Sea
   ) : (
     <>
       Open your league on ESPN, use the{" "}
-      <a className={s.link} href="/espn">
+      <a className={s.link} href={espnSetup("season")}>
         Draft Room bookmark
       </a>
       , then Connect my season.

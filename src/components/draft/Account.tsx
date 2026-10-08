@@ -65,7 +65,7 @@ export type LeagueSettingsLink = { name: string; href: string; external?: boolea
  * Signed in, it also reaches the current league's settings (people look for those under their
  * account) and, with an ESPN login, the ESPN connection, which belongs to the account (Epic 15).
  */
-export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueSettingsLink | null; espn?: { seasonEmails: boolean | null } | null } = {}) {
+export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueSettingsLink | null; espn?: { seasonEmails: boolean | null; login: "connected" | "disconnected" | null } | null } = {}) {
   const flags = useFlags();
   const { cloudEnabled, paymentsEnabled } = flags;
   const user = useAccount();
@@ -196,11 +196,16 @@ export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueS
                   <span>League settings · {leagueSettings.name}</span>
                 </button>
               ))}
-            {espn && (
-              <button className={bar.item} role="menuitem" onClick={pick(() => setShowEspn(true))}>
-                <span>ESPN connection</span>
-              </button>
-            )}
+            {espn &&
+              (espn.login ? (
+                <button className={bar.item} role="menuitem" onClick={pick(() => setShowEspn(true))}>
+                  <span>ESPN connection{espn.login === "disconnected" && " · reconnect"}</span>
+                </button>
+              ) : (
+                <a className={bar.item} role="menuitem" href="/espn?for=season">
+                  <span>Connect ESPN</span>
+                </a>
+              ))}
           </div>
         )}
         <div className={bar.group}>
@@ -215,7 +220,7 @@ export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueS
         </div>
       </div>
       {showPurchases && <PurchasesDialog onClose={() => setShowPurchases(false)} />}
-      {showEspn && espn && <EspnConnectionDialog seasonEmails={espn.seasonEmails} onClose={() => setShowEspn(false)} />}
+      {showEspn && espn?.login && <EspnConnectionDialog seasonEmails={espn.seasonEmails} login={espn.login} onClose={() => setShowEspn(false)} />}
     </>
   );
 }

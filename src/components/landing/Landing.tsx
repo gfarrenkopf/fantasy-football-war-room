@@ -129,6 +129,11 @@ export function Landing({ flags, farewell = false }: { flags: PublicFlags; farew
                 Connect your ESPN league once and Draft Room sets your best lineup every week and checks any trade against both teams&apos; real rosters,
                 for the rest of the season. Free.
               </p>
+              <p className={s.personaPlus}>
+                <a className={s.personaLink} href="/espn?for=season">
+                  Connect your ESPN league
+                </a>
+              </p>
             </article>
           )}
         </div>

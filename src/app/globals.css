@@ -151,3 +151,27 @@ html[data-leaving] body::after {
     animation: none;
   }
 }
+
+/*
+ * The tap mark on the ESPN bookmark's setup illustrations (src/components/espn/BookmarkScenes.tsx):
+ * a ring that swells and fades from the dot, the way a touch registers. The only motion in them;
+ * reduced motion keeps the dot and drops the ring's pulse (they use motion-safe:).
+ */
+@keyframes bookmark-tap {
+  from {
+    transform: scale(0.55);
+    opacity: 0.45;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* A setup step arriving (src/components/espn/SetupWizard.tsx): a short rise into place, from visible. */
+@keyframes setup-step {
+  from {
+    transform: translateY(6px);
+    opacity: 0.4;
+  }
+}

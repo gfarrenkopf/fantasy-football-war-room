@@ -4,6 +4,8 @@ import { espnLoginClaims } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { CLAIM_TTL_MS, MAX_LIVE_CLAIMS, createClaim, dropClaim, openClaim, peekClaim, purgeExpiredClaims } from "./loginClaims";
+import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
+import { acknowledgeDisclosure } from "./disclosure";
 import type { ConnectRequest, ConnectResult } from "./seasonConnect";
 
 vi.mock("server-only", () => ({}));
@@ -85,11 +87,22 @@ async function routes(env: Record<string, string> = {}) {
 
 const handoffPost = (body: unknown, origin = ESPN) =>
   new Request("http://localhost/api/espn/season/handoff", { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) });
-const claimPost = (claim: unknown) =>
-  new Request("http://localhost/api/espn/season/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ claim }) });
+const claimPost = (claim: unknown, acknowledged?: number) =>
+  new Request("http://localhost/api/espn/season/claim", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ claim, ...(acknowledged ? { acknowledged } : {}) }),
+  });
+const claimDelete = (claim: unknown, origin?: string) =>
+  new Request("http://localhost/api/espn/season/claim", {
+    method: "DELETE",
+    headers: { "content-type": "application/json", host: "localhost", ...(origin ? { origin } : {}) },
+    body: JSON.stringify({ claim }),
+  });
 
 describe("handing a login from ESPN to Draft Room", () => {
-  const body = { ...SCOPE, ...LOGIN };
+  const body = { espnLeagueId: SCOPE.espnLeagueId, season: SCOPE.season, ...LOGIN };
+  const connected = { espnLeagueId: SCOPE.espnLeagueId, season: SCOPE.season, consentVersion: ESPN_DISCLOSURE_VERSION, ...LOGIN };
   beforeEach(async () => {
     vi.resetModules();
     await db.delete(espnLoginClaims);
@@ -102,62 +115,81 @@ describe("handing a login from ESPN to Draft Room", () => {
     vi.restoreAllMocks();
   });
 
-  it("serves the disclosure and preflight to ESPN only", async () => {
+  const handOff = async (handoff: Awaited<ReturnType<typeof routes>>["handoff"]) =>
+    ((await (await handoff.POST(handoffPost(body))).json()) as { claim: string }).claim;
+
+  it("answers ESPN's preflight only", async () => {
     const { handoff } = await routes();
-    const res = handoff.GET(new Request("http://localhost/api/espn/season/handoff", { headers: { origin: ESPN } }));
-    expect(await res.json()).toEqual({ version: 1, lines: expect.arrayContaining([expect.stringContaining("cookies")]) });
-    expect(res.headers.get("access-control-allow-origin")).toBe(ESPN);
     const options = (origin: string) => new Request("http://localhost/api/espn/season/handoff", { method: "OPTIONS", headers: { origin } });
     expect(handoff.OPTIONS(options(ESPN)).status).toBe(204);
     expect(handoff.OPTIONS(options("https://evil.example")).status).toBe(404);
   });
 
-  it("parks the login under a claim the signed-in user then connects with, once", async () => {
+  it("parks the login under a claim, and asks the account to agree before using it (APE-332)", async () => {
     const { handoff, claim } = await routes();
     const res = await handoff.POST(handoffPost(body));
     expect(res.status).toBe(200);
     expect(res.headers.get("access-control-allow-origin")).toBe(ESPN);
     const { claim: code } = (await res.json()) as { claim: string };
 
-    const first = await claim.POST(claimPost(code), undefined);
+    const unasked = await claim.POST(claimPost(code), undefined);
+    expect(unasked.status).toBe(428);
+    expect(await unasked.json()).toEqual({ needsDisclosure: ESPN_DISCLOSURE_VERSION });
+    expect(state.connects).toEqual([]);
+
+    const first = await claim.POST(claimPost(code, ESPN_DISCLOSURE_VERSION), undefined);
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ leagueId: "lg1", created: true });
-    expect(state.connects).toEqual([{ ...SCOPE, ...LOGIN }]);
+    expect(state.connects).toEqual([connected]);
     expect((await claim.POST(claimPost(code), undefined)).status).toBe(410);
+  });
+
+  it("asks once per account: agreeing to it, here or when pairing a draft, covers the next connect", async () => {
+    const { handoff, claim } = await routes();
+    await claim.POST(claimPost(await handOff(handoff), ESPN_DISCLOSURE_VERSION), undefined);
+    expect((await claim.POST(claimPost(await handOff(handoff)), undefined)).status).toBe(200);
+
+    state.user = { userId: await createTestUser(db), email: "fan@example.test" };
+    await acknowledgeDisclosure(db, state.user.userId, ESPN_DISCLOSURE_VERSION);
+    expect((await claim.POST(claimPost(await handOff(handoff)), undefined)).status).toBe(200);
+  });
+
+  it("deletes the claim when the user says not now", async () => {
+    const { handoff, claim } = await routes();
+    const code = await handOff(handoff);
+    expect((await claim.DELETE(claimDelete(code, "https://evil.example"))).status).toBe(403);
+    expect((await claim.DELETE(claimDelete(code))).status).toBe(204);
+    expect(await db.select().from(espnLoginClaims)).toEqual([]);
   });
 
   it("keeps the claim when ESPN can't be reached, so the user can retry", async () => {
     const { handoff, claim } = await routes();
-    const { claim: code } = (await (await handoff.POST(handoffPost(body))).json()) as { claim: string };
+    const code = await handOff(handoff);
     state.result = { ok: false, status: 503, error: "Couldn't reach ESPN." } satisfies ConnectResult;
-    expect((await claim.POST(claimPost(code), undefined)).status).toBe(503);
+    expect((await claim.POST(claimPost(code, ESPN_DISCLOSURE_VERSION), undefined)).status).toBe(503);
     state.result = { ok: false, status: 403, error: "No team." } satisfies ConnectResult;
     expect((await claim.POST(claimPost(code), undefined)).status).toBe(403);
     expect((await claim.POST(claimPost(code), undefined)).status).toBe(410);
   });
 
-  it("refuses a malformed login, a stale consent, and claims from signed-out users", async () => {
+  it("refuses a malformed login, and claims from signed-out users", async () => {
     const { handoff, claim } = await routes();
     expect((await handoff.POST(handoffPost({ ...body, swid: "nope" }))).status).toBe(400);
     expect((await handoff.POST(handoffPost({ ...body, espnS2: "short" }))).status).toBe(400);
     expect((await handoff.POST(handoffPost({ ...body, espnLeagueId: "abc" }))).status).toBe(400);
-    const stale = await handoff.POST(handoffPost({ ...body, consentVersion: 0 }));
-    expect(stale.status).toBe(409);
-    expect(await stale.json()).toEqual({ seasonVersion: 1 });
     expect(await db.select().from(espnLoginClaims)).toEqual([]);
 
-    const { claim: code } = (await (await handoff.POST(handoffPost(body))).json()) as { claim: string };
+    const code = await handOff(handoff);
     state.user = null;
-    expect((await claim.POST(claimPost(code), undefined)).status).toBe(401);
+    expect((await claim.POST(claimPost(code, ESPN_DISCLOSURE_VERSION), undefined)).status).toBe(401);
     state.user = { userId: await createTestUser(db), email: "fan@example.test" };
-    expect((await claim.POST(claimPost("../etc"), undefined)).status).toBe(400);
+    expect((await claim.POST(claimPost("../etc", ESPN_DISCLOSURE_VERSION), undefined)).status).toBe(400);
     expect(state.connects).toEqual([]);
   });
 
   it("is off without ESPN_CODE_KEY", async () => {
     const { handoff, claim } = await routes({ ESPN_CODE_KEY: "" });
     expect((await handoff.POST(handoffPost(body))).status).toBe(404);
-    expect(handoff.GET(new Request("http://localhost/api/espn/season/handoff")).status).toBe(404);
     expect((await claim.POST(claimPost("x".repeat(43)), undefined)).status).toBe(404);
   });
 });

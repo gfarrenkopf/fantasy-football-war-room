@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { totalPicks } from "@/lib/draft/snake";
-import { ESPN_SEASON_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import type { Crosswalk } from "@/lib/espn/crosswalk";
 import type { LiveSnapshot } from "@/lib/espn/live";
 import { toSeasonSettings } from "@/lib/espn/league";
@@ -87,7 +87,7 @@ describe("reconcileEspnDraft", () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(finished(TOTAL))));
 
     expect(await reconcileEspnDraft(db, KEY, userId, leagueId, { fetchImpl, crosswalkFor })).toEqual({ kind: "no-login" });
-    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_SEASON_VERSION });
+    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_DISCLOSURE_VERSION });
     expect(await reconcileEspnDraft(db, KEY, userId, leagueId, { fetchImpl, crosswalkFor })).toEqual({ kind: "imported" });
     expect(String(fetchImpl.mock.calls[0][0])).toContain("/leagues/704343562?view=mDraftDetail");
     expect(await reconcileEspnDraft(db, KEY, userId, leagueId, { fetchImpl, crosswalkFor })).toEqual({ kind: "already-final" });
@@ -97,7 +97,7 @@ describe("reconcileEspnDraft", () => {
   it("uses the season link for a league linked before the connection marker", async () => {
     const userId = await createTestUser(db);
     const leagueId = await createTestLeague(db, userId);
-    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_SEASON_VERSION });
+    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_DISCLOSURE_VERSION });
     await linkSeason(db, userId, { leagueId, espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(finished(TOTAL))));
     expect(await reconcileEspnDraft(db, KEY, userId, leagueId, { fetchImpl, crosswalkFor })).toEqual({ kind: "imported" });
@@ -152,7 +152,7 @@ describe("finalizeFromLive", () => {
     const userId = await createTestUser(db);
     const leagueId = await createTestLeague(db, userId);
     await connectEspn(db, userId, leagueId, { espnLeagueId: "704343562", espnTeamId: 1, season: 2026 });
-    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_SEASON_VERSION });
+    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_DISCLOSURE_VERSION });
     const notYet = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ draftDetail: { drafted: false, inProgress: true, picks: [] } })));
     expect(await finalizeCompletedDraft(db, KEY, userId, leagueId, live(TOTAL), { fetchImpl: notYet, crosswalkFor })).toEqual({ kind: "imported" });
     expect(notYet).toHaveBeenCalledTimes(1);
@@ -168,7 +168,7 @@ describe("connectSeason", () => {
     const total = totalPicks(imported.league);
     const body = { settings: league.settings, teams: [{ id: 3, owners: [SWID] }], ...finished(total, imported.league.teams) };
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(body)));
-    const request = { espnLeagueId: "110222051", season: 2026, consentVersion: ESPN_SEASON_VERSION, espnS2: "s2", swid: SWID };
+    const request = { espnLeagueId: "110222051", season: 2026, consentVersion: ESPN_DISCLOSURE_VERSION, espnS2: "s2", swid: SWID };
 
     const result = await connectSeason(db, KEY, userId, request, { fetchImpl, crosswalkFor });
     expect(result).toMatchObject({ ok: true, created: true });

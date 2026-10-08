@@ -142,7 +142,10 @@ export function EspnPair({
         <header className="space-y-1">
           <p className="text-xs uppercase tracking-wider text-muted">Draft Room</p>
           <h1 className="text-xl font-semibold">Connect your ESPN draft</h1>
-          <p className="text-sm text-muted">Picks made in your ESPN draft will land on your Draft Room board as they happen.</p>
+          <p className="text-sm text-muted">
+            Picks made in your ESPN draft will land on your Draft Room board as they happen.
+            {flags.espnSeasonEnabled ? " Your season connects too, for weekly lineup and trade help." : ""}
+          </p>
         </header>
 
         {!validEspn ? (

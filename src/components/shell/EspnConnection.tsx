@@ -6,9 +6,19 @@ import s from "./appBar.module.css";
 /**
  * The user's ESPN connection (Epic 15), opened from the account menu: one login reads every league,
  * so disconnecting and the Sunday email are the account's, not any one league's. Moved here from the
- * foot of the season page.
+ * foot of the season page. Reconnecting, or connecting another league, goes to the bookmark's
+ * setup page (APE-335).
  */
-export function EspnConnectionDialog({ seasonEmails, onClose }: { seasonEmails: boolean | null; onClose(): void }) {
+export function EspnConnectionDialog({
+  seasonEmails,
+  login,
+  onClose,
+}: {
+  seasonEmails: boolean | null;
+  /** ESPN still accepts the login, or has signed Draft Room out and it needs the bookmark again. */
+  login: "connected" | "disconnected";
+  onClose(): void;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const [phase, setPhase] = useState<"idle" | "confirm" | "working" | "done" | "failed">("idle");
   useEffect(() => {
@@ -31,7 +41,18 @@ export function EspnConnectionDialog({ seasonEmails, onClose }: { seasonEmails: 
           <p role="status">Disconnected. Draft Room has deleted your ESPN login, and your leagues stop updating until you connect again.</p>
         ) : (
           <>
-            <p className={s.dialogText}>Draft Room reads all your ESPN leagues with one login.</p>
+            {login === "disconnected" ? (
+              <p className={s.dialogText}>
+                <span className={s.warnText}>ESPN signed Draft Room out</span>, which it does every so often. Your leagues stop updating until you reconnect.
+              </p>
+            ) : (
+              <p className={s.dialogText}>Draft Room reads all your ESPN leagues with one login.</p>
+            )}
+            <p className={s.dialogText}>
+              <a className={s.textBtn} href="/espn?for=season">
+                {login === "disconnected" ? "Reconnect ESPN" : "Connect another ESPN league"}
+              </a>
+            </p>
             {seasonEmails !== null && <SeasonEmails initial={seasonEmails} />}
             <div className={s.dialogDanger}>
               {phase === "confirm" || phase === "working" ? (

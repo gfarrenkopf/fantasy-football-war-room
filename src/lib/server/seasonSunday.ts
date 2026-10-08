@@ -7,6 +7,7 @@ import { seasonAiAccess } from "./seasonAi";
 import { writeAiLineup } from "./seasonAiOutputs";
 import { recordProjections } from "./seasonProjections";
 import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobLeague, type JobMail } from "./seasonJobs";
+import { espnSetup } from "@/lib/espn/pages";
 
 /**
  * The Sunday-morning AI lineup job (Epic 11, 11.3). A timer on the droplet starts it at 11:40 ET,
@@ -69,7 +70,7 @@ export async function runSundayJob(db: Db, deps: SundayDeps, { dryRun = false }:
     if (dryRun || !to) continue;
     const unsubscribe = unsubscribeUrl(deps, userId);
     if (lineups.length && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "lineup", now }, renderSundayEmail({ leagues: lineups, unsubscribeUrl: unsubscribe })))) summary.emails++;
-    if (reconnect && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "reconnect", now }, renderReconnectEmail({ espnUrl: espnLeaguePage(reconnect), helpUrl: new URL("/espn", deps.baseUrl).toString(), unsubscribeUrl: unsubscribe })))) summary.reconnects++;
+    if (reconnect && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "reconnect", now }, renderReconnectEmail({ espnUrl: espnLeaguePage(reconnect), helpUrl: new URL(espnSetup("season"), deps.baseUrl).toString(), unsubscribeUrl: unsubscribe })))) summary.reconnects++;
   }
   return summary;
 }

@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { parseEspnPlayers } from "@/lib/espn/crosswalk";
-import { ESPN_SEASON_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import espnPool from "@/lib/espn/__fixtures__/espn-players-2026.json";
 import { connectEspn, getDraft, putDraft } from "../leagues";
 import { createTestLeague } from "../testLeagues";
@@ -65,7 +65,7 @@ describe("POST /api/leagues/:id/espn/reconcile (APE-325)", () => {
 
   it("replaces the board with ESPN's finished draft and locks it, reading ESPN at most once in a while", async () => {
     const { POST } = await route();
-    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_SEASON_VERSION });
+    await storeLogin(db, KEY, userId, { espnS2: "s2", swid: SWID }, { season: 2026, consentVersion: ESPN_DISCLOSURE_VERSION });
     await putDraft(db, userId, leagueId, { version: 1, picks: [{ playerId: "ja-marr-chase-wr", mine: true }] }, 0);
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(finished)));
     vi.stubGlobal("fetch", fetchImpl);

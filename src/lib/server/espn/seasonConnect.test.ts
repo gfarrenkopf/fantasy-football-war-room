@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
-import { ESPN_SEASON_VERSION } from "@/lib/espn/disclosure";
+import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import league from "@/lib/season/__fixtures__/espn-league-2026.json";
 import { deleteLeague, findLeague } from "../leagues";
 import { createTestLeague } from "../testLeagues";
@@ -20,7 +20,7 @@ afterAll(() => close());
 
 const KEY = randomBytes(32);
 const SWID = "{154E132F-8C13-4AC0-9DAC-20C2C5625594}";
-const request = { espnLeagueId: "110222051", season: 2026, consentVersion: ESPN_SEASON_VERSION, espnS2: "AEB%2Fnot-a-real-cookie", swid: SWID };
+const request = { espnLeagueId: "110222051", season: 2026, consentVersion: ESPN_DISCLOSURE_VERSION, espnS2: "AEB%2Fnot-a-real-cookie", swid: SWID };
 /** ESPN's answer: the fixture league's settings, with the user owning team 3. */
 const espnLeague = { settings: league.settings, teams: [{ id: 1, owners: ["{AAAAAAAA-0000-0000-0000-000000000000}"] }, { id: 3, owners: [SWID.toLowerCase()] }] };
 
@@ -86,7 +86,7 @@ describe("connectSeason", () => {
     expect(await connectSeason(db, KEY, userId, { ...request, consentVersion: 0 }, { fetchImpl })).toMatchObject({
       ok: false,
       status: 409,
-      seasonVersion: ESPN_SEASON_VERSION,
+      seasonVersion: ESPN_DISCLOSURE_VERSION,
     });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
