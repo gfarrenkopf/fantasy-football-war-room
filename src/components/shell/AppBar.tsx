@@ -6,9 +6,10 @@ import s from "./appBar.module.css";
  * The app bar (Epic 15): one row on top of every page, the draft room and the season page alike.
  * The wordmark on the left, the league you're in beside it, and on the right ESPN's sync time (on a
  * league that follows ESPN) and the account. Each page passes its own pieces; the bar only lays
- * them out, so it looks and behaves the same wherever it's mounted.
+ * them out, so it looks and behaves the same wherever it's mounted. On a phone the draft room also
+ * passes its status chip (APE-322), so where the draft is costs no row of its own.
  */
-export function AppBar({ league, sync, account }: { league?: React.ReactNode; sync?: React.ReactNode; account?: React.ReactNode }) {
+export function AppBar({ league, status, sync, account }: { league?: React.ReactNode; status?: React.ReactNode; sync?: React.ReactNode; account?: React.ReactNode }) {
   return (
     <header className={`${s.bar} ${stage.variable}`}>
       <Link href="/" className={s.mark} aria-label="Draft Room home">
@@ -24,6 +25,7 @@ export function AppBar({ league, sync, account }: { league?: React.ReactNode; sy
         </>
       )}
       <div className={s.end}>
+        {status}
         {sync}
         {account}
       </div>

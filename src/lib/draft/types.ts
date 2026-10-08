@@ -119,6 +119,8 @@ export interface UiPrefs {
   premiered: string[] | null;
   /** Leagues whose draft-complete reveal has played on this device, so an undo and re-log doesn't replay it. */
   wrapped: string[];
+  /** Whether this device has dismissed the first-run tip on how clicking a player logs a pick. */
+  seenClickTip: boolean;
 }
 
 export interface Dataset {
