@@ -6,7 +6,7 @@ import { canPlay } from "@/lib/season/apply";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
 import { compareLineups, isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
-import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
+import { onBye, type SeasonView, type ViewPlayer, type WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
 import { ArrowLeft, ArrowRight, Check, External } from "./Icons";
@@ -26,7 +26,7 @@ const HEADLINE: Record<Emphasis, string> = {
 /** Why a starter is coming out, when it's news, in the word managers use: BYE, or his designation (OUT, IR, SSPD). */
 function outTag(p: ViewPlayer): string | null {
   if (isRuledOut(p.injuryStatus)) return INJURY_TAG[p.injuryStatus] ?? "OUT";
-  if (p.points === 0 && p.projected) return "BYE";
+  if (onBye(p)) return "BYE";
   return null;
 }
 

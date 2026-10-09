@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot, Standing } from "@/lib/season/types";
-import type { ViewPlayer } from "@/lib/season/view";
+import { onBye, type ViewPlayer } from "@/lib/season/view";
 import { Check, Lock, Note } from "./Icons";
 import { LocalTime } from "./LocalTime";
 import s from "./season.module.css";
@@ -203,7 +203,7 @@ export function PlayerLine({
   stacked?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
-  const bye = player.points === 0 && player.projected;
+  const bye = onBye(player);
   const started = live && hasStarted(player);
   const status = live && player.game !== null;
   return (

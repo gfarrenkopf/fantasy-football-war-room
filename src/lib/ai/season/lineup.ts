@@ -1,7 +1,7 @@
 import { SLOT_DEFS } from "@/lib/draft/league";
 import { isRuledOut, type LineupPlan } from "@/lib/season/lineup";
 import type { LineupSlot, LineupSlotCount } from "@/lib/season/types";
-import type { SeasonView, ViewPlayer } from "@/lib/season/view";
+import { onBye, type SeasonView, type ViewPlayer } from "@/lib/season/view";
 import { withDeadline } from "../generatePlan";
 import { PlanModelError, type JsonSchema, type ModelEffort, type ModelUsage, type PlanModel } from "../provider";
 import { clip, injuryTag, isObject, refError } from "./shared";
@@ -130,7 +130,7 @@ export function buildLineupInput(view: SeasonView): LineupInput {
       injury: injuryTag(p.injuryStatus),
       locked: p.locked,
       now: p.slot,
-      bye: p.projected && p.team !== null && p.points === 0 && p.ros > 0,
+      bye: onBye(p) && p.ros > 0,
       opponent: p.game?.opponent ? `${p.game.home ? "vs" : "@"}${p.game.opponent}` : null,
     })),
     slots,

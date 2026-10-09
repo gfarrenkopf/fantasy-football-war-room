@@ -78,6 +78,15 @@ export interface ViewClaim extends Omit<PendingClaim, "add" | "teamId"> {
   add: { playerId: number; name: string; pos: PlayerProjections["pos"] | null; team: string | null };
 }
 
+/**
+ * Whether a player is on a bye this week: ESPN projects him for nothing and his team has no game on
+ * this week's scoreboard. ESPN also blanks the projection of a player it expects to sit while his
+ * team still plays (APE-338); he has a game, so he isn't on a bye.
+ */
+export function onBye(p: Pick<ViewPlayer, "projected" | "points" | "team" | "game">): boolean {
+  return p.projected && p.points === 0 && p.team !== null && p.game === null;
+}
+
 /** A roster entry scored for this league: weekly and rest-of-season projections, and his game. */
 export function scorePlayer(
   league: Pick<SeasonLeague, "currentWeek" | "finalWeek" | "scoringItems">,
