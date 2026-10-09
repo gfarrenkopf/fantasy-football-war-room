@@ -57,6 +57,12 @@ const espnSyncAllowlist = (readEnv("ESPN_SYNC_ALLOWLIST") ?? "")
  * works for live draft sync.
  */
 const espnCodeKeyRaw = readEnv("ESPN_CODE_KEY");
+/**
+ * Which landing page `/` shows (APE-340): `auto` (the default) follows the NFL season, `draft` or
+ * `season` force one. The season page needs in-season features, so without them it's the draft page.
+ */
+const landingModeRaw = readEnv("LANDING_MODE")?.toLowerCase();
+const landingMode = landingModeRaw === "draft" || landingModeRaw === "season" ? landingModeRaw : "auto";
 const espnCodeKey = parseKey(espnCodeKeyRaw);
 
 /** Accounts + server-backed persistence. Requires a database and auth. */
@@ -97,6 +103,7 @@ export const config = Object.freeze({
   sportsDataApiKey,
   espnSyncAllowlist,
   espnCodeKey,
+  landingMode,
 
   cloudEnabled,
   googleAuthEnabled,
@@ -191,6 +198,9 @@ if (espnCodeKeyRaw && !espnCodeKey) {
   warnings.push("ESPN_CODE_KEY isn't 32 bytes of base64 (try `openssl rand -base64 32`), so drafting without an ESPN tab open and in-season features are off.");
 } else if (espnCodeKey && !cloudEnabled) {
   warnings.push("ESPN_CODE_KEY is set but cloud features are disabled, so drafting without an ESPN tab open and in-season features are off.");
+}
+if (landingModeRaw && landingModeRaw !== landingMode) {
+  warnings.push(`LANDING_MODE "${landingModeRaw}" isn't one of auto, draft or season, so the landing page follows the season.`);
 }
 for (const warning of warnings) {
   console.warn(`[config] ${warning}`);

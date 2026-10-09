@@ -1,0 +1,1542 @@
+/*
+ * The landing page in season (APE-340). It inherits the door whole (landing.module.css: the root,
+ * the veil, the entry panel, the section rhythm, the personas and footer) and adds the season
+ * page's vocabulary: Win Night's YOU WON in the stage face, the green-washed changed rows, the gain
+ * ladder, and the win-chance split bar. The "Exclusive" tag is the door's one gold.
+ *
+ * One departure, recorded in DESIGN.md as the Season Door Exception: "Connect your ESPN league" is
+ * a filled Signal Green button. The draft door's outlined sky primary asks a visitor to try
+ * something; this one asks them to hand over their league, and it has to win the page.
+ */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.qb { --pos: var(--color-qb); }
+.rb { --pos: var(--color-rb); }
+.wr { --pos: var(--color-wr); }
+.te { --pos: var(--color-te); }
+.k { --pos: var(--color-k); }
+.dst { --pos: var(--color-dst); }
+
+.struck {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in srgb, var(--color-reach-ink) 70%, transparent);
+  color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------- hero */
+
+.hero {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  padding: max(24px, 14vh, env(safe-area-inset-top)) 24px 32px max(24px, env(safe-area-inset-left));
+}
+
+.heroInner {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 28px;
+}
+
+/* The rest of the league's week, behind everything: the season page's density, set dressing only. */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  grid-auto-rows: min-content;
+  align-content: start;
+  gap: 8px;
+  padding: 8px;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow: hidden;
+  pointer-events: none;
+}
+.tile {
+  padding: 9px 10px 10px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  animation: tileIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.tileRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--color-muted);
+}
+.tileRow + .tileRow {
+  margin-top: 3px;
+}
+.tileRow span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tileRow b {
+  font-weight: 700;
+}
+.tileLead {
+  color: var(--color-text);
+}
+.tileBar {
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-line2) 80%, transparent);
+  overflow: hidden;
+}
+.tileBar span {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--color-text) 30%, transparent);
+}
+
+/* ---------------------------------------------------------------- the panel's season face */
+
+/* "Exclusive" beside the wordmark: gold, the one warm accent on the door, for the people who play to win. */
+.exclusive {
+  align-self: center;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-gold) 16%, transparent), color-mix(in srgb, var(--color-gold) 6%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-gold) 55%, transparent);
+  border-radius: 3px;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--color-gold) 35%, transparent);
+}
+
+/* The promise's second line in the season's green: the product's "yours" (the Doors Rule). */
+.thesisWin {
+  font-style: normal;
+  color: var(--color-mine);
+}
+
+.faceCta {
+  margin-top: 22px;
+}
+
+/*
+ * The Season Door Exception: the hosted site's one filled primary. Signal Green with the near-black
+ * mine ink, 56px tall, one pass of light as the panel lands, and the arrow leaning toward ESPN on
+ * hover. Everything around it stays quiet so it is the loudest thing on the page.
+ */
+.connect {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 18px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  border: 1px solid color-mix(in srgb, var(--color-mine) 70%, white);
+  border-radius: 8px;
+  text-decoration: none;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--color-mine) 22%, transparent);
+  transition:
+    background-color 160ms ease,
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 160ms ease;
+}
+.connect:hover {
+  background: color-mix(in srgb, var(--color-mine) 88%, white);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--color-mine) 30%, transparent);
+}
+.connect:active {
+  transform: translateY(1px);
+}
+.connect:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.connectArrow {
+  width: 20px;
+  height: 20px;
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.connect:hover .connectArrow {
+  transform: translateX(3px);
+}
+.connectSweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, white 45%, transparent) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: sweep 1100ms 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.connectNote {
+  margin: 10px 0 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.late {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-line);
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.late a {
+  font-weight: 600;
+  color: var(--color-sky);
+  text-decoration: underline;
+  text-decoration-color: var(--color-sky-line);
+  text-underline-offset: 4px;
+}
+.late a:hover {
+  text-decoration-color: var(--color-sky);
+}
+
+/* ---------------------------------------------------------------- the win card */
+
+/*
+ * The week, already won: Win Night's YOU WON over the final, then Draft Room's calls as a receipt.
+ * Compact on purpose: one look tells the story, so the panel beside it keeps the attention.
+ */
+.win {
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+  width: 360px;
+  background: var(--color-panel);
+  border: 1px solid color-mix(in srgb, var(--color-mine) 55%, var(--color-line2));
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--color-bg) 70%, transparent);
+  animation: stageIn 560ms 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.winHead {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 14px;
+  text-align: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-mine) 16%, var(--color-panel)) 0%, var(--color-panel) 100%);
+  border-bottom: 1px solid var(--color-line);
+}
+/* One sweep of green light as the word lands. */
+.winHead::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 28%, color-mix(in srgb, var(--color-mine) 22%, transparent) 50%, transparent 72%);
+  transform: translateX(-100%);
+  animation: sweep 1100ms 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.winWord {
+  font-family: var(--font-stage), var(--font-sans);
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--color-mine);
+  text-shadow: 0 0 28px color-mix(in srgb, var(--color-mine) 35%, transparent);
+  animation: slam 560ms 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.winScore {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-muted);
+}
+.winScore b {
+  color: var(--color-text);
+}
+.winScore span {
+  color: var(--color-dim);
+}
+.winTeams {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.callsLabel {
+  margin: 0;
+  padding: 12px 16px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.calls {
+  margin: 0;
+  padding: 0 10px 8px;
+  list-style: none;
+}
+/* The season page's changed row: green wash, the started player in green, the benched one's score in reach ink. */
+.call {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-mine) 8%, transparent);
+  animation: faceIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.call + .call {
+  margin-top: 6px;
+}
+.slot {
+  padding: 2px 0;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--pos);
+  background: color-mix(in srgb, var(--pos) 10%, var(--color-chip));
+  border-radius: 3px;
+}
+.callWho {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.callIn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+.callIn b {
+  font-weight: 700;
+  color: var(--color-mine);
+}
+.callOut {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--color-muted);
+}
+.callOut b {
+  font-weight: 700;
+  color: var(--color-reach-ink);
+}
+.callPts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+.callPts b {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-mine);
+}
+.callPts span {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+.winFoot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--color-line);
+}
+.winWorth {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--color-value-ink);
+  animation: pop 420ms 980ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.winFoot p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.winFoot p span {
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------- sections */
+
+.section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 88px 24px;
+  border-top: 1px solid var(--color-line);
+}
+.sectionHead {
+  max-width: 720px;
+  margin-bottom: 28px;
+}
+.title {
+  margin: 0 0 12px;
+  font-size: clamp(26px, 3.2vw, 38px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+/* One phrase per title in Signal Green: the hero's "we make sure" voice, carried down the page. */
+.titleWin {
+  color: var(--color-mine);
+}
+.titleSky {
+  color: var(--color-sky);
+}
+.lede {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-muted);
+}
+
+/*
+ * Four sections, four compositions, so the page keeps moving: the lineup proof centered under a
+ * green light (the anchor claim); trades and pickups under an editorial split head, the trade
+ * drawn as an exchange, in the analyst's sky; game day as a full-bleed night band under two floodlights, mirrored with the
+ * headline right; the personas centered, two voices either side of an "or".
+ */
+
+.proofSection {
+  position: relative;
+  padding-top: 104px;
+}
+.proofSection::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 360px;
+  pointer-events: none;
+  background: radial-gradient(ellipse 50% 70% at 50% 0%, color-mix(in srgb, var(--color-mine) 10%, transparent), transparent 70%);
+}
+.headCenter {
+  position: relative;
+  margin: 0 auto 40px;
+  text-align: center;
+}
+.headCenter .lede {
+  margin: 0 auto;
+}
+
+/* ---- the lineup proof: the season page's table on the left, the verdict on the right */
+
+.proof {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.table {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+.tableHead,
+.tableRow,
+.tableFoot {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+}
+.tableHead {
+  font-size: 11px;
+  color: var(--color-muted);
+  background: var(--color-panel2);
+  border-bottom: 1px solid var(--color-line);
+}
+.tableHead span:last-child {
+  color: var(--color-mine);
+  font-weight: 700;
+}
+.tableRow + .tableRow {
+  border-top: 1px solid var(--color-row-line);
+}
+.tableChanged {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-mine) 11%, transparent), color-mix(in srgb, var(--color-mine) 5%, transparent)) no-repeat;
+  background-size: 100% 100%;
+}
+.tableSlot {
+  padding: 2px 0;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--pos);
+  background: color-mix(in srgb, var(--pos) 10%, var(--color-chip));
+  border-radius: 3px;
+}
+.tableCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+}
+.tableCell > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tableProj {
+  font-weight: 700;
+  color: var(--color-muted);
+}
+/* A starter Draft Room keeps takes the whole row, with a dim check at its end. */
+.tableKeep {
+  grid-column: 2 / -1;
+}
+.keepIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--color-dim);
+}
+.tableIn,
+.tableIn .tableProj {
+  color: var(--color-mine);
+}
+.tableFoot {
+  border-top: 1px solid var(--color-line);
+  background: var(--color-strip);
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.tableFoot .tableProj {
+  font-size: 15px;
+  color: var(--color-text);
+}
+.tableFoot .tableIn .tableProj {
+  color: var(--color-mine);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* The gain ladder's swing step: 50px in Signal Green on a 9% wash. */
+.ladder {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 18px;
+  background: color-mix(in srgb, var(--color-mine) 9%, var(--color-panel));
+  border: 1px solid color-mix(in srgb, var(--color-mine) 45%, var(--color-line));
+  border-radius: 8px;  box-shadow: 0 8px 26px color-mix(in srgb, var(--color-mine) 10%, transparent);
+}
+.ladder b {
+  font-size: 50px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--color-mine);
+}
+.ladder > span {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.swing {
+  padding: 14px 16px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+.swingRow {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.swingRow + .swingRow {
+  margin-top: 8px;
+}
+.swingRow b {
+  text-align: right;
+  font-size: 15px;
+  color: var(--color-text);
+}
+.swingBar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-reach) 30%, var(--color-panel2));
+}
+.swingBar span {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  background: color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+/* The coin-flip line: Draft Room's bar is the one that crosses it. */
+.swingBar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-bg);
+}
+.swingOurs {
+  color: var(--color-mine);
+  font-weight: 700;
+}
+.swingOurs .swingBar span {
+  background: var(--color-mine);
+}
+.swingOurs b {
+  color: var(--color-mine);
+}
+.swingNote {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--color-dim);
+}
+.whys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.whys li {
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-muted);
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+.whys li + li {
+  margin-top: 10px;
+}
+.whys b {
+  color: var(--color-text);
+}
+.whyIn {
+  color: var(--color-mine);
+}
+
+/* ---- trades and pickups: an editorial split head, then the trade and the pickup side by side at one height */
+
+.headSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 24px 64px;
+  margin-bottom: 32px;
+}
+.headSplit .title {
+  margin: 0;
+}
+.headSplit .lede {
+  padding-bottom: 6px;
+}
+.moves {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.move {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-sky) 6%, var(--color-panel)) 0, var(--color-panel) 64px);
+  border: 1px solid color-mix(in srgb, var(--color-sky) 22%, var(--color-line));
+  border-radius: 8px;
+}
+.moveHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.moveHead h3 {
+  margin: 0;
+  color: var(--color-sky);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.winWin {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-value-ink);
+  background: color-mix(in srgb, var(--color-value) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-value) 45%, transparent);
+  border-radius: 4px;
+}
+.ownedTag {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.exchange {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+.sideLabel {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.getSide,
+.sendSide {
+  padding: 10px 12px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+}
+.sendSide {
+  background: color-mix(in srgb, var(--color-bg) 45%, transparent);
+}
+.sendSide .plName {
+  color: var(--color-muted);
+}
+/* What you get is the good side of the trade: the changed row's green wash. */
+.getSide {
+  background: color-mix(in srgb, var(--color-mine) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-mine) 30%, transparent);
+  box-shadow: 0 8px 26px color-mix(in srgb, var(--color-mine) 10%, transparent);
+}
+.getSide .sideLabel {
+  font-weight: 700;
+  color: var(--color-mine);
+}
+/* The swap itself: a sky ring between the two sides, which turns a half circle as the trade plays. */
+.hub {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--color-sky);
+  background: var(--color-panel);
+  border: 1px solid var(--color-sky-line);
+  border-radius: 50%;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-sky) 6%, transparent);
+}
+.hubIcon {
+  width: 18px;
+  height: 18px;
+  transform: rotate(90deg);
+}
+
+.pl {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+.plPos {
+  grid-row: span 2;
+  padding: 2px 0;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--pos);
+  background: color-mix(in srgb, var(--pos) 10%, var(--color-chip));
+  border-radius: 3px;
+}
+.plName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+.plMeta {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.moveGain {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.moveGain b {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-mine);
+}
+.moveGain > span {
+  color: var(--color-dim);
+}
+.why {
+  margin: 12px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--color-line2);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* The reason sits on each card's floor, so the trade and the pickup end on one line. */
+.move .why {
+  margin-top: auto;
+}
+.moveGain {
+  margin-bottom: 12px;
+}
+.pickup {
+  display: flex;
+  flex-direction: column;
+}
+.pickupRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.pickupRow .pl {
+  flex: 1;
+  min-width: 0;
+}
+.pickupGain {
+  text-align: right;
+}
+.pickupGain b {
+  display: block;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--color-mine);
+}
+.pickupGain > span {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.dropBox {
+  margin: 8px 0 12px;
+}
+.dropBox .struck {
+  color: var(--color-muted);
+}
+
+/* ---- game day and the recap: a night band, the panel left and the headline right */
+
+.section.night {
+  position: relative;
+  max-width: none;
+  overflow: hidden;
+  padding: 96px 24px;
+  background: color-mix(in srgb, black 30%, var(--color-bg));
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+/* Two floodlights from the top corners, angled in toward the game. */
+.flood {
+  position: absolute;
+  top: -120px;
+  width: 560px;
+  height: 720px;
+  pointer-events: none;
+  background: radial-gradient(ellipse 30% 100% at 50% 0%, color-mix(in srgb, var(--color-sky) 17%, transparent), transparent 75%);
+}
+.floodLeft {
+  left: 4%;
+  transform: rotate(-24deg);
+}
+.floodRight {
+  right: 4%;
+  transform: rotate(24deg);
+}
+.nightInner {
+  position: relative;
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 56px;
+}
+.nightHead {
+  grid-column: 2;
+  grid-row: 1;
+}
+.nightHead .title {
+  margin-bottom: 18px;
+}
+.nightList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nightList li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-muted);
+}
+.nightList li + li {
+  margin-top: 8px;
+}
+.nightList li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-mine);
+}
+.nightList li + li::before {
+  background: var(--color-sky);
+}
+.nightInner .gameday {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.gameday {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  box-shadow: 0 24px 60px color-mix(in srgb, black 45%, transparent);
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.live {
+  position: relative;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-line);
+}
+.liveScores {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.liveScores div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.liveScores div:last-child {
+  text-align: right;
+}
+.liveScores div > span {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.liveScores b {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.liveMine {
+  color: var(--color-mine);
+}
+.liveLead {
+  margin: 12px 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-mine);
+}
+.liveLead > span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+.liveBar {
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-reach) 35%, var(--color-panel2));
+}
+.liveBar span {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  background: var(--color-mine);
+}
+.liveTag {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-mine);
+}
+.liveDot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-mine);
+}
+/* One ring of light as the game comes in, then still. */
+.liveDot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--color-mine);
+  opacity: 0;
+}
+.recap {
+  padding: 18px 20px;
+}
+.recap h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+/* Win Night's W, small: the recap starts where Sunday ended. */
+.wBadge {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  font-family: var(--font-stage), var(--font-sans);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--color-mine-ink);
+  background: var(--color-mine);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-mine) 28%, transparent);
+}
+.recap p {
+  margin: 0;
+  max-width: 54ch;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-muted);
+}
+
+/* ---- the personas: each in its own voice, the winner in green, the helper in sky */
+
+.personas {
+  text-align: center;
+}
+.personas h2 {
+  margin-left: auto;
+  margin-right: auto;
+  text-wrap: balance;
+}
+.personaGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  text-align: left;
+}
+.or {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  font-size: 13px;
+  font-weight: 800;
+  font-style: italic;
+  color: var(--color-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-line2);
+  border-radius: 50%;
+}
+.personaGrid > article {
+  align-self: stretch;
+}
+
+.personaWin,
+.personaEase {
+  --voice: var(--color-mine);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--voice) 9%, var(--color-panel)) 0%, var(--color-panel) 70%);
+  border-color: color-mix(in srgb, var(--voice) 30%, var(--color-line));
+}
+.personaEase {
+  --voice: var(--color-sky);
+}
+.personaWin h3,
+.personaEase h3 {
+  color: var(--voice);
+}
+.personaWin b,
+.personaEase b {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ---- scroll staging (stage.ts): armed holds each keyframe's first frame, play runs it once */
+
+[data-stage] .tableChanged {
+  animation: washIn 700ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .tableChanged .struck {
+  animation: strike 420ms calc(var(--at, 0ms) + 150ms) ease-out both;
+}
+[data-stage] .tableChanged .tableIn {
+  animation: arrive 520ms calc(var(--at, 0ms) + 260ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .ladder {
+  animation: glow 1400ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .swingClimb {
+  animation: climb 1000ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .whys li {
+  animation: rise 480ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .getSide {
+  animation: arrive 620ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both, glow 1400ms calc(var(--at, 0ms) + 200ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .hub {
+  animation: hubTurn 900ms var(--at, 0ms) cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+[data-stage] .sendSide {
+  animation: rise 480ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .dropBox .struck {
+  animation: strike 420ms calc(var(--at, 0ms) + 200ms) ease-out both;
+}
+[data-stage] .winWin {
+  animation: pop 420ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .liveClimb {
+  animation: climbFromHalf 1600ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-stage] .liveDot::after {
+  animation: ping 1200ms 300ms ease-out both;
+}
+[data-stage] .wBadge {
+  animation: slam 560ms var(--at, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.section[data-stage="armed"] *,
+.section[data-stage="armed"] *::after {
+  animation-play-state: paused;
+}
+
+/* ---- the close: the ask beside the trophy, under one gold light from the rafters */
+
+.close {
+  position: relative;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 96px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 48px;
+  border-top: 1px solid var(--color-line);
+}
+.close::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(560px, 60%);
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 55% at 62% 18%, color-mix(in srgb, var(--color-gold) 11%, transparent), transparent 70%);
+}
+.closeText {
+  position: relative;
+}
+.closeText h2 {
+  text-wrap: balance;
+}
+.titleGold {
+  color: var(--color-gold);
+}
+.closeCta {
+  max-width: 420px;
+}
+.closeCta .connectNote {
+  text-align: left;
+}
+.close .late {
+  max-width: 420px;
+}
+
+.trophy {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 40px 0 0;
+}
+/* The rod the banner hangs from: a gold bar with capped ends. */
+.rod {
+  position: relative;
+  z-index: 1;
+  width: 272px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-gold) 75%, white), var(--color-gold) 45%, color-mix(in srgb, var(--color-gold) 55%, black));
+  box-shadow: 0 4px 10px color-mix(in srgb, black 40%, transparent);
+}
+/* The window the banner lowers through: it comes down from behind the rod, then swings and settles. */
+.drop {
+  margin-top: -2px;
+  padding: 0 0 40px;
+  margin-bottom: -40px;
+  overflow: hidden;
+  transform-origin: 50% 0;
+  filter: drop-shadow(0 18px 30px color-mix(in srgb, var(--color-gold) 18%, transparent));
+}
+/* A pennant: gold trim, then the banner cloth cut to the same notched shape. */
+.banner {
+  --notch: polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%);
+  position: relative;
+  /* clip-path hides the glint but doesn't stop it widening the page as it sweeps past the edge. */
+  overflow: hidden;
+  width: 232px;
+  padding: 3px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--color-gold) 85%, white), var(--color-gold) 40%, color-mix(in srgb, var(--color-gold) 60%, black));
+  clip-path: var(--notch);
+}
+.bannerInner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 18px 64px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--color-gold) 14%, transparent), transparent 70%),
+    var(--color-panel);
+  clip-path: var(--notch);
+  font-family: var(--font-stage), var(--font-sans);
+  text-transform: uppercase;
+}
+.bannerYear {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--color-gold);
+}
+.bannerWord {
+  font-size: 54px;
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: 0.01em;
+  color: var(--color-gold);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--color-gold) 30%, transparent);
+}
+.bannerYear + .bannerWord {
+  margin-top: 10px;
+}
+.bannerRule {
+  width: 64px;
+  height: 2px;
+  margin: 16px 0 12px;
+  background: color-mix(in srgb, var(--color-gold) 60%, transparent);
+}
+.bannerTeam {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--color-text);
+}
+/* A glint of gold light across the cloth: once as it comes to rest, and again whenever the visitor reaches for the button. */
+.glint,
+.bannerInner::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--color-gold) 30%, white 20%) 50%, transparent 65%);
+  mix-blend-mode: screen;
+  transform: translateX(-120%);
+}
+.bannerInner::after {
+  content: "";
+}
+.trophyNote {
+  margin-top: 14px;
+  font-size: 12px;
+  font-style: italic;
+  color: color-mix(in srgb, var(--color-gold) 70%, var(--color-muted));
+}
+
+[data-stage] .banner {
+  animation: lower 2000ms 200ms cubic-bezier(0.45, 0.05, 0.2, 1) both;
+}
+[data-stage] .drop {
+  animation: sway 2400ms 1900ms cubic-bezier(0.37, 0, 0.63, 1) both;
+}
+[data-stage] .bannerInner::after {
+  animation: glint 1200ms 2100ms cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+[data-stage] .trophyNote {
+  animation: rise 600ms 2000ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.close[data-stage="armed"] *,
+.close[data-stage="armed"] *::after {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .close:has(.connect:hover) .glint,
+  .close:has(.connect:focus-visible) .glint {
+    animation: glint 900ms cubic-bezier(0.45, 0, 0.55, 1) both;
+  }
+}
+
+/* ---------------------------------------------------------------- motion */
+
+@keyframes lower {
+  from { transform: translateY(-101%); }
+  to { transform: none; }
+}
+/* The cloth's weight catching up with it: a small swing either side of plumb, then still. */
+@keyframes sway {
+  0% { transform: none; }
+  25% { transform: rotate(1.1deg); }
+  55% { transform: rotate(-0.6deg); }
+  80% { transform: rotate(0.25deg); }
+  100% { transform: none; }
+}
+@keyframes glint {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
+}
+@keyframes hubTurn {
+  from { transform: rotate(-180deg); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes washIn {
+  from { background-size: 0% 100%; }
+  to { background-size: 100% 100%; }
+}
+@keyframes strike {
+  from { text-decoration-color: transparent; color: var(--color-text); }
+}
+@keyframes climb {
+  from { transform: scaleX(var(--from)); }
+}
+@keyframes climbFromHalf {
+  from { transform: scaleX(0.5); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes arrive {
+  from { opacity: 0; transform: translateX(12px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes glow {
+  from { box-shadow: 0 0 0 transparent; }
+  45% { box-shadow: 0 12px 40px color-mix(in srgb, var(--color-mine) 26%, transparent); }
+  to { box-shadow: 0 8px 26px color-mix(in srgb, var(--color-mine) 10%, transparent); }
+}
+@keyframes ping {
+  from { opacity: 0.9; transform: scale(1); }
+  to { opacity: 0; transform: scale(3.2); }
+}
+@keyframes tileIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes stageIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+@keyframes faceIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(1.5); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slam {
+  from { opacity: 0; transform: scale(2.4) rotate(-4deg); filter: blur(6px); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .win,
+  .winWord,
+  .call,
+  .winWorth {
+    animation: none;
+  }
+  .connectSweep,
+  .winHead::after {
+    display: none;
+  }
+  .connect,
+  .connectArrow {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- responsive (the door's 1100 / 900 / 640) */
+
+@media (max-width: 1100px) {
+  .proof {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+  /* The pair stacks with the panel first: on a phone the button has to be in the first screen. */
+  .heroInner {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .win {
+    width: min(420px, 100%);
+  }
+  .nightInner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .headSplit,
+  .moves {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nightHead,
+  .nightInner .gameday {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .personaGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .or {
+    justify-self: center;
+  }
+  /* The trophy hangs first on a phone: the banner, then the ask. */
+  .close {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+  .close::before {
+    width: 100%;
+  }
+  .trophy {
+    order: -1;
+    margin: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .backdrop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .section,
+  .close {
+    padding: 56px 16px;
+  }
+  .closeCta,
+  .close .late {
+    max-width: none;
+  }
+  /* On a phone the exchange runs top to bottom, the hub turned to match. */
+  .exchange {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hub {
+    justify-self: center;
+    margin: -4px 0;
+  }
+  .hubIcon {
+    transform: none;
+  }
+  .tableHead,
+  .tableRow,
+  .tableFoot {
+    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    padding: 7px 10px;
+  }
+  .ladder b {
+    font-size: 40px;
+  }
+}
