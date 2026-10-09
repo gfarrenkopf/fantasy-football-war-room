@@ -3,7 +3,7 @@ import league from "./__fixtures__/espn-league-2026.json";
 import projections from "./__fixtures__/espn-projections-2026.json";
 import { parseSeasonLeague } from "./espnLeague";
 import { parseProjections } from "./projections";
-import { buildSeasonView } from "./view";
+import { buildSeasonView, onBye } from "./view";
 
 const parsed = parseSeasonLeague(league, "110222051");
 if (!parsed.ok) throw new Error(parsed.error);
@@ -84,5 +84,24 @@ describe("buildSeasonView", () => {
     expect(view.lineup.starters.every((s) => s.playerId !== null)).toBe(true);
     const mine = new Set(view.teams[0].roster.map((p) => p.playerId));
     expect(view.lineup.starters.every((s) => mine.has(s.playerId!))).toBe(true);
+  });
+});
+
+describe("onBye", () => {
+  const game = { state: "pre" as const, detail: "Sun 1:00 PM", opponent: "MIA", home: false, kickoff: null, period: 0, clockSeconds: 0, score: null };
+  const blank = { projected: true, points: 0, team: "CIN", game: null };
+
+  it("calls a player projected for nothing, whose team has no game, on a bye", () => {
+    expect(onBye(blank)).toBe(true);
+  });
+
+  it("doesn't when his team plays: ESPN blanked a questionable player's projection, not his week (APE-338)", () => {
+    expect(onBye({ ...blank, game })).toBe(false);
+  });
+
+  it("doesn't for a projected player, an unprojected one, or a free agent", () => {
+    expect(onBye({ ...blank, points: 12.8 })).toBe(false);
+    expect(onBye({ ...blank, projected: false })).toBe(false);
+    expect(onBye({ ...blank, team: null })).toBe(false);
   });
 });

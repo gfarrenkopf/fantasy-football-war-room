@@ -50,8 +50,12 @@
   }
 
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
-  /** War Room's origin: wherever this script was loaded from. */
-  const ORIGIN = script && script.src ? new URL(script.src).origin : "https://draftroom.online";
+  /**
+   * War Room's origin: wherever this script was loaded from. The bookmark imports it as a module
+   * (APE-339), which has no currentScript, so it leaves the origin on window; a bookmark from
+   * before then loads it with a script tag.
+   */
+  const ORIGIN = script && script.src ? new URL(script.src).origin : w.__draftRoomOrigin || "https://draftroom.online";
 
   /**
    * Phone or computer, and which phone browser: only for the load beacon, so a failure can be told
