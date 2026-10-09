@@ -2465,6 +2465,7 @@ li + li > .pickerOption {
 .tag {
   flex-shrink: 0;
   padding: 0 5px;
+  white-space: nowrap;
   border-radius: 3px;
   font-size: 10.5px;
   font-weight: 700;

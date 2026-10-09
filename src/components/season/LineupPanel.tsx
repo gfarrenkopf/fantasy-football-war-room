@@ -6,7 +6,7 @@ import { canPlay } from "@/lib/season/apply";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
 import { compareLineups, isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
-import { onBye, type SeasonView, type ViewPlayer, type WarRoomMove } from "@/lib/season/view";
+import { likelyOut, onBye, type SeasonView, type ViewPlayer, type WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
 import { ArrowLeft, ArrowRight, Check, External } from "./Icons";
@@ -23,10 +23,20 @@ const HEADLINE: Record<Emphasis, string> = {
   must: "Points stuck on your bench",
 };
 
-/** Why a starter is coming out, when it's news, in the word managers use: BYE, or his designation (OUT, IR, SSPD). */
-function outTag(p: ViewPlayer): string | null {
-  if (isRuledOut(p.injuryStatus)) return INJURY_TAG[p.injuryStatus] ?? "OUT";
-  if (onBye(p)) return "BYE";
+interface OutTag {
+  label: string;
+  kind: "out" | "warn";
+}
+
+/**
+ * Why a starter is coming out, when it's news, in the word managers use: his designation (OUT, IR,
+ * SSPD), BYE, or LIKELY OUT when ESPN projects him for nothing with a game to play (APE-338). That
+ * last is ESPN's guess, not a designation, so it's amber rather than red.
+ */
+function outTag(p: ViewPlayer): OutTag | null {
+  if (isRuledOut(p.injuryStatus)) return { label: INJURY_TAG[p.injuryStatus] ?? "OUT", kind: "out" };
+  if (onBye(p)) return { label: "BYE", kind: "out" };
+  if (likelyOut(p)) return { label: "LIKELY OUT", kind: "warn" };
   return null;
 }
 
@@ -135,8 +145,8 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
                             {m.tag && (
                               <>
                                 {" "}
-                                <span className={s.tag} data-kind="out">
-                                  {m.tag}
+                                <span className={s.tag} data-kind={m.tag.kind}>
+                                  {m.tag.label}
                                 </span>
                               </>
                             )}
@@ -299,8 +309,9 @@ function StarterRow({ draft, seat, made, fresh }: { draft: LineupDraft; seat: nu
   const changed = now?.playerId !== next?.playerId;
   const group = changed ? draft.changeOf.get(next?.playerId ?? now?.playerId ?? -1) : undefined;
   const picked = group ? draft.isPicked(group) : true;
-  // His injury tag already shows by his name; a bye has no tag of its own, so it gets one here.
-  const bye = changed && now ? outTag(now) === "BYE" : false;
+  // His injury tag already shows by his name; a bye, or ESPN expecting him to sit, has no tag of its own, so gets one here.
+  const tag = changed && now ? outTag(now) : null;
+  const why = tag && !isRuledOut(now!.injuryStatus) ? tag : null;
   const ours = !changed && now ? made.find((m) => m.playerId === now.playerId && m.slot === key) : undefined;
   const delta = (next?.points ?? 0) - (now?.points ?? 0);
   return (
@@ -318,11 +329,12 @@ function StarterRow({ draft, seat, made, fresh }: { draft: LineupDraft; seat: nu
       {/* Left: the player ESPN has in this seat, as set. */}
       <span className={s.rowPlayer}>
         {now ? <PlayerLine player={now} locked={now.locked} value="none" news ownership live stacked /> : <span className={s.fine}>Empty on ESPN</span>}
-        {bye && (
+        {why && (
           <span className={s.rowMove}>
-            <span className={s.tag} data-kind="out">
-              BYE
+            <span className={s.tag} data-kind={why.kind}>
+              {why.label}
             </span>
+            {why.kind === "warn" && <> ESPN projects him for 0</>}
           </span>
         )}
       </span>

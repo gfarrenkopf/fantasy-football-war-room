@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot, Standing } from "@/lib/season/types";
-import { onBye, type ViewPlayer } from "@/lib/season/view";
+import { likelyOut, onBye, type ViewPlayer } from "@/lib/season/view";
 import { Check, Lock, Note } from "./Icons";
 import { LocalTime } from "./LocalTime";
 import s from "./season.module.css";
@@ -204,6 +204,7 @@ export function PlayerLine({
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = onBye(player);
+  const sitting = likelyOut(player);
   const started = live && hasStarted(player);
   const status = live && player.game !== null;
   return (
@@ -250,6 +251,7 @@ export function PlayerLine({
               {" "}
               · <span className={`${s.pts} tabular-nums`}>{pts(player.points)}</span>
               {bye && " · bye"}
+              {sitting && " · likely out"}
               {!player.projected && " · no projection"}
             </>
           ))}
