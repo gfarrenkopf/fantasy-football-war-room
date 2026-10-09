@@ -9,6 +9,8 @@ import type { PublicFlags } from "@/lib/config";
 import { getStores, newLeagueRecord, type Farewell } from "@/lib/storage";
 import { cx, s } from "./cx";
 import { FarewellFace } from "./Farewell";
+import { s as season_ } from "./season/cx";
+import { SeasonFace } from "./season/SeasonFace";
 import { SignIn } from "./SignIn";
 
 const SCORING_LABELS: { value: ScoringFormat; label: string }[] = [
@@ -42,8 +44,14 @@ export function EntryPanel({
   onLeague,
   openOn = "draft",
   farewell,
+  season = false,
 }: {
   flags: PublicFlags;
+  /**
+   * In season (APE-340) the panel's first face sells the season instead of setting up a draft, and
+   * signing in lands wherever `/` sends that account (its season page, or the draft room).
+   */
+  season?: boolean;
   league: LeagueSettings;
   onLeague(next: LeagueSettings): void;
   /** The face on the first paint: "farewell" straight after a sign-out (the server knows). */
@@ -119,10 +127,11 @@ export function EntryPanel({
       <div className={s.sweep} aria-hidden="true" />
       <div className={s.brand}>
         <b>Draft Room</b>
+        {season && <small className={season_.exclusive}>Exclusive</small>}
         {canSignIn &&
           (face === "signin" ? (
             <button type="button" className={s.faceLink} onClick={() => flip("draft")}>
-              ← New draft
+              {season ? "← Back" : "← New draft"}
             </button>
           ) : (
             <button type="button" className={s.faceLink} onClick={() => flip("signin")}>
@@ -139,6 +148,8 @@ export function EntryPanel({
           onSignIn={() => flip(canSignIn ? "signin" : "draft")}
           onNewDraft={() => flip("draft")}
         />
+      ) : face === "draft" && season ? (
+        <SeasonFace key="season" ref={heading} />
       ) : face === "draft" ? (
         <div key="draft" className={s.face}>
           <h1 className={s.thesis} ref={heading} tabIndex={-1}>
@@ -223,6 +234,7 @@ export function EntryPanel({
               primary
               initialEmail={farewell?.email ?? ""}
               describedBy="signin-face-title signin-face-sub"
+              next={season ? "/" : undefined}
               fine="No password. We email you a link that signs you in."
             />
           </div>

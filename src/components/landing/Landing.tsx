@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { useMediaQuery } from "@/components/draft/useMediaQuery";
 import type { PublicFlags } from "@/lib/config";
 import { dataset } from "@/lib/data";
 import { LATE_POSITIONS, type LeagueSettings } from "@/lib/draft/types";
 import { valueTag } from "@/lib/draft/value";
-import { getStores, takeFarewell, type Farewell } from "@/lib/storage";
 import { cx, s } from "./cx";
 import { EntryPanel, startingLeague } from "./EntryPanel";
 import { LiveBoard } from "./LiveBoard";
 import { OnTheClock } from "./OnTheClock";
 import { TurnPlanProof } from "./TurnPlanProof";
 import { useFirstTurnPlan } from "./useFirstTurnPlan";
+import { useDoor } from "./useDoor";
 import { useLiveMock } from "./useLiveMock";
 
 const REDUCED = "(prefers-reduced-motion: reduce)";
@@ -26,48 +25,12 @@ const REDUCED = "(prefers-reduced-motion: reduce)";
  * them all in one place. No page copy is about how it's built.
  *
  * Anyone who has been here before never sees it: a signed-in session is forwarded on the server,
- * and a league saved on this device is forwarded as soon as the stores answer.
+ * and a league saved on this device is forwarded as soon as the stores answer (useDoor).
  */
 export function Landing({ flags, farewell = false }: { flags: PublicFlags; farewell?: boolean }) {
-  const router = useRouter();
   const [league, setLeague] = useState<LeagueSettings>(startingLeague);
   const reduced = useMediaQuery(REDUCED);
-
-  /**
-   * Returning local user: straight to their board. The page renders first and redirects when the
-   * stores answer, rather than holding the markup behind a storage round trip — a door that ships
-   * an empty document to a crawler, or to anyone without JavaScript, is not a door.
-   */
-  useEffect(() => {
-    // Just signed out: stay for the goodbye, even with leagues saved on this device.
-    if (farewell) return;
-    let live = true;
-    void getStores()
-      .league.listLeagues()
-      .then((leagues) => {
-        if (live && leagues.length) router.replace(`/draft${window.location.search}`);
-      });
-    return () => {
-      live = false;
-    };
-  }, [router, farewell]);
-
-  /*
-   * The goodbye's contents, handed over by the sign-out in this tab's sessionStorage. Read (and
-   * the `?farewell=1` stripped) from a timeout: an effect cleaned up before it fires, as React's
-   * development double-run does, then retries rather than losing the one-time hand-off.
-   */
-  const [goodbye, setGoodbye] = useState<Farewell | null | undefined>(undefined);
-  useEffect(() => {
-    if (!farewell) return;
-    const t = setTimeout(() => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("farewell");
-      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-      setGoodbye(takeFarewell());
-    }, 0);
-    return () => clearTimeout(t);
-  }, [farewell]);
+  const goodbye = useDoor(farewell);
 
   const mock = useLiveMock(league, reduced);
   const first = useFirstTurnPlan(league, mock.full);

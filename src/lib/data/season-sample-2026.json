@@ -1,0 +1,285 @@
+{
+  "season": 2026,
+  "window": {
+    "start": "2026-09-10T00:20:00.000Z",
+    "end": "2027-01-08T01:15:00.000Z"
+  },
+  "you": "Your team",
+  "opponent": "The Commish",
+  "lineup": [
+    {
+      "slot": "QB",
+      "player": {
+        "name": "Dak Prescott",
+        "pos": "QB",
+        "team": "DAL",
+        "game": "vs TB",
+        "proj": 17.8
+      }
+    },
+    {
+      "slot": "RB",
+      "player": {
+        "name": "Derrick Henry",
+        "pos": "RB",
+        "team": "BAL",
+        "game": "@ ATL",
+        "proj": 16.8
+      }
+    },
+    {
+      "slot": "RB",
+      "player": {
+        "name": "Blake Corum",
+        "pos": "RB",
+        "team": "LAR",
+        "game": "vs BUF",
+        "proj": 8.4
+      }
+    },
+    {
+      "slot": "WR",
+      "player": {
+        "name": "Amon-Ra St. Brown",
+        "pos": "WR",
+        "team": "DET",
+        "game": "@ ARI",
+        "proj": 20
+      }
+    },
+    {
+      "slot": "WR",
+      "player": {
+        "name": "Matthew Golden",
+        "pos": "WR",
+        "team": "GB",
+        "game": "vs CHI",
+        "proj": 12.7
+      }
+    },
+    {
+      "slot": "TE",
+      "player": {
+        "name": "Harold Fannin Jr.",
+        "pos": "TE",
+        "team": "CLE",
+        "game": "@ NYJ",
+        "proj": 12
+      }
+    },
+    {
+      "slot": "FLEX",
+      "player": {
+        "name": "Jakobi Meyers",
+        "pos": "WR",
+        "team": "JAX",
+        "game": "vs PHI",
+        "proj": 10.7
+      }
+    },
+    {
+      "slot": "D/ST",
+      "player": {
+        "name": "HOU D/ST",
+        "pos": "DST",
+        "team": "HOU",
+        "game": "@ TEN",
+        "proj": 6.7
+      }
+    },
+    {
+      "slot": "K",
+      "player": {
+        "name": "Eddy Pineiro",
+        "pos": "K",
+        "team": "SF",
+        "game": "@ SEA",
+        "proj": 8.6
+      }
+    }
+  ],
+  "bench": [
+    {
+      "name": "C.J. Stroud",
+      "pos": "QB",
+      "team": "HOU",
+      "game": "@ TEN",
+      "proj": 15.4
+    },
+    {
+      "name": "Braelon Allen",
+      "pos": "RB",
+      "team": "NYJ",
+      "game": "vs CLE",
+      "proj": 14.1
+    },
+    {
+      "name": "Romeo Doubs",
+      "pos": "WR",
+      "team": "NE",
+      "game": "vs LV",
+      "proj": 12.2
+    },
+    {
+      "name": "Dohnte Meyers",
+      "pos": "WR",
+      "team": "CIN",
+      "game": "@ MIA",
+      "proj": 9.6
+    },
+    {
+      "name": "Hunter Henry",
+      "pos": "TE",
+      "team": "NE",
+      "game": "vs LV",
+      "proj": 7.7
+    },
+    {
+      "name": "Najee Harris",
+      "pos": "RB",
+      "team": "NYG",
+      "game": "@ WSH",
+      "proj": 5.3
+    }
+  ],
+  "swaps": [
+    {
+      "slot": 2,
+      "out": {
+        "name": "Blake Corum",
+        "pos": "RB",
+        "team": "LAR",
+        "game": "vs BUF",
+        "proj": 8.4
+      },
+      "in": {
+        "name": "Braelon Allen",
+        "pos": "RB",
+        "team": "NYJ",
+        "game": "vs CLE",
+        "proj": 14.1
+      },
+      "points": {
+        "in": 23.2,
+        "out": 4.1
+      }
+    },
+    {
+      "slot": 6,
+      "out": {
+        "name": "Jakobi Meyers",
+        "pos": "WR",
+        "team": "JAX",
+        "game": "vs PHI",
+        "proj": 10.7
+      },
+      "in": {
+        "name": "Romeo Doubs",
+        "pos": "WR",
+        "team": "NE",
+        "game": "vs LV",
+        "proj": 12.2
+      },
+      "points": {
+        "in": 16.8,
+        "out": 7.6
+      }
+    }
+  ],
+  "opponentProj": 116.1,
+  "winChance": {
+    "before": 0.46,
+    "after": 0.71
+  },
+  "final": {
+    "you": 130.5,
+    "opponent": 112.9
+  },
+  "star": {
+    "name": "Braelon Allen",
+    "points": 23.2
+  },
+  "trade": {
+    "partner": "Kelce Grammer",
+    "send": [
+      {
+        "name": "C.J. Stroud",
+        "pos": "QB",
+        "team": "HOU",
+        "game": "@ TEN",
+        "proj": 15.4
+      }
+    ],
+    "get": [
+      {
+        "name": "Christian Watson",
+        "pos": "WR",
+        "team": "GB",
+        "game": "vs CHI",
+        "proj": 13.8
+      },
+      {
+        "name": "David Montgomery",
+        "pos": "RB",
+        "team": "HOU",
+        "game": "@ TEN",
+        "proj": 11.9
+      }
+    ],
+    "gain": {
+      "you": 2.3,
+      "partner": 1.1
+    },
+    "why": "They need a quarterback and you have two. C.J. Stroud sits on your bench every week; Christian Watson starts for you, and David Montgomery backs up your running backs."
+  },
+  "waiver": {
+    "add": {
+      "name": "Malik Washington",
+      "pos": "WR",
+      "team": "MIA",
+      "game": "vs CIN",
+      "proj": 11.1
+    },
+    "drop": {
+      "name": "Najee Harris",
+      "pos": "RB",
+      "team": "NYG",
+      "game": "@ WSH",
+      "proj": 5.3
+    },
+    "gain": 5.8,
+    "owned": 36
+  },
+  "scoreboard": [
+    {
+      "home": "Hurts So Good",
+      "away": "Tua Legit to Quit",
+      "homeScore": 136.6,
+      "awayScore": 118.9
+    },
+    {
+      "home": "Kelce Grammer",
+      "away": "Bijan Mustard",
+      "homeScore": 95.3,
+      "awayScore": 138.1
+    },
+    {
+      "home": "Ja'Marr the Merrier",
+      "away": "Saquon Me Later",
+      "homeScore": 116.9,
+      "awayScore": 111.8
+    },
+    {
+      "home": "Nacho Average Team",
+      "away": "Lamar Your Business",
+      "homeScore": 99.6,
+      "awayScore": 94.8
+    },
+    {
+      "home": "Waddle Waddle",
+      "away": "Gibbs Me a Break",
+      "homeScore": 115.6,
+      "awayScore": 138.7
+    }
+  ]
+}
