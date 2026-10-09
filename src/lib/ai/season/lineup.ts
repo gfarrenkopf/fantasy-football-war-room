@@ -1,7 +1,7 @@
 import { SLOT_DEFS } from "@/lib/draft/league";
 import { isRuledOut, type LineupPlan } from "@/lib/season/lineup";
 import type { LineupSlot, LineupSlotCount } from "@/lib/season/types";
-import { onBye, type SeasonView, type ViewPlayer } from "@/lib/season/view";
+import { likelyOut, onBye, type SeasonView, type ViewPlayer } from "@/lib/season/view";
 import { withDeadline } from "../generatePlan";
 import { PlanModelError, type JsonSchema, type ModelEffort, type ModelUsage, type PlanModel } from "../provider";
 import { clip, injuryTag, isObject, refError } from "./shared";
@@ -36,6 +36,8 @@ export interface LineupInputPlayer {
   now: LineupSlot;
   /** No game this week (projected, but 0 this week). */
   bye: boolean;
+  /** ESPN projects him for 0 though his team plays: it doesn't expect him to (APE-338). */
+  likelyOut: boolean;
   /** This week's NFL opponent, "@DAL" away or "vs DAL" at home (APE-211); null when unknown. */
   opponent: string | null;
 }
@@ -131,6 +133,7 @@ export function buildLineupInput(view: SeasonView): LineupInput {
       locked: p.locked,
       now: p.slot,
       bye: onBye(p) && p.ros > 0,
+      likelyOut: likelyOut(p),
       opponent: p.game?.opponent ? `${p.game.home ? "vs" : "@"}${p.game.opponent}` : null,
     })),
     slots,
@@ -162,7 +165,7 @@ export function buildLineupPrompt(input: LineupInput): { system: string; user: s
     "",
     "Roster: [ref] name, position team | opponent | projected points this week | rest of season | on ESPN now | flags",
     ...input.players.map((p) => {
-      const flags = [p.injury, p.locked ? "game started, locked" : null, p.bye ? "bye week" : null].filter(Boolean).join(", ");
+      const flags = [p.injury, p.locked ? "game started, locked" : null, p.bye ? "bye week" : null, p.likelyOut ? "ESPN projects 0, likely out" : null].filter(Boolean).join(", ");
       return [`[${p.ref}] ${p.name}, ${p.pos} ${p.team ?? "FA"}`, p.opponent ?? "-", `${p.points.toFixed(1)} pts`, `ROS ${Math.round(p.ros)}`, `now ${SLOT_WORD[p.now]}`, flags || "-"].join(" | ");
     }),
     "",

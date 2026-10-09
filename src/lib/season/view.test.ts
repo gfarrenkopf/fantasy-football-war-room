@@ -3,7 +3,7 @@ import league from "./__fixtures__/espn-league-2026.json";
 import projections from "./__fixtures__/espn-projections-2026.json";
 import { parseSeasonLeague } from "./espnLeague";
 import { parseProjections } from "./projections";
-import { buildSeasonView, onBye } from "./view";
+import { buildSeasonView, likelyOut, onBye } from "./view";
 
 const parsed = parseSeasonLeague(league, "110222051");
 if (!parsed.ok) throw new Error(parsed.error);
@@ -103,5 +103,21 @@ describe("onBye", () => {
     expect(onBye({ ...blank, points: 12.8 })).toBe(false);
     expect(onBye({ ...blank, projected: false })).toBe(false);
     expect(onBye({ ...blank, team: null })).toBe(false);
+  });
+});
+
+describe("likelyOut", () => {
+  const game = { state: "pre" as const, detail: "Sun 1:00 PM", opponent: "MIA", home: false, kickoff: null, period: 0, clockSeconds: 0, score: null };
+  const blank = { projected: true, points: 0, team: "CIN", game };
+
+  it("calls a player ESPN projects for nothing, though his team plays, likely out (APE-338)", () => {
+    expect(likelyOut(blank)).toBe(true);
+  });
+
+  it("doesn't on a bye, for a projected or unprojected player, or a free agent", () => {
+    expect(likelyOut({ ...blank, game: null })).toBe(false);
+    expect(likelyOut({ ...blank, points: 12.8 })).toBe(false);
+    expect(likelyOut({ ...blank, projected: false })).toBe(false);
+    expect(likelyOut({ ...blank, team: null })).toBe(false);
   });
 });

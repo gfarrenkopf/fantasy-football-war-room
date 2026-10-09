@@ -105,6 +105,8 @@ function page({
     beacons.push(JSON.parse(String(init.body)));
     return Promise.resolve(new Response(null, { status: 204 }));
   };
+  /** The hidden frame's fetch (APE-339): the same as the page's, which a test can block. */
+  const frameFetch = fetchOrBeacon;
   /** The popup the bridge opens, which it answers through postMessage. */
   const popup = { postMessage: vi.fn() };
   const open = vi.fn(() => popup);
@@ -116,8 +118,12 @@ function page({
   const posted: unknown[] = [];
   const document = {
     currentScript: { src: `${WAR_ROOM}/espn-bridge.js` },
-    // The overlay's host attaches the shared shadow root; everything else is a fresh element.
-    createElement: () => Object.assign(new FakeEl(), { attachShadow: () => shadow }),
+    // The overlay's host attaches the shared shadow root; everything else is a fresh element. The
+    // hidden frame the bridge sends its requests through (APE-339) gets a fetch of its own.
+    createElement: (tag?: string) =>
+      tag === "iframe"
+        ? Object.assign(new FakeEl(), { isConnected: true, contentWindow: { fetch: (url: string, init: RequestInit) => frameFetch(url, init) } })
+        : Object.assign(new FakeEl(), { attachShadow: () => shadow }),
     body: new FakeEl(),
     documentElement: new FakeEl(),
     activeElement: null,
@@ -966,6 +972,21 @@ describe("connecting the season from an ESPN league page (10.3, APE-298, APE-332
     expect(p.open).not.toHaveBeenCalled();
   });
 
+  // ESPN's phone site wraps the page's fetch in a "privacy-gateway" that refuses Draft Room.
+  it("gets past ESPN's privacy gateway by asking Draft Room through a hidden frame (APE-339)", async () => {
+    const p = page({ href: LEAGUE_PAGE, cookie: COOKIE });
+    p.fetch.mockImplementation(async () => Response.json({ claim: "c0de-claim_123" }));
+    const pageFetch = vi.fn(async (url: string) => {
+      throw new TypeError(`${url} fetch blocked by privacy-gateway`);
+    });
+    p.context.fetch = pageFetch;
+    p.load();
+    await tap(p, ".sc");
+    expect(pageFetch).not.toHaveBeenCalled();
+    expect(p.beacons).toContainEqual(expect.objectContaining({ event: "load", mode: "season" }));
+    expect(p.assign).toHaveBeenCalledWith(`${WAR_ROOM}/espn/season?claim=c0de-claim_123`);
+  });
+
   it("says when ESPN has no login to give, without asking Draft Room anything", async () => {
     const p = leaguePage("region=us");
     await tap(p, ".sc");
@@ -1109,7 +1130,8 @@ describe("never leaving the user with nothing to see (APE-331)", () => {
     const append = vi.spyOn(p.document.body, "appendChild");
     p.load();
     p.load();
-    expect(append).toHaveBeenCalledTimes(2);
+    const overlays = append.mock.calls.filter(([el]) => !("contentWindow" in el));
+    expect(overlays).toHaveLength(2);
   });
 
   it("dims the page until the user has connected, then stays out of the way", () => {
@@ -1211,15 +1233,17 @@ describe("never leaving the user with nothing to see (APE-331)", () => {
     expect(p.errorListeners).toHaveLength(0);
 
     const broken = page();
+    const createElement = broken.document.createElement;
     broken.document.createElement = () => {
       throw new TypeError("no DOM");
     };
     expect(() => broken.load()).toThrow();
     const append = vi.spyOn(broken.document.body, "appendChild");
-    broken.document.createElement = () => Object.assign(new FakeEl(), { attachShadow: () => broken.shadow });
+    broken.document.createElement = createElement;
     broken.fireError(new TypeError("no DOM"));
-    expect(append).toHaveBeenCalledTimes(1);
-    expect(append.mock.calls[0][0].textContent).toContain("Something on this page blocked Draft Room");
+    const shown = append.mock.calls.filter(([el]) => !("contentWindow" in el));
+    expect(shown).toHaveLength(1);
+    expect(shown[0][0].textContent).toContain("Something on this page blocked Draft Room");
     expect(broken.beacons).toContainEqual(expect.objectContaining({ event: "error", error: "TypeError" }));
     expect(broken.errorListeners).toHaveLength(0);
   });

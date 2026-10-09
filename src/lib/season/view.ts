@@ -87,6 +87,14 @@ export function onBye(p: Pick<ViewPlayer, "projected" | "points" | "team" | "gam
   return p.projected && p.points === 0 && p.team !== null && p.game === null;
 }
 
+/**
+ * Whether ESPN doesn't expect a player to play this week: it projects him for nothing although his
+ * team has a game (APE-338). ESPN does this ahead of an official designation, so it isn't one.
+ */
+export function likelyOut(p: Pick<ViewPlayer, "projected" | "points" | "team" | "game">): boolean {
+  return p.projected && p.points === 0 && p.team !== null && p.game !== null;
+}
+
 /** A roster entry scored for this league: weekly and rest-of-season projections, and his game. */
 export function scorePlayer(
   league: Pick<SeasonLeague, "currentWeek" | "finalWeek" | "scoringItems">,
