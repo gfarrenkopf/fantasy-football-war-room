@@ -73,6 +73,42 @@
   const BLOCKED = "Something on this page blocked Draft Room. Try again in Safari or Chrome without content blockers.";
 
   /**
+   * fetch for requests to Draft Room. ESPN's phone site wraps the page's fetch, XHR and sendBeacon
+   * in a "privacy-gateway" that refuses any domain it doesn't know (APE-339), so these go through
+   * the untouched fetch of a hidden blank frame, which has the page's origin and so the same CORS.
+   * The frame is put back if ESPN's page takes it off; the page's own fetch is the fallback.
+   * @param {string} url @param {RequestInit} init
+   * @returns {Promise<Response>}
+   */
+  function toDraftRoom(url, init) {
+    return cleanFetch()(url, init);
+  }
+
+  /** @type {HTMLIFrameElement | null} */
+  let netFrame = null;
+  /** The frame's fetch, taken the moment it's added, before anything on the page can wrap it. @type {typeof fetch | null} */
+  let netFetch = null;
+  /** @returns {typeof fetch} */
+  function cleanFetch() {
+    try {
+      // A frame without a fetch isn't tried again; one ESPN's page took off is put back.
+      if (!netFrame || netFrame.isConnected === false) {
+        netFrame = document.createElement("iframe");
+        netFrame.setAttribute("aria-hidden", "true");
+        netFrame.tabIndex = -1;
+        netFrame.style.display = "none";
+        (document.body || document.documentElement).appendChild(netFrame);
+        const frameWindow = /** @type {any} */ (netFrame.contentWindow);
+        netFetch = frameWindow && typeof frameWindow.fetch === "function" ? frameWindow.fetch.bind(frameWindow) : null;
+      }
+      if (netFetch) return netFetch;
+    } catch {
+      /* fall back to the page's own */
+    }
+    return fetch;
+  }
+
+  /**
    * Tells Draft Room the bridge loaded, failed, or how pairing went (APE-331), so a bookmark that
    * "does nothing" shows up somewhere. A plain-text no-cors post, so no preflight; never awaited,
    * never retried, and it carries no ESPN data beyond the league id.
@@ -81,7 +117,7 @@
   function beacon(event, extra) {
     try {
       const body = JSON.stringify({ event, mode: pageMode(), platform: PLATFORM, espnLeagueId, ...extra });
-      void fetch(`${ORIGIN}/api/espn/bridge/beacon`, { method: "POST", mode: "no-cors", credentials: "omit", keepalive: true, headers: { "content-type": "text/plain" }, body }).catch(() => {});
+      void toDraftRoom(`${ORIGIN}/api/espn/bridge/beacon`, { method: "POST", mode: "no-cors", credentials: "omit", keepalive: true, headers: { "content-type": "text/plain" }, body }).catch(() => {});
     } catch {
       /* telemetry never gets in the way */
     }
@@ -585,7 +621,7 @@
     // one, or they'd be marked sent without ever being sent.
     const sendingSettings = settingsToSend;
     try {
-      const res = await fetch(`${ORIGIN}/api/espn/bridge/frames`, {
+      const res = await toDraftRoom(`${ORIGIN}/api/espn/bridge/frames`, {
         method: "POST",
         mode: "cors",
         credentials: "omit",
@@ -719,7 +755,7 @@
       // War Room can still draft for the user; it just can't recover picks it missed after a restart.
     }
     try {
-      const res = await fetch(`${ORIGIN}/api/espn/bridge/handover`, {
+      const res = await toDraftRoom(`${ORIGIN}/api/espn/bridge/handover`, {
         method: "POST",
         mode: "cors",
         credentials: "omit",
@@ -826,7 +862,7 @@
     seasonStep = "sending";
     render();
     try {
-      const res = await fetch(`${ORIGIN}/api/espn/season/handoff`, {
+      const res = await toDraftRoom(`${ORIGIN}/api/espn/season/handoff`, {
         method: "POST",
         mode: "cors",
         credentials: "omit",
@@ -862,7 +898,7 @@
     }
     let done = false;
     try {
-      const res = await fetch(`${ORIGIN}/api/espn/bridge/season`, {
+      const res = await toDraftRoom(`${ORIGIN}/api/espn/bridge/season`, {
         method: "POST",
         mode: "cors",
         credentials: "omit",
