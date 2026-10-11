@@ -1,4 +1,5 @@
 import type { GameState } from "./scoreboard";
+import type { LineupSlotCount } from "./types";
 import type { SeasonView, ViewPlayer } from "./view";
 
 /**
@@ -88,6 +89,31 @@ export function pace(player: Pick<ViewPlayer, "actual" | "points" | "game">): Pa
 /** Starters on a team still to finish: their game hasn't kicked off or is under way. */
 export function leftToPlay(view: SeasonView, teamId: number): number {
   return starting(rosterOf(view, teamId)).filter((p) => p.game && p.game.state !== "post").length;
+}
+
+/** One starting slot on game day: the user's player in it and their opponent's, as set on ESPN; null when ESPN has it empty. */
+export interface HeadToHeadRow {
+  key: LineupSlotCount["key"];
+  me: ViewPlayer | null;
+  them: ViewPlayer | null;
+}
+
+/**
+ * The user's starters against their opponent's, slot by slot in the league's lineup order (APE-343).
+ * Two players ESPN has in the same kind of slot pair off in roster order.
+ */
+export function headToHead(view: SeasonView): HeadToHeadRow[] {
+  const seated = (teamId: number | undefined) => {
+    const byKey = new Map<string, ViewPlayer[]>();
+    if (teamId === undefined) return byKey;
+    for (const p of starting(rosterOf(view, teamId))) byKey.set(p.slot, [...(byKey.get(p.slot) ?? []), p]);
+    return byKey;
+  };
+  const me = seated(view.myTeamId);
+  const them = seated(view.matchup?.them.teamId);
+  return view.starters.flatMap(({ key, count }) =>
+    Array.from({ length: count }, () => ({ key, me: me.get(key)?.shift() ?? null, them: them.get(key)?.shift() ?? null })),
+  );
 }
 
 /** Whether every starter on both sides of the user's matchup is done, so the score is final. */

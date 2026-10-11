@@ -1366,17 +1366,22 @@ li + li > .pickerOption {
 .scoreRow + .scoreRow {
   border-top: 1px solid var(--color-row-line);
 }
-.scoreRow[data-pace="pre"] {
+.scoreRow[data-pace="pre"],
+.h2hSide[data-pace="pre"] {
   --pace: var(--color-muted);
 }
-.scoreRow[data-pace="behind"] {
+.scoreRow[data-pace="behind"],
+.h2hSide[data-pace="behind"] {
   --pace: var(--color-reach-ink);
 }
 .scoreRow[data-pace="ahead"],
-.scoreRow[data-pace="boom"] {
+.scoreRow[data-pace="boom"],
+.h2hSide[data-pace="ahead"],
+.h2hSide[data-pace="boom"] {
   --pace: var(--color-mine);
 }
-.scoreRow[data-pace="boom"] {
+.scoreRow[data-pace="boom"],
+.h2hSide[data-pace="boom"] {
   background: color-mix(in srgb, var(--color-mine) 7%, transparent);
 }
 .scoreSlot {
@@ -1398,11 +1403,13 @@ li + li > .pickerOption {
   line-height: 1.05;
   letter-spacing: -0.02em;
 }
-.scoreRow[data-pace="pre"] .scoreNow {
+.scoreRow[data-pace="pre"] .scoreNow,
+.h2hSide[data-pace="pre"] .scoreNow {
   font-size: 15px;
   font-weight: 600;
 }
-.scoreRow[data-pace="boom"] .scoreNow {
+.scoreRow[data-pace="boom"] .scoreNow,
+.h2hSide[data-pace="boom"] .scoreNow {
   animation: boom 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .scoreProj {
@@ -1411,7 +1418,7 @@ li + li > .pickerOption {
   white-space: nowrap;
 }
 .scoreOver {
-  color: var(--color-mine);
+  color: var(--pace);
   font-weight: 700;
 }
 .paceMeter {
@@ -1440,6 +1447,187 @@ li + li > .pickerOption {
 .lineupTools {
   justify-self: start;
 }
+
+/*
+ * The head-to-head (APE-343): the user's starters left, their opponent's mirrored right, paired by
+ * slot down a recessed 44px spine. Each side is the game-day row turned toward the spine: the points
+ * sit against it and the meter fills toward it, so the two numbers in a slot read as one comparison.
+ */
+.h2h {
+  overflow: hidden;
+}
+.h2hTeams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+  padding: 8px 14px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--color-row-line);
+}
+.h2hMine {
+  color: var(--color-mine);
+}
+.h2hTheirs {
+  grid-column: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  text-align: right;
+}
+.h2hList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.scoreboard .h2hBody {
+  border-top: 1px solid var(--color-row-line);
+}
+.h2hRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+  grid-template-areas: "me slot them";
+}
+.h2hRow + .h2hRow {
+  border-top: 1px solid var(--color-row-line);
+}
+.h2hSlot {
+  grid-area: slot;
+  display: grid;
+  place-items: center;
+  background: var(--color-tier);
+  border-inline: 1px solid var(--color-row-line);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.h2hSide {
+  --pace: var(--color-text);
+  grid-area: me;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 14px;
+}
+.h2hSide[data-side="them"] {
+  grid-area: them;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.h2hSide[data-side="them"] .player {
+  order: 2;
+  padding-right: 0;
+  padding-left: 8px;
+  text-align: right;
+}
+.h2hSide[data-side="them"] .playerLine {
+  justify-content: flex-end;
+}
+.h2hSide[data-side="them"] .scoreCell {
+  justify-items: start;
+}
+/* The meter fills toward the spine on both sides. */
+.h2hSide[data-side="them"] .paceMeter {
+  transform: scaleX(-1);
+}
+.h2hEmpty {
+  color: var(--color-dim);
+  font-size: 12px;
+}
+.h2hSide[data-side="them"] .h2hEmpty {
+  grid-column: 1 / -1;
+  text-align: right;
+}
+.nameShort {
+  display: none;
+}
+
+/*
+ * The opponent's side reads from the user's chair: green only ever means good for the user. Their
+ * player ahead of his pace is a threat in Reach Red ink, past his whole projection too, but with no
+ * wash and no flare (the wash is a celebration, and only the user's players earn one), and one behind
+ * stays plain: his slump isn't the user's to celebrate.
+ */
+.h2hSide[data-side="them"][data-pace="behind"] {
+  --pace: var(--color-text);
+}
+.h2hSide[data-side="them"][data-pace="ahead"],
+.h2hSide[data-side="them"][data-pace="boom"] {
+  --pace: var(--color-reach-ink);
+}
+.h2hSide[data-side="them"][data-pace="boom"] {
+  background: none;
+}
+.h2hSide[data-side="them"][data-pace="boom"] .scoreNow {
+  animation: none;
+}
+
+/*
+ * The head-to-head fits the column it's given, not the screen. Under 640px a side can't hold a whole
+ * game line: the team goes, the clock or kickoff takes a line of its own, and a boom shows only its
+ * gain. Under 480px (half a phone) the first name shrinks to its initial and the spine narrows.
+ */
+.h2hBody {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .h2hSide .factsTeam,
+  .h2hSide .gameWhenSep,
+  .h2hSide .scoreOverOf {
+    display: none;
+  }
+  .h2hSide .gameWhen {
+    display: block;
+  }
+  .h2hSide .factsGame {
+    display: block;
+  }
+  .h2hSide .factsStats {
+    white-space: normal;
+  }
+}
+@container (max-width: 480px) {
+  .h2hTeams,
+  .h2hRow {
+    grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr);
+  }
+  .h2hTeams {
+    padding-inline: 10px;
+  }
+  .h2hSide {
+    gap: 6px;
+    padding: 8px 8px 8px 10px;
+  }
+  .h2hSide[data-side="them"] {
+    padding: 8px 10px 8px 8px;
+  }
+  .h2hSide .player,
+  .h2hSide[data-side="them"] .player {
+    padding-inline: 0;
+  }
+  .h2hSide .scoreCell {
+    min-width: 40px;
+  }
+  .h2hSide .scoreNow {
+    font-size: 16px;
+  }
+  .h2hSide .paceMeter {
+    width: 40px;
+  }
+  .h2hSlot {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+  .nameFull {
+    display: none;
+  }
+  .nameShort {
+    display: inline;
+  }
+}
+
 
 /*
  * The week's result (APE-230), what win night (below) leaves behind. A win: the stage face on a
@@ -4047,7 +4235,17 @@ li + li > .pickerOption {
 @media (prefers-reduced-motion: reduce) {
   .gainNumber,
   .gain[data-level="must"][data-sign="gain"],
-  .scoreRow[data-pace="boom"] .scoreNow {
+  .scoreRow[data-pace="boom"] .scoreNow,
+  .h2hSide[data-pace="boom"] .scoreNow {
     animation: none;
+  }
+}
+
+/* Beside the matchup on a wide screen, the other matchups wrap into an even grid instead of scrolling. */
+@media (min-width: 1024px) {
+  .aroundList {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    overflow: visible;
   }
 }

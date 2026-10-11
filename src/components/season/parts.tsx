@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { Fragment, useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot, Standing } from "@/lib/season/types";
@@ -24,6 +24,12 @@ export function recordText(standing: Standing, teams: number): string {
 }
 /** A position as ESPN writes it. */
 export const posLabel = (pos: ViewPlayer["pos"]) => (pos === "DST" ? "D/ST" : pos);
+
+/** A player's name as the phone's head-to-head sets it (APE-343): "J. Gibbs", "A. St. Brown". A D/ST keeps its name. */
+export function shortName(player: Pick<ViewPlayer, "name" | "pos">): string {
+  const at = player.name.indexOf(" ");
+  return player.pos === "DST" || at < 1 ? player.name : `${player.name[0]}. ${player.name.slice(at + 1)}`;
+}
 
 /** Slot names as ESPN shows them. */
 export const SLOT_LABEL: Record<LineupSlot, string> = {
@@ -123,21 +129,34 @@ export function GameStatus({ player }: { player: ViewPlayer }) {
       <span className={s.live}>
         <span className={s.liveDot} aria-hidden />
         <span className="sr-only">Playing now: </span>
-        {[opponent, score, game.detail || "Live"].filter(Boolean).join(" · ")}
+        <GameParts parts={[opponent, score, game.detail || "Live"]} />
       </span>
     );
   }
   if (game.state === "post") {
     const result = game.score && `${game.score.team > game.score.opponent ? "W" : game.score.team < game.score.opponent ? "L" : "T"} ${score}`;
-    return <span className={s.final}>{[opponent, result, game.detail || "Final"].filter(Boolean).join(" · ")}</span>;
+    return (
+      <span className={s.final}>
+        <GameParts parts={[opponent, result, game.detail || "Final"]} />
+      </span>
+    );
   }
   return (
     <span className={s.pregame}>
-      {opponent}
-      {opponent && game.kickoff && " · "}
-      {game.kickoff && <LocalTime iso={game.kickoff} />}
+      <GameParts parts={[opponent, game.kickoff && <LocalTime iso={game.kickoff} />]} />
     </span>
   );
+}
+
+/** A game's facts joined by " · ", the last (the clock, "Final", the kickoff) in a span of its own so a narrow side can drop it to a line of its own (APE-343). */
+function GameParts({ parts }: { parts: React.ReactNode[] }) {
+  const shown = parts.filter(Boolean);
+  return shown.map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && <span className={i === shown.length - 1 ? s.gameWhenSep : undefined}> · </span>}
+      {i > 0 && i === shown.length - 1 ? <span className={s.gameWhen}>{part}</span> : part}
+    </Fragment>
+  ));
 }
 
 /**
@@ -183,6 +202,7 @@ export function PlayerLine({
   pos = true,
   stats = false,
   stacked = false,
+  short = false,
 }: {
   player: ViewPlayer;
   tone?: "same" | "out" | "in";
@@ -201,6 +221,8 @@ export function PlayerLine({
   stats?: boolean;
   /** His game and ownership take a line each at every width, as on ESPN's roster (APE-249). */
   stacked?: boolean;
+  /** On a phone, the first name shrinks to its initial (APE-343). */
+  short?: boolean;
 }) {
   const tag = INJURY_TAG[player.injuryStatus];
   const bye = onBye(player);
@@ -210,7 +232,16 @@ export function PlayerLine({
   return (
     <span className={s.player} data-tone={tone} data-stacked={stacked || undefined}>
       <span className={s.playerLine}>
-        <span className={s.name}>{player.name}</span>
+        <span className={s.name}>
+          {short ? (
+            <>
+              <span className={s.nameFull}>{player.name}</span>
+              <span className={s.nameShort}>{shortName(player)}</span>
+            </>
+          ) : (
+            player.name
+          )}
+        </span>
         {tag && (
           <span className={s.tag} data-kind={isRuledOut(player.injuryStatus) ? "out" : "warn"}>
             {tag}
@@ -257,7 +288,7 @@ export function PlayerLine({
           ))}
         {status && (
           <span className={s.factsGame}>
-            {pos ? <span className={s.factsSep}> · </span> : `${player.team ?? "FA"} `}
+            {pos ? <span className={s.factsSep}> · </span> : <span className={s.factsTeam}>{player.team ?? "FA"} </span>}
             <GameStatus player={player} />
           </span>
         )}

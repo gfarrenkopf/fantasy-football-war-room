@@ -1,7 +1,7 @@
 "use client";
 
 import { biggestSurprises, trackRecord, type ProjectionAccuracy, type ProjectionCall, type SeasonCalls } from "@/lib/season/accuracy";
-import { gameProgress, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type Pace } from "@/lib/season/gameday";
+import { gameProgress, headToHead, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type HeadToHeadRow, type Pace } from "@/lib/season/gameday";
 import { compareLineups } from "@/lib/season/lineup";
 import { weekRecap } from "@/lib/season/recap";
 import type { MatchupSide } from "@/lib/season/types";
@@ -62,55 +62,69 @@ export function GameDayPanel({
   // While the result card tells this week, the archive starts from the week before.
   const shownAbove = phase === "results" && matchupDecided(view);
   const lastKept = previous && archive.some((w) => w.season === previous.view.season && w.week === previous.view.currentWeek);
-  const startersPanel = (
-    <section className={s.panel} aria-labelledby="starters-title">
-      <div className={s.panelHead}>
-        <h2 id="starters-title" className={s.panelTitle}>
-          Starters
-        </h2>
-        <span className={s.panelNote}>As set on ESPN</span>
-      </div>
-      <ul className={s.scoreList}>
-        {starters.map(({ key, player }, i) =>
-          player ? (
-            <ScoreRow key={player.playerId} player={player} slot={SLOT_LABEL[key]} />
-          ) : (
-            <li key={`empty-${i}`} className={s.scoreRow} data-pace="pre">
-              <span className={s.scoreSlot}>{SLOT_LABEL[key]}</span>
-              <span className={s.fine}>Empty on ESPN</span>
-            </li>
-          ),
-        )}
-      </ul>
-    </section>
-  );
 
   return (
     <>
       <div className={s.lineup}>
+        {/* The matchup: the score over both lineups, slot by slot (APE-343). */}
         <div className={s.stack}>
-          {view.matchup &&
-            (phase === "results" && matchupDecided(view) ? (
-              <MatchupMoment leagueId={leagueId} view={view} accuracy={accuracy} />
+          {view.matchup ? (
+            shownAbove ? (
+              <>
+                <MatchupMoment leagueId={leagueId} view={view} accuracy={accuracy} />
+                <section className={`${s.panel} ${s.h2h}`} aria-labelledby="h2h-title">
+                  <div className={s.panelHead}>
+                    <h2 id="h2h-title" className={s.panelTitle}>
+                      Head to head
+                    </h2>
+                    <span className={s.panelNote}>As set on ESPN</span>
+                  </div>
+                  <HeadToHead view={view} teams />
+                </section>
+              </>
             ) : (
-              <Scoreboard view={view} phase={phase} />
-            ))}
-          {phase === "live" && <AroundTheLeague view={view} />}
+              <Scoreboard view={view} phase={phase}>
+                <HeadToHead view={view} />
+              </Scoreboard>
+            )
+          ) : (
+            <section className={s.panel} aria-labelledby="starters-title">
+              <div className={s.panelHead}>
+                <h2 id="starters-title" className={s.panelTitle}>
+                  Starters
+                </h2>
+                <span className={s.panelNote}>As set on ESPN</span>
+              </div>
+              <ul className={s.scoreList}>
+                {starters.map(({ key, player }, i) =>
+                  player ? (
+                    <ScoreRow key={player.playerId} player={player} slot={SLOT_LABEL[key]} />
+                  ) : (
+                    <li key={`empty-${i}`} className={s.scoreRow} data-pace="pre">
+                      <span className={s.scoreSlot}>{SLOT_LABEL[key]}</span>
+                      <span className={s.fine}>Empty on ESPN</span>
+                    </li>
+                  ),
+                )}
+              </ul>
+            </section>
+          )}
+        </div>
+        {/* Beside it: what ESPN expected (its season and last week, between weeks), the rest of the league, and the bench. */}
+        <div className={s.stack}>
           {offDay ? (
             <>
               {accuracy?.season && <TrackRecord view={view} season={accuracy.season} />}
               {previous && !lastKept && <LastWeek view={previous.view} accuracy={previous.accuracy} />}
             </>
           ) : (
-            startersPanel
+            accuracy && <EspnCall view={view} accuracy={accuracy} />
           )}
-        </div>
-        <div className={s.stack}>
-          {offDay ? startersPanel : accuracy && <EspnCall view={view} accuracy={accuracy} />}
+          {phase === "live" && <AroundTheLeague view={view} />}
           <section className={s.panel} aria-labelledby="gameday-bench-title">
             <div className={s.panelHead}>
               <h2 id="gameday-bench-title" className={s.panelTitle}>
-                Bench
+                Your bench
               </h2>
               <span className={s.panelNote}>
                 {benchPoints > 0 ? (
@@ -135,6 +149,58 @@ export function GameDayPanel({
       </div>
       {phase !== "live" && <RecapArchive league={view.name} weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
     </>
+  );
+}
+
+/**
+ * Both lineups at once (APE-343): the user's starters on the left and their opponent's mirrored on
+ * the right, paired by slot down a narrow spine, each with his game, his stats and his points over
+ * his projection. Under the scoreboard, its two sides already name the teams; under the result card,
+ * a row of its own does.
+ */
+function HeadToHead({ view, teams = false }: { view: SeasonView; teams?: boolean }) {
+  const opponent = view.teams.find((t) => t.id === view.matchup?.them.teamId)?.name ?? "Your opponent";
+  return (
+    <div className={s.h2hBody}>
+      {teams && (
+        <div className={s.h2hTeams} aria-hidden>
+          <span className={s.h2hMine}>You</span>
+          <span className={s.h2hTheirs} title={opponent}>
+            {opponent}
+          </span>
+        </div>
+      )}
+      <ul className={s.h2hList} aria-label="Starters, slot by slot">
+        {headToHead(view).map((row, i) => (
+          <li key={i} className={s.h2hRow}>
+            <span className={s.h2hSlot}>{SLOT_LABEL[row.key]}</span>
+            <H2HSide player={row.me} side="me" />
+            <H2HSide player={row.them} side="them" opponent={opponent} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** One side of a head-to-head slot: the player's line and his points, the points toward the spine. */
+function H2HSide({ player, side, opponent }: { player: HeadToHeadRow["me"]; side: "me" | "them"; opponent?: string }) {
+  const whose = side === "me" ? "Yours: " : `${opponent}'s: `;
+  if (!player) {
+    return (
+      <div className={s.h2hSide} data-side={side} data-pace="pre">
+        <span className={s.h2hEmpty}>
+          <span className="sr-only">{whose}</span>Empty
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className={s.h2hSide} data-side={side} data-pace={pace(player)}>
+      <span className="sr-only">{whose}</span>
+      <PlayerLine player={player} value="none" news={side === "me"} live stats short pos={false} />
+      <ScoreCell player={player} />
+    </div>
   );
 }
 
@@ -277,9 +343,10 @@ function LastWeek({ view, accuracy }: { view: SeasonView; accuracy: ProjectionAc
 
 /**
  * The matchup as the page's hero: both scores at 44px, the lead between them in tone, each side's
- * projection and starters still to play, and ESPN's win probability as a split bar.
+ * projection and starters still to play, and ESPN's win probability as a split bar. The head-to-head
+ * hangs under it in the same panel (APE-343): the score and the rows that make it read as one thing.
  */
-function Scoreboard({ view, phase }: { view: SeasonView; phase: GameDayPhase }) {
+function Scoreboard({ view, phase, children }: { view: SeasonView; phase: GameDayPhase; children?: React.ReactNode }) {
   const { me, them } = view.matchup!;
   const opponent = view.teams.find((t) => t.id === them.teamId)?.name ?? "Your opponent";
   const lead = me.points - them.points;
@@ -322,7 +389,7 @@ function Scoreboard({ view, phase }: { view: SeasonView; phase: GameDayPhase }) 
     );
   };
   return (
-    <section className={`${s.panel} ${s.scoreboard}`} data-lead={lead > 0 ? "up" : lead < 0 ? "down" : "even"} aria-labelledby="scoreboard-title">
+    <section className={`${s.panel} ${s.scoreboard} ${children ? s.h2h : ""}`} data-lead={lead > 0 ? "up" : lead < 0 ? "down" : "even"} aria-labelledby="scoreboard-title">
       <div className={s.panelHead}>
         <h2 id="scoreboard-title" className={s.panelTitle}>
           Week {view.currentWeek} · <span className={s.scoreStatus}>{status}</span>
@@ -346,6 +413,7 @@ function Scoreboard({ view, phase }: { view: SeasonView; phase: GameDayPhase }) 
           </span>
         </div>
       )}
+      {children}
     </section>
   );
 }
@@ -438,42 +506,53 @@ function EspnCall({ view, accuracy }: { view: SeasonView; accuracy: ProjectionAc
 
 /** One player on game day: his line, game and stats on the left, his points large on the right over his projection and pace. */
 function ScoreRow({ player, slot }: { player: ViewPlayer; slot?: string }) {
+  return (
+    <li className={s.scoreRow} data-pace={pace(player)} data-slotted={slot !== undefined}>
+      {slot !== undefined && <span className={s.scoreSlot}>{slot}</span>}
+      {/* A slot that names his position says it already; the bench and FLEX/OP still show it. */}
+      <PlayerLine player={player} value="none" news live stats pos={slot !== posLabel(player.pos)} />
+      <ScoreCell player={player} />
+    </li>
+  );
+}
+
+/** What a player has scored, large, over his projection, with a meter of how much of it he has and a tick where the clock says he should be. */
+function ScoreCell({ player }: { player: ViewPlayer }) {
   const level = pace(player);
   const started = level !== "pre";
   const actual = player.actual ?? 0;
   const share = player.points > 0 ? Math.min(1, Math.max(0, actual / player.points)) : 0;
   const due = player.game?.state === "in" ? gameProgress(player.game) : null;
   return (
-    <li className={s.scoreRow} data-pace={level} data-slotted={slot !== undefined}>
-      {slot !== undefined && <span className={s.scoreSlot}>{slot}</span>}
-      {/* A slot that names his position says it already; the bench and FLEX/OP still show it. */}
-      <PlayerLine player={player} value="none" news live stats pos={slot !== posLabel(player.pos)} />
-      <span className={s.scoreCell}>
-        {/* Keyed on boom, so the flare plays once when he passes his projection, not on every refresh. */}
-        <b key={level === "boom" ? "boom" : "pts"} className={`${s.scoreNow} tabular-nums`}>
-          {pts(started ? actual : player.points)}
-        </b>
-        <span className={s.scoreProj}>
-          {!started ? (
-            "proj"
-          ) : level === "boom" && player.points > 0 ? (
-            <>
-              <span className={s.scoreOver}>{signed(actual - player.points)}</span> over <span className="tabular-nums">{pts(player.points)}</span>
-            </>
-          ) : (
-            <>
-              of <span className="tabular-nums">{pts(player.points)}</span>
-            </>
-          )}
-        </span>
-        {started && player.points > 0 && (
-          <span className={s.paceMeter} aria-hidden>
-            <span className={s.paceFill} style={{ width: `${share * 100}%` }} />
-            {due !== null && <span className={s.paceTick} style={{ left: `${due * 100}%` }} />}
-          </span>
+    <span className={s.scoreCell}>
+      {/* Keyed on boom, so the flare plays once when he passes his projection, not on every refresh. */}
+      <b key={level === "boom" ? "boom" : "pts"} className={`${s.scoreNow} tabular-nums`}>
+        {pts(started ? actual : player.points)}
+      </b>
+      <span className={s.scoreProj}>
+        {!started ? (
+          "proj"
+        ) : level === "boom" && player.points > 0 ? (
+          <>
+            <span className={s.scoreOver}>{signed(actual - player.points)}</span>
+            <span className={s.scoreOverOf}>
+              {" "}
+              over <span className="tabular-nums">{pts(player.points)}</span>
+            </span>
+          </>
+        ) : (
+          <>
+            of <span className="tabular-nums">{pts(player.points)}</span>
+          </>
         )}
-        <span className="sr-only">, {PACE_TEXT[level]}</span>
       </span>
-    </li>
+      {started && player.points > 0 && (
+        <span className={s.paceMeter} aria-hidden>
+          <span className={s.paceFill} style={{ width: `${share * 100}%` }} />
+          {due !== null && <span className={s.paceTick} style={{ left: `${due * 100}%` }} />}
+        </span>
+      )}
+      <span className="sr-only">, {PACE_TEXT[level]}</span>
+    </span>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameDayPhase, gameProgress, inResultHold, leftToPlay, matchupDecided, matchupLive, nextReset, pace } from "./gameday";
+import { gameDayPhase, gameProgress, headToHead, inResultHold, leftToPlay, matchupDecided, matchupLive, nextReset, pace } from "./gameday";
 import type { GameState } from "./scoreboard";
 import type { LineupSlot } from "./types";
 import type { SeasonView, ViewPlayer } from "./view";
@@ -158,5 +158,36 @@ describe("the matchup", () => {
   it("is live while a game on either side is under way", () => {
     expect(matchupLive(view([player("QB", game("post"))], [player("QB", game("in"))]))).toBe(true);
     expect(matchupLive(view([player("QB", game("post"))], [player("QB", game("post"))]))).toBe(false);
+  });
+});
+
+describe("headToHead", () => {
+  const starters = [
+    { key: "QB", count: 1 },
+    { key: "WR", count: 2 },
+    { key: "FLEX", count: 1 },
+  ] as const;
+  const withSlots = (v: SeasonView) => ({ ...v, starters: starters.map((s) => ({ ...s })) }) as SeasonView;
+
+  it("pairs each starting slot, in the league's order, with both teams' players", () => {
+    const myQb = player("QB", null);
+    const myWr1 = player("WR", null);
+    const myWr2 = player("WR", null);
+    const myFlex = player("FLEX", null);
+    const theirFlex = player("FLEX", null);
+    const theirQb = player("QB", null);
+    const theirWr = player("WR", null);
+    const rows = headToHead(withSlots(view([myFlex, player("BN", null), myWr1, myQb, myWr2], [theirFlex, theirQb, player("IR", null), theirWr])));
+    expect(rows.map((r) => [r.key, r.me?.playerId ?? null, r.them?.playerId ?? null])).toEqual([
+      ["QB", myQb.playerId, theirQb.playerId],
+      ["WR", myWr1.playerId, theirWr.playerId],
+      ["WR", myWr2.playerId, null],
+      ["FLEX", myFlex.playerId, theirFlex.playerId],
+    ]);
+  });
+
+  it("leaves the other side empty without a matchup", () => {
+    const v = withSlots({ ...view([player("QB", null)], [player("QB", null)]), matchup: null });
+    expect(headToHead(v).every((r) => r.them === null)).toBe(true);
   });
 });
