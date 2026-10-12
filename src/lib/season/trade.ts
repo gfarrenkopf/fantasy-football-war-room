@@ -1,3 +1,4 @@
+import { pickDrops } from "./drops";
 import { optimalLineup } from "./lineup";
 import type { LineupSlotCount, PendingTrade } from "./types";
 import type { ViewPlayer } from "./view";
@@ -46,7 +47,7 @@ export interface TeamVerdict {
   /** Per remaining week. */
   perWeek: number;
   bySlot: SlotChange[];
-  /** Who they'd have to cut to fit the roster: the lowest rest-of-season value. */
+  /** Who they'd have to cut to fit the roster (src/lib/season/drops.ts). */
   drops: number[];
 }
 
@@ -79,7 +80,8 @@ export function afterTrade(roster: readonly ViewPlayer[], out: ReadonlySet<numbe
   const counted = kept.filter((p) => p.slot !== "IR");
   const over = counted.length - Math.max(capacity, roster.filter((p) => p.slot !== "IR").length);
   if (over <= 0) return { roster: kept, drops: [] as number[] };
-  const drops = [...counted].sort((x, y) => x.ros - y.ros || x.playerId - y.playerId).slice(0, over).map((p) => p.playerId);
+  // Nobody coming in is cut to make room for himself.
+  const drops = pickDrops(counted, over, league, { keep: new Set(incoming.map((p) => p.playerId)) });
   const cut = new Set(drops);
   return { roster: kept.filter((p) => !cut.has(p.playerId)), drops };
 }
