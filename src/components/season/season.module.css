@@ -1500,8 +1500,8 @@ li + li > .pickerOption {
 /*
  * The spine wears each slot's position hue, as the board's position chips do, so a lineup scans by
  * color down the middle (APE-344). The ink is lifted toward the text color to clear 4.5:1 on its own
- * wash at 11px; QB's red needs the most lift. FLEX and OP share the flex gold. The starters list
- * without a matchup (.scoreSlot) takes the same hues.
+ * wash at 11px. FLEX and OP share the flex gold. The starters list without a matchup (.scoreSlot)
+ * takes the same hues.
  */
 .h2hSlot,
 .scoreSlot {
@@ -1522,7 +1522,6 @@ li + li > .pickerOption {
 .h2hSlot[data-slot="QB"],
 .scoreSlot[data-slot="QB"] {
   --pos: var(--color-qb);
-  --pos-lift: 65%;
 }
 .h2hSlot[data-slot="RB"],
 .scoreSlot[data-slot="RB"] {

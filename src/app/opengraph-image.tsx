@@ -11,8 +11,8 @@ export const contentType = "image/png";
 
 /** Position hues, straight off the board. Colors are literals here because satori has no CSS tokens. */
 const POS = [
-  ["QB", "#e5484d"],
-  ["RB", "#3ddc91"],
+  ["QB", "#e255c1"],
+  ["RB", "#0bccd7"],
   ["WR", "#4f9cf9"],
   ["TE", "#f59e42"],
   ["K", "#b39ddb"],

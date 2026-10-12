@@ -20,7 +20,7 @@ export const C = {
 } as const;
 
 /** The six position hues, in draft-board order: the stripe across the top of the card. */
-export const STRIPE = ["#e5484d", "#3ddc91", "#4f9cf9", "#f59e42", "#b39ddb", "#9aa7b8"];
+export const STRIPE = ["#e255c1", "#0bccd7", "#4f9cf9", "#f59e42", "#b39ddb", "#9aa7b8"];
 
 export const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 

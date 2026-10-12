@@ -10,8 +10,8 @@ colors:
   text: "#e7ebf0"
   muted: "#8f9aa8"
   dim: "#5f6a78"
-  qb: "#e5484d"
-  rb: "#3ddc91"
+  qb: "#e255c1"
+  rb: "#0bccd7"
   wr: "#4f9cf9"
   te: "#f59e42"
   k: "#b39ddb"
@@ -213,15 +213,15 @@ A near-neutral blue-grey ground carrying six saturated position hues and a small
 
 ### Primary
 
-- **Signal Green** (`#3ddc91`): the yes-color. It marks running backs, marks picks the user owns (16% fill, 6px left rail, checkmark badge, green name), and drives the on-clock glow. The single loudest color in the system.
+- **Signal Green** (`#3ddc91`): the yes-color. It marks picks the user owns (16% fill, 6px left rail, checkmark badge, green name), and drives the on-clock glow. The single loudest color in the system.
 - **Alert Amber** (`#fbbf24`): approach and conflict. Warms the status chip as the pick nears, flags bye-week collisions on player cards (18% fill, 55% border, a ⚠ glyph), pulses an open-position pip when a need is urgent.
 
 ### Secondary
 
 The six position hues. These are load-bearing, not thematic: they appear as a 3px left rail on every player card, as the rank badge and position-label ink, and as the 10px column dot.
 
-- **Quarterback Red** (`#e5484d`)
-- **Running Back Green** (`#3ddc91`)
+- **Quarterback Magenta** (`#e255c1`) — magenta, not red, so a quarterback never reads as Reach Red's "bad"
+- **Running Back Cyan** (`#0bccd7`) — cyan, not green, so a running back never reads as Signal Green's "good"
 - **Receiver Blue** (`#4f9cf9`)
 - **Tight End Amber** (`#f59e42`)
 - **Kicker Lilac** (`#b39ddb`)
@@ -252,7 +252,7 @@ The signal layer, used only on verdicts and states.
 
 **The Translucent Signal Rule.** Signal backgrounds are never opaque. Every state fill is `color-mix(in srgb, var(--color-X) N%, transparent)` at 7–18%, with a matching border at 45–60%. This keeps the ground visible through the state, so an alarmed row still reads as part of the same board.
 
-**The Double-Duty Green Warning.** `--color-rb` and `--color-mine` are the same hex (`#3ddc91`) by inheritance, not by design. A drafted running back therefore wears one color meaning two things. This is a known flaw; a future pass should separate ownership from position rather than deepen the coupling.
+**The Verdict-Free Position Rule.** Position hues stay clear of the signal hues. Green means good for the user and red means bad, everywhere, so no position may be green or red: the prototype's QB red and RB green (the RB shared `--color-mine`'s exact hex) read as verdicts next to pace ink and Value/Reach tags, and were moved to magenta and cyan (APE-344). A new position or signal hue keeps the two families apart.
 
 ## Typography
 
@@ -610,7 +610,7 @@ The panel it leaves behind is the week's result: "YOU WON" in Big Shoulders on a
 - **Don't** drift toward platform draft rooms (ESPN/Yahoo house style): heavy chrome, ad slots, logo soup, low information per pixel.
 - **Don't** add a filled, saturated primary button. Primary in this system is an outlined sky-tinted button; a solid accent button would out-shout the position hues that carry actual meaning. The one exception is the season door's "Connect your ESPN league" (the Season Door Exception).
 - **Don't** introduce a new hue for a decorative purpose. Neutrals and the existing signal set cover non-semantic needs. (The six position hues are themselves open for revision — treat them as inherited, not sacred, but do not accrete alongside them.)
-- **Don't** deepen the `--color-rb` / `--color-mine` collision. They share `#3ddc91` by accident; new work should not add meaning to that green until the two are separated.
+- **Don't** give a position a green or red hue, or a signal a position's hue. Position says who; signal says good or bad, and the two must never be confused.
 - **Don't** add a third animated glow. Two exist; urgency animation is the scarcest signal in the system.
 - **Don't** make the document scroll inside `/draft`. Scrolling belongs to panels. The landing route is the one exception and it does not generalize.
 - **Don't** carry the door's type scale into the instrument. 26–38px headings and 24px odds are licensed on `/` and nowhere else; inside the war room the working range is still 10–15px.
