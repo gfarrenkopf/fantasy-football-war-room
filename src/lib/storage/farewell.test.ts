@@ -43,7 +43,7 @@ describe("farewellMood", () => {
 describe("farewellOrder", () => {
   it("lists paused drafts first, furthest along first, then finished, then waiting", () => {
     const at = (name: string, n: number) => ({ ...summarizeLeague(league, draftOf(n)), name });
-    const order = farewellOrder([at("waiting", 0), at("done", total), at("early", 10), at("late", 150)]);
+    const order = farewellOrder([at("waiting", 0), at("done", total), at("early", 10), at("late", 150)], new Date());
     expect(order.map((l) => l.name)).toEqual(["late", "early", "done", "waiting"]);
   });
 });
@@ -58,8 +58,25 @@ describe("draft dates in the goodbye", () => {
   });
 
   it("lists waiting leagues soonest first, undated last", () => {
-    const order = farewellOrder([waiting("none", null), waiting("next week", "2026-10-01"), waiting("tonight", "2026-09-25T00:00:00.000Z")]);
+    const order = farewellOrder([waiting("none", null), waiting("next week", "2026-10-01"), waiting("tonight", "2026-09-25T00:00:00.000Z")], now);
     expect(order.map((l) => l.name)).toEqual(["tonight", "next week", "none"]);
+  });
+
+  it("puts drafts still ahead above paused and finished leagues, so the next one is never cut off", () => {
+    const at = (name: string, n: number, draftAt: string | null = null) => ({ ...summarizeLeague({ ...league, draftAt }, draftOf(n)), name });
+    const order = farewellOrder(
+      [
+        at("done", total, "2026-09-20"),
+        at("paused", 40),
+        at("undated", 0),
+        at("gone", 0, "2026-09-20"),
+        at("next week", 0, "2026-10-01"),
+        at("paused, dated", 10, "2026-09-25"),
+        at("tomorrow", 0, "2026-09-25T23:30:00.000Z"),
+      ],
+      now,
+    );
+    expect(order.map((l) => l.name)).toEqual(["tomorrow", "next week", "paused", "paused, dated", "done", "gone", "undated"]);
   });
 
   it("finds the next draft still ahead, skipping past ones and started leagues", () => {

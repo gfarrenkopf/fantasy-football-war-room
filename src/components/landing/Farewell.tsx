@@ -49,9 +49,10 @@ const soonHeadline = (c: DraftCountdown): string | null =>
 /**
  * The entry panel's goodbye, after signing out (see AccountMenu): walking out of the draft room
  * with your card in hand. Every league gets a line and a track of one square per round, in the
- * order that matters on the way out: paused drafts first (where each clock stopped, the reason to
- * come back), then finished ones (the track runs green to a stamped ✓, with the picks that anchor
- * the team), then the ones still waiting for draft day. The headline follows the most pressing.
+ * order that matters on the way out: drafts still ahead first (soonest first), then paused drafts
+ * (where each clock stopped, the reason to come back), then finished ones (the track runs green to
+ * a stamped ✓, with the picks that anchor the team), then the rest still waiting for draft day.
+ * The headline follows the most pressing.
  *
  * `farewell` is undefined for the moment between the first paint and reading the hand-off, when
  * the face holds its place empty rather than flash the wrong goodbye.
@@ -61,9 +62,9 @@ export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell 
     if (farewell === undefined) return <div className={s.face} aria-busy="true" />;
 
     const mood = farewellMood(farewell);
-    const leagues = farewellOrder(farewell?.leagues ?? []);
     // Read on the client only: the face renders after the hand-off is read, never on the server.
     const now = new Date();
+    const leagues = farewellOrder(farewell?.leagues ?? [], now);
     const next = soonestDraft(farewell, now);
     // A draft under a day away leads, unless a paused one is waiting to be finished.
     const urgent = mood !== "unfinished" && next ? soonHeadline(next.countdown) : null;

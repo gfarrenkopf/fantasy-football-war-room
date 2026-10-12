@@ -43,18 +43,25 @@ export const isDone = (l: FarewellLeague) => l.total > 0 && l.logged >= l.total;
 
 export const stageOf = (l: FarewellLeague): LeagueStage => (isUnfinished(l) ? "paused" : isDone(l) ? "done" : "waiting");
 
-const STAGE_ORDER: Record<LeagueStage, number> = { paused: 0, done: 1, waiting: 2 };
+/** A waiting league's countdown when its draft is still ahead, else null. */
+const upcomingDraft = (l: FarewellLeague, now: Date): DraftCountdown | null => {
+  if (stageOf(l) !== "waiting") return null;
+  const countdown = draftCountdown(l.draftAt, now);
+  return countdown && countdown.phase !== "started" ? countdown : null;
+};
 
 /**
- * The goodbye's order: paused drafts first (the reason to come back, furthest along first), then
- * finished ones (the celebration), then the ones still waiting for draft day.
+ * The goodbye's order: drafts still ahead first (soonest first, so a busy account never counts its
+ * next draft into "and N more"), then paused drafts (the reason to come back, furthest along
+ * first), then finished ones (the celebration), then the rest still waiting for draft day.
  */
-export function farewellOrder(leagues: FarewellLeague[]): FarewellLeague[] {
+export function farewellOrder(leagues: FarewellLeague[], now: Date): FarewellLeague[] {
+  const group = (l: FarewellLeague) => (upcomingDraft(l, now) ? 0 : { paused: 1, done: 2, waiting: 3 }[stageOf(l)]);
   return [...leagues].sort(
     (a, b) =>
-      STAGE_ORDER[stageOf(a)] - STAGE_ORDER[stageOf(b)] ||
+      group(a) - group(b) ||
       b.logged / (b.total || 1) - a.logged / (a.total || 1) ||
-      // Waiting for draft day: the soonest first, and leagues without a date after every dated one.
+      // Soonest first, and leagues without a date after every dated one.
       draftTime(a) - draftTime(b),
   );
 }
@@ -71,10 +78,8 @@ const draftTime = (l: FarewellLeague) => {
 export function soonestDraft(f: Farewell | null, now: Date): { league: FarewellLeague; countdown: DraftCountdown } | null {
   let best: { league: FarewellLeague; countdown: DraftCountdown } | null = null;
   for (const league of f?.leagues ?? []) {
-    if (stageOf(league) !== "waiting") continue;
-    const countdown = draftCountdown(league.draftAt, now);
-    if (!countdown || countdown.phase === "started") continue;
-    if (!best || countdown.at < best.countdown.at) best = { league, countdown };
+    const countdown = upcomingDraft(league, now);
+    if (countdown && (!best || countdown.at < best.countdown.at)) best = { league, countdown };
   }
   return best;
 }
