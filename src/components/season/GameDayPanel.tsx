@@ -4,7 +4,7 @@ import { biggestSurprises, trackRecord, type ProjectionAccuracy, type Projection
 import { gameProgress, headToHead, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type HeadToHeadRow, type Pace } from "@/lib/season/gameday";
 import { compareLineups } from "@/lib/season/lineup";
 import { weekRecap } from "@/lib/season/recap";
-import type { MatchupSide } from "@/lib/season/types";
+import type { LineupSlot, MatchupSide } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import type { ArchiveWeek } from "@/lib/season/leagueRecap";
 import { MatchupMoment } from "./MatchupMoment";
@@ -98,10 +98,12 @@ export function GameDayPanel({
               <ul className={s.scoreList}>
                 {starters.map(({ key, player }, i) =>
                   player ? (
-                    <ScoreRow key={player.playerId} player={player} slot={SLOT_LABEL[key]} />
+                    <ScoreRow key={player.playerId} player={player} slot={key} />
                   ) : (
                     <li key={`empty-${i}`} className={s.scoreRow} data-pace="pre">
-                      <span className={s.scoreSlot}>{SLOT_LABEL[key]}</span>
+                      <span className={s.scoreSlot} data-slot={key}>
+                        {SLOT_LABEL[key]}
+                      </span>
                       <span className={s.fine}>Empty on ESPN</span>
                     </li>
                   ),
@@ -173,7 +175,9 @@ function HeadToHead({ view, teams = false }: { view: SeasonView; teams?: boolean
       <ul className={s.h2hList} aria-label="Starters, slot by slot">
         {headToHead(view).map((row, i) => (
           <li key={i} className={s.h2hRow}>
-            <span className={s.h2hSlot}>{SLOT_LABEL[row.key]}</span>
+            <span className={s.h2hSlot} data-slot={row.key}>
+              {SLOT_LABEL[row.key]}
+            </span>
             <H2HSide player={row.me} side="me" />
             <H2HSide player={row.them} side="them" opponent={opponent} />
           </li>
@@ -505,12 +509,16 @@ function EspnCall({ view, accuracy }: { view: SeasonView; accuracy: ProjectionAc
 }
 
 /** One player on game day: his line, game and stats on the left, his points large on the right over his projection and pace. */
-function ScoreRow({ player, slot }: { player: ViewPlayer; slot?: string }) {
+function ScoreRow({ player, slot }: { player: ViewPlayer; slot?: LineupSlot }) {
   return (
     <li className={s.scoreRow} data-pace={pace(player)} data-slotted={slot !== undefined}>
-      {slot !== undefined && <span className={s.scoreSlot}>{slot}</span>}
+      {slot !== undefined && (
+        <span className={s.scoreSlot} data-slot={slot}>
+          {SLOT_LABEL[slot]}
+        </span>
+      )}
       {/* A slot that names his position says it already; the bench and FLEX/OP still show it. */}
-      <PlayerLine player={player} value="none" news live stats pos={slot !== posLabel(player.pos)} />
+      <PlayerLine player={player} value="none" news live stats pos={slot === undefined || SLOT_LABEL[slot] !== posLabel(player.pos)} />
       <ScoreCell player={player} />
     </li>
   );
