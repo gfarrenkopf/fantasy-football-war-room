@@ -592,6 +592,195 @@
   font-size: 12.5px;
 }
 
+/* ------------------------------------------------------------------ a hole in the lineup (APE-350) */
+
+/* A slot nobody can play: amber, the system's word for a conflict that needs a hand. Committed like
+   a swing, never breathing: the fix is a tap away, not an alarm. The total stays honest and plain. */
+.gain[data-level="hole"] {
+  --tone: var(--color-warn);
+  background: color-mix(in srgb, var(--color-warn) 7%, var(--color-panel));
+  border-color: color-mix(in srgb, var(--color-warn) 50%, transparent);
+}
+.gain[data-level="hole"] .gainNumber {
+  font-size: 40px;
+  color: var(--color-text);
+}
+.gain[data-level="hole"] .gainShiftNote {
+  line-height: 1.5;
+}
+/* The ✓ stamp's place, taken by a warning. */
+.holeStamp {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--color-warn);
+  color: var(--color-bg);
+}
+.holeStamp svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.6;
+}
+.holeList {
+  display: grid;
+  gap: 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.holeRow {
+  display: grid;
+  gap: 6px;
+}
+.holeWhy {
+  margin: 0;
+  font-size: 13.5px;
+}
+.holeWhy b {
+  color: var(--color-text);
+  font-weight: 700;
+}
+.holeWhy .tag {
+  vertical-align: 1px;
+}
+.holeWait {
+  margin: 0;
+}
+.holeNone {
+  margin: 0;
+  color: var(--color-warn-ink);
+  font-size: 13px;
+}
+.holeNone b {
+  font-weight: 800;
+}
+
+/* A fill: who, how to make room, his points; the button under. Ruled, not boxed: one card is enough. */
+.fillList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fill {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--color-warn) 22%, var(--color-row-line));
+}
+.fillWho {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--color-text);
+}
+.fillRoom {
+  color: var(--color-muted);
+  font-size: 11.5px;
+}
+.fillPts {
+  color: var(--color-text);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+/* The other options are one line each, their button on the right, until one is tapped. */
+.fill:not([data-lead]):not([data-open]) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.fill:not([data-lead]):not([data-open]) .fillAct {
+  grid-column: auto;
+}
+.fillAct {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.fillDone {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-value-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.fillProblem {
+  grid-column: 1 / -1;
+}
+.holeMore {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  font-size: 12.5px;
+}
+.holeMore .textButton,
+.holeNote .textButton {
+  white-space: nowrap;
+}
+.holeArrow {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+}
+.fillButtons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+/* A soft hole: a line to keep an eye on, under the verdict, never in its place. */
+.holeNotes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.holeNote {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-warn) 30%, transparent);
+  background: color-mix(in srgb, var(--color-warn) 6%, transparent);
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+.holeNote b {
+  color: var(--color-text);
+}
+.holeNoteIcon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--color-warn);
+  transform: translateY(2px);
+}
+
+/* The lock-in moment, when a hole outlives it. */
+.lockHole {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  color: var(--color-warn-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.lockHole svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* The apply panel once ESPN has War Room's lineup: it says so in the lineup's green. */
 .applyTitle {
   display: flex;
@@ -4073,6 +4262,26 @@ li + li > .pickerOption {
   }
   .gain[data-level="must"] .gainNumber {
     font-size: 48px;
+  }
+  .gain[data-level="hole"] .gainNumber {
+    font-size: 36px;
+  }
+  /* The add is the thumb's: full width, a target sized for it. */
+  .fillAct,
+  .fillButtons {
+    justify-items: stretch;
+    width: 100%;
+  }
+  .fillAct .primary,
+  .fillAct .button {
+    flex: 1;
+    min-height: 44px;
+  }
+  .fill:not([data-lead]):not([data-open]) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .fill:not([data-lead]):not([data-open]) .fillAct {
+    grid-column: 1 / -1;
   }
   /* The number and the total it moves share a line, above the headline. */
   .gainLead {

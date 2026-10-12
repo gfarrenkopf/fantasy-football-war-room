@@ -7,7 +7,7 @@ import { lineupEmphasis } from "@/lib/season/emphasis";
 import { lockInHeadline } from "@/lib/season/lockIn";
 import type { ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { hasPlayedMoment, markMomentPlayed, momentKey } from "@/lib/storage/moments";
-import { Check } from "./Icons";
+import { Check, Warning } from "./Icons";
 import { pts, signed, SLOT_LABEL } from "./parts";
 import s from "./season.module.css";
 
@@ -36,6 +36,7 @@ export function LockIn({
   leagueId,
   season,
   week,
+  hole = null,
   onFinish,
   className,
 }: {
@@ -48,6 +49,8 @@ export function LockIn({
   leagueId: string;
   season: number;
   week: number;
+  /** The slots still nobody can play (APE-350), "QB and TE"; null when there are none. */
+  hole?: string | null;
   /** Stage the rest of War Room's lineup and open the review. */
   onFinish: () => void;
   className?: string;
@@ -131,6 +134,12 @@ export function LockIn({
             </li>
           ))}
         </ul>
+
+        {hole && (
+          <p className={s.lockHole}>
+            <Warning /> Still a hole at {hole}.
+          </p>
+        )}
 
         {remaining >= 0.05 && (
           <div className={s.lockLeft}>

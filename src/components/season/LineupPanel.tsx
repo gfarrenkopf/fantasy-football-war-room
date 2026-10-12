@@ -4,11 +4,13 @@ import { useEffect, useId, useState, type CSSProperties } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { canPlay } from "@/lib/season/apply";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
+import { findHoles, holeSlots } from "@/lib/season/holes";
 import { compareLineups, isRuledOut } from "@/lib/season/lineup";
 import type { LineupSlot } from "@/lib/season/types";
 import { likelyOut, onBye, type SeasonView, type ViewPlayer, type WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
+import { HoleHero, HoleNote } from "./HoleHero";
 import { ArrowLeft, ArrowRight, Check, External } from "./Icons";
 import { Gain, hasStarted, INJURY_TAG, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import { Banked, LockIn } from "./LockIn";
@@ -49,7 +51,20 @@ const fromWhere = (p: ViewPlayer) => (p.slot === "BN" ? "the bench" : SLOT_LABEL
  * a change War Room suggests, or one the user makes by tapping a slot, shows as a swap on that row,
  * ticked to be made. The panel beside them applies the ticked changes.
  */
-export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null; writeConsented: boolean }) {
+export function LineupPanel({
+  view,
+  leagueId,
+  ai,
+  writeConsented,
+  onWaivers,
+}: {
+  view: SeasonView;
+  leagueId: string;
+  ai: SeasonAiState | null;
+  writeConsented: boolean;
+  /** Opens the Waivers tab, for a claim that would fill a hole. */
+  onWaivers: () => void;
+}) {
   const draft = useLineupDraft(view);
   const panelInView = useInView("apply-panel");
   const mine = view.teams.find((t) => t.id === view.myTeamId);
@@ -78,6 +93,9 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
   // Nothing left to suggest and nothing staged: the lineup on ESPN is War Room's.
   const onWarRooms = !suggested && draft.moves.length === 0;
   const fresh = new Set(draft.moment?.warRoom.map((m) => m.playerId));
+  // A slot nobody on the roster can play this week (APE-350): never "Your lineup is set" while one is open.
+  const holes = findHoles(view);
+  const hard = holes.filter((h) => h.kind === "hard");
   const reviewable = draft.chosen.length > 0 && draft.problems.length === 0 && draft.phase.kind === "idle" && !panelInView;
 
   return (
@@ -94,11 +112,22 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
             leagueId={leagueId}
             season={view.season}
             week={view.currentWeek}
+            hole={hard.length ? holeSlots(hard) : null}
             onFinish={() => {
               draft.startFrom(draft.recommended);
               draft.setPhase({ kind: "review" });
               document.getElementById("apply-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
             }}
+          />
+        ) : hard.length ? (
+          <HoleHero
+            className={s.orderGain}
+            view={view}
+            leagueId={leagueId}
+            holes={hard}
+            swaps={suggestions}
+            agreed={writeConsented}
+            onWaivers={onWaivers}
           />
         ) : !suggested && (banked >= 0.05 || onWarRooms) ? (
           <Banked className={s.orderGain} moves={view.warRoomMoves} total={lineup.total} week={view.currentWeek} name={(id) => byId.get(id)?.name ?? `Player ${id}`} />
@@ -167,6 +196,8 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
           />
         )}
 
+        <HoleNote className={s.orderGain} view={view} holes={holes.filter((h) => h.kind === "soft")} onWaivers={onWaivers} />
+
         <section className={`${s.panel} ${s.orderTable}`} aria-labelledby="starters-title">
           <div className={s.panelHead}>
             <h2 id="starters-title" className={s.panelTitle}>
@@ -216,10 +247,10 @@ export function LineupPanel({ view, leagueId, ai, writeConsented }: { view: Seas
       </div>
 
       <div className={s.stack}>
-        <section id="apply-panel" className={`${s.panel} ${s.orderMoves}`} data-done={onWarRooms || undefined} aria-labelledby="moves-title">
+        <section id="apply-panel" className={`${s.panel} ${s.orderMoves}`} data-done={(onWarRooms && !hard.length) || undefined} aria-labelledby="moves-title">
           <div className={s.panelHead}>
             <h2 id="moves-title" className={`${s.panelTitle} ${s.applyTitle}`}>
-              {onWarRooms && <Check />}
+              {onWarRooms && !hard.length && <Check />}
               {draft.moves.length ? "Make these moves on ESPN" : onWarRooms ? "ESPN has Draft Room's lineup" : "Nothing to change on ESPN"}
             </h2>
           </div>

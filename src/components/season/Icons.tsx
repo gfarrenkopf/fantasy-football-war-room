@@ -67,3 +67,10 @@ export const Note = ({ className }: IconProps) => (
     <path d="M10 12h5M10 16h5" />
   </svg>
 );
+
+export const Warning = ({ className }: IconProps) => (
+  <svg {...base} className={className}>
+    <path d="M12 4.5L21 19.5H3z" />
+    <path d="M12 10v4.5M12 17.2v.1" />
+  </svg>
+);

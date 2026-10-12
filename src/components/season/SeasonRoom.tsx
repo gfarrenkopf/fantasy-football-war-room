@@ -177,7 +177,7 @@ export function SeasonRoom(props: Props) {
               {tab === "gameday" ? (
                 <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} previous={props.previous} archive={props.archive} onLineupTools={() => setTab("lineup")} />
               ) : tab === "lineup" ? (
-                <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
+                <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} onWaivers={() => setTab("waivers")} />
               ) : tab === "trade" ? (
                 <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
               ) : (
