@@ -3,12 +3,13 @@
 import { useState } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { tradeEmphasis } from "@/lib/season/emphasis";
-import { snapshotOf } from "@/lib/season/apply";
+import { canPlay, label, snapshotOf } from "@/lib/season/apply";
+import { thinSlots, type ThinSlot } from "@/lib/season/holesAhead";
 import { evaluateTrade, tradeFromPending, type Trade, type TradeVerdict } from "@/lib/season/trade";
 import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiTradeWriteupCard } from "./AiPanel";
-import { Check } from "./Icons";
+import { Check, Warning } from "./Icons";
 import { LocalTime, WEEKDAY_DATE_TIME } from "./LocalTime";
 import { PlayerLine, recordText, signed } from "./parts";
 import s from "./season.module.css";
@@ -74,6 +75,7 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
           ones this season.
         </p>
       )}
+      {!view.tradeDeadlinePassed && <Thin view={view} onTry={load} />}
       <div className={s.tradeSide}>
         {ai && <TradeIdeas view={view} leagueId={leagueId} ai={ai} writeConsented={writeConsented} loadedId={loaded} onLoad={load} onNotice={setNotice} />}
         <section className={s.column} aria-labelledby="pending-title">
@@ -120,7 +122,7 @@ export function TradePanel({ view, leagueId, ai, writeConsented }: { view: Seaso
       <section className={s.column} aria-labelledby="builder-title">
         <div className={s.columnHead}>
           <h2 id="builder-title" className={s.columnTitle}>
-            {loaded?.startsWith("idea:") ? "Tweak this idea" : loaded ? "Tweak it into a counter" : "Check a trade"}
+            {loaded?.startsWith("idea:") ? "Tweak this idea" : loaded && !loaded.startsWith("thin:") ? "Tweak it into a counter" : "Check a trade"}
           </h2>
           {(gives.length > 0 || gets.length > 0) && (
             <button type="button" className={`${s.button} ${s.buttonGhost}`} onClick={clear}>
@@ -442,5 +444,66 @@ function RosterPicker({
         })}
       </ul>
     </fieldset>
+  );
+}
+
+/** "weeks 7, 9 and 12". */
+const weekList = (weeks: readonly number[]) => (weeks.length < 2 ? `week ${weeks[0]}` : `weeks ${weeks.slice(0, -1).join(", ")} and ${weeks[weeks.length - 1]}`);
+
+/** How many players a team carries at `pos` beyond its own starting slots there. */
+const spare = (roster: readonly ViewPlayer[], view: SeasonView, pos: ViewPlayer["pos"]) =>
+  roster.filter((p) => p.pos === pos && p.slot !== "IR").length - (view.starters.find((st) => st.key === pos)?.count ?? 0);
+
+/**
+ * A slot that's a hole week after week (APE-353): the waiver wire patches a week, a trade fixes the
+ * season. Names the weeks, and the players on other teams with one to spare who'd score most in them,
+ * each a tap from the builder.
+ */
+function Thin({ view, onTry }: { view: SeasonView; onTry: (trade: Trade, id: string) => void }) {
+  const slots = thinSlots(view);
+  if (!slots.length) return null;
+  const others = view.teams.filter((t) => t.id !== view.myTeamId);
+  const options = (slot: ThinSlot) =>
+    others
+      .flatMap((t) =>
+        t.roster
+          .filter((p) => canPlay(p.pos, slot.key) && !p.tradeLocked && p.slot !== "IR" && spare(t.roster, view, p.pos) > 0)
+          .map((p) => ({ team: t, p, worth: slot.weeks.reduce((sum, w) => sum + (p.weekly[w] ?? 0), 0) })),
+      )
+      .filter((o) => o.worth > 0)
+      .sort((a, b) => b.worth - a.worth || b.p.ros - a.p.ros)
+      .slice(0, 3);
+  return (
+    <section className={s.thin} aria-label="Thin spots">
+      {slots.map((slot) => {
+        const list = options(slot);
+        return (
+          <div key={slot.key} className={s.aheadHole}>
+            <p className={s.aheadHead}>
+              <Warning className={s.holeNoteIcon} />
+              <span>
+                <b>Thin at {label(slot.key)}</b>: nobody on your team can play it in {weekList(slot.weeks)}
+                {slot.of > slot.weeks.length ? ` (${slot.weeks.length} of ${slot.of} weeks left)` : ""}.{list.length ? " Teams with one to spare:" : ""}
+              </span>
+            </p>
+            {list.length > 0 && (
+              <ul className={s.thinList}>
+                {list.map(({ team, p }) => (
+                  <li key={p.playerId}>
+                    <span className={s.thinWho}>
+                      <PlayerLine player={p} value="points" />
+                      <span className={s.fine}>On {team.name}</span>
+                    </span>
+                    <button type="button" className={s.button} onClick={() => onTry({ teamA: view.myTeamId, gives: [], teamB: team.id, gets: [p.playerId] }, `thin:${p.playerId}`)}>
+                      Check a trade
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </section>
   );
 }

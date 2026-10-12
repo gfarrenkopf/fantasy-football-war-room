@@ -34,6 +34,15 @@ describe("buildLineupInput", () => {
     expect(user).toContain("Gibbs, RB DET | @NYJ | 11.0 pts");
     expect(user).toContain("Flex Wideout, WR DET | - | 10.0 pts");
   });
+
+  it("marks a slot nobody can play as a hole, for the intro to lead with (APE-352)", () => {
+    expect(slot("QB").hole).toBeNull();
+    const outQb = at("QB", player("Out Quarterback", "QB", 0, { injuryStatus: "OUT" }));
+    const holed = buildLineupInput(seasonView([outQb, rbA, rbB, wrC, wrD, te, flex]));
+    const qbSlot = holed.slots.find((s) => s.key === "QB")!;
+    expect(qbSlot.hole).toBe("out");
+    expect(buildLineupPrompt(holed).user).toContain(`[${qbSlot.ref}] QB | Out Quarterback [${qbSlot.engine}] | ${qbSlot.engine} 0.0 | keep | HOLE: the pick is ruled out, and nobody else on the roster can play it`);
+  });
 });
 
 describe("validateAiLineup", () => {

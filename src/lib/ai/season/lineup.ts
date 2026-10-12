@@ -1,4 +1,5 @@
 import { SLOT_DEFS } from "@/lib/draft/league";
+import { findHoles, type HoleReason } from "@/lib/season/holes";
 import { isRuledOut, type LineupPlan } from "@/lib/season/lineup";
 import type { LineupSlot, LineupSlotCount } from "@/lib/season/types";
 import { likelyOut, onBye, type SeasonView, type ViewPlayer } from "@/lib/season/view";
@@ -14,7 +15,7 @@ import { clip, injuryTag, isObject, refError } from "./shared";
  */
 
 /** Bump when the prompt or the input it's built from changes meaningfully. Recorded with each lineup. */
-export const LINEUP_PROMPT_VERSION = 2;
+export const LINEUP_PROMPT_VERSION = 3;
 
 /** Projected points this close count as a coin flip the model may call either way. */
 export const CLOSE_POINTS = 2;
@@ -52,6 +53,8 @@ export interface LineupInputSlot {
   locked: boolean;
   /** The model writes a reason for this slot: it's a close call, or it changes on ESPN. */
   decide: boolean;
+  /** Nobody on the roster can play this slot this week (APE-352): why, or null when someone can. */
+  hole: Extract<HoleReason, "out" | "bye" | "empty"> | null;
 }
 
 export interface LineupInput {
@@ -100,6 +103,7 @@ export function buildLineupInput(view: SeasonView): LineupInput {
   const spare = mine.filter((p) => !starting.has(p.playerId) && p.slot !== "IR" && !p.locked && !isRuledOut(p.injuryStatus));
   const now = new Map<StarterKey, number[]>();
   for (const p of mine) if (p.slot !== "BN" && p.slot !== "IR") now.set(p.slot, [...(now.get(p.slot) ?? []), p.playerId]);
+  const holes = findHoles(view).filter((h) => h.kind === "hard");
 
   const slots = plan.starters.map((f, i): LineupInputSlot => {
     const engine = f.playerId === null ? null : refOf.get(f.playerId)!;
@@ -115,6 +119,7 @@ export function buildLineupInput(view: SeasonView): LineupInput {
       options: [...(engine ? [engine] : []), ...close.map((p) => refOf.get(p.playerId)!)],
       locked: f.locked,
       decide: !f.locked && engine !== null && (close.length > 0 || moved),
+      hole: (holes.find((h) => h.key === f.key && h.playerId === f.playerId)?.reason as LineupInputSlot["hole"] | undefined) ?? null,
     };
   });
 
@@ -154,9 +159,12 @@ Output rules:
 - Answer with refs, the bracketed ids such as p4 and s2, not player names.
 - calls: one entry for every slot marked "decide", in order, with the player you start there and a one-sentence reason. Use only that slot's options.
 - A reason names players, never refs. Everything in it must come from the table: no outside news, weather, depth charts or team situations. A player's NFL opponent is listed; say nothing about that opponent beyond its name.
-- intro: 1-3 sentences on the week: how many points the lineup projects against the one set on ESPN now, and the calls that matter most.`;
+- intro: 1-3 sentences on the week: how many points the lineup projects against the one set on ESPN now, and the calls that matter most.
+- A slot marked HOLE has nobody on the roster who can play it this week. The intro leads with it, plainly: the slot scores nothing unless the manager adds a player. Never call a lineup with a hole set.`;
 
 const SLOT_WORD: Record<LineupSlot, string> = { ...Object.fromEntries(SLOT_DEFS.map((d) => [d.key, d.key === "BN" ? "bench" : d.label])), IR: "IR" } as Record<LineupSlot, string>;
+
+const HOLE_WHY: Record<NonNullable<LineupInputSlot["hole"]>, string> = { out: "the pick is ruled out", bye: "the pick is on a bye", empty: "empty" };
 
 export function buildLineupPrompt(input: LineupInput): { system: string; user: string } {
   const byRef = new Map(input.players.map((p) => [p.ref, p]));
@@ -173,7 +181,8 @@ export function buildLineupPrompt(input: LineupInput): { system: string; user: s
     ...input.slots.map((s) => {
       const pick = s.engine ? `${byRef.get(s.engine)!.name} [${s.engine}]` : "empty";
       const options = s.options.map((r) => `${r} ${byRef.get(r)!.points.toFixed(1)}`).join(", ") || "-";
-      return `[${s.ref}] ${label(s.key)} | ${pick}${s.locked ? " (locked)" : ""} | ${options} | ${s.decide ? "decide" : "keep"}`;
+      const hole = s.hole ? ` | HOLE: ${HOLE_WHY[s.hole]}, and nobody else on the roster can play it` : "";
+      return `[${s.ref}] ${label(s.key)} | ${pick}${s.locked ? " (locked)" : ""} | ${options} | ${s.decide ? "decide" : "keep"}${hole}`;
     }),
     "",
     `Return calls for: ${input.slots.filter((s) => s.decide).map((s) => s.ref).join(", ") || "none (write only the intro)"}.`,

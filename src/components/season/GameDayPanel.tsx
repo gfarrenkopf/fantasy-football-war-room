@@ -2,11 +2,13 @@
 
 import { biggestSurprises, trackRecord, type ProjectionAccuracy, type ProjectionCall, type SeasonCalls } from "@/lib/season/accuracy";
 import { gameProgress, headToHead, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type HeadToHeadRow, type Pace } from "@/lib/season/gameday";
+import { findHoles, holeSlots } from "@/lib/season/holes";
 import { compareLineups } from "@/lib/season/lineup";
 import { weekRecap } from "@/lib/season/recap";
 import type { LineupSlot, MatchupSide } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import type { ArchiveWeek } from "@/lib/season/leagueRecap";
+import { ArrowRight, Warning } from "./Icons";
 import { MatchupMoment } from "./MatchupMoment";
 import { PlayerLine, posLabel, pts, signed, SLOT_LABEL } from "./parts";
 import { RecapArchive } from "./RecapArchive";
@@ -62,12 +64,29 @@ export function GameDayPanel({
   // While the result card tells this week, the archive starts from the week before.
   const shownAbove = phase === "results" && matchupDecided(view);
   const lastKept = previous && archive.some((w) => w.season === previous.view.season && w.week === previous.view.currentWeek);
+  // A slot nobody can play (APE-351), while there's still time to fill it: the fix lives on Lineup.
+  const holes = findHoles(view).filter((h) => h.kind === "hard");
 
   return (
     <>
       <div className={s.lineup}>
         {/* The matchup: the score over both lineups, slot by slot (APE-343). */}
         <div className={s.stack}>
+          {holes.length > 0 && (
+            <p className={s.holeLine} role="status">
+              <Warning className={s.holeNoteIcon} />
+              <span>
+                <b>
+                  {holes.length === 1 ? "Hole at " : "Holes at "}
+                  {holeSlots(holes)}
+                </b>
+                : nobody on your team can play {holes.length === 1 ? "it" : "them"} this week.{" "}
+                <button type="button" className={s.textButton} onClick={onLineupTools}>
+                  {holes.length === 1 ? "Fill it" : "Fill them"} on Lineup <ArrowRight className={s.holeArrow} />
+                </button>
+              </span>
+            </p>
+          )}
           {view.matchup ? (
             shownAbove ? (
               <>
