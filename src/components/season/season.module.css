@@ -766,6 +766,27 @@
   transform: translateY(2px);
 }
 
+/* Game day's one line about a hole (APE-351): the note's look, with the fix a tap away. */
+.holeLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-warn) 45%, transparent);
+  background: color-mix(in srgb, var(--color-warn) 8%, var(--color-panel));
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.holeLine b {
+  color: var(--color-warn-ink);
+}
+.holeLine .textButton {
+  white-space: nowrap;
+  color: var(--color-text);
+}
+
 /* The lock-in moment, when a hole outlives it. */
 .lockHole {
   display: flex;
