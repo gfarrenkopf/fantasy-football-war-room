@@ -13,8 +13,9 @@ import { createTestLeague } from "./testLeagues";
 const MIN = 60 * 1000;
 const THURSDAY = Date.parse("2026-10-09T00:15:00Z"); // Thu Oct 8, 8:15 PM ET
 const SUNDAY = Date.parse("2026-10-11T17:00:00Z"); // Sun Oct 11, 1:00 PM ET
-// Week 5: DET and GB on Thursday night, everyone else in the Sunday 1 PM slot.
-const schedule: Schedule = new Map([[5, new Map([["DET", THURSDAY], ["GB", THURSDAY], ["CHI", SUNDAY], ["MIN", SUNDAY], ["DAL", SUNDAY], ["NYG", SUNDAY]])]]);
+const NIGHT = Date.parse("2026-10-12T00:20:00Z"); // Sun Oct 11, 8:20 PM ET
+// Week 5: DET and GB on Thursday night, SF and SEA on Sunday night, everyone else in the Sunday 1 PM slot.
+const schedule: Schedule = new Map([[5, new Map([["DET", THURSDAY], ["GB", THURSDAY], ["CHI", SUNDAY], ["MIN", SUNDAY], ["DAL", SUNDAY], ["NYG", SUNDAY], ["SF", NIGHT], ["SEA", NIGHT]])]]);
 
 // A Thursday back on the bench out-projects a Sunday starter: that move can't wait.
 const thursdayMove = seasonView([at("QB", player("Sunday QB", "QB", 20, { team: "CHI" })), at("RB", player("Sunday RB", "RB", 15, { team: "CHI" })), at("RB", player("Weak RB", "RB", 6, { team: "CHI" })), at("FLEX", player("Flex RB", "RB", 5, { team: "MIN" })), player("Thursday Back", "RB", 14, { team: "DET" })]);
@@ -65,7 +66,7 @@ describe("runEarlyJob", () => {
 
   it("emails only the league with a move involving a Thursday player, skipping idle leagues", async () => {
     const summary = await runEarlyJob(db, deps);
-    expect(summary).toEqual({ dryRun: false, kickoff: new Date(THURSDAY).toISOString(), leagues: 3, inactive: 1, withMoves: 1, failed: 0, emails: 1 });
+    expect(summary).toEqual({ dryRun: false, kickoff: new Date(THURSDAY).toISOString(), when: "early", leagues: 3, inactive: 1, withMoves: 1, failed: 0, emails: 1 });
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toMatch(/^alice/);
     expect(sent[0].email.subject).toBe("Set your lineup before Thursday's 8:15 PM ET kickoff");
@@ -90,6 +91,45 @@ describe("runEarlyJob", () => {
     await runEarlyJob(db, deps);
     const erin = sent.find((m) => m.to.startsWith("erin"))!.email;
     expect(erin.text).toContain("Erin league\n- Hole at QB: Thursday QB is out, and nobody else can play QB. Fill it before kickoff.\n");
+  });
+
+  describe("a late kickoff (APE-347)", () => {
+    const ok = (view: typeof thursdayMove): SeasonViewLoad => ({ kind: "ok", view, fetchedAt: new Date(), stale: false, projectionsMissing: false, phase: "lineup" });
+    const sundayRest = thursdayMove.teams[0].roster.filter((p) => p.pos !== "QB");
+    const nightQb = (over: Partial<ReturnType<typeof player>> = {}) => player("Night QB", "QB", 0, { team: "SF", injuryStatus: "OUT", ...over });
+
+    it("emails only a hole whose player is in that game, with its fill, and no other moves", async () => {
+      const qb = nightQb();
+      const userId = await createTestUser(db, `fran-${crypto.randomUUID()}@example.test`);
+      loads.set(await link(userId, "Fran league", 1), ok(seasonView([at("QB", qb), ...sundayRest])));
+      const backup = { ...player("Backup QB", "QB", 16.2, { team: "SEA" }), status: "FREEAGENT" as const, waiverClears: null };
+      const summary = await runEarlyJob(db, {
+        ...deps,
+        now: new Date(NIGHT - 70 * MIN),
+        loadFills: async () => [{ hole: { key: "QB", kind: "hard", reason: "out", playerId: qb.playerId, kickoff: null }, fills: [{ player: backup, drop: null, ir: null }], claims: [] }],
+      });
+      // Alice's Thursday move isn't a late game's business.
+      expect(summary).toMatchObject({ when: "late", withMoves: 1, emails: 1 });
+      expect(sent).toHaveLength(1);
+      expect(sent[0].email.subject).toBe("Fill a hole in your lineup before Sunday's 8:20 PM ET kickoff");
+      expect(sent[0].email.text).toContain("Fran league\n- Hole at QB: Night QB is out, and nobody else can play QB. Add Backup QB (16.2 pts).\n");
+    });
+
+    it("says so when nobody on the wire can play in time", async () => {
+      const userId = await createTestUser(db, `gus-${crypto.randomUUID()}@example.test`);
+      const qb = nightQb();
+      loads.set(await link(userId, "Gus league", 1), ok(seasonView([at("QB", qb), ...sundayRest])));
+      await runEarlyJob(db, { ...deps, now: new Date(NIGHT - 70 * MIN), loadFills: async () => [{ hole: { key: "QB", kind: "hard", reason: "out", playerId: qb.playerId, kickoff: null }, fills: [], claims: [] }] });
+      expect(sent[0].email.text).toContain("- Hole at QB: Night QB is out, and nobody else can play QB. Nobody on the wire can play in time.\n");
+    });
+
+    it("sends nothing when the starter in that game is healthy, or his game has locked", async () => {
+      for (const qb of [nightQb({ injuryStatus: "ACTIVE", points: 20 }), nightQb({ locked: true })]) {
+        loads.set(await link(await createTestUser(db), "Quiet", 1), ok(seasonView([at("QB", qb), ...sundayRest])));
+      }
+      expect(await runEarlyJob(db, { ...deps, now: new Date(NIGHT - 70 * MIN) })).toMatchObject({ when: "late", withMoves: 0, emails: 0 });
+      expect(sent).toEqual([]);
+    });
   });
 
   it("does nothing outside the 60-75 minute window", async () => {

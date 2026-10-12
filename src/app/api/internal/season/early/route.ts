@@ -4,6 +4,7 @@ import { getEmailSender } from "@/lib/server/email";
 import { formatServerError } from "@/lib/server/errorLog";
 import { getEspnSchedule } from "@/lib/server/espn/schedule";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
+import { loadFills } from "@/lib/server/espn/waivers";
 import { error, hasBearer, json } from "@/lib/server/http";
 import { runEarlyJob } from "@/lib/server/seasonEarly";
 
@@ -15,7 +16,7 @@ const nflSeason = (now: Date) => (now.getUTCMonth() < 6 ? now.getUTCFullYear() -
 /**
  * POST /api/internal/season/early[?dryRun=1] → EarlySummary. The early-kickoff alert (11.4), started
  * every 15 minutes by deploy/warroom-season-early.timer with `Authorization: Bearer $CRON_SECRET`.
- * Does nothing unless an early kickoff is 60-75 minutes away. 404 unless in-season and CRON_SECRET
+ * Does nothing unless a kickoff other than the Sunday 1 PM slot's is 60-75 minutes away (APE-347). 404 unless in-season and CRON_SECRET
  * are configured; 401 without the secret.
  */
 export async function POST(request: Request): Promise<Response> {
@@ -30,6 +31,10 @@ export async function POST(request: Request): Promise<Response> {
       {
         schedule: await getEspnSchedule(nflSeason(now)),
         loadView: (userId, leagueId) => loadSeasonView(db, espnCodeKey, userId, leagueId, { refresh: true }),
+        loadFills: async (userId, leagueId) => {
+          const load = await loadFills(db, espnCodeKey, userId, leagueId);
+          return load.kind === "ok" ? load.fills : null;
+        },
         sendEmail: getEmailSender(),
         baseUrl: config.nextAuthUrl ?? new URL(request.url).origin,
         secret: nextAuthSecret,

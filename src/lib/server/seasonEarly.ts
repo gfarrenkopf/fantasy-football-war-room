@@ -1,5 +1,6 @@
 import type { Db } from "@/lib/db/types";
-import { earlyMoves, kickoffLabel, renderEarlyEmail } from "@/lib/season/email";
+import { earlyMoves, gameHoles, kickoffLabel, lateHoles, renderEarlyEmail } from "@/lib/season/email";
+import type { HoleFills } from "@/lib/season/holes";
 import { dueKickoff, type Schedule } from "@/lib/season/schedule";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { recordProjections } from "./seasonProjections";
@@ -13,6 +14,10 @@ import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobMail } from 
  * out the free optimal lineup (10.5) and emails the changes that involve a player in that game.
  * No AI, so no pass or trial is needed.
  *
+ * The same timer covers the kickoffs after the Sunday 1 PM slot (APE-347): the late afternoon games,
+ * Sunday and Monday nights. Their inactives come out after the Sunday email, so a starter ruled out
+ * there would go unnoticed. For those, it emails only the holes, with the pickup that fills each.
+ *
  * Reruns are safe: at most one alert per user and kickoff. A lapsed ESPN login is left to the
  * Sunday job's reconnect email.
  */
@@ -20,6 +25,8 @@ import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobMail } from 
 export interface EarlyDeps extends JobMail {
   schedule: Schedule;
   loadView(userId: string, leagueId: string): Promise<SeasonViewLoad>;
+  /** The best ways to fill this week's lineup holes (APE-352), or null when the wire can't be read. */
+  loadFills?(userId: string, leagueId: string): Promise<readonly HoleFills[] | null>;
   now?: Date;
 }
 
@@ -29,7 +36,9 @@ export interface EarlySummary {
   kickoff: string | null;
   leagues: number;
   inactive: number;
-  /** Leagues with a change involving that game. */
+  /** Whether that kickoff came before the Sunday job, or after the main slot (APE-347). */
+  when: "early" | "late" | null;
+  /** Leagues with a change involving that game: for a late kickoff, a hole. */
   withMoves: number;
   failed: number;
   emails: number;
@@ -37,10 +46,11 @@ export interface EarlySummary {
 
 export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: { dryRun?: boolean } = {}): Promise<EarlySummary> {
   const now = deps.now ?? new Date();
-  const summary: EarlySummary = { dryRun, kickoff: null, leagues: 0, inactive: 0, withMoves: 0, failed: 0, emails: 0 };
+  const summary: EarlySummary = { dryRun, kickoff: null, when: null, leagues: 0, inactive: 0, withMoves: 0, failed: 0, emails: 0 };
   const due = dueKickoff(deps.schedule, now.getTime());
   if (!due) return summary;
   summary.kickoff = new Date(due.at).toISOString();
+  summary.when = due.when;
 
   const { total, inactive, byUser } = await activeLeagues(db, now);
   summary.leagues = total;
@@ -59,7 +69,10 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
         // ESPN's numbers before an early kickoff, for game day's "ESPN's call" (APE-229).
         if (!dryRun) await recordProjections(db, league.leagueId, load.view).catch((err: Error) => jobError("early", `couldn't record projections: ${err.message}`, { leagueId: league.leagueId }));
         if (load.view.currentWeek !== due.week) continue; // ESPN hasn't moved on to that week yet
-        const moves = earlyMoves(load.view, due.teams);
+        // A hole leads with the pickup that fills it, when the wire reads.
+        const holes = gameHoles(load.view, due.teams);
+        const fills = holes.length && deps.loadFills ? ((await deps.loadFills(userId, league.leagueId).catch(() => null)) ?? undefined) : undefined;
+        const moves = due.when === "early" ? earlyMoves(load.view, due.teams, fills) : lateHoles(load.view, due.teams, fills);
         if (!moves.length) continue;
         summary.withMoves++;
         alerts.push({ name: league.name, url: new URL(`/season/${encodeURIComponent(league.leagueId)}`, deps.baseUrl).toString(), moves });
@@ -70,7 +83,7 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
     }
     const to = list[0].email;
     if (dryRun || !to || !alerts.length) continue;
-    const email = renderEarlyEmail({ kickoff: kickoffLabel(due.at), leagues: alerts, unsubscribeUrl: unsubscribeUrl(deps, userId) });
+    const email = renderEarlyEmail({ kickoff: kickoffLabel(due.at), when: due.when, leagues: alerts, unsubscribeUrl: unsubscribeUrl(deps, userId) });
     if (await sendOnce(db, deps, { job: "early", userId, to, kind: "early", slot: summary.kickoff, now }, email)) summary.emails++;
   }
   return summary;

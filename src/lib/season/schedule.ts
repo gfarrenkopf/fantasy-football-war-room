@@ -1,7 +1,7 @@
 import { PRO_TEAMS } from "@/lib/espn/proTeams";
 
 /**
- * The NFL schedule as the early-kickoff alert (11.4) needs it: when each team kicks off, week by
+ * The NFL schedule as the kickoff alerts (11.4, APE-347) need it: when each team kicks off, week by
  * week, from ESPN's public `proTeamSchedules_wl` view. Teams are keyed by the same abbreviations as
  * roster entries (PRO_TEAMS), so a player's `team` finds his game.
  */
@@ -38,9 +38,9 @@ export function parseSchedule(raw: unknown): Schedule {
   return weeks;
 }
 
-/** How long before an early kickoff the alert goes out: after the inactives (~90 minutes before). */
+/** How long before a kickoff the alert goes out: after the inactives (~90 minutes before). */
 export const ALERT_LEAD_MS = 75 * 60 * 1000;
-/** The alert job runs this often; each early kickoff falls in exactly one run's window. */
+/** The alert job runs this often; each alerted kickoff falls in exactly one run's window. */
 export const ALERT_EVERY_MS = 15 * 60 * 1000;
 /**
  * The Sunday AI lineup (11.3) runs this long before the week's main slot (11:40 ET for the 1 PM
@@ -48,17 +48,33 @@ export const ALERT_EVERY_MS = 15 * 60 * 1000;
  */
 const SUNDAY_JOB_LEAD_MS = 80 * 60 * 1000;
 
+/** The week's main slot: the kickoff with the most games (the earliest, on a tie). Null for an empty week. */
+function mainSlot(week: WeekKickoffs): number | null {
+  const games = new Map<number, number>();
+  for (const at of week.values()) games.set(at, (games.get(at) ?? 0) + 1);
+  if (!games.size) return null;
+  return [...games].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+}
+
 /**
  * The week's early kickoffs, in order: every kickoff before the Sunday job. The main slot is the
  * one with the most games, so no weekday or time zone is assumed: Thursday nights, London mornings,
  * and the late season's Friday and Saturday games all fall out of it.
  */
 export function earlyKickoffs(week: WeekKickoffs): number[] {
-  const games = new Map<number, number>();
-  for (const at of week.values()) games.set(at, (games.get(at) ?? 0) + 1);
-  if (!games.size) return [];
-  const main = [...games].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
-  return [...games.keys()].filter((at) => at < main - SUNDAY_JOB_LEAD_MS).sort((a, b) => a - b);
+  const main = mainSlot(week);
+  if (main === null) return [];
+  return [...new Set(week.values())].filter((at) => at < main - SUNDAY_JOB_LEAD_MS).sort((a, b) => a - b);
+}
+
+/**
+ * The week's late kickoffs, in order: every kickoff after the main slot (APE-347). Their inactives
+ * come out after the Sunday job has run: the late Sunday afternoon games, Sunday and Monday nights.
+ */
+export function lateKickoffs(week: WeekKickoffs): number[] {
+  const main = mainSlot(week);
+  if (main === null) return [];
+  return [...new Set(week.values())].filter((at) => at > main).sort((a, b) => a - b);
 }
 
 export interface DueKickoff {
@@ -66,14 +82,20 @@ export interface DueKickoff {
   at: number;
   /** The teams playing then. */
   teams: string[];
+  /** Before the Sunday job (11.4), or after the main slot (APE-347). */
+  when: "early" | "late";
 }
 
-/** The early kickoff whose alert is due at `now`: kickoff 60-75 minutes away. Null most of the time. */
+/**
+ * The kickoff whose alert is due at `now`: kickoff 60-75 minutes away. Every kickoff but the main
+ * slot's, which the Sunday job covers. Null most of the time.
+ */
 export function dueKickoff(schedule: Schedule, now: number): DueKickoff | null {
   for (const [week, byTeam] of schedule) {
-    for (const at of earlyKickoffs(byTeam)) {
+    const slots = [...earlyKickoffs(byTeam).map((at) => ({ at, when: "early" as const })), ...lateKickoffs(byTeam).map((at) => ({ at, when: "late" as const }))];
+    for (const { at, when } of slots) {
       if (now >= at - ALERT_LEAD_MS && now < at - ALERT_LEAD_MS + ALERT_EVERY_MS) {
-        return { week, at, teams: [...byTeam].filter(([, t]) => t === at).map(([team]) => team).sort() };
+        return { week, at, when, teams: [...byTeam].filter(([, t]) => t === at).map(([team]) => team).sort() };
       }
     }
   }
