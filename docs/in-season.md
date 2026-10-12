@@ -139,7 +139,7 @@ Both extend the draft plan's pipeline (`src/lib/ai/`): the same provider seam, s
 - **What:** it re-reads ESPN and the projections (skipping the caches), then writes the league's `lineup-sunday` AI lineup through the same path as the mid-week one (11.2).
 - **Email:** one per user covering all their leagues, with each league's projected gain and top three moves, through Resend. A user whose ESPN login has lapsed gets a reconnect email instead. `season_emails` holds one row per user, kind and day, so a rerun never sends twice. Users opt out on the season page, or with the email's link (`/season/unsubscribe`, signed with `NEXTAUTH_SECRET`; mail providers get RFC 8058 one-click unsubscribe too). Opting out stops the emails, not the lineups.
 - **Failures** are logged as `[server-error]` lines, so the alert emails pick them up.
-- **Only one automatic run.** News before the 4pm, SNF or MNF games comes after it; the user can still use their mid-week lineup if it's unused, or the free lineup.
+- **Only one automatic run.** News before the 4pm, SNF or MNF games comes after it; the user can still use their mid-week lineup if it's unused, or the free lineup. A starter ruled out at those games' inactives gets its own alert (below).
 
 ### The early-kickoff alert (11.4)
 
@@ -149,6 +149,7 @@ The Sunday job comes too late for players whose games kick off first: they're lo
 - **When:** a timer every 15 minutes. The job acts only when an early kickoff is 60–75 minutes away, after the inactives (~90 minutes before).
 - **What:** for each league opened in the last 14 days, it re-reads ESPN and takes the free optimal lineup's changes that involve an unlocked player in that game, going in or out. Changes among Sunday players wait for Sunday.
 - **Email:** one per user and kickoff, listing each league's changes. It honours the same opt-out. A lapsed ESPN login is left to the Sunday job's reconnect email.
+- **Late scratches (APE-347):** the same job covers every kickoff after the main slot (the 4:05 and 4:25 games, Sunday and Monday nights), 60–75 minutes out. Their inactives come after the Sunday email, so a starter ruled out there would otherwise go unnoticed. For those kickoffs it emails only hard holes (`findHoles()`) whose player is in that game and unlocked, each with the best free-agent fill (`loadFills()`), or "Nobody on the wire can play in time." Other lineup changes aren't sent: they were the Sunday email's. A slot whose game has locked is never a hole, and in a league that locks every player at the first kickoff nothing is unlocked, so nothing is sent. In the app, the Lineup and Game day heroes already show the hole, or "no one left to add", and need nothing more.
 
 ## 7. Writing lineups to ESPN
 

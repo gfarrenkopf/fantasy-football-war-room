@@ -196,12 +196,23 @@ export function renderReconnectEmail({ espnUrl, helpUrl, unsubscribeUrl }: { esp
   return { subject, html, text: [subject, "", body, "", espnUrl, "", `${help} ${helpUrl}`, "", `Stop these emails: ${unsubscribeUrl}`, ""].join("\n") };
 }
 
+/** The hard holes whose player is in a game kicking off for `teams` and isn't locked yet. */
+export function gameHoles(view: SeasonView, teams: readonly string[]): Hole[] {
+  const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
+  const inGame = new Set(roster.filter((p) => !p.locked && p.team !== null && teams.includes(p.team)).map((p) => p.playerId));
+  return findHoles(view).filter((h) => h.kind === "hard" && h.playerId !== null && inGame.has(h.playerId));
+}
+
+/** `holes` in words, with the pickup that fills each when `fills` were read, or a nudge when not. */
+const kickoffHoleLines = (view: SeasonView, holes: readonly Hole[], fills?: readonly HoleFills[]) =>
+  holeLines(view, holes, fills).map((line) => (fills ? line : `${line} Fill it before kickoff.`));
+
 /**
  * The lineup changes that involve a player in the early game (11.4), going in or coming out, as
  * "Start A at FLEX over B", led by any hole whose player is in that game. Moves among Sunday players can
  * wait for Sunday; these can't.
  */
-export function earlyMoves(view: SeasonView, teams: readonly string[]): string[] {
+export function earlyMoves(view: SeasonView, teams: readonly string[], fills?: readonly HoleFills[]): string[] {
   const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
   const byId = new Map(roster.map((p) => [p.playerId, p]));
   const early = (id: number | null) => {
@@ -209,7 +220,7 @@ export function earlyMoves(view: SeasonView, teams: readonly string[]): string[]
     return !!p && !p.locked && p.team !== null && teams.includes(p.team);
   };
   // A hole whose player is in that game leads: it can't wait for Sunday either (APE-352).
-  const holes = holeLines(view, findHoles(view).filter((h) => early(h.playerId))).map((line) => `${line} Fill it before kickoff.`);
+  const holes = kickoffHoleLines(view, gameHoles(view, teams), fills);
   const moves = compareLineups(roster, view.lineup)
     .filter((row) => row.changed && !row.locked && (early(row.now) || early(row.next)))
     .map((row) => {
@@ -222,10 +233,36 @@ export function earlyMoves(view: SeasonView, teams: readonly string[]): string[]
   return [...holes, ...moves];
 }
 
-/** "Set your lineup before Thursday's 8:15 PM kickoff": the moves involving that game, per league. */
-export function renderEarlyEmail({ kickoff, leagues, unsubscribeUrl }: { kickoff: string; leagues: { name: string; url: string; moves: string[] }[]; unsubscribeUrl: string }): SeasonEmail {
-  const subject = `Set your lineup before ${kickoff}`;
-  const lead = "These changes involve players in that game. They lock at kickoff, so the Sunday lineup comes too late for them.";
+/**
+ * The holes a late game's inactives opened (APE-347): starters in that game ruled out after the
+ * Sunday job ran. Only holes, not every lineup change: those were the Sunday email's to make.
+ */
+export function lateHoles(view: SeasonView, teams: readonly string[], fills?: readonly HoleFills[]): string[] {
+  return kickoffHoleLines(view, gameHoles(view, teams), fills);
+}
+
+const KICKOFF_COPY = {
+  early: { subject: "Set your lineup before", lead: "These changes involve players in that game. They lock at kickoff, so the Sunday lineup comes too late for them." },
+  late: { subject: "Fill a hole in your lineup before", lead: "A starter in that game was ruled out after the Sunday lineup went out. The slot locks at kickoff." },
+} as const;
+
+/**
+ * "Set your lineup before Thursday's 8:15 PM kickoff": the moves involving that game, per league. A
+ * late game's alert (APE-347) carries only its holes.
+ */
+export function renderEarlyEmail({
+  kickoff,
+  when = "early",
+  leagues,
+  unsubscribeUrl,
+}: {
+  kickoff: string;
+  when?: "early" | "late";
+  leagues: { name: string; url: string; moves: string[] }[];
+  unsubscribeUrl: string;
+}): SeasonEmail {
+  const { subject: verb, lead } = KICKOFF_COPY[when];
+  const subject = `${verb} ${kickoff}`;
   const sections = leagues
     .map(
       (l) => `<tr><td style="padding:22px 32px 0;">

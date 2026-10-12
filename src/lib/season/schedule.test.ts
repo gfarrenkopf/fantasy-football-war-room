@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import raw from "./__fixtures__/espn-schedule-2026.json";
-import { dueKickoff, earlyKickoffs, parseSchedule } from "./schedule";
+import { dueKickoff, earlyKickoffs, lateKickoffs, parseSchedule } from "./schedule";
 
 const schedule = parseSchedule(raw);
 const et = (at: number) => new Date(at).toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit" });
@@ -24,12 +24,18 @@ describe("earlyKickoffs", () => {
   });
 });
 
+describe("lateKickoffs", () => {
+  it("finds the late afternoon games and both nights, after the main slot (APE-347)", () => {
+    expect(lateKickoffs(schedule.get(4)!).map(et)).toEqual(["Sun 4:05 PM", "Sun 4:25 PM", "Sun 8:20 PM", "Mon 8:15 PM"]);
+  });
+});
+
 describe("dueKickoff", () => {
   const [thursday] = earlyKickoffs(schedule.get(4)!);
   const min = 60 * 1000;
 
   it("is due from 75 minutes before kickoff, for one 15-minute window", () => {
-    expect(dueKickoff(schedule, thursday - 75 * min)).toMatchObject({ week: 4, at: thursday });
+    expect(dueKickoff(schedule, thursday - 75 * min)).toMatchObject({ week: 4, at: thursday, when: "early" });
     expect(dueKickoff(schedule, thursday - 61 * min)?.at).toBe(thursday);
     expect(dueKickoff(schedule, thursday - 60 * min)).toBeNull();
     expect(dueKickoff(schedule, thursday - 76 * min)).toBeNull();
@@ -37,6 +43,11 @@ describe("dueKickoff", () => {
 
   it("names the teams playing then", () => {
     expect(dueKickoff(schedule, thursday - 70 * min)!.teams).toHaveLength(2);
+  });
+
+  it("is due for a late kickoff too (APE-347)", () => {
+    const [, , snf] = lateKickoffs(schedule.get(4)!);
+    expect(dueKickoff(schedule, snf - 70 * min)).toMatchObject({ week: 4, at: snf, when: "late" });
   });
 
   it("is never due for the main Sunday slot", () => {

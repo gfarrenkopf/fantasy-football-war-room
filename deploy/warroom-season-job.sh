@@ -3,7 +3,7 @@
 # stdin, never on a command line where `ps` would show it.
 #
 #   warroom-season-job.sh sunday            # warroom-season-sunday.timer: Sunday AI lineups, 11:40 ET (11.3)
-#   warroom-season-job.sh early             # warroom-season-early.timer: early-kickoff alerts, every 15 minutes (11.4)
+#   warroom-season-job.sh early             # warroom-season-early.timer: kickoff alerts, every 15 minutes (11.4, APE-347)
 #   warroom-season-job.sh recaps            # warroom-season-recaps.timer: the week's recaps, Wednesdays 07:00 ET (APE-308)
 #   warroom-season-job.sh draft             # warroom-season-draft.timer: draft-day reminders, every 15 minutes (APE-336)
 #   warroom-season-job.sh <job> --dry-run   # counts what it would do, without the model or emails

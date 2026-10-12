@@ -1,8 +1,8 @@
 [Unit]
-Description=Early-kickoff lineup alerts: Thursday nights, London mornings, late-season Friday and Saturday games
+Description=Kickoff lineup alerts: early games (Thursday nights, London mornings, late-season Friday and Saturday) and late-game scratches
 
 [Timer]
-# Every 15 minutes, on the quarter hour: each early kickoff falls in exactly one run's 60-75 minute
+# Every 15 minutes, on the quarter hour: each alerted kickoff falls in exactly one run's 60-75 minute
 # window (src/lib/season/schedule.ts), so the run must start on time.
 OnCalendar=*:00/15
 AccuracySec=1s
