@@ -1384,8 +1384,14 @@ li + li > .pickerOption {
 .h2hSide[data-pace="boom"] {
   background: color-mix(in srgb, var(--color-mine) 7%, transparent);
 }
+/* A chip in its 38px column, hued by the slot as the head-to-head spine is (APE-344). */
 .scoreSlot {
-  color: var(--color-muted);
+  display: grid;
+  place-items: center;
+  height: 24px;
+  border-radius: 4px;
+  /* Opaque, so a boom row's green wash can't drop the ink under 4.5:1. */
+  background: color-mix(in srgb, var(--pos) 14%, var(--color-panel));
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1491,16 +1497,58 @@ li + li > .pickerOption {
 .h2hRow + .h2hRow {
   border-top: 1px solid var(--color-row-line);
 }
+/*
+ * The spine wears each slot's position hue, as the board's position chips do, so a lineup scans by
+ * color down the middle (APE-344). The ink is lifted toward the text color to clear 4.5:1 on its own
+ * wash at 11px; QB's red needs the most lift. FLEX and OP share the flex gold. The starters list
+ * without a matchup (.scoreSlot) takes the same hues.
+ */
+.h2hSlot,
+.scoreSlot {
+  --pos: var(--color-muted);
+  --pos-lift: 80%;
+  color: color-mix(in srgb, var(--pos) var(--pos-lift), var(--color-text));
+}
 .h2hSlot {
   grid-area: slot;
   display: grid;
   place-items: center;
-  background: var(--color-tier);
+  background: color-mix(in srgb, var(--pos) 14%, var(--color-tier));
   border-inline: 1px solid var(--color-row-line);
-  color: var(--color-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+.h2hSlot[data-slot="QB"],
+.scoreSlot[data-slot="QB"] {
+  --pos: var(--color-qb);
+  --pos-lift: 65%;
+}
+.h2hSlot[data-slot="RB"],
+.scoreSlot[data-slot="RB"] {
+  --pos: var(--color-rb);
+}
+.h2hSlot[data-slot="WR"],
+.scoreSlot[data-slot="WR"] {
+  --pos: var(--color-wr);
+}
+.h2hSlot[data-slot="TE"],
+.scoreSlot[data-slot="TE"] {
+  --pos: var(--color-te);
+}
+.h2hSlot[data-slot="FLEX"],
+.h2hSlot[data-slot="SUPERFLEX"],
+.scoreSlot[data-slot="FLEX"],
+.scoreSlot[data-slot="SUPERFLEX"] {
+  --pos: var(--color-flex);
+}
+.h2hSlot[data-slot="K"],
+.scoreSlot[data-slot="K"] {
+  --pos: var(--color-k);
+}
+.h2hSlot[data-slot="DST"],
+.scoreSlot[data-slot="DST"] {
+  --pos: var(--color-dst);
 }
 .h2hSide {
   --pace: var(--color-text);
