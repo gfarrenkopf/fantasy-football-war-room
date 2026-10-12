@@ -4,6 +4,7 @@ import { getPlanModel } from "@/lib/server/ai";
 import { getEmailSender } from "@/lib/server/email";
 import { formatServerError } from "@/lib/server/errorLog";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
+import { loadFills } from "@/lib/server/espn/waivers";
 import { error, hasBearer, json } from "@/lib/server/http";
 import { runSundayJob } from "@/lib/server/seasonSunday";
 
@@ -28,6 +29,10 @@ export async function POST(request: Request): Promise<Response> {
         model,
         // Fresh from ESPN: the point of running now is the inactives just posted.
         loadView: (userId, leagueId) => loadSeasonView(db, espnCodeKey, userId, leagueId, { refresh: true }),
+        loadFills: async (userId, leagueId) => {
+          const load = await loadFills(db, espnCodeKey, userId, leagueId);
+          return load.kind === "ok" ? load.fills : null;
+        },
         sendEmail: getEmailSender(),
         paymentsEnabled: config.paymentsEnabled,
         allowlist: config.aiAllowlist,

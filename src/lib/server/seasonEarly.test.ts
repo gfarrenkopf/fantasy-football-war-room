@@ -82,6 +82,16 @@ describe("runEarlyJob", () => {
     expect((await projectionAccuracy(db, leagueId, seasonView([back]))).players).toEqual([{ playerId: back.playerId, projected: 14, actual: null }]);
   });
 
+  it("leads with a hole whose player is in the early game (APE-352)", async () => {
+    const userId = await createTestUser(db, `erin-${crypto.randomUUID()}@example.test`);
+    const leagueId = await link(userId, "Erin league", 1);
+    const roster = thursdayMove.teams[0].roster.filter((p) => p.pos !== "QB");
+    loads.set(leagueId, { kind: "ok", view: seasonView([at("QB", player("Thursday QB", "QB", 0, { team: "DET", injuryStatus: "OUT" })), ...roster]), fetchedAt: new Date(), stale: false, projectionsMissing: false, phase: "lineup" });
+    await runEarlyJob(db, deps);
+    const erin = sent.find((m) => m.to.startsWith("erin"))!.email;
+    expect(erin.text).toContain("Erin league\n- Hole at QB: Thursday QB is out, and nobody else can play QB. Fill it before kickoff.\n");
+  });
+
   it("does nothing outside the 60-75 minute window", async () => {
     for (const offset of [90, 59, -10]) {
       expect(await runEarlyJob(db, { ...deps, now: new Date(THURSDAY - offset * MIN) })).toMatchObject({ kickoff: null, emails: 0 });

@@ -1,5 +1,7 @@
 import type { AiLineup } from "@/lib/ai/season/lineup";
 import { C, escape, FONT, STRIPE } from "@/lib/auth/email";
+import { label } from "./apply";
+import { findHoles, type Hole, type HoleFills } from "./holes";
 import { compareLineups } from "./lineup";
 import type { SeasonView } from "./view";
 
@@ -16,6 +18,8 @@ export interface LeagueSummary {
   gain: number;
   /** The top changes to make on ESPN, in words. */
   moves: string[];
+  /** Slots nobody on the roster can play this week (APE-352), in words: they lead the league's section. */
+  holes?: string[];
 }
 
 export interface SeasonEmail {
@@ -25,6 +29,10 @@ export interface SeasonEmail {
 }
 
 const SLOT: Record<string, string> = { SUPERFLEX: "OP", DST: "D/ST" };
+
+/** Alert Amber and its ink (--color-warn, --color-warn-ink): a hole's line. */
+const WARN = "#fbbf24";
+const WARN_INK = "#f5d27a";
 
 /** The changes from the lineup set on ESPN to the AI lineup, as "Start A at RB over B", most first. */
 export function lineupMoves(view: SeasonView, lineup: AiLineup, max = 3): string[] {
@@ -45,6 +53,28 @@ export function lineupMoves(view: SeasonView, lineup: AiLineup, max = 3): string
 }
 
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
+
+/**
+ * This week's hard holes in words (APE-352): "Hole at QB: Lamar Jackson is out, and nobody else can
+ * play QB. Add Mac Jones (16.2 pts), dropping Bench WR." With `fills` unread, it stops at the hole.
+ */
+export function holeLines(view: SeasonView, holes: readonly Hole[] = findHoles(view), fills?: readonly HoleFills[]): string[] {
+  const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
+  const name = (id: number | null) => roster.find((p) => p.playerId === id)?.name;
+  return holes
+    .filter((h) => h.kind === "hard")
+    .map((h) => {
+      const slot = label(h.key);
+      const who = name(h.playerId);
+      const why = !who ? `nobody on your team can play ${slot}` : `${who} is ${h.reason === "bye" ? "on a bye" : "out"}, and nobody else can play ${slot}`;
+      const head = `Hole at ${slot}: ${why}.`;
+      if (!fills) return head;
+      const best = fills.find((f) => f.hole.key === h.key && f.hole.playerId === h.playerId)?.fills[0];
+      if (!best) return `${head} Nobody on the wire can play in time.`;
+      const room = best.ir !== null ? `, moving ${name(best.ir)} to IR` : best.drop !== null ? `, dropping ${name(best.drop)}` : "";
+      return `${head} Add ${best.player.name} (${best.player.points.toFixed(1)} pts)${room}.`;
+    });
+}
 
 function shell({ title, preheader, headline, body, footer }: { title: string; preheader: string; headline: string; body: string; footer: string }): string {
   return `<!doctype html>
@@ -93,7 +123,16 @@ const footer = (unsubscribeUrl: string) =>
 
 /** "Your Sunday lineup is ready": one section per league, with the moves that matter most. */
 export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: LeagueSummary[]; unsubscribeUrl: string }): SeasonEmail {
-  const subject = leagues.length === 1 ? "Your Sunday lineup is ready" : `Your Sunday lineups are ready (${leagues.length} leagues)`;
+  // A hole leads: in the subject, the preheader, and its league's section (APE-352).
+  const hole = leagues.flatMap((l) => l.holes ?? [])[0];
+  const many = leagues.length > 1;
+  const subject = hole
+    ? many
+      ? `A hole in your Sunday lineups (${leagues.length} leagues)`
+      : "Your Sunday lineup has a hole"
+    : many
+      ? `Your Sunday lineups are ready (${leagues.length} leagues)`
+      : "Your Sunday lineup is ready";
   const lead = "Written after the inactives were posted. Set it on ESPN before kickoff.";
   const sections = leagues
     .map((l) => {
@@ -101,8 +140,12 @@ export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: League
         ? `<ul style="margin:8px 0 0;padding-left:18px;font-family:${FONT};font-size:14px;line-height:22px;color:${C.text};">${l.moves.map((m) => `<li>${escape(m)}</li>`).join("")}</ul>`
         : `<p style="margin:8px 0 0;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">Your ESPN lineup already matches it.</p>`;
       const gain = l.gain > 0.05 ? ` <span style="color:${C.mine};font-weight:700;">${escape(signed(l.gain))} pts</span>` : "";
+      const holes = (l.holes ?? [])
+        .map((h) => `<p style="margin:8px 0 0;padding:8px 10px;border:1px solid ${WARN}66;border-radius:6px;font-family:${FONT};font-size:14px;line-height:21px;color:${WARN_INK};">&#9888;&nbsp; ${escape(h)}</p>`)
+        .join("");
       return `<tr><td style="padding:22px 32px 0;">
           <div style="font-family:${FONT};font-size:15px;line-height:20px;font-weight:700;color:${C.text};">${escape(l.name)}${gain}</div>
+          ${holes}
           ${moves}
           <div style="padding-top:12px;">${button(l.url, "See the lineup")}</div>
         </td></tr>`;
@@ -110,8 +153,8 @@ export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: League
     .join("\n");
   const html = shell({
     title: subject,
-    preheader: leagues[0]?.moves[0] ?? lead,
-    headline: subject.startsWith("Your Sunday lineups") ? "Your Sunday lineups are ready." : "Your Sunday lineup is ready.",
+    preheader: hole ?? leagues[0]?.moves[0] ?? lead,
+    headline: hole ? (many ? "One of your Sunday lineups has a hole." : "Your Sunday lineup has a hole.") : many ? "Your Sunday lineups are ready." : "Your Sunday lineup is ready.",
     body: `<tr><td style="padding:10px 32px 0;font-family:${FONT};font-size:14px;line-height:22px;color:${C.muted};">${escape(lead)}</td></tr>\n${sections}`,
     footer: footer(unsubscribeUrl),
   });
@@ -119,7 +162,13 @@ export function renderSundayEmail({ leagues, unsubscribeUrl }: { leagues: League
     subject,
     "",
     lead,
-    ...leagues.flatMap((l) => ["", `${l.name}${l.gain > 0.05 ? ` (${signed(l.gain)} pts)` : ""}`, ...(l.moves.length ? l.moves.map((m) => `- ${m}`) : ["Your ESPN lineup already matches it."]), l.url]),
+    ...leagues.flatMap((l) => [
+      "",
+      `${l.name}${l.gain > 0.05 ? ` (${signed(l.gain)} pts)` : ""}`,
+      ...(l.holes ?? []).map((h) => `! ${h}`),
+      ...(l.moves.length ? l.moves.map((m) => `- ${m}`) : ["Your ESPN lineup already matches it."]),
+      l.url,
+    ]),
     "",
     `Stop these emails: ${unsubscribeUrl}`,
     "",
@@ -149,7 +198,8 @@ export function renderReconnectEmail({ espnUrl, helpUrl, unsubscribeUrl }: { esp
 
 /**
  * The lineup changes that involve a player in the early game (11.4), going in or coming out, as
- * "Start A at FLEX over B". Moves among Sunday players can wait for Sunday; these can't.
+ * "Start A at FLEX over B", led by any hole whose player is in that game. Moves among Sunday players can
+ * wait for Sunday; these can't.
  */
 export function earlyMoves(view: SeasonView, teams: readonly string[]): string[] {
   const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
@@ -158,7 +208,9 @@ export function earlyMoves(view: SeasonView, teams: readonly string[]): string[]
     const p = id === null ? undefined : byId.get(id);
     return !!p && !p.locked && p.team !== null && teams.includes(p.team);
   };
-  return compareLineups(roster, view.lineup)
+  // A hole whose player is in that game leads: it can't wait for Sunday either (APE-352).
+  const holes = holeLines(view, findHoles(view).filter((h) => early(h.playerId))).map((line) => `${line} Fill it before kickoff.`);
+  const moves = compareLineups(roster, view.lineup)
     .filter((row) => row.changed && !row.locked && (early(row.now) || early(row.next)))
     .map((row) => {
       const now = row.now === null ? undefined : byId.get(row.now);
@@ -167,6 +219,7 @@ export function earlyMoves(view: SeasonView, teams: readonly string[]): string[]
       if (!next) return `Bench ${now!.name} (nobody can fill ${slot})`;
       return `Start ${next.name} at ${slot}${now ? ` over ${now.name}` : ""}`;
     });
+  return [...holes, ...moves];
 }
 
 /** "Set your lineup before Thursday's 8:15 PM kickoff": the moves involving that game, per league. */

@@ -18,7 +18,16 @@ import { createTestLeague } from "./testLeagues";
 const NOW = new Date("2026-10-11T15:40:00Z"); // a Sunday, 11:40 ET
 const DAY = 24 * 60 * 60 * 1000;
 const bench = player("Bench Back", "RB", 14);
-const view = seasonView([at("QB", player("QB", "QB", 20)), at("RB", player("RB1", "RB", 15)), at("RB", player("RB2", "RB", 6)), bench]); // week 5
+// Every slot but FLEX filled, so the bench back is the only move. Week 5.
+const view = seasonView([
+  at("QB", player("QB", "QB", 20)),
+  at("RB", player("RB1", "RB", 15)),
+  at("RB", player("RB2", "RB", 6)),
+  at("WR", player("WR1", "WR", 13)),
+  at("WR", player("WR2", "WR", 12)),
+  at("TE", player("TE", "TE", 8)),
+  bench,
+]);
 const ok: SeasonViewLoad = { kind: "ok", view, fetchedAt: NOW, stale: false, projectionsMissing: false, phase: "lineup" };
 
 let db: Db;
@@ -125,6 +134,20 @@ describe("runSundayJob", () => {
     const url = new URL(alice[0].headers["List-Unsubscribe"].slice(1, -1));
     expect(url.pathname).toBe("/api/season/unsubscribe");
     expect(verifyUnsubscribeToken("test-secret", url.searchParams.get("u")!, url.searchParams.get("t")!)).toBe(true);
+  });
+
+  it("leads with a slot nobody can play, and the pickup that fills it (APE-352)", async () => {
+    const out = player("Out QB", "QB", 0, { injuryStatus: "OUT" });
+    const holed = seasonView([at("QB", out), ...view.teams[0].roster.filter((p) => p.pos !== "QB")]);
+    loads.set(ids.carol, { ...ok, view: holed });
+    const streamer = { ...player("Streamer", "QB", 16.2), status: "FREEAGENT" as const, waiverClears: null };
+    const hole = { key: "QB" as const, kind: "hard" as const, reason: "out" as const, playerId: out.playerId, kickoff: null };
+    deps.loadFills = async () => [{ hole, fills: [{ player: streamer, drop: null, ir: out.playerId }], claims: [] }];
+    await runSundayJob(db, deps);
+    const carol = sent.filter((m) => m.to.startsWith("carol"))[0].email;
+    expect(carol.subject).toBe("Your Sunday lineup has a hole");
+    expect(carol.text).toContain("Carol paid (+14.0 pts)\n! Hole at QB: Out QB is out, and nobody else can play QB. Add Streamer (16.2 pts), moving Out QB to IR.\n");
+    expect(carol.html).toContain("Hole at QB");
   });
 
   it("changes nothing on a rerun the same morning", async () => {

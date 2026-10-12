@@ -1,7 +1,8 @@
 import type { PlanModel } from "@/lib/ai/provider";
 import type { Db } from "@/lib/db/types";
 import { espnLeaguePage } from "@/lib/espn/pages";
-import { lineupMoves, renderReconnectEmail, renderSundayEmail, type LeagueSummary } from "@/lib/season/email";
+import { holeLines, lineupMoves, renderReconnectEmail, renderSundayEmail, type LeagueSummary } from "@/lib/season/email";
+import { findHoles, type HoleFills } from "@/lib/season/holes";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { seasonAiAccess } from "./seasonAi";
 import { writeAiLineup } from "./seasonAiOutputs";
@@ -24,6 +25,8 @@ export interface SundayDeps extends JobMail {
   model: PlanModel;
   /** The league's season view, fresh from ESPN. */
   loadView(userId: string, leagueId: string): Promise<SeasonViewLoad>;
+  /** The best ways to fill this week's lineup holes (APE-352), or null when the wire can't be read. */
+  loadFills?(userId: string, leagueId: string): Promise<readonly HoleFills[] | null>;
   paymentsEnabled: boolean;
   allowlist: readonly string[];
   now?: Date;
@@ -109,11 +112,15 @@ async function runLeague(db: Db, deps: SundayDeps, league: JobLeague, { dryRun, 
       jobError("sunday", "the model failed", { leagueId: league.leagueId, reason: result.status === "failed" ? result.kind : result.status });
       return "failed";
     }
+    // A slot nobody can play leads the league's section, with the pickup that fills it when the wire reads.
+    const holes = findHoles(view).filter((h) => h.kind === "hard");
+    const fills = holes.length && deps.loadFills ? await deps.loadFills(league.userId, league.leagueId).catch(() => null) : null;
     lineups.push({
       name: league.name,
       url: new URL(`/season/${encodeURIComponent(league.leagueId)}`, deps.baseUrl).toString(),
       gain: result.output.total - view.lineup.currentTotal,
       moves: lineupMoves(view, result.output),
+      holes: holeLines(view, holes, fills ?? undefined),
     });
     return result.cached ? "existing" : "written";
   } catch (error) {
