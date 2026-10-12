@@ -787,6 +787,63 @@
   color: var(--color-text);
 }
 
+/* Waivers: next week's holes (APE-353), above the wire, in the hole's amber but quieter than a hero. */
+.ahead {
+  display: grid;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent);
+  background: color-mix(in srgb, var(--color-warn) 5%, transparent);
+}
+.aheadHole {
+  display: grid;
+  gap: 6px;
+}
+.aheadHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.aheadHead b {
+  color: var(--color-warn-ink);
+}
+.aheadNone {
+  margin: 0;
+}
+
+/* Trades: a slot that's a hole week after week (APE-353), with players who'd fill it. Full width. */
+.thin {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent);
+  background: color-mix(in srgb, var(--color-warn) 5%, transparent);
+}
+.thinList {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.thinWho {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.thinList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
 /* The lock-in moment, when a hole outlives it. */
 .lockHole {
   display: flex;

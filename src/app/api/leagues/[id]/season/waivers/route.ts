@@ -11,9 +11,9 @@ type Ctx = RouteContext<"/api/leagues/[id]/season/waivers">;
 const ROUTE = "/api/leagues/[id]/season/waivers";
 
 /**
- * GET /api/leagues/:id/season/waivers[?refresh=1] → { pickups, considered, fetchedAt }: the waiver-wire
- * players who'd most improve the user's best lineup for the rest of the season (APE-212), each with
- * who to drop. Free, like the lineup and trade verdict. 409 `{ problem }` when ESPN can't be read.
+ * GET /api/leagues/:id/season/waivers[?refresh=1] → { pickups, ahead, considered, fetchedAt }: the
+ * waiver-wire players who'd most improve the user's best lineup for the rest of the season (APE-212),
+ * each with who to drop, and the best fills for next week's lineup holes (APE-353). Free, like the lineup and trade verdict. 409 `{ problem }` when ESPN can't be read.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const { id } = await ctx.params;
@@ -24,7 +24,7 @@ export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => 
     const refresh = new URL(request.url).searchParams.get("refresh") === "1";
     const load = await loadWaivers(db, config.espnCodeKey, userId, id, { refresh });
     if (load.kind !== "ok") return json(409, { error: "ESPN couldn't be read for this league", problem: load.problem });
-    return json(200, { pickups: load.pickups, considered: load.considered, fetchedAt: load.fetchedAt.toISOString() });
+    return json(200, { pickups: load.pickups, ahead: load.ahead, considered: load.considered, fetchedAt: load.fetchedAt.toISOString() });
   } catch (err) {
     console.error(formatServerError(err, { method: request.method, path: new URL(request.url).pathname }, { routePath: ROUTE, routeType: "route" }));
     return error(503, "The waiver wire couldn't be read just now");

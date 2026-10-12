@@ -4,6 +4,7 @@ import { SLOT_DEFS } from "@/lib/draft/league";
 import type { Position } from "@/lib/draft/types";
 import { parseFreeAgents } from "@/lib/season/espnLeague";
 import { findHoles, rankFills, type Hole, type HoleFills, type PoolPlayer } from "@/lib/season/holes";
+import { nextWeekHoles, rankAhead, type AheadFill, type WeekHole } from "@/lib/season/holesAhead";
 import type { FreeAgent } from "@/lib/season/types";
 import { scorePlayer, type SeasonView } from "@/lib/season/view";
 import { rankPickups, type Pickup } from "@/lib/season/waivers";
@@ -44,7 +45,9 @@ export const freeAgentFilter = (season: number, week: number, positions: readonl
 
 type Problem = "not-linked" | "no-login" | "disconnected" | "unavailable" | "invalid";
 
-export type WaiverLoad = { kind: "ok"; view: SeasonView; pickups: Pickup[]; considered: number; fetchedAt: Date } | { kind: "problem"; problem: Problem };
+export type WaiverLoad =
+  | { kind: "ok"; view: SeasonView; pickups: Pickup[]; ahead: { hole: WeekHole; fills: AheadFill[] }[]; considered: number; fetchedAt: Date }
+  | { kind: "problem"; problem: Problem };
 
 export type FillLoad = { kind: "ok"; holes: Hole[]; fills: HoleFills[] } | { kind: "problem"; problem: Problem };
 
@@ -116,7 +119,9 @@ async function readPool(db: Db, key: Buffer, userId: string, leagueId: string, {
 export async function loadWaivers(db: Db, key: Buffer, userId: string, leagueId: string, { refresh = false }: { refresh?: boolean } = {}): Promise<WaiverLoad> {
   const read = await readPool(db, key, userId, leagueId, { positions: POSITIONS, limit: POOL_SIZE, refresh });
   if (read.kind !== "ok") return read;
-  return { kind: "ok", view: read.view, pickups: rankPickups(read.view, read.pool), considered: read.pool.length, fetchedAt: read.fetchedAt };
+  const { view, pool } = read;
+  // Next week's holes (APE-353), filled from the same pool: a claim placed now clears in time.
+  return { kind: "ok", view, pickups: rankPickups(view, pool), ahead: rankAhead(view, nextWeekHoles(view), pool), considered: pool.length, fetchedAt: read.fetchedAt };
 }
 
 /**
