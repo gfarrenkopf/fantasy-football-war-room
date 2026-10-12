@@ -230,7 +230,9 @@ sudo systemctl start warroom
 
 If a deploy fails partway, the live app isn't touched. Fix the problem and run the deploy again; a build that already succeeded is reused.
 
-When changing `deploy/*.service`, `.timer` or `Caddyfile`, copy the new versions into place as in §6 and §7 after deploying, then `sudo systemctl daemon-reload`. `deploy.sh` doesn't install them.
+When changing `deploy/*.service`, `.timer` or `Caddyfile`, copy the new versions into place as in §6 and §7 after deploying, then `sudo systemctl daemon-reload`. `deploy.sh` doesn't install them: that takes root, and a unit file can run anything as root, so a deploy from `main` must not be able to write one.
+
+It does check them (APE-354). After every deploy and rollback, `deploy.sh` compares the live release's units and `Caddyfile` with the installed copies in `/etc/systemd/system` and `/etc/caddy`. For each one that differs, isn't installed, or can't be read, it prints a `WARNING` line, then the commands to install them: copy, `daemon-reload`, restart any changed timer or `warroom.service`, enable a new timer, reload Caddy. It never fails the deploy, so look for these lines in the CI deploy log. Nothing is printed when everything matches.
 
 ## 10. Deploy on merge
 

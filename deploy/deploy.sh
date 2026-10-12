@@ -15,8 +15,12 @@
 # code: migrations stay applied, so a release that needs a schema change must be written to run
 # against both the old and the new schema.
 #
+# The systemd units and Caddyfile in deploy/ are installed by hand, never by this script: writing
+# them takes root. After switching, it warns about any that differ from the installed copies.
+#
 # Overrides for a local dry run: WARROOM_ROOT, WARROOM_REPO, WARROOM_ENV_FILE, WARROOM_BACKUP_DIR,
-# WARROOM_RESTART (e.g. `true`), WARROOM_HEALTH_URL (empty skips the health check).
+# WARROOM_RESTART (e.g. `true`), WARROOM_HEALTH_URL (empty skips the health check),
+# WARROOM_UNIT_DIR, WARROOM_CADDYFILE.
 # FORCE=1 deploys even while War Room holds a user's live ESPN draft (see db:live-drafts).
 set -euo pipefail
 
@@ -26,6 +30,8 @@ env_file="${WARROOM_ENV_FILE:-/etc/warroom/.env}"
 backup_dir="${WARROOM_BACKUP_DIR:-/var/backups/warroom}"
 restart_cmd="${WARROOM_RESTART:-sudo -n systemctl restart warroom}"
 health_url="${WARROOM_HEALTH_URL-http://127.0.0.1:3000/}"
+unit_dir="${WARROOM_UNIT_DIR:-/etc/systemd/system}"
+caddyfile="${WARROOM_CADDYFILE:-/etc/caddy/Caddyfile}"
 keep_releases=5
 
 log() { printf '==> %s\n' "$*"; }
@@ -61,6 +67,39 @@ restart_and_check() {
   die "$health_url didn't respond within 30s. Check \`journalctl -u warroom -n 100\`; \`$0 rollback\` restores the previous release."
 }
 
+# Warns about each unit or Caddyfile in the live release that differs from the installed copy, and
+# prints the commands that install them. Read-only and never fatal: installing them takes root,
+# which the deploy user doesn't have.
+check_installed() {
+  local live="$root/current/deploy" src name dest copy=() restart=() enable=() caddy=0
+  for src in "$live"/*.service "$live"/*.timer "$live/Caddyfile"; do
+    [[ -f "$src" ]] || continue
+    name="$(basename "$src")"
+    if [[ "$name" == Caddyfile ]]; then dest="$caddyfile"; else dest="$unit_dir/$name"; fi
+    if [[ ! -e "$dest" ]]; then
+      log "WARNING: $name isn't installed at $dest"
+      if [[ "$name" == *.timer ]]; then enable+=("$name"); fi
+    elif [[ ! -r "$dest" ]]; then
+      log "WARNING: can't read $dest to compare it with this release's $name"
+      continue
+    elif cmp -s "$src" "$dest"; then
+      continue
+    else
+      log "WARNING: $dest differs from this release's $name"
+      # A timer reschedules, and the app's service picks up its new settings, only on restart.
+      if [[ "$name" == *.timer || "$name" == warroom.service ]]; then restart+=("${name%.service}"); fi
+    fi
+    if [[ "$name" == Caddyfile ]]; then caddy=1; else copy+=("$src"); fi
+  done
+  if (( ${#copy[@]} )); then
+    log "To install: sudo cp ${copy[*]} $unit_dir/ && sudo systemctl daemon-reload"
+    if (( ${#restart[@]} )); then log "Then: sudo systemctl restart ${restart[*]}"; fi
+    if (( ${#enable[@]} )); then log "Then, if it's meant to run: sudo systemctl enable --now ${enable[*]}"; fi
+  fi
+  if (( caddy )); then log "To install: sudo cp $live/Caddyfile $caddyfile && sudo systemctl reload caddy"; fi
+  return 0
+}
+
 rollback() {
   local current previous
   current="$(readlink "$root/current" || true)"
@@ -70,6 +109,7 @@ rollback() {
   ln -sfn "$previous" "$root/current"
   if [[ -n "$current" ]]; then ln -sfn "$current" "$root/previous"; fi
   restart_and_check
+  check_installed
 }
 
 deploy() {
@@ -126,6 +166,7 @@ deploy() {
   touch "$release/.release-ok" # newest mtime = most recently deployed, for pruning
 
   restart_and_check
+  check_installed
   prune
 }
 
@@ -156,7 +197,7 @@ prune() {
 }
 
 case "${1:-main}" in
-  -h | --help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' ;;
   rollback) lock; rollback ;;
   *) lock; deploy "${1:-main}" ;;
 esac
