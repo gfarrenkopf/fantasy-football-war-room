@@ -65,7 +65,7 @@ struct EspnConnectView: View {
                     if let message = model.errorMessage {
                         Text(message).typeStyle(TypeScale.label).foregroundStyle(.reachInk)
                     }
-                    Button("I understand. Sign in to ESPN") { withAnimation(.spring(duration: 0.4)) { model.agree() } }
+                    Button("I understand. Sign in to ESPN") { withAnimation(Motion.respond) { model.agree() } }
                         .buttonStyle(ProviderButtonStyle(prominent: true))
                         .padding(.top, Spacing.sm)
                         .accessibilityIdentifier("espn-agree")
@@ -188,7 +188,7 @@ private struct ConnectedView: View {
         }
         .padding(Spacing.xl * 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sensoryFeedback(.success, trigger: drawn)
+        .sensoryFeedback(Haptic.success, trigger: drawn)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.7)) { drawn = true }
         }

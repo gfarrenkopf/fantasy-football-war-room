@@ -79,3 +79,16 @@ struct EspnLoginStatus: Codable, Equatable, Sendable {
 
     let login: Login?
 }
+
+/// One of the user's in-season leagues (GET /api/v1/leagues).
+struct League: Codable, Equatable, Hashable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let espnLeagueId: String
+    let espnTeamId: Int
+    let season: Int
+}
+
+struct LeagueList: Codable, Sendable {
+    let leagues: [League]
+}

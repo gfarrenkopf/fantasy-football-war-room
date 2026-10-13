@@ -2,7 +2,14 @@ import SwiftUI
 
 @main
 struct DraftRoomApp: App {
-    @State private var session = Session(api: APIClient(baseURL: AppEnvironment.current.apiBaseURL))
+    @State private var session = Session(api: DraftRoomApp.makeAPI())
+
+    @MainActor private static func makeAPI() -> APIClient {
+        #if DEBUG
+        if let stub = UITestStub.apiIfRequested() { return stub }
+        #endif
+        return APIClient(baseURL: AppEnvironment.current.apiBaseURL)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -28,7 +35,7 @@ struct RootView: View {
                 SignInView()
                     .transition(.opacity)
             case .signedIn:
-                HomeView()
+                ShellView()
                     .transition(.opacity)
             case .updateRequired:
                 UpdateRequiredView()
@@ -36,7 +43,7 @@ struct RootView: View {
                 UnreachableView(message: message)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: session.phase)
+        .animation(Motion.fade, value: session.phase)
         .task { await session.start() }
     }
 }

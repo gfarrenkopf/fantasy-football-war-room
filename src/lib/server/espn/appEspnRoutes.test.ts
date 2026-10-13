@@ -131,3 +131,25 @@ describe("/api/v1/espn/login", () => {
     expect((await (await GET(new Request("http://localhost/api/v1/espn/login", { headers: auth }), undefined)).json()).login).toBeNull();
   });
 });
+
+describe("GET /api/v1/leagues", () => {
+  it("lists the leagues connected for the season", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(espnLeague)));
+    const connect = (await import("@/app/api/v1/espn/connect/route")).POST;
+    const { GET } = await import("@/app/api/v1/leagues/route");
+    const { auth } = await bearer();
+    expect(await (await GET(new Request("http://localhost/api/v1/leagues", { headers: auth }), undefined)).json()).toEqual({ leagues: [] });
+    const connected = await (await connect(post("/api/v1/espn/connect", { ...login, espnLeagueId: "110222051", season: 2026, consentVersion: ESPN_DISCLOSURE_VERSION }, auth), undefined)).json();
+    const res = await GET(new Request("http://localhost/api/v1/leagues", { headers: auth }), undefined);
+    expect(await res.json()).toEqual({ leagues: [{ id: connected.leagueId, name: "App Test 8.17", espnLeagueId: "110222051", espnTeamId: 3, season: 2026 }] });
+  });
+
+  it("is empty, not an error, when in-season help isn't open to the account", async () => {
+    vi.stubEnv("ESPN_SYNC_ALLOWLIST", "someone-else@example.test");
+    const { GET } = await import("@/app/api/v1/leagues/route");
+    const { auth } = await bearer();
+    const res = await GET(new Request("http://localhost/api/v1/leagues", { headers: auth }), undefined);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ leagues: [] });
+  });
+});

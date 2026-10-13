@@ -34,6 +34,8 @@ xcodebuild test -project mobile/ios/DraftRoom.xcodeproj -scheme DraftRoom \
 - `DraftRoomTests/` holds unit tests written with Swift Testing (`import Testing`), run inside the app.
 - `DraftRoomUITests/` holds the XCUITest smoke tests, which launch the app.
 
+Debug builds launched with `-uiTestStub` answer the API from canned JSON (`Support/UITestStub.swift`): signed in, with two leagues. UI tests use it to drive the signed-in app without a server, and it's handy for screenshots: `xcrun simctl launch booted tech.apeman.draftroom -uiTestStub`. Release builds don't contain it.
+
 ## Layout
 
 The project uses folder-synchronized groups: any file added under `DraftRoom/`, `DraftRoomTests/` or `DraftRoomUITests/` joins its target automatically, with no project-file edit.
@@ -56,7 +58,9 @@ UI code uses token names only, never raw hex, the same as the web's Tailwind rul
 - type: `.typeStyle(TypeScale.body)`
 - radii and spacing: `Radius.card`, `Spacing.md`
 
-`Design/Typography.swift` explains how web sizes map to the iPhone. `Design/TokenSwatches.swift` is a preview-only sheet of the tokens.
+`Design/Typography.swift` explains how web sizes map to the iPhone. `Design/Motion.swift` holds the shared springs (`Motion.settle`, `Motion.respond`, `Motion.press`) and haptics (`Haptic.success`, `Haptic.choice`); use them rather than one-off values.
+
+The app icon (`Assets.xcassets/AppIcon`, with light, dark and tinted variants) is the web's `src/app/icon.svg` board drawn at 1024 px. The launch screen is the `bg` token (`LaunchBackground`). `Design/TokenSwatches.swift` is a preview-only sheet of the tokens.
 
 ## Swift
 

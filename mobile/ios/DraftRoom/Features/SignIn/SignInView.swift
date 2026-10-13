@@ -21,7 +21,7 @@ struct SignInView: View {
         .background(.bg)
         .task {
             if model == nil { model = SignInModel(session: session) }
-            withAnimation(.spring(duration: 0.7, bounce: 0.2).delay(0.1)) { shown = true }
+            withAnimation(Motion.settle.delay(0.1)) { shown = true }
         }
         .onOpenURL { url in
             Task { await model?.handle(url) }
@@ -43,7 +43,7 @@ struct SignInView: View {
                         .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
                 case let .checkInbox(address):
                     InboxView(address: address) {
-                        withAnimation(.spring(duration: 0.45)) { model.step = .choose }
+                        withAnimation(Motion.respond) { model.step = .choose }
                     }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -59,7 +59,7 @@ struct SignInView: View {
             .padding(.horizontal, Spacing.xl + Spacing.sm)
             .padding(.top, 72)
             .padding(.bottom, Spacing.xl * 2)
-            .animation(.spring(duration: 0.45), value: model.step)
+            .animation(Motion.respond, value: model.step)
             .animation(.easeOut(duration: 0.2), value: model.errorMessage)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -194,7 +194,7 @@ private struct InboxView: View {
                 .typeStyle(TypeScale.label)
                 .foregroundStyle(.muted)
         }
-        .sensoryFeedback(.success, trigger: landed)
+        .sensoryFeedback(Haptic.success, trigger: landed)
         .onAppear {
             withAnimation(.spring(duration: 0.6, bounce: 0.35).delay(0.15)) { landed = true }
         }
@@ -217,7 +217,7 @@ struct ProviderButtonStyle: ButtonStyle {
             .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(prominent ? Color.skyLine : Color.line))
             .opacity(isEnabled ? 1 : 0.45)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -226,7 +226,7 @@ private extension View {
     func rise(_ shown: Bool, order: Int) -> some View {
         offset(y: shown ? 0 : 16)
             .opacity(shown ? 1 : 0)
-            .animation(.spring(duration: 0.6, bounce: 0.2).delay(0.12 + Double(order) * 0.06), value: shown)
+            .animation(Motion.stagger(order), value: shown)
     }
 }
 

@@ -19,6 +19,12 @@
 			</array>
 		</dict>
 	</array>
+	<!-- The launch screen is the room's background (--color-bg; LaunchBackground in the asset catalog). -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
