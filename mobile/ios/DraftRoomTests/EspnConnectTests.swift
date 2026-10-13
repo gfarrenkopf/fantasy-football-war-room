@@ -65,9 +65,15 @@ extension StubbedNetwork {
             let model = EspnConnectModel(api: api)
             await model.start()
             model.agree()
+            let answer = StubURLProtocol.reply
             StubURLProtocol.reply = { _ in .init(status: 503, body: Data(#"{"error":"Couldn't reach ESPN."}"#.utf8)) }
             await model.signedIn(login)
-            #expect(model.step == .enterLeague)
+            #expect(model.step == .enterLeague(listFailed: true))
+
+            // ESPN answers the retry with the same login.
+            StubURLProtocol.reply = answer
+            await model.loadLeagues()
+            guard case .pick = model.step else { Issue.record("expected a pick"); return }
         }
     }
 }

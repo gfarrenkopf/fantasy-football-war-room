@@ -13,8 +13,9 @@ final class EspnConnectModel {
         /// ESPN's sign-in page is showing.
         case signingIn(EspnDisclosure)
         case pick([EspnLeagueChoice])
-        /// The fan API listed nothing (or couldn't be read): ask for the league link or id.
-        case enterLeague
+        /// The fan API listed nothing, or couldn't be reached: ask for the league link or id.
+        /// `listFailed` offers to load the list again, since ESPN is sometimes just slow.
+        case enterLeague(listFailed: Bool)
         case connecting
         case connected(EspnConnected, name: String)
         case failed(String)
@@ -55,20 +56,27 @@ final class EspnConnectModel {
     /// ESPN's sign-in finished and both cookies are here.
     func signedIn(_ login: EspnLogin) async {
         self.login = login
+        await loadLeagues()
+    }
+
+    /// The leagues the captured login can see. Also the retry when ESPN didn't answer the first time.
+    func loadLeagues() async {
+        guard let login else { return }
         step = .loading
+        errorMessage = nil
         do {
             let list: EspnLeagueList = try await api.post("api/v1/espn/leagues", body: login)
             // This season's leagues; older seasons can't be connected for in-season help.
             let newest = list.leagues.map(\.season).max()
             let current = list.leagues.filter { $0.season == newest }
-            step = current.isEmpty ? .enterLeague : .pick(current)
+            step = current.isEmpty ? .enterLeague(listFailed: false) : .pick(current)
         } catch .server(status: 400, let message) {
             self.login = nil
             errorMessage = message
             if let disclosure { step = .consent(disclosure) }
         } catch {
             // The list is a convenience: without it, the league link still works.
-            step = .enterLeague
+            step = .enterLeague(listFailed: true)
         }
     }
 

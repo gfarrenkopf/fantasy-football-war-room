@@ -114,11 +114,17 @@ struct EspnConnectView: View {
             }
             .scrollContentBackground(.hidden)
 
-        case .enterLeague:
+        case let .enterLeague(listFailed):
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 Text("Which league?").typeStyle(TypeScale.title).foregroundStyle(.text)
-                Text("Paste the link to your league from ESPN, or its league id.")
+                Text(listFailed
+                    ? "ESPN didn't send your list of leagues. Try again, or paste the link to your league from ESPN, or its league id."
+                    : "Paste the link to your league from ESPN, or its league id.")
                     .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.muted)
+                if listFailed {
+                    Button("Load my leagues again") { Task { await model.loadLeagues() } }
+                        .buttonStyle(ProviderButtonStyle(prominent: false))
+                }
                 TextField("fantasy.espn.com/football/league?leagueId=…", text: $model.leagueEntry)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
