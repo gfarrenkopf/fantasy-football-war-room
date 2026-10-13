@@ -212,6 +212,13 @@ export function EspnPair({
                     <li key={point}>{point}</li>
                   ))}
                 </ul>
+                <p className="text-muted">
+                  How Draft Room handles your data:{" "}
+                  <a className="text-focus underline" href="/privacy" target="_blank" rel="noreferrer">
+                    privacy policy
+                  </a>
+                  .
+                </p>
                 <label className="flex items-start gap-2">
                   <input type="checkbox" className="mt-1" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
                   <span>I understand</span>

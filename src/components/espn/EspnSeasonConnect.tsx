@@ -123,6 +123,13 @@ export function EspnSeasonConnect({
                     <li key={point}>{point}</li>
                   ))}
                 </ul>
+                <p className="text-muted">
+                  How Draft Room handles your data:{" "}
+                  <a className="text-focus underline" href="/privacy" target="_blank" rel="noreferrer">
+                    privacy policy
+                  </a>
+                  .
+                </p>
               </div>
             )}
             {phase.kind === "error" && (

@@ -125,7 +125,12 @@ export function SignIn({
           )}
         </div>
       )}
-      {fine && <p className={s.fine}>{fine}</p>}
+      <p className={s.fine}>
+        {fine && <>{fine} </>}
+        <a href="/privacy" target="_blank" rel="noreferrer">
+          Privacy
+        </a>
+      </p>
     </div>
   );
 }

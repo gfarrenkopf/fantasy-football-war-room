@@ -724,6 +724,14 @@
   line-height: 1.45;
   color: var(--color-dim);
 }
+.fine a {
+  color: var(--color-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fine a:hover {
+  color: var(--color-text);
+}
 
 .error {
   margin: 8px 0 0;
