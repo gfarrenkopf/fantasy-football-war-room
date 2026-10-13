@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Set per configuration by the API_BASE_URL build setting: localhost in Debug, draftroom.online in Release. -->
+	<key>APIBaseURL</key>
+	<string>$(API_BASE_URL)</string>
+	<!-- Lets Debug builds reach the local dev server over plain HTTP. Covers localhost only. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

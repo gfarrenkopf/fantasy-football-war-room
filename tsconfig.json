@@ -31,5 +31,5 @@
     "**/*.mts",
     "public/espn-bridge.js"
   ],
-  "exclude": ["node_modules", ".research"]
+  "exclude": ["node_modules", ".research", "mobile"]
 }
