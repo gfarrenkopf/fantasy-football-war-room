@@ -156,6 +156,7 @@ The variables exist for the paid hosted version. Accounts, cross-device sync, AI
 | `NEXTAUTH_SECRET` | Signing auth sessions. Generate with `openssl rand -base64 32`. | `DATABASE_URL` | Available |
 | `NEXTAUTH_URL` | The site's public URL, e.g. `https://warroom.example.com`. **Required in production**, where sign-in otherwise rejects requests. | cloud features | Available |
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Sign in with Google. Set the OAuth redirect URI to `<NEXTAUTH_URL>/api/auth/callback/google`. | cloud features | Available |
+| `AUTH_APPLE_ID`, `AUTH_APPLE_TEAM_ID`, `AUTH_APPLE_KEY_ID`, `AUTH_APPLE_PRIVATE_KEY` | Sign in with Apple: the Services ID, team id, and the Sign in with Apple key's id and `.p8` contents (one line, `\n` for line breaks). Set the return URL to `<NEXTAUTH_URL>/api/auth/callback/apple`; Apple requires HTTPS. | cloud features | Available |
 | `AUTH_RESEND_KEY`, `EMAIL_FROM` | Sign in with an emailed magic link, sent through [Resend](https://resend.com). `EMAIL_FROM` must be on a domain verified in Resend. | cloud features | Available |
 | `ANTHROPIC_API_KEY` | AI-written draft plan | cloud features (database + auth secret) | Available |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID` | Payments: a one-time season pass per league that unlocks AI plans. See [payments.md](payments.md). **Leave unset when self-hosting.** Without them nothing is paywalled. | cloud features, and all three set | Available |
