@@ -706,6 +706,12 @@
   width: 100%;
 }
 
+/* Apple and Google, stacked. */
+.providers {
+  display: grid;
+  gap: 8px;
+}
+
 .gmark {
   width: 16px;
   height: 16px;

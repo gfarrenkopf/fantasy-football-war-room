@@ -1,4 +1,5 @@
 import "server-only";
+import { createPrivateKey } from "node:crypto";
 import { parseKey } from "@/lib/server/espn/secretBox";
 
 /**
@@ -14,11 +15,29 @@ function readEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+function isPrivateKey(pem: string): boolean {
+  try {
+    return createPrivateKey(pem).asymmetricKeyType === "ec";
+  } catch {
+    return false;
+  }
+}
+
 const databaseUrl = readEnv("DATABASE_URL");
 const nextAuthSecret = readEnv("NEXTAUTH_SECRET");
 const nextAuthUrl = readEnv("NEXTAUTH_URL");
 const googleClientId = readEnv("AUTH_GOOGLE_ID");
 const googleClientSecret = readEnv("AUTH_GOOGLE_SECRET");
+/**
+ * Sign in with Apple on the web: the Services ID, the developer team id, and the Sign in with Apple
+ * key (its id and its .p8 contents). The key signs the client secret Apple asks for (src/lib/auth/apple.ts).
+ */
+const appleClientId = readEnv("AUTH_APPLE_ID");
+const appleTeamId = readEnv("AUTH_APPLE_TEAM_ID");
+const appleKeyId = readEnv("AUTH_APPLE_KEY_ID");
+/** The .p8 file's PEM. One line in .env files, so `\n` escapes stand for its line breaks. */
+const applePrivateKeyRaw = readEnv("AUTH_APPLE_PRIVATE_KEY")?.replace(/\\n/g, "\n").trim();
+const applePrivateKey = applePrivateKeyRaw && isPrivateKey(applePrivateKeyRaw) ? applePrivateKeyRaw : undefined;
 const resendApiKey = readEnv("AUTH_RESEND_KEY");
 const emailFrom = readEnv("EMAIL_FROM");
 /** Shared with the droplet's timers: authorizes the internal job routes (src/app/api/internal). */
@@ -70,6 +89,9 @@ const cloudEnabled = Boolean(databaseUrl && nextAuthSecret);
 /** Sign-in methods. Each needs cloud features plus its own credentials. */
 const googleAuthEnabled = cloudEnabled && Boolean(googleClientId && googleClientSecret);
 const emailAuthEnabled = cloudEnabled && Boolean(resendApiKey && emailFrom);
+const appleVars = { AUTH_APPLE_ID: appleClientId, AUTH_APPLE_TEAM_ID: appleTeamId, AUTH_APPLE_KEY_ID: appleKeyId, AUTH_APPLE_PRIVATE_KEY: applePrivateKeyRaw };
+const appleMissing = Object.keys(appleVars).filter((name) => !appleVars[name as keyof typeof appleVars]);
+const appleAuthEnabled = cloudEnabled && appleMissing.length === 0 && applePrivateKey !== undefined;
 /** API key per AI provider. Add a provider here when it gets an adapter in src/lib/ai/providers. */
 const aiApiKeys: Record<string, { env: string; key: string | undefined }> = {
   anthropic: { env: "ANTHROPIC_API_KEY", key: anthropicApiKey },
@@ -87,6 +109,10 @@ export const config = Object.freeze({
   nextAuthUrl,
   googleClientId,
   googleClientSecret,
+  appleClientId,
+  appleTeamId,
+  appleKeyId,
+  applePrivateKey,
   resendApiKey,
   emailFrom,
   cronSecret,
@@ -108,6 +134,7 @@ export const config = Object.freeze({
   cloudEnabled,
   googleAuthEnabled,
   emailAuthEnabled,
+  appleAuthEnabled,
   /** AI-generated draft plan. A paid, hosted feature, so it needs accounts. */
   aiEnabled: cloudEnabled && Boolean(aiApiKey),
   /** Stripe checkout + entitlements. Needs accounts to attach purchases to. */
@@ -146,6 +173,7 @@ export const publicFlags = Object.freeze({
   /** Which sign-in methods exist, so the landing page never renders a button that 404s. */
   googleAuthEnabled: config.googleAuthEnabled,
   emailAuthEnabled: config.emailAuthEnabled,
+  appleAuthEnabled: config.appleAuthEnabled,
   aiEnabled: config.aiEnabled,
   paymentsEnabled: config.paymentsEnabled,
   dataPipelineEnabled: config.dataPipelineEnabled,
@@ -166,11 +194,16 @@ if (databaseUrl && !nextAuthSecret) {
 if (nextAuthSecret && !databaseUrl) {
   warnings.push("NEXTAUTH_SECRET is set but DATABASE_URL is not, so cloud features are disabled.");
 }
-if (cloudEnabled && !googleAuthEnabled && !emailAuthEnabled) {
-  warnings.push("Cloud features are enabled but no sign-in method is configured: set AUTH_GOOGLE_ID/AUTH_GOOGLE_SECRET or AUTH_RESEND_KEY/EMAIL_FROM.");
+if (cloudEnabled && !googleAuthEnabled && !emailAuthEnabled && !appleAuthEnabled) {
+  warnings.push("Cloud features are enabled but no sign-in method is configured: set AUTH_GOOGLE_ID/AUTH_GOOGLE_SECRET, AUTH_RESEND_KEY/EMAIL_FROM or the AUTH_APPLE_* variables.");
 }
 if (Boolean(googleClientId) !== Boolean(googleClientSecret)) {
   warnings.push("Only one of AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET is set, so Google sign-in is off.");
+}
+if (appleMissing.length > 0 && appleMissing.length < Object.keys(appleVars).length) {
+  warnings.push(`${appleMissing.join(", ")} ${appleMissing.length > 1 ? "are" : "is"} not set, so Sign in with Apple is off.`);
+} else if (applePrivateKeyRaw && !applePrivateKey) {
+  warnings.push("AUTH_APPLE_PRIVATE_KEY isn't the PEM of a Sign in with Apple .p8 key, so Sign in with Apple is off.");
 }
 if (Boolean(resendApiKey) !== Boolean(emailFrom)) {
   warnings.push("Only one of AUTH_RESEND_KEY and EMAIL_FROM is set, so email sign-in is off.");

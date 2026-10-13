@@ -7,6 +7,7 @@ const OFF: PublicFlags = {
   cloudEnabled: false,
   googleAuthEnabled: false,
   emailAuthEnabled: false,
+  appleAuthEnabled: false,
   aiEnabled: false,
   paymentsEnabled: false,
   dataPipelineEnabled: false,

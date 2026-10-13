@@ -108,7 +108,7 @@ export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueS
   if (!user) {
     // The same sign-in the landing page shows, in a dialog. Anyone who started an anonymous
     // draft is redirected away from `/` from then on, so this is their only route to an account.
-    if (!flags.emailAuthEnabled && !flags.googleAuthEnabled) return null;
+    if (!flags.emailAuthEnabled && !flags.googleAuthEnabled && !flags.appleAuthEnabled) return null;
     return (
       <>
         <button ref={signInBtn} className={bar.textBtn} onClick={() => setShowSignIn(true)} title="Sign in to sync your leagues across devices">

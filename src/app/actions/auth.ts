@@ -49,3 +49,9 @@ export async function signInWithGoogle(next?: string): Promise<void> {
   if (!authjs || !config.googleAuthEnabled) return;
   await authjs.signIn("google", { redirectTo: landing(next) });
 }
+
+/** Starts Sign in with Apple. Redirects to Apple, which posts back to /api/auth/callback/apple. */
+export async function signInWithApple(next?: string): Promise<void> {
+  if (!authjs || !config.appleAuthEnabled) return;
+  await authjs.signIn("apple", { redirectTo: landing(next) });
+}

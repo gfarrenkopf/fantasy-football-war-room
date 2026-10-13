@@ -2,11 +2,13 @@ import "server-only";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { eq } from "drizzle-orm";
 import NextAuth, { type NextAuthConfig } from "next-auth";
+import Apple from "next-auth/providers/apple";
 import type { EmailConfig } from "next-auth/providers/email";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { config } from "@/lib/config";
 import { getDb, schema } from "@/lib/db";
+import { appleDisplayName, cachedAppleClientSecret, storeAppleName } from "./apple";
 import { renderSignInEmail } from "./email";
 import type { SessionUser } from "./types";
 
@@ -16,6 +18,7 @@ function authConfig(): NextAuthConfig {
   const providers: NextAuthConfig["providers"] = [];
   if (config.googleAuthEnabled) providers.push(Google({ clientId: config.googleClientId, clientSecret: config.googleClientSecret }));
   if (config.emailAuthEnabled) providers.push(Resend({ name: "Email", apiKey: config.resendApiKey, from: config.emailFrom, sendVerificationRequest }));
+  if (config.appleAuthEnabled) providers.push(appleProvider());
 
   return {
     adapter: DrizzleAdapter(getDb(), {
@@ -35,12 +38,65 @@ function authConfig(): NextAuthConfig {
     trustHost: Boolean(config.nextAuthUrl) || !config.isProduction,
     // Auth.js renders its sign-in page outside the app, so it takes a literal color: --color-value from globals.css.
     theme: { colorScheme: "dark", brandColor: "#22c55e" },
+    cookies: appleCookies(),
+    events: {
+      // Apple names the user only on their first consent. A new account already got the name at
+      // creation (the provider's profile); this covers an existing account linked by email.
+      async linkAccount({ user, account, profile }) {
+        if (account.provider === "apple" && user.id) await storeAppleName(getDb(), user.id, profile.name ?? null);
+      },
+    },
     callbacks: {
       // Database sessions hand this the full session row (including its token); expose only what the app needs.
       session({ session, user }) {
         return { expires: session.expires, user: { id: user.id, email: user.email, name: user.name, image: user.image } } as typeof session;
       },
     },
+  };
+}
+
+/**
+ * Sign in with Apple. Apple wants a freshly signed JWT as the client secret, not a static one
+ * (see apple.ts), and sends the user's name only on first consent, as `profile.user`.
+ *
+ * Account linking: `allowDangerousEmailAccountLinking` lets an Apple sign-in land on the existing
+ * account with the same email (made with Google or a magic link) instead of failing with
+ * OAuthAccountNotLinked. Auth.js calls it dangerous because a provider that doesn't verify emails
+ * would let anyone claim an account by typing its address. Apple only issues verified emails: an
+ * Apple ID's address is confirmed before it can be used, and "Hide my email" gives a unique relay
+ * address that matches no existing account (that user simply gets a new account, as expected).
+ * That is the same trust the magic link already places in the inbox, so linking is safe here. It
+ * is set on Apple only; Google keeps the default.
+ */
+function appleProvider() {
+  return Apple({
+    clientId: config.appleClientId,
+    clientSecret: cachedAppleClientSecret({
+      teamId: config.appleTeamId!,
+      keyId: config.appleKeyId!,
+      clientId: config.appleClientId!,
+      privateKey: config.applePrivateKey!,
+    }),
+    allowDangerousEmailAccountLinking: true,
+    // The default falls back to the email as the name; an unnamed account should stay unnamed.
+    profile(profile) {
+      return { id: profile.sub, name: appleDisplayName(profile.user?.name), email: profile.email, image: null };
+    },
+  });
+}
+
+/**
+ * Apple returns to the callback with a cross-site POST (`response_mode=form_post`), and browsers
+ * don't send SameSite=Lax cookies on those, so Auth.js would lose its state and nonce checks.
+ * Those two short-lived cookies go out as SameSite=None, which browsers only accept over HTTPS;
+ * Apple needs HTTPS anyway, so plain-HTTP dev servers keep the defaults.
+ */
+function appleCookies(): NextAuthConfig["cookies"] {
+  if (!config.appleAuthEnabled || !config.nextAuthUrl?.startsWith("https://")) return undefined;
+  const options = { httpOnly: true, sameSite: "none" as const, path: "/", secure: true, maxAge: 15 * 60 };
+  return {
+    state: { name: "__Secure-authjs.state", options },
+    nonce: { name: "__Secure-authjs.nonce", options },
   };
 }
 
