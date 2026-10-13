@@ -12,6 +12,7 @@ What we know about ESPN's live draft, from test drafts on 2026-09-21: the origin
 6. [Probe scripts](#6-probe-scripts)
 7. [Open questions](#7-open-questions)
 8. [In-season reads and lineup writes](#8-in-season-reads-and-lineup-writes)
+9. [Connecting ESPN on iOS](#9-connecting-espn-on-ios)
 
 ---
 
@@ -300,4 +301,32 @@ From probes on 2026-09-29 (NFL week 4) against test league 704343562: team 1 fro
 - *Still to probe:*
   - how the partner drops to make room when accepting an uneven trade;
   - vetoes during review (`vetoVotesRequired` is 1 in the test league).
+
+## 9. Connecting ESPN on iOS
+
+The iPhone app connects ESPN without the bookmarklet (APE-368, the 17.0 spike; built in APE-377). It shows ESPN's own sign-in page in a `WKWebView`, reads the two login cookies from that web view's cookie store, and sends them to `POST /api/v1/espn/connect`, which runs `connectSeason()` exactly as the web's claim does. The code is `mobile/ios/DraftRoom/Features/EspnConnect/`.
+
+**Confirmed on the test account (2026-10-13):**
+
+- **The cookies need no conversion.** `parseEspnLogin()` accepts `espn_s2` exactly as ESPN sets it (URL-encoded, about 300 characters, `%` included) and `SWID` with its braces. The app sends cookie values as `WKHTTPCookieStore` returns them.
+- **The fan API lists the user's leagues**, so the app offers a picker instead of asking for a league id. `GET https://fan.api.espn.com/apis/v2/fans/{SWID}` with the two cookies returns `preferences[]`. Each fantasy league is a preference with `typeId: 9` whose `metaData.entry` has:
+  - `abbrev: "FFL"` for fantasy football (other games, like `FBA`, are skipped);
+  - `seasonId`, `entryId` (the user's team id), and `entryMetadata.teamName`;
+  - `groups[0]`: the league, as `groupId` and `groupName`, plus `draftStatus` and `draftDate`.
+
+  No query parameters are needed. `listFanLeagues()` in `src/lib/server/espn/fanLeagues.ts` reads it for `POST /api/v1/espn/leagues`. The app keeps only the newest season's leagues, and asks for a league link or id when the list is empty or ESPN can't be reached.
+- **The "signed in" signal is the `espn_s2` cookie.** ESPN gives signed-out visitors a `SWID` too, so `SWID` alone means nothing. The app watches the web view's cookie store (`WKHTTPCookieStoreObserver`) and closes the sheet once both cookies exist on an `espn.com` domain, wherever the page has navigated.
+
+**The web view:**
+
+- It loads `https://www.espn.com/login` with a non-persistent data store, so nothing survives the sheet. The cookies stay in memory until the connect request carries them.
+- Its user agent ends in `Version/18.0 Mobile/15E148 Safari/604.1` (`applicationNameForUserAgent`), so the page sees Safari rather than an unknown embedded browser.
+- `/login` is a small page that loads Disney's `DisneyID.js` (`registerdisney.go.com`, client `ESPN-ONESITE.WEB`) and opens the OneID form as a lightbox. On the iPhone 17 simulator (iOS 27) it rendered in the web view as normal, with no "unsupported browser" page: the username and password fields, Log In, and reCAPTCHA's invisible badge. The web view must be opaque; with a clear background the lightbox draws nothing over the app's dark background.
+- In Debug builds, the app logs each page the web view finishes loading (host and path only) under the `espn-signin` category, for working out sign-in problems.
+
+**Still to confirm by signing in by hand** (needs a person with the test account's password, on the simulator or a phone):
+
+1. Signing in completes inside the web view: no captcha loop, no forced app hand-off, no second factor the web view can't finish. If it refuses, try the user agent without the Safari suffix, then a full Safari user agent.
+2. `espn_s2` lands in the web view's cookie store (domain `.espn.com`) after sign-in, and the cookie observer fires.
+3. The whole flow on the test league (704343562): sign in, pick "App Tester", connect, land on the league.
 
