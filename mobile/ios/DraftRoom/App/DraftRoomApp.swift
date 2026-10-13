@@ -9,6 +9,7 @@ struct DraftRoomApp: App {
             HomeView()
                 .environment(environment)
                 .preferredColorScheme(.dark)
+                .tint(.focus)
         }
     }
 }

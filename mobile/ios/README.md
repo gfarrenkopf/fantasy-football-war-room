@@ -36,6 +36,20 @@ The project uses folder-synchronized groups: any file added under `DraftRoom/`, 
 | `DraftRoom/Design/` | Design tokens (generated from `src/app/globals.css`) and shared components |
 | `DraftRoom/Support/` | Keychain, environment and other plumbing |
 
+## Design tokens
+
+`DraftRoom/Design/Tokens.swift` is generated from the web's tokens (the `@theme` block in `src/app/globals.css` for colors, and `DESIGN.md` for the type scale, radii and spacing). Never edit it by hand. After changing a web token, run `npm run ios:tokens` and commit the result; web CI fails while the file is stale.
+
+UI code uses token names only, never raw hex, the same as the web's Tailwind rule:
+
+- colors: `.foregroundStyle(.muted)`, `.background(.panel)`
+- type: `.typeStyle(TypeScale.body)`
+- radii and spacing: `Radius.card`, `Spacing.md`
+
+`Design/Typography.swift` explains how web sizes map to the iPhone. `Design/TokenSwatches.swift` is a preview-only sheet of the tokens.
+
+## Swift
+
 Swift 6 language mode is on, so strict concurrency checking is too. State lives in `@Observable` classes.
 
 ## Xcode Cloud
