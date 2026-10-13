@@ -17,7 +17,10 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  # Only the web app runs on the droplet. A merge that only changes mobile/ (the iPhone app, which
+  # Xcode Cloud builds), docs/ or Markdown files has nothing to deploy. PRs land as merge commits, so the merge's
+  # first parent is the main it was merged into; a hand-run deploy always goes ahead.
+  changes:
     # Forks and self-hosted copies of the repo have no droplet; skip there.
     if: >-
       github.repository == 'gfarrenkopf/fantasy-football-war-room' && (
@@ -26,6 +29,33 @@ jobs:
          github.event.workflow_run.event == 'push' &&
          github.event.workflow_run.head_repository.full_name == github.repository)
       )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      web: ${{ steps.diff.outputs.web }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+
+      - name: Look for web changes
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] || ! git rev-parse -q --verify HEAD^1 >/dev/null; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD^1 HEAD | grep -qvE '^(mobile|docs)/|\.md$'; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only mobile/, docs/ or Markdown changed; nothing to deploy."
+            echo "web=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:

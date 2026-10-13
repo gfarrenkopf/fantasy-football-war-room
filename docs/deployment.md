@@ -237,7 +237,7 @@ It does check them (APE-354). After every deploy and rollback, `deploy.sh` compa
 
 ## 10. Deploy on merge
 
-`.github/workflows/deploy.yml` deploys every push to `main` once CI passes on it. You can follow it in the repo's **Actions** tab and under **Environments → production**. You can also start it by hand from the Actions tab (**Deploy → Run workflow**), which deploys the current `main`.
+`.github/workflows/deploy.yml` deploys every push to `main` once CI passes on it, unless the merge only changes `mobile/`, `docs/` or Markdown files (`*.md`), none of which the server runs: the iPhone app ships through Xcode Cloud, and the docs are read on GitHub. Such a merge skips the deploy (its run shows the `deploy` job as skipped). The check compares the merge with its first parent, so a direct push of several commits is judged by its last one. You can follow it in the repo's **Actions** tab and under **Environments → production**. You can also start it by hand from the Actions tab (**Deploy → Run workflow**), which deploys the current `main`.
 
 The workflow connects as `warroom` with a key that can only run [`deploy/ci-deploy.sh`](../deploy/ci-deploy.sh). That script accepts one commit sha that is already on `main` and passes it to `deploy.sh`. Rollback and anything else still happen over SSH (§9).
 
