@@ -137,6 +137,21 @@ export const entitlements = pgTable(
   (t) => [primaryKey({ columns: [t.leagueId, t.kind] })],
 );
 
+/**
+ * Purchases of deleted accounts (APE-374), kept for tax and refunds with nothing linking them to a
+ * person: no user, no league, just what was bought, when, for how much, and the Stripe reference
+ * (which Stripe can match to its own payment record). Written only by deleteAccount().
+ */
+export const deletedAccountPurchases = pgTable("deleted_account_purchases", {
+  /** The entitlement's source, e.g. a Stripe checkout session id. */
+  source: text("source").primaryKey(),
+  kind: text("kind").notNull(),
+  amountTotal: integer("amount_total"),
+  currency: text("currency"),
+  grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }).notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
 /** Where a league's AI plan job stands. See src/lib/server/aiPlans.ts. */
 export type AiPlanStatus = PlanJobStatus;
 

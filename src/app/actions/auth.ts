@@ -1,8 +1,10 @@
 "use server";
 
 import { AuthError } from "next-auth";
-import { authjs } from "@/lib/auth";
+import { authjs, getSessionUser } from "@/lib/auth";
 import { config } from "@/lib/config";
+import { getDb } from "@/lib/db";
+import { deleteAccount } from "@/lib/server/account";
 
 /** Where a successful sign-in lands by default: the war room, with the user's leagues already synced. */
 const AFTER_SIGN_IN = "/draft?welcome=1";
@@ -54,4 +56,19 @@ export async function signInWithGoogle(next?: string): Promise<void> {
 export async function signInWithApple(next?: string): Promise<void> {
   if (!authjs || !config.appleAuthEnabled) return;
   await authjs.signIn("apple", { redirectTo: landing(next) });
+}
+
+/**
+ * Deletes the signed-in account and everything it owns (deleteAccount()), then ends the session.
+ * The caller has already had the user type DELETE; the phrase is checked again here so nothing
+ * else can call this by accident. The iPhone app uses DELETE /api/v1/account instead.
+ */
+export async function deleteAccountAction(confirm: string): Promise<{ ok: boolean }> {
+  if (!authjs || confirm !== "DELETE") return { ok: false };
+  const user = await getSessionUser();
+  if (!user) return { ok: false };
+  await deleteAccount(getDb(), user.userId);
+  // The session row went with the account; this clears the cookie.
+  await authjs.signOut({ redirect: false });
+  return { ok: true };
 }

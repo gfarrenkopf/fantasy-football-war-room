@@ -120,3 +120,17 @@ describe("POST /api/v1/auth/signout", () => {
     expect((await me({ authorization: `Bearer ${token}` })).status).toBe(401);
   });
 });
+
+describe("DELETE /api/v1/account", () => {
+  const del = (token: string, body: unknown) =>
+    new Request("http://localhost/api/v1/account", { method: "DELETE", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("needs { confirm: \"DELETE\" }, then deletes the account", async () => {
+    const { DELETE } = await import("@/app/api/v1/account/route");
+    const { token } = await createAppSession(db, await createTestUser(db));
+    expect((await DELETE(del(token, {}), undefined as never)).status).toBe(400);
+    expect((await DELETE(del(token, { confirm: "delete" }), undefined as never)).status).toBe(400);
+    expect((await DELETE(del(token, { confirm: "DELETE" }), undefined as never)).status).toBe(204);
+    expect((await me({ authorization: `Bearer ${token}` })).status).toBe(401);
+  });
+});

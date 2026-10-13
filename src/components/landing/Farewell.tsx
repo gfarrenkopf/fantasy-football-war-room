@@ -60,6 +60,7 @@ const soonHeadline = (c: DraftCountdown): string | null =>
 export const FarewellFace = forwardRef<HTMLHeadingElement, { farewell: Farewell | null | undefined; onSignIn(): void; onNewDraft(): void }>(
   function FarewellFace({ farewell, onSignIn, onNewDraft }, heading) {
     if (farewell === undefined) return <div className={s.face} aria-busy="true" />;
+    if (farewell?.deleted) return <DeletedFace ref={heading} email={farewell.email} onNewDraft={onNewDraft} />;
 
     const mood = farewellMood(farewell);
     // Read on the client only: the face renders after the hand-off is read, never on the server.
@@ -245,3 +246,29 @@ function Stakes({ league: l }: { league: FarewellLeague }) {
     </p>
   );
 }
+
+/** The goodbye after deleting the account: it's gone, and the board still works without one. */
+const DeletedFace = forwardRef<HTMLHeadingElement, { email: string | null; onNewDraft(): void }>(function DeletedFace({ email, onNewDraft }, heading) {
+  return (
+    <div className={s.face}>
+      <h1 className={s.thesis} ref={heading} tabIndex={-1}>
+        Your account is deleted.
+      </h1>
+      <p className={s.sub}>
+        {email ? (
+          <>
+            <b className={s.fwEmail}>{email}</b> and everything saved to it are gone.{" "}
+          </>
+        ) : (
+          "Everything saved to your account is gone. "
+        )}
+        The board, practice drafts and plans still work on this device without an account.
+      </p>
+      <div className={s.fwActions}>
+        <button type="button" className={cx("btn", "primary", "wide")} onClick={onNewDraft}>
+          Start a new draft
+        </button>
+      </div>
+    </div>
+  );
+});

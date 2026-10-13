@@ -68,6 +68,17 @@ export function configureStores({ cloudEnabled, userId }: { cloudEnabled: boolea
   }
 }
 
+/**
+ * Drops this device's cached copy of a deleted account, unsynced changes included: there is no
+ * account left for them to reach. The next configureStores() starts signed out.
+ */
+export function forgetAccount(userId: string): void {
+  if (typeof window === "undefined") return;
+  const storage = browserStorage();
+  clearNamespace(storage, userId);
+  if (readJson(storage, LAST_USER_KEY) === userId) removeKey(storage, LAST_USER_KEY);
+}
+
 export function getStores(): Stores {
   stores ??= createLocalStores(undefined, { legacy });
   return stores;

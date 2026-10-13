@@ -2,9 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { SessionUser } from "@/lib/auth/types";
-import { signOutAction } from "@/app/actions/auth";
+import { deleteAccountAction, signOutAction } from "@/app/actions/auth";
 import { formatMoney } from "@/lib/money";
-import { farewellMood, gatherFarewell, getStores, saveFarewell, soonestDraft, type Farewell, type FarewellMood, type Purchase } from "@/lib/storage";
+import { farewellMood, forgetAccount, gatherFarewell, getStores, saveFarewell, soonestDraft, type Farewell, type FarewellMood, type Purchase } from "@/lib/storage";
 import { SignIn } from "@/components/landing/SignIn";
 import bar from "@/components/shell/appBar.module.css";
 import { EspnConnectionDialog } from "@/components/shell/EspnConnection";
@@ -152,6 +152,31 @@ export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueS
     window.location.assign("/?farewell=1");
   };
 
+  const deleteAccount = async () => {
+    const ok = await confirm({
+      message:
+        "This deletes your Draft Room account for good: your leagues, drafts, plans, ESPN connection and settings, on every device. Purchases can't be refunded through it. This can't be undone.",
+      confirmLabel: "Delete account",
+      typeToConfirm: "DELETE",
+      danger: true,
+    });
+    if (!ok) return;
+    const root = document.documentElement;
+    root.dataset.leaving = "";
+    document.body.dataset.line = "Deleting your account…";
+    try {
+      const result = await deleteAccountAction("DELETE");
+      if (!result.ok) throw new Error("Account deletion was refused");
+    } catch (error) {
+      delete root.dataset.leaving;
+      throw error;
+    }
+    forgetAccount(user.userId);
+    saveFarewell({ email: user.email, leagues: [], deleted: true });
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/?farewell=1");
+  };
+
   const label = user.email ?? "Signed in";
   // Picking an item closes the popover first, so a dialog it opens isn't stacked under it.
   const pick = (action: () => void) => () => {
@@ -216,6 +241,11 @@ export function AccountMenu({ leagueSettings, espn }: { leagueSettings?: LeagueS
           )}
           <button className={bar.item} role="menuitem" onClick={pick(() => void signOut())}>
             <span>Sign out</span>
+          </button>
+        </div>
+        <div className={bar.group}>
+          <button className={`${bar.item} ${bar.dangerItem}`} role="menuitem" onClick={pick(() => void deleteAccount())}>
+            <span>Delete account</span>
           </button>
         </div>
       </div>
