@@ -14,6 +14,16 @@ Debug builds talk to `http://localhost:3000`, so start the web app first (`npm r
 
 Until the Apple Developer enrollment clears (Epic 16), build for the simulator only. From the command line, add `CODE_SIGNING_ALLOWED=NO`.
 
+## Signing in on the simulator
+
+The app signs in three ways (`docs/ios.md` §4): Sign in with Apple, Google through the system browser sheet, and an emailed link. Against the local dev server:
+
+- **Apple** needs a signed build with the Sign in with Apple capability, so it waits for the Apple team (Epic 16).
+- **Google** works when the dev server has `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`. On a dev server, the hand-off comes back through the app's `draftroom://` scheme, not a Universal Link.
+- **Email** sends a real link. Universal Links don't work for `localhost`, so open the link's `email` and `token` through the app's scheme: `xcrun simctl openurl booted "draftroom://auth/email?email=<email>&token=<token>"`.
+
+Unsigned builds (`CODE_SIGNING_ALLOWED=NO`) can't use the Keychain. Debug builds then keep the session in memory, so signing in works until the app quits, and the Keychain test is skipped.
+
 ## Test
 
 ```sh

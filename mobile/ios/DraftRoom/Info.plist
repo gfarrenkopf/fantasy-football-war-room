@@ -6,6 +6,19 @@
 	<key>APIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
 	<!-- Lets Debug builds reach the local dev server over plain HTTP. Covers localhost only. -->
+	<!-- The app's own scheme: Google sign-in hands back through it on development servers, and
+	     `xcrun simctl openurl booted "draftroom://auth/email?email=…&token=…"` tests a magic link. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>tech.apeman.draftroom</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>draftroom</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
