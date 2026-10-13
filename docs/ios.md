@@ -78,6 +78,20 @@ The plan:
 4. **`withUser()` accepts the Bearer token** as well as the cookie, resolving to the same `sessions` row, so every route the app calls is protected the same way. (`isSameOrigin()` already lets requests without an `Origin` header through, which is what native requests look like.)
 5. **Account deletion** (`DELETE /api/v1/account`, plus a button in the web account menu): App Store guideline 5.1.1(v) requires it in any app with sign-up. It deletes the user, their leagues, their stored ESPN login and their device tokens.
 
+### The sign-in endpoints (built in 17.4)
+
+Every exchange ends the same way: a row in Auth.js's `sessions` table and `{ token, expiresAt, user, isNew }`. App sessions last 90 days and extend when used in their second half. All of this is in `src/lib/server/appAuth.ts`. The exchange endpoints allow 10 attempts a minute per address.
+
+| Route | What it does |
+|---|---|
+| `POST /api/v1/auth/apple` | `{ identityToken, nonce, fullName? }`. Verifies the token against Apple's keys: issuer, audience `tech.apeman.draftroom`, expiry, and `sha256(nonce)`. Links to an existing account by verified email, like the web. |
+| `GET /api/v1/auth/google` | Opened in an ephemeral `ASWebAuthenticationSession`. Runs the web's Google sign-in, then `/api/v1/auth/handoff` swaps that browser session for a 60-second single-use code and redirects to `https://draftroom.online/app/callback?code=…` (a Universal Link; `draftroom://auth/callback` on dev servers). |
+| `POST /api/v1/auth/code` | `{ code }`. Trades the hand-off code for a session. |
+| `POST /api/v1/auth/email/start` | `{ email }`. Sends the magic link, with `/app/signed-in` as its destination. That destination is what the Universal Link rule matches, so links asked for on the web keep opening the web. |
+| `POST /api/v1/auth/email` | `{ email, token }`, taken from the opened link. Uses it up exactly as Auth.js would. |
+| `POST /api/v1/auth/signout` | Deletes the Bearer token's session. |
+| `GET /api/v1/me` | The user, feature flags (`season`, `ai`, `payments`) and `minAppVersion`. |
+
 ## 5. Connecting ESPN
 
 ```
