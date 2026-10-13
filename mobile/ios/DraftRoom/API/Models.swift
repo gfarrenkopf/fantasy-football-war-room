@@ -34,3 +34,48 @@ struct Me: Codable, Equatable, Sendable {
 struct ServerError: Codable, Sendable {
     let error: String
 }
+
+// MARK: ESPN (/api/v1/espn)
+
+/// GET /api/v1/espn/disclosure: the web's own consent text and version.
+struct EspnDisclosure: Codable, Equatable, Sendable {
+    let version: Int
+    let points: [String]
+}
+
+/// The two ESPN cookies, read from the sign-in web view. Held in memory only, until sent.
+struct EspnLogin: Codable, Equatable, Sendable {
+    let espnS2: String
+    let swid: String
+}
+
+/// One of the user's ESPN fantasy football leagues (POST /api/v1/espn/leagues).
+struct EspnLeagueChoice: Codable, Equatable, Hashable, Sendable, Identifiable {
+    let espnLeagueId: String
+    let name: String
+    let season: Int
+    let espnTeamId: Int
+    let teamName: String?
+
+    var id: String { "\(season):\(espnLeagueId)" }
+}
+
+struct EspnLeagueList: Codable, Sendable {
+    let leagues: [EspnLeagueChoice]
+}
+
+/// POST /api/v1/espn/connect
+struct EspnConnected: Codable, Equatable, Sendable {
+    let leagueId: String
+    let created: Bool
+}
+
+/// GET /api/v1/espn/login
+struct EspnLoginStatus: Codable, Equatable, Sendable {
+    struct Login: Codable, Equatable, Sendable {
+        let status: String
+        let season: Int
+    }
+
+    let login: Login?
+}

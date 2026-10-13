@@ -9,6 +9,9 @@ struct SettingsView: View {
     @State private var typed = ""
     @State private var working = false
     @State private var errorMessage: String?
+    /// nil while loading or when in-season features are off; .some(nil) when not connected.
+    @State private var espn: EspnLoginStatus?
+    @State private var connecting = false
 
     var body: some View {
         NavigationStack {
@@ -17,6 +20,23 @@ struct SettingsView: View {
                     Section("Signed in as") {
                         Text(user.email ?? user.name ?? "Your account")
                             .foregroundStyle(.text)
+                    }
+                }
+                if session.me?.flags.season == true {
+                    Section("ESPN connection") {
+                        if let login = espn?.login {
+                            LabeledContent("Status", value: login.status == "connected" ? "Connected · \(login.season)" : "Needs reconnecting")
+                                .foregroundStyle(.text)
+                            if login.status != "connected" {
+                                Button("Reconnect ESPN") { connecting = true }
+                            }
+                            Button("Disconnect ESPN", role: .destructive) { Task { await disconnect() } }
+                                .foregroundStyle(.softRed)
+                        } else if espn != nil {
+                            Button("Connect ESPN") { connecting = true }
+                        } else {
+                            ProgressView()
+                        }
                     }
                 }
                 Section {
@@ -61,6 +81,8 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .task { await loadEspn() }
+            .sheet(isPresented: $connecting, onDismiss: { Task { await loadEspn() } }) { EspnConnectView() }
             .alert("Delete your account?", isPresented: $confirmingDelete) {
                 TextField("DELETE", text: $typed)
                     .textInputAutocapitalization(.characters)
@@ -73,6 +95,20 @@ struct SettingsView: View {
             } message: {
                 Text("Everything saved to your account is deleted for good. Type DELETE to confirm.")
             }
+        }
+    }
+
+    private func loadEspn() async {
+        guard session.me?.flags.season == true else { return }
+        espn = try? await session.api.get("api/v1/espn/login")
+    }
+
+    private func disconnect() async {
+        do {
+            try await session.api.send("DELETE", "api/v1/espn/login")
+            espn = EspnLoginStatus(login: nil)
+        } catch {
+            errorMessage = error.message
         }
     }
 
