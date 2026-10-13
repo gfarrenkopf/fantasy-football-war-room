@@ -28,6 +28,8 @@ export interface FarewellLeague {
 export interface Farewell {
   email: string | null;
   leagues: FarewellLeague[];
+  /** The account was deleted, not just signed out of: the goodbye says so and offers no way back in. */
+  deleted?: boolean;
 }
 
 /** Unfinished beats done: a paused draft is the reason to come back. */

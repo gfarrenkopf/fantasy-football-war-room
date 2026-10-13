@@ -162,6 +162,13 @@
       "when": 1791481587161,
       "tag": "0022_backfill_league_espn",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791903819412,
+      "tag": "0023_deleted_account_purchases",
+      "breakpoints": true
     }
   ]
 }

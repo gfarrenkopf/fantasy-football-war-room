@@ -51,6 +51,8 @@ const eslintConfig = defineConfig([
     "prototype/**",
     // Local research probes, git-ignored (see .gitignore).
     ".research/**",
+    // The iOS app (Swift), built with Xcode, not part of the web build.
+    "mobile/**",
   ]),
 ]);
 

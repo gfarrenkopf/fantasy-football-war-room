@@ -137,6 +137,7 @@ In the editor, add at least one sign-in method. The variables are described in [
 
 - **Google:** `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`. In Google Cloud, set the OAuth redirect URI to `https://warroom.example.com/api/auth/callback/google`.
 - **Email link:** `AUTH_RESEND_KEY` and `EMAIL_FROM`. The sender's domain must be verified in Resend.
+- **Apple:** `AUTH_APPLE_ID` (the Services ID, `tech.apeman.draftroom.web`), `AUTH_APPLE_TEAM_ID`, `AUTH_APPLE_KEY_ID`, and `AUTH_APPLE_PRIVATE_KEY` (the Sign in with Apple `.p8` key's contents on one line, with `\n` for each line break). In the Services ID, set the return URL to `https://warroom.example.com/api/auth/callback/apple`; Apple only accepts HTTPS. `AUTH_APPLE_TEAM_ID` on its own also turns on `/.well-known/apple-app-site-association`, the iPhone app's Universal Links file ([ios.md](ios.md)).
   - **Give the sender a name,** e.g. `EMAIL_FROM="Fantasy War Room <gm@warroom.example.com>"`. A bare address shows up in the inbox as `gm`, and people trust a name they recognize.
   - **Keep sign-in links out of spam.** In Resend's *Domains* page, add every DNS record it lists (the SPF `TXT`, the DKIM `TXT` records and the `MX` for the bounce subdomain) and wait for each to show *Verified*. Then add a DMARC record: `TXT` on `_dmarc.warroom.example.com` with `v=DMARC1; p=none; rua=mailto:you@example.com`. Gmail sends mail from unauthenticated or DMARC-less domains to Junk. Test by sending a link to a Gmail address and choosing *Show original*: SPF, DKIM and DMARC should all read `PASS`.
 

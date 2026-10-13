@@ -66,7 +66,7 @@ export function EntryPanel({
   const [busy, setBusy] = useState(false);
   const [face, setFace] = useState<Face>(openOn);
   const errors = validateLeague(league, dataset);
-  const canSignIn = flags.cloudEnabled && (flags.emailAuthEnabled || flags.googleAuthEnabled);
+  const canSignIn = flags.cloudEnabled && (flags.emailAuthEnabled || flags.googleAuthEnabled || flags.appleAuthEnabled);
 
   /*
    * The re-deal, said out loud. Changing the league re-deals the board behind this panel, which a

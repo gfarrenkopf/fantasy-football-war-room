@@ -41,6 +41,8 @@ interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  /** A word the user has to type before the confirm button works, for what can't be undone. */
+  typeToConfirm?: string;
 }
 
 type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
@@ -50,10 +52,12 @@ const ConfirmContext = createContext<ConfirmFn>(async () => false);
 /** In-app replacement for window.confirm(), which would block the page. */
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = useState<(ConfirmOptions & { resolve: (ok: boolean) => void }) | null>(null);
+  const [typed, setTyped] = useState("");
 
   const confirm = useCallback<ConfirmFn>(
     (options) =>
       new Promise((resolve) => {
+        setTyped("");
         setPending({ ...options, resolve });
       }),
     [],
@@ -90,11 +94,35 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           <div className={s.scrim} onClick={() => close(false)} />
           <div className={s.dialog} role="alertdialog" aria-modal="true" aria-describedby="confirm-message">
             <p id="confirm-message">{pending.message}</p>
+            {pending.typeToConfirm && (
+              <label className={s.typeToConfirm}>
+                <span>
+                  Type <b>{pending.typeToConfirm}</b> to confirm
+                </span>
+                <input
+                  className={s.input}
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && typed === pending.typeToConfirm) close(true);
+                  }}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  autoFocus
+                />
+              </label>
+            )}
             <div className={s.dialogActions}>
               <button className={s.btn} onClick={() => close(false)}>
                 {pending.cancelLabel ?? "Cancel"}
               </button>
-              <button className={cx("btn", pending.danger ? "danger" : "primary")} onClick={() => close(true)} autoFocus>
+              <button
+                className={cx("btn", pending.danger ? "danger" : "primary")}
+                onClick={() => close(true)}
+                disabled={!!pending.typeToConfirm && typed !== pending.typeToConfirm}
+                autoFocus={!pending.typeToConfirm}
+              >
                 {pending.confirmLabel ?? "OK"}
               </button>
             </div>

@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -52,5 +53,55 @@ describe("payments config", () => {
     const { config, warnings } = await load(STRIPE);
     expect(config.paymentsEnabled).toBe(false);
     expect(warnings.some((w) => w.includes("cloud features are disabled, so payments are off"))).toBe(true);
+  });
+});
+
+describe("Sign in with Apple config", () => {
+  const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  const APPLE = {
+    AUTH_APPLE_ID: "tech.apeman.draftroom.web",
+    AUTH_APPLE_TEAM_ID: "TEAM123456",
+    AUTH_APPLE_KEY_ID: "KEY1234567",
+    // As it sits in an .env file: one line, with \n escapes.
+    AUTH_APPLE_PRIVATE_KEY: pem.replace(/\n/g, "\\n"),
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    for (const name of [...Object.keys(CLOUD), ...Object.keys(APPLE)]) vi.stubEnv(name, "");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("is off with no variables set, and says nothing about Apple", async () => {
+    const { config, warnings } = await load({});
+    expect(config.appleAuthEnabled).toBe(false);
+    expect(warnings.filter((w) => /AUTH_APPLE/.test(w) && !/no sign-in method/.test(w))).toEqual([]);
+  });
+
+  it("is on with cloud features and all four variables, unescaping the key", async () => {
+    const { config } = await load({ ...CLOUD, ...APPLE });
+    expect(config.appleAuthEnabled).toBe(true);
+    expect(config.applePrivateKey).toBe(pem.trim());
+  });
+
+  it("stays off and names what's missing in a partial setup", async () => {
+    const { config, warnings } = await load({ ...CLOUD, AUTH_APPLE_ID: APPLE.AUTH_APPLE_ID, AUTH_APPLE_TEAM_ID: APPLE.AUTH_APPLE_TEAM_ID });
+    expect(config.appleAuthEnabled).toBe(false);
+    expect(warnings.some((w) => w.includes("AUTH_APPLE_KEY_ID, AUTH_APPLE_PRIVATE_KEY are not set, so Sign in with Apple is off"))).toBe(true);
+  });
+
+  it("stays off, and says why, when the key isn't a valid .p8", async () => {
+    const { config, warnings } = await load({ ...CLOUD, ...APPLE, AUTH_APPLE_PRIVATE_KEY: "not a key" });
+    expect(config.appleAuthEnabled).toBe(false);
+    expect(warnings.some((w) => w.includes("AUTH_APPLE_PRIVATE_KEY isn't the PEM"))).toBe(true);
+  });
+
+  it("stays off without cloud features", async () => {
+    const { config } = await load(APPLE);
+    expect(config.appleAuthEnabled).toBe(false);
   });
 });

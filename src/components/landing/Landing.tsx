@@ -121,7 +121,7 @@ export function Landing({ flags, farewell = false }: { flags: PublicFlags; farew
           </p>
         </div>
         <p className={s.fine}>
-          Player rankings: {dataset.label}. Average draft positions from {dataset.adpSource}.
+          Player rankings: {dataset.label}. Average draft positions from {dataset.adpSource}. <a href="/privacy">Privacy</a>
         </p>
       </footer>
     </main>

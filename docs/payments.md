@@ -101,6 +101,12 @@ Signed-in users see **Purchases** next to Sign out when payments are on. It list
 
 Refunds follow [refund-policy.md](refund-policy.md). They're done by hand in the Stripe dashboard, plus removing the entitlement if the pass shouldn't stay unlocked (§4).
 
+### When an account is deleted
+
+Deleting an account (`deleteAccount()` in `src/lib/server/account.ts`, from the web's account menu or `DELETE /api/v1/account` in the app) deletes its leagues, and their entitlements go with them. The purchases are kept for tax and refunds, but not linked to anyone. Before the delete, each entitlement is copied to `deleted_account_purchases` with only its kind, amount, currency, grant time and `source`: the Stripe checkout session id, which finds the payment in the Stripe dashboard. That table has no user or league columns. Stripe keeps its own record of the payment, including the buyer's email, under Stripe's retention rules.
+
+To refund a deleted account's purchase, find the payment in Stripe by that checkout session id. There's no entitlement left to remove.
+
 ## 7. Local testing
 
 1. Run cloud features locally (see [database.md](database.md)) and set `STRIPE_SECRET_KEY` to a test key and `STRIPE_PRICE_ID` to the test price.

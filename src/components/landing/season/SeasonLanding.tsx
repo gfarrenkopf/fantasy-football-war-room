@@ -69,7 +69,9 @@ export function SeasonLanding({ flags, sample, farewell = false }: { flags: Publ
           <b>Draft Room</b>
           <p>Lineups, trades and waiver pickups for your ESPN fantasy football league, every week of the season.</p>
         </div>
-        <p className={door.fine}>Projections from ESPN. Draft Room isn&apos;t affiliated with ESPN.</p>
+        <p className={door.fine}>
+          Projections from ESPN. Draft Room isn&apos;t affiliated with ESPN. <a href="/privacy">Privacy</a>
+        </p>
       </footer>
     </main>
   );

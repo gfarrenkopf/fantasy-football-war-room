@@ -37,6 +37,6 @@ export function useSeasonPrompt(leagueId: string | null | undefined): "connect" 
   const linked = useHasSeasonPage(leagueId);
   if (linked || !leagueId) return null;
   if (user) return shell.season ? "connect" : null;
-  const canSignIn = flags.emailAuthEnabled || flags.googleAuthEnabled;
+  const canSignIn = flags.emailAuthEnabled || flags.googleAuthEnabled || flags.appleAuthEnabled;
   return flags.cloudEnabled && flags.espnSeasonOpen && canSignIn ? "sign-in" : null;
 }

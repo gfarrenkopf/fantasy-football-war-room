@@ -44,3 +44,8 @@ backups/
 # local research probes (e.g. Epic 8's ESPN protocol probes): run against real accounts,
 # never shipped. Findings that matter are written up in docs/ instead.
 .research/
+
+# Xcode (mobile/ios): per-user state and build output
+xcuserdata/
+DerivedData/
+*.xcuserstate
