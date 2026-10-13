@@ -11,7 +11,8 @@ final class ShellTests: XCTestCase {
         let gameDay = app.tabBars.buttons["Game day"]
         XCTAssertTrue(gameDay.waitForExistence(timeout: 10))
         XCTAssertTrue(app.tabBars.buttons["Lineup"].exists)
-        XCTAssertTrue(app.tabBars.buttons["Recaps"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Trades"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Waivers"].exists)
         XCTAssertTrue(app.staticTexts["App Tester · 2026"].exists)
 
         app.tabBars.buttons["Lineup"].tap()

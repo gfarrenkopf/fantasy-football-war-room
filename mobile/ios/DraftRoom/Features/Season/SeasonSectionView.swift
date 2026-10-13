@@ -1,10 +1,13 @@
 import SwiftUI
 
-/// The season's sections, as tabs. Epic 19 adds Team, and Epic 20 adds AI where the web shows it.
+/// The season's sections, as tabs: the web's season room tabs (SeasonRoom.tsx), in its order.
+/// Recaps live in Game day, as on the web. Epic 18 builds Game day and Lineup, Epic 19 Waivers,
+/// Epic 20 Trades.
 enum SeasonTab: String, CaseIterable, Identifiable, Hashable {
     case gameDay = "gameday"
     case lineup
-    case recaps
+    case trade
+    case waivers
 
     var id: String { rawValue }
 
@@ -12,7 +15,8 @@ enum SeasonTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .gameDay: "Game day"
         case .lineup: "Lineup"
-        case .recaps: "Recaps"
+        case .trade: "Trades"
+        case .waivers: "Waivers"
         }
     }
 
@@ -20,7 +24,8 @@ enum SeasonTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .gameDay: "sportscourt"
         case .lineup: "list.bullet.rectangle"
-        case .recaps: "doc.text"
+        case .trade: "arrow.left.arrow.right"
+        case .waivers: "person.badge.plus"
         }
     }
 }
