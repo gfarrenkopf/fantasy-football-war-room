@@ -1,7 +1,8 @@
 import { checkAcquire, checkCancel, checkClaim, dropCandidates, FAAB_CLAIMS, needsDrop, rosterLimit } from "@/lib/season/acquire";
-import type { HoleFills, Hole } from "@/lib/season/holes";
+import type { Fill, HoleFills, Hole } from "@/lib/season/holes";
 import type { AheadFill, WeekHole } from "@/lib/season/holesAhead";
-import { rosterChanges, type RosterSnapshot } from "@/lib/season/apply";
+import { checkMoves, label, rosterChanges, type RosterSnapshot } from "@/lib/season/apply";
+import { fillSteps, type FillPlan } from "@/lib/season/holeFill";
 import type { FreeAgent } from "@/lib/season/types";
 import { checkProposal, checkResponse } from "@/lib/season/tradeWrite";
 import type { SeasonView } from "@/lib/season/view";
@@ -44,6 +45,17 @@ export interface TeamDryRun {
 
 /** After a write ESPN took: whether the re-read shows it, and what to tell the user. The web's flags ride along. */
 export type TeamApplied = { landed: boolean; result: string } & Partial<{ added: boolean; dropped: boolean; pending: boolean; cancelled: boolean; done: boolean }>;
+
+/** `?dryRun=1` on a hole fill (APE-404): each step in words, in order, besides the summary. */
+export interface FillDryRun extends TeamDryRun {
+  steps: string[];
+}
+
+/**
+ * After a hole fill: each step and whether ESPN shows it (null for a step never sent, because one
+ * before it didn't land), what to tell the user, and why the step that stopped it did.
+ */
+export type FillApplied = TeamApplied & { steps: { text: string; landed: boolean | null }[]; details: string[] };
 
 export function waiversResponse(view: SeasonView, load: { pickups: Pickup[]; ahead: WaiversResponse["ahead"]; considered: number; fetchedAt: Date }): WaiversResponse {
   const roster = mine(view);
@@ -126,6 +138,45 @@ export function acquireApplied(view: SeasonView, body: AcquireBody, landed: Acqu
     landed: landed.added && landed.dropped,
     result: landed.added ? `Done. ${add} is on your team${dropped}.` : `ESPN doesn't show ${add} on your team. Check ESPN. Draft Room has been alerted.`,
   };
+}
+
+/** A hole fill against the season view, for the confirm sheet: each step, and why it can't go. ESPN checks every step again as it's sent. */
+export function fillDryRun(view: SeasonView, hole: Pick<Hole, "key">, fill: Fill, plan: FillPlan): FillDryRun {
+  const name = namer(view, [[fill.player.playerId, fill.player.name]]);
+  const roster = mine(view);
+  const afterIr = plan.ir ? roster.map((p) => (p.playerId === plan.ir!.move.playerId ? { ...p, slot: "IR" as const } : p)) : roster;
+  const others = view.teams.filter((t) => t.id !== view.myTeamId);
+  return {
+    text: `Fill your ${label(hole.key)} hole with ${fill.player.name}.`,
+    steps: fillSteps(plan, hole.key, name),
+    problems: [
+      ...(plan.ir ? checkMoves(roster, [plan.ir.move], view.starters, view.benchSize, view.irSlots) : []),
+      ...checkAcquire(afterIr, others, { add: plan.add.add, drop: plan.add.drop }, rosterLimit(view.starters, view.benchSize)),
+    ],
+  };
+}
+
+/**
+ * A hole fill ESPN took at least the first step of: `landed` is each step sent, in order, and the
+ * last one is where it stopped when it's false. `details` is why that step didn't go. The words are
+ * the web hole card's.
+ */
+export function fillApplied(view: SeasonView, hole: Pick<Hole, "key">, fill: Fill, plan: FillPlan, landed: readonly boolean[], details: string[]): FillApplied {
+  const name = namer(view, [[fill.player.playerId, fill.player.name]]);
+  const texts = fillSteps(plan, hole.key, name);
+  const steps = texts.map((text, i) => ({ text, landed: i < landed.length ? landed[i] : null }));
+  const add = fill.player.name;
+  const slot = label(hole.key);
+  if (landed.length === texts.length && landed.every(Boolean)) return { landed: true, result: `Done. ${add} starts at ${slot}.`, steps, details: [] };
+  // The step that stopped it: 0 IR, 1 add, 2 start.
+  const stopped = landed.length - (plan.ir ? 1 : 0);
+  const result =
+    stopped === 0
+      ? `ESPN didn't move ${name(plan.ir!.move.playerId)} to IR. Nothing else was sent.`
+      : stopped === 1
+        ? `ESPN didn't add ${add}.${plan.ir ? ` ${name(plan.ir.move.playerId)} is on IR now.` : ""}`
+        : `${add} is on your team, but ESPN didn't start him at ${slot}. Start him from your lineup.`;
+  return { landed: false, result, steps, details };
 }
 
 /** A proposal, or an answer to a pending trade, against the season view, for the confirm sheet. */

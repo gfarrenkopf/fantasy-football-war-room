@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
-import { label, snapshotOf, type SuggestedMove } from "@/lib/season/apply";
+import { label } from "@/lib/season/apply";
+import { fillPlan } from "@/lib/season/holeFill";
 import { FILL_OPTIONS, holeSlots, type Fill, type Hole, type HoleFills } from "@/lib/season/holes";
 import type { LineupMove } from "@/lib/season/lineup";
-import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { ArrowRight, Warning } from "./Icons";
 import { LocalTime } from "./LocalTime";
@@ -206,7 +206,7 @@ function HoleRow({
       {options.length > 0 && (
         <ol className={s.fillList}>
           {(more ? options : options.slice(0, 1)).map((f, i) => (
-            <FillOption key={f.player.playerId} view={view} leagueId={leagueId} hole={hole} holder={holder} fill={f} agreed={agreed} lead={i === 0} />
+            <FillOption key={f.player.playerId} view={view} leagueId={leagueId} hole={hole} fill={f} agreed={agreed} lead={i === 0} />
           ))}
         </ol>
       )}
@@ -244,9 +244,6 @@ type Phase =
   /** `retry` is the step to try again from, when an earlier one landed. */
   | { kind: "failed"; error: string; details: string[]; retry: "start" | null };
 
-/** The roster as ESPN has it, kept in step with each write so the next is checked against it. */
-type Snapshot = { playerId: number; slot: LineupSlot }[];
-
 async function post(path: string, body: unknown) {
   const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
   const json = (await res?.json().catch(() => ({}))) as {
@@ -264,14 +261,13 @@ async function post(path: string, body: unknown) {
 
 /**
  * One free agent who could fill the hole, and the button that does it: the hole's player to IR when
- * that makes room, the add (with its drop), then the start. Each write is checked against the roster
- * the one before it left, and a step that fails says what already happened.
+ * that makes room, the add (with its drop), then the start, as fillPlan() lays them out. Each write
+ * is checked against the roster the one before it left, and a step that fails says what already happened.
  */
 function FillOption({
   view,
   leagueId,
   hole,
-  holder,
   fill,
   agreed: agreedAtLoad,
   lead,
@@ -279,7 +275,6 @@ function FillOption({
   view: SeasonView;
   leagueId: string;
   hole: Hole;
-  holder: ViewPlayer | undefined;
   fill: Fill;
   agreed: boolean;
   /** The best fill: its button is the hero's primary. The others are quieter. */
@@ -289,7 +284,6 @@ function FillOption({
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [agreed, setAgreed] = useState(agreedAtLoad);
   const [consenting, setConsenting] = useState(false);
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
   const name = (id: number | null) => roster.find((p) => p.playerId === id)?.name ?? "your drop";
   const { player } = fill;
@@ -299,49 +293,41 @@ function FillOption({
   const fail = (body: { error?: string; changed?: string[]; problems?: string[]; refused?: string[] }, fallback: string, retry: "start" | null = null) =>
     setPhase({ kind: "failed", error: body.error ?? fallback, details: body.changed ?? body.problems ?? body.refused ?? [], retry });
 
+  const plan = fillPlan(view, hole, fill);
+
   /** Starts the new player in the hole's slot, benching whoever ESPN has there. */
-  async function start(now: Snapshot, consent: object) {
+  async function start(consent: object) {
+    if (!plan) return;
     setPhase({ kind: "sending", step: `Starting ${player.name}…` });
-    const seats = view.starters.find((st) => st.key === hole.key)?.count ?? 1;
-    const there = now.filter((p) => p.slot === hole.key);
-    // The hole's own player makes way first; otherwise, with the slot full, the one projecting least.
-    const out =
-      there.length < seats ? undefined : (there.find((p) => p.playerId === hole.playerId) ?? there.map((p) => roster.find((r) => r.playerId === p.playerId)!).sort((a, b) => a.points - b.points)[0]);
-    const moves: LineupMove[] = [{ playerId: player.playerId, from: "BN", to: hole.key }, ...(out ? [{ playerId: out.playerId, from: hole.key, to: "BN" as const }] : [])];
-    const suggested: SuggestedMove[] = [{ playerId: player.playerId, to: hole.key, gain: player.points - (holder?.points ?? 0) }];
-    const r = await post(`${base}/apply`, { week: view.currentWeek, season: view.season, snapshot: now, moves, suggested, ...consent });
+    const r = await post(`${base}/apply`, { week: view.currentWeek, season: view.season, snapshot: plan.start.snapshot, moves: plan.start.moves, suggested: plan.start.suggested, ...consent });
     if (r.ok && r.body.moves?.every((m) => m.landed)) {
       router.refresh();
       return setPhase({ kind: "done", message: `Done. ${player.name} starts at ${slot}.` });
     }
-    setSnapshot(now);
     fail(r.body, `${player.name} is on your team, but ESPN didn't start him at ${slot}.`, "start");
   }
 
   async function send() {
+    if (!plan) return;
     const consent = agreed ? {} : { consentVersion: ESPN_WRITE_VERSION };
-    let now: Snapshot = snapshotOf(roster);
 
-    if (fill.ir !== null) {
-      const from = now.find((p) => p.playerId === fill.ir)!.slot;
-      setPhase({ kind: "sending", step: `Moving ${name(fill.ir)} to IR…` });
-      const r = await post(`${base}/apply`, { week: view.currentWeek, season: view.season, snapshot: now, moves: [{ playerId: fill.ir, from, to: "IR" }], suggested: [], ...consent });
+    if (plan.ir) {
+      setPhase({ kind: "sending", step: `Moving ${name(plan.ir.move.playerId)} to IR…` });
+      const r = await post(`${base}/apply`, { week: view.currentWeek, season: view.season, snapshot: plan.ir.snapshot, moves: [plan.ir.move], suggested: [], ...consent });
       if (r.body.consent) return consentLapsed();
       if (!r.ok || !r.body.moves?.every((m) => m.landed)) return fail(r.body, "ESPN didn't move him to IR. Nothing else was sent.");
       setAgreed(true);
-      now = now.map((p) => (p.playerId === fill.ir ? { ...p, slot: "IR" as const } : p));
     }
 
     setPhase({ kind: "sending", step: `Adding ${player.name}…` });
-    const add = await post(`${base}/acquire`, { kind: "add", week: view.currentWeek, snapshot: now, add: player.playerId, drop: fill.drop, ...(fill.ir === null ? consent : {}) });
+    const add = await post(`${base}/acquire`, { kind: "add", week: view.currentWeek, snapshot: plan.add.snapshot, add: plan.add.add, drop: plan.add.drop, ...(plan.ir ? {} : consent) });
     if (add.body.consent) return consentLapsed();
     if (!add.ok || !add.body.added) {
       router.refresh();
-      return fail(add.body, `ESPN didn't add ${player.name}.${fill.ir !== null ? ` ${name(fill.ir)} is on IR now.` : ""}`);
+      return fail(add.body, `ESPN didn't add ${player.name}.${plan.ir ? ` ${name(plan.ir.move.playerId)} is on IR now.` : ""}`);
     }
     setAgreed(true);
-    now = [...now.filter((p) => p.playerId !== fill.drop), { playerId: player.playerId, slot: "BN" }];
-    await start(now, {});
+    await start({});
   }
 
   function consentLapsed() {
@@ -366,8 +352,8 @@ function FillOption({
         <div className={s.fillAct}>
           {/* The consent waits for the tap, so the hero isn't a wall of it. */}
           {phase.kind === "consent" && <WriteConsent checked={consenting} onChange={setConsenting} />}
-          {phase.kind === "failed" && phase.retry === "start" && snapshot ? (
-            <button type="button" className={s.primary} onClick={() => start(snapshot, {})}>
+          {phase.kind === "failed" && phase.retry === "start" ? (
+            <button type="button" className={s.primary} onClick={() => start({})}>
               Start {player.name} at {slot}
             </button>
           ) : (

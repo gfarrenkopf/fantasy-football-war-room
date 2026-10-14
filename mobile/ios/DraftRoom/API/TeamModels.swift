@@ -110,3 +110,74 @@ struct TeamApplied: Codable, Equatable, Sendable {
     let landed: Bool
     let result: String
 }
+
+// GET /api/v1/leagues/:id/team/fills and POST /api/v1/leagues/:id/team/fill (APE-404): this week's
+// holes, the ranked ways to fill the hard ones, and the fill that runs their steps on ESPN.
+
+/// This week's holes, and how to fill the hard ones (the web's season/fills).
+struct FillsResponse: Codable, Equatable, Sendable {
+    let holes: [Hole]
+    let fills: [HoleFills]
+}
+
+/// One hole's ways to fill it: free agents to add now, best first, and claims that clear in time.
+struct HoleFills: Codable, Equatable, Sendable {
+    let hole: Hole
+    let fills: [HoleFill]
+    /// Claimed from Waivers, not here.
+    let claims: [HoleFill]
+}
+
+/// One way to fill a hole: who to add, and how to make room for him.
+struct HoleFill: Codable, Equatable, Sendable, Identifiable {
+    let player: ViewPlayer
+    /// Who to drop; nil when there's room, or IR makes it.
+    let drop: Int?
+    /// The hole's player, moved to IR first to make room.
+    let ir: Int?
+
+    var id: Int { player.playerId }
+}
+
+/// A hole and one of team/fills' ways to fill it; the server takes the drop and IR from there.
+struct FillRequest: Encodable, Equatable, Sendable {
+    struct HoleRef: Encodable, Equatable, Sendable {
+        let key: String
+        let playerId: Int?
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(key, forKey: .key)
+            try c.encode(playerId, forKey: .playerId) // the server wants the key, null or not
+        }
+
+        private enum CodingKeys: String, CodingKey { case key, playerId }
+    }
+
+    let week: Int
+    let season: Int
+    let snapshot: [LineupRequest.Seat]
+    let hole: HoleRef
+    let add: Int
+}
+
+/// `?dryRun=1` on a fill: the fill and each step in plain words, and why it can't go.
+struct FillDryRun: Codable, Equatable, Sendable {
+    let text: String
+    let steps: [String]
+    let problems: [String]
+}
+
+/// After a fill: each step and whether ESPN shows it (nil for one never sent), what to tell the user,
+/// and why the step that stopped it did.
+struct FillApplied: Codable, Equatable, Sendable {
+    struct Step: Codable, Equatable, Sendable {
+        let text: String
+        let landed: Bool?
+    }
+
+    let landed: Bool
+    let result: String
+    let steps: [Step]
+    let details: [String]
+}

@@ -102,8 +102,25 @@ enum UITestStub {
             }
         }
 
+        /// The fill route: a dry run lists the steps for Boswell (Elliott to IR) or Moody (Downs dropped); a send lands them.
+        private static func fill(dryRun: Bool, body: Data?) -> (Int, String) {
+            struct Sent: Decodable { let add: Int }
+            guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid request"}"#) }
+            let boswell = sent.add == 23
+            let name = boswell ? "Chris Boswell" : "Jake Moody"
+            let steps = boswell ? ["Move Jake Elliott to IR", "Add Chris Boswell", "Start Chris Boswell at K"] : ["Add Jake Moody and drop Josh Downs", "Start Jake Moody at K over Jake Elliott"]
+            let quoted = steps.map { "\"\($0)\"" }.joined(separator: ",")
+            if dryRun { return (200, #"{"text":"Fill your K hole with \#(name).","steps":[\#(quoted)],"problems":[]}"#) }
+            let landed = steps.map { #"{"text":"\#($0)","landed":true}"# }.joined(separator: ",")
+            return (200, #"{"landed":true,"result":"Done. \#(name) starts at K.","steps":[\#(landed)],"details":[]}"#)
+        }
+
         static func answer(_ path: String, query: String = "", body: Data? = nil) -> (Int, String) {
             switch path {
+            case "/api/v1/leagues/lg-1/team/fills", "/api/v1/leagues/lg-2/team/fills":
+                (200, SeasonSample.fillsJSON)
+            case "/api/v1/leagues/lg-1/team/fill", "/api/v1/leagues/lg-2/team/fill":
+                fill(dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/team/waivers", "/api/v1/leagues/lg-2/team/waivers":
                 (200, SeasonSample.wireJSON)
             case "/api/v1/leagues/lg-1/team/acquire", "/api/v1/leagues/lg-2/team/acquire":
@@ -118,7 +135,9 @@ enum UITestStub {
                 (200, #"{"leagues":[{"id":"lg-1","name":"App Tester","espnLeagueId":"704343562","espnTeamId":1,"season":2026},{"id":"lg-2","name":"Sunday Regulars","espnLeagueId":"111","espnTeamId":4,"season":2026}]}"#)
             case "/api/v1/leagues/lg-1/season", "/api/v1/leagues/lg-2/season":
                 // `-uiTestFinal` serves the week decided (a win) instead of the live one.
-                (200, ProcessInfo.processInfo.arguments.contains("-uiTestFinal") ? SeasonSample.json(SeasonSample.final) : SeasonSample.liveJSON)
+                // `-uiTestHole` serves the kicker out with no backup (APE-404).
+                (200, ProcessInfo.processInfo.arguments.contains("-uiTestFinal") ? SeasonSample.json(SeasonSample.final)
+                    : ProcessInfo.processInfo.arguments.contains("-uiTestHole") ? SeasonSample.holedJSON : SeasonSample.liveJSON)
             case "/api/v1/leagues/lg-1/recaps":
                 (200, RecapSample.json(RecapSample.archive))
             case "/api/v1/leagues/lg-2/recaps":

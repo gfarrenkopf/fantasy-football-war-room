@@ -5,6 +5,8 @@ import SwiftUI
 /// review bar opens the save, which shows each change in the server's words before anything goes.
 struct LineupView: View {
     let model: LineupModel
+    /// Filling a hole from the hole card (APE-404).
+    let fill: FillModel
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
     /// Opens the Waivers tab, for a pickup behind a doubtful starter.
@@ -66,6 +68,7 @@ struct LineupView: View {
         .sheet(item: $pickingSeat) { pick in SeatPicker(model: model, seat: pick.seat) }
         .sheet(item: $pickingBench) { player in BenchPicker(model: model, player: player) }
         .sheet(isPresented: saving) { SaveSheet(model: model) }
+        .sheet(isPresented: filling) { FillSheet(model: fill, onWaivers: onWaivers) }
     }
 
     /// What leads the tab: the Lock In moment, the holes, Banked, or the start/sit verdict.
@@ -76,13 +79,20 @@ struct LineupView: View {
                 Task { await model.finishDraftRoom() }
             }
         case let .holes(holes):
-            HoleHero(model: model, holes: holes, week: week)
+            HoleHero(model: model, holes: holes, week: week) { hole in Task { await fill.open(hole) } }
         case .banked:
             BankedHero(model: model, week: week)
         case .startSit:
             StartSitHero(model: model, week: week)
         case nil:
             EmptyView()
+        }
+    }
+
+    /// The fill sheet is up from Fill it until the user closes it.
+    private var filling: Binding<Bool> {
+        Binding { fill.hole != nil } set: { shown in
+            if !shown { fill.dismiss() }
         }
     }
 
@@ -627,5 +637,5 @@ private struct PickerOption: View {
 #Preview {
     let api = APIClient(baseURL: URL(string: "http://localhost:3000")!)
     let store = SeasonStore(api: api, leagueId: "lg-1")
-    LineupView(model: LineupModel(api: api, store: store), onReconnect: {})
+    LineupView(model: LineupModel(api: api, store: store), fill: FillModel(api: api, store: store), onReconnect: {})
 }

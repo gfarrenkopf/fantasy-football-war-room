@@ -24,6 +24,7 @@ final class ShellModel {
     /// Each league's staged lineup, kept with its season so edits survive switching tabs.
     @ObservationIgnored private var lineups: [String: LineupModel] = [:]
     @ObservationIgnored private var waivers: [String: WaiversModel] = [:]
+    @ObservationIgnored private var fills: [String: FillModel] = [:]
     private static let lastLeagueKey = "lastLeagueId"
 
     init(api: APIClient, defaults: UserDefaults = .standard) {
@@ -78,6 +79,14 @@ final class ShellModel {
         if let model = waivers[league.id] { return model }
         let model = WaiversModel(api: api, store: season(for: league))
         waivers[league.id] = model
+        return model
+    }
+
+    /// The league's hole fill, made on first use.
+    func fill(for league: League) -> FillModel {
+        if let model = fills[league.id] { return model }
+        let model = FillModel(api: api, store: season(for: league))
+        fills[league.id] = model
         return model
     }
 

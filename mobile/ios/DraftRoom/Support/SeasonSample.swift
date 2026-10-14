@@ -188,6 +188,36 @@ enum SeasonSample {
         claims: .init(allowed: true, reason: nil),
         drops: .init(needed: true, candidates: [7, 6, 8, 5, 4, 3, 2, 1]))
 
+    // MARK: A hole to fill (APE-404)
+
+    /// `-uiTestHole`: Jake Elliott is out with no other kicker, so K is a hole on the Lineup tab.
+    static var holedJSON: String {
+        guard var season = (try? JSONSerialization.jsonObject(with: Data(liveJSON.utf8))) as? [String: Any],
+              var lineup = season["lineup"] as? [String: Any] else { return liveJSON }
+        lineup["holes"] = [["key": "K", "kind": "hard", "reason": "out", "playerId": 5]]
+        season["lineup"] = lineup
+        return (try? JSONSerialization.data(withJSONObject: season)).map { String(decoding: $0, as: UTF8.self) } ?? liveJSON
+    }
+
+    /// The K hole's fills: Boswell with Elliott to IR first, or Moody over Downs.
+    static let fills = FillsResponse(
+        holes: [Hole(key: "K", kind: "hard", reason: "out", playerId: 5)],
+        fills: [
+            HoleFills(
+                hole: Hole(key: "K", kind: "hard", reason: "out", playerId: 5),
+                fills: [
+                    HoleFill(player: wirePlayer(23, "Chris Boswell", "K", points: 8.4, ros: 117.6), drop: nil, ir: 5),
+                    HoleFill(player: wirePlayer(25, "Jake Moody", "K", points: 7.1, ros: 99.4), drop: 7, ir: nil),
+                ],
+                claims: []),
+        ])
+
+    static var fillsJSON: String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(decoding: (try? encoder.encode(fills)) ?? Data(), as: UTF8.self)
+    }
+
     static var wireJSON: String {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
