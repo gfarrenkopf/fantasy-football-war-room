@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { after, connection } from "next/server";
+import { connection } from "next/server";
 import { espnLeaguePage } from "@/lib/espn/pages";
 import { SeasonRoom, type SeasonProblem } from "@/components/season/SeasonRoom";
 import { getSessionUser } from "@/lib/auth";
@@ -8,13 +8,10 @@ import { config, publicFlags } from "@/lib/config";
 import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { getDb } from "@/lib/db";
 import { seasonAiState } from "@/lib/server/ai/season";
-import { reconcileEspnDraft } from "@/lib/server/espn/draftImport";
-import { listSeasonLinks, markSeasonViewed } from "@/lib/server/espn/seasonLinks";
-import { loadSeasonView, loadWeekView } from "@/lib/server/espn/seasonView";
-import { projectionAccuracy, recordProjections } from "@/lib/server/seasonProjections";
-import { keepWeeks, listWeeks } from "@/lib/server/seasonRecaps";
+import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
+import { loadSeasonView } from "@/lib/server/espn/seasonView";
+import { afterSeasonRead, seasonExtras } from "@/lib/server/espn/seasonVisit";
 import { archiveWeek } from "@/lib/season/leagueRecap";
-import { writeConsent } from "@/lib/server/seasonPrefs";
 import { loadShell } from "@/lib/server/shell";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
 import { findLeague } from "@/lib/server/leagues";
@@ -43,12 +40,8 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
   if (!league) notFound();
 
   const key = config.espnCodeKey;
-  // A league whose board isn't ESPN's finished draft yet (APE-193, APE-325) gets it now, after the
-  // page is sent; the draft room reads it from the server next time it opens.
-  after(() =>
-    reconcileEspnDraft(db, key, user.userId, leagueId).catch((err: unknown) => console.warn(`[espn-season] draft backfill failed: ${(err as Error).message}`)),
-  );
   const load = await loadSeasonView(db, key, user.userId, leagueId, { refresh });
+  afterSeasonRead(db, key, user.userId, leagueId, load);
   if (load.kind !== "ok") {
     // Reconnecting starts on the user's ESPN league page (APE-301).
     const link = links.find((l) => l.leagueId === leagueId);
@@ -56,31 +49,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
     return <SeasonRoom flags={publicFlags} user={user} leagueId={leagueId} leagueName={league.name} shell={shell} problem={load as SeasonProblem} espnUrl={espnUrl} />;
   }
   const { view, result, previous } = load;
-  // ESPN's projections as they stand, kept for game day's "ESPN's call" (APE-229); last week's too
-  // while its result or recap is up, so ESPN's stat corrections still land (APE-251).
-  for (const v of [view, result ?? previous].filter((v) => v !== undefined)) {
-    after(() => recordProjections(db, leagueId, v).catch((err: unknown) => console.warn(`[espn-season] couldn't record projections: ${(err as Error).message}`)));
-  }
-  // The weeks that are over go into the recap archive (APE-308): the one on show, and a few older
-  // ones a visit fills in, so the archive builds up without one page view reading the whole season.
-  const shown = load.phase === "results" ? (result ?? view) : previous;
-  const over = shown?.currentWeek ?? view.currentWeek - 1;
-  after(() =>
-    keepWeeks(db, leagueId, {
-      season: view.season,
-      throughWeek: over,
-      loadWeek: (week) => (week === shown?.currentWeek ? Promise.resolve(shown) : loadWeekView(db, key, user.userId, leagueId, week)),
-      limit: 3,
-    }).catch((err: unknown) => console.warn(`[espn-season] couldn't keep the recaps: ${(err as Error).message}`)),
-  );
-  const [ai, consented, , accuracy, previousAccuracy, kept] = await Promise.all([
-    seasonAiState(db, user, league, view),
-    writeConsent(db, user.userId),
-    markSeasonViewed(db, user.userId, leagueId),
-    projectionAccuracy(db, leagueId, result ?? view),
-    previous ? projectionAccuracy(db, leagueId, previous) : null,
-    listWeeks(db, leagueId),
-  ]);
+  const [ai, { consented, accuracy, previousAccuracy, kept }] = await Promise.all([seasonAiState(db, user, league, view), seasonExtras(db, user.userId, leagueId, load)]);
 
   return (
     <SeasonRoom
