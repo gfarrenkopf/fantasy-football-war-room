@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
-import { rankPickups } from "./waivers";
+import { rankPickups, waiverNote } from "./waivers";
 
 // Starters: QB, RB×2, WR×2, TE, FLEX, D/ST, K (testView's STARTERS); bench of three.
 const mine = [
@@ -38,5 +38,13 @@ describe("rankPickups", () => {
 
   it("keeps only the top few", () => {
     expect(rankPickups(view, [rb, te, bye], 1)).toHaveLength(1);
+  });
+});
+
+describe("waiverNote", () => {
+  it("says FAAB left in a league that bids, the waiver rank otherwise, and nothing when ESPN gave neither", () => {
+    expect(waiverNote({ ...view, waiver: { rank: 3, budget: 100, left: 62 } })).toBe("$62 of $100 FAAB left");
+    expect(waiverNote({ ...view, waiver: { rank: 3, budget: null, left: null } })).toBe("Waiver priority 3 of 2");
+    expect(waiverNote(view)).toBeNull();
   });
 });

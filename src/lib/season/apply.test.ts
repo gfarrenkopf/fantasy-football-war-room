@@ -322,6 +322,16 @@ describe("changeText", () => {
     const [chain] = groups([t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.benchWr.playerId, t.wr.playerId]);
     expect(changeText(chain, name)).toBe("Move Wr from WR to FLEX; bench Flex Wr; start Bench Wr at WR");
   });
+
+  it("names IR moves, so one off or onto IR never reads as a plain swap (APE-386)", () => {
+    const toIr = [
+      { playerId: t.rb1.playerId, from: "RB", to: "IR" },
+      { playerId: t.benchRb.playerId, from: "BN", to: "RB" },
+    ] as const;
+    expect(changeText(toIr, name)).toBe("Move Rb One to IR; start Bench Rb at RB");
+    expect(changeText([{ playerId: t.ir.playerId, from: "IR", to: "BN" }], name)).toBe("Take Hurt off IR");
+    expect(changeText([{ playerId: t.ir.playerId, from: "IR", to: "FLEX" }], name)).toBe("Move Hurt from IR to FLEX");
+  });
 });
 
 describe("espnRefusal", () => {

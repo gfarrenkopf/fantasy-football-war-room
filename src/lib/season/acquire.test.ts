@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acquireItems, acquireLanded, checkAcquire, claimPending, needsDrop, rosterLimit } from "./acquire";
+import { acquireItems, acquireLanded, checkAcquire, checkCancel, checkClaim, claimPending, dropCandidates, FAAB_CLAIMS, needsDrop, rosterLimit } from "./acquire";
 import type { ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
@@ -61,5 +61,30 @@ describe("acquireItems / acquireLanded", () => {
   it("reads the roster after for the player in and the drop gone", () => {
     expect(acquireLanded([{ playerId: 99 }, { playerId: 1 }], { add: 99, drop: 4 })).toEqual({ added: true, dropped: true });
     expect(acquireLanded([{ playerId: 4 }], { add: 99, drop: 4 })).toEqual({ added: false, dropped: false });
+  });
+});
+
+describe("checkClaim / checkCancel (APE-386)", () => {
+  it("refuses claims in a league that bids FAAB, on top of the add's own checks", () => {
+    expect(checkClaim(null, FULL, THEM, { add: 99, drop: 4 }, LIMIT)).toEqual([]);
+    expect(checkClaim(100, FULL, THEM, { add: 99, drop: 4 }, LIMIT)).toEqual([FAAB_CLAIMS]);
+    expect(checkClaim(100, FULL, THEM, { add: 50, drop: 4 }, LIMIT)).toEqual([FAAB_CLAIMS, "That player is on Their Team now."]);
+  });
+
+  it("cancels only the user's own pending claims", () => {
+    expect(checkCancel([{ id: "c1" }], "c1")).toEqual([]);
+    expect(checkCancel([{ id: "c1" }], "c2")).toEqual(["That claim isn't pending on ESPN any more."]);
+  });
+});
+
+describe("dropCandidates", () => {
+  it("offers anyone off IR whose game hasn't started, weakest first", () => {
+    const roster = [
+      { ...entry(1, "Qb", "QB"), ros: 200 },
+      { ...entry(2, "Locked", "RB", true), ros: 10 },
+      { ...entry(3, "Bench", "BN"), ros: 40 },
+      { ...entry(5, "Hurt", "IR"), ros: 5 },
+    ];
+    expect(dropCandidates(roster).map((p) => p.playerId)).toEqual([3, 1]);
   });
 });

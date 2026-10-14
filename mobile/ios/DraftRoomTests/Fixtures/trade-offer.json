@@ -1,0 +1,21 @@
+{
+  "id": "trade-1",
+  "status": "proposed",
+  "proposerTeamId": 2,
+  "partnerTeamId": 1,
+  "moves": [
+    {
+      "playerId": 4567048,
+      "fromTeamId": 2,
+      "toTeamId": 1
+    },
+    {
+      "playerId": 4870808,
+      "fromTeamId": 1,
+      "toTeamId": 2
+    }
+  ],
+  "proposedAt": "2026-09-19T12:00:00.000Z",
+  "expiresAt": "2026-09-21T12:00:00.000Z",
+  "processesAt": null
+}

@@ -1,0 +1,84 @@
+{
+  "week": 3,
+  "season": 2026,
+  "snapshot": [
+    {
+      "playerId": 4429795,
+      "slot": "RB"
+    },
+    {
+      "playerId": 4374302,
+      "slot": "WR"
+    },
+    {
+      "playerId": 4379399,
+      "slot": "RB"
+    },
+    {
+      "playerId": 4362238,
+      "slot": "FLEX"
+    },
+    {
+      "playerId": 4426502,
+      "slot": "WR"
+    },
+    {
+      "playerId": 3918298,
+      "slot": "QB"
+    },
+    {
+      "playerId": 4870808,
+      "slot": "BN"
+    },
+    {
+      "playerId": 4361579,
+      "slot": "BN"
+    },
+    {
+      "playerId": 4430737,
+      "slot": "BN"
+    },
+    {
+      "playerId": 4567750,
+      "slot": "BN"
+    },
+    {
+      "playerId": 4685702,
+      "slot": "BN"
+    },
+    {
+      "playerId": 4882093,
+      "slot": "BN"
+    },
+    {
+      "playerId": 4431459,
+      "slot": "TE"
+    },
+    {
+      "playerId": 3121422,
+      "slot": "BN"
+    },
+    {
+      "playerId": -16007,
+      "slot": "DST"
+    },
+    {
+      "playerId": 4574716,
+      "slot": "K"
+    }
+  ],
+  "lineup": [
+    3918298,
+    4870808,
+    4379399,
+    4374302,
+    4426502,
+    4431459,
+    4362238,
+    -16007,
+    4574716
+  ],
+  "ir": [
+    4429795
+  ]
+}

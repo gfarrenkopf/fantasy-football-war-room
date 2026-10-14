@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
-import { checkAcquire, needsDrop, rosterLimit } from "@/lib/season/acquire";
+import { checkAcquire, dropCandidates, needsDrop, rosterLimit } from "@/lib/season/acquire";
 import { snapshotOf } from "@/lib/season/apply";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import type { Pickup } from "@/lib/season/waivers";
@@ -39,7 +39,7 @@ export function AcquireReview({
   const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
   const limit = rosterLimit(view.starters, view.benchSize);
   const full = needsDrop(roster, limit);
-  const droppable = roster.filter((p) => p.slot !== "IR" && !p.locked).sort((a, b) => a.ros - b.ros);
+  const droppable = dropCandidates(roster);
   const [drop, setDrop] = useState<number | null>(pickup.drop ?? (full ? (droppable[0]?.playerId ?? null) : null));
   const [phase, setPhase] = useState<Phase>({ kind: "review" });
   const [agreed, setAgreed] = useState(agreedAtLoad);

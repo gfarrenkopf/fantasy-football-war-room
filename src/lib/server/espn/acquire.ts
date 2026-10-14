@@ -1,6 +1,6 @@
 import "server-only";
 import type { Db } from "@/lib/db/types";
-import { acquireItems, acquireLanded, checkAcquire, claimPending, rosterLimit, type Acquire } from "@/lib/season/acquire";
+import { acquireItems, acquireLanded, checkAcquire, checkCancel, checkClaim, claimPending, rosterLimit, type Acquire } from "@/lib/season/acquire";
 import type { RosterSnapshot } from "@/lib/season/apply";
 import { guardedWrite, type GuardedOutcome, type WriteDeps } from "./guardedWrite";
 
@@ -55,10 +55,7 @@ export function claimWaiver(db: Db, key: Buffer, userId: string, leagueId: strin
     {
       week: request.week,
       snapshot: request.snapshot,
-      check: ({ league, teamId, roster }) => [
-        ...(league.waivers.budget === null ? [] : ["This league bids on waivers. Place FAAB claims on ESPN for now."]),
-        ...checkAcquire(roster, others(league, teamId), { add, drop }, rosterLimit(league.starters, league.benchSize)),
-      ],
+      check: ({ league, teamId, roster }) => checkClaim(league.waivers.budget, roster, others(league, teamId), { add, drop }, rosterLimit(league.starters, league.benchSize)),
       transaction: ({ teamId }) => ({ type: "WAIVER", items: acquireItems(teamId, { add, drop }), bidAmount: null }),
       landed: ({ league, teamId }, sent) => ({ pending: claimPending(league.pendingClaims, teamId, { id: sent?.id ?? null, add }) }),
       anyLanded: (l) => l.pending,
@@ -76,7 +73,7 @@ export function cancelClaim(db: Db, key: Buffer, userId: string, leagueId: strin
     {
       week,
       snapshot: null,
-      check: ({ league, teamId }) => (league.pendingClaims.some((c) => c.id === claimId && c.teamId === teamId) ? [] : ["That claim isn't pending on ESPN any more."]),
+      check: ({ league, teamId }) => checkCancel(league.pendingClaims.filter((c) => c.teamId === teamId), claimId),
       transaction: () => ({ type: "WAIVER", executionType: "CANCEL", relatedTransactionId: claimId, items: [] }),
       landed: ({ league }) => ({ cancelled: !league.pendingClaims.some((c) => c.id === claimId) }),
       anyLanded: (l) => l.cancelled,
