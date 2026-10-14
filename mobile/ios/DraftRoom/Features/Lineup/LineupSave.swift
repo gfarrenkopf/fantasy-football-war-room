@@ -201,12 +201,41 @@ struct LockInCard: View {
     let moment: LockInMoment
     let playing: Bool
     let week: Int
+    /// War Room's swaps still to make, now ESPN has been read back.
+    var left = 0
+    /// Stages the rest of War Room's lineup and opens the review.
+    var onFinish: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
     var body: some View {
         let animate = playing && !reduceMotion
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            summary(animate: animate)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken)
+                .accessibilityAddTraits(.updatesFrequently)
+                .accessibilityIdentifier("lock-in")
+            if moment.leftover >= 0.05, left > 0 {
+                Button(left == 1 ? "Make the last move" : "Make these \(left) moves", action: onFinish)
+                    .buttonStyle(ProviderButtonStyle(prominent: true))
+                    .accessibilityIdentifier("lock-in-finish")
+            }
+        }
+        .padding(Spacing.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.value.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.dialog))
+        .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(Color.value.opacity(0.45)))
+        .scaleEffect(shown || !animate ? 1 : 0.94)
+        .opacity(shown ? 1 : 0)
+        .sensoryFeedback(Haptic.success, trigger: shown) { _, now in now && playing }
+        .onAppear {
+            withAnimation(animate ? .spring(duration: 0.7, bounce: 0.35).delay(0.1) : Motion.fade) { shown = true }
+        }
+    }
+
+    private func summary(animate: Bool) -> some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                 Text("+" + SeasonFormat.points(shown ? moment.banked : 0))
@@ -243,20 +272,6 @@ struct LockInCard: View {
                     .typeStyle(TypeScale.label).foregroundStyle(.warnInk)
             }
         }
-        .padding(Spacing.xl)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.value.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.dialog))
-        .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(Color.value.opacity(0.45)))
-        .scaleEffect(shown || !animate ? 1 : 0.94)
-        .opacity(shown ? 1 : 0)
-        .sensoryFeedback(Haptic.success, trigger: shown) { _, now in now && playing }
-        .onAppear {
-            withAnimation(animate ? .spring(duration: 0.7, bounce: 0.35).delay(0.1) : Motion.fade) { shown = true }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken)
-        .accessibilityAddTraits(.updatesFrequently)
-        .accessibilityIdentifier("lock-in")
     }
 
     private var spoken: String {

@@ -7,6 +7,8 @@ struct LineupView: View {
     let model: LineupModel
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
+    /// Opens the Waivers tab, for a pickup behind a doubtful starter.
+    var onWaivers: () -> Void = {}
 
     @State private var pickingSeat: SeatPick?
     @State private var pickingBench: ViewPlayer?
@@ -22,14 +24,14 @@ struct LineupView: View {
                             ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
                         }
                         FreshnessNote(season: season, offline: store.offline)
-                        if let moment = model.moment {
-                            LockInCard(moment: moment, playing: model.momentIsNew, week: season.view.currentWeek)
-                        } else if let save = model.lastSave {
+                        if let save = model.lastSave, model.moment == nil || !save.allLanded {
                             SaveResults(save: save)
                         }
-                        // 18.9 puts the start/sit hero, Banked and the hole card here.
+                        hero(week: season.view.currentWeek)
+                        HoleNotes(model: model, onWaivers: onWaivers)
                         StartersCard(model: model) { pickingSeat = SeatPick(seat: $0) }
                         BenchCard(model: model) { pickingBench = $0 }
+                        MatchupCard(view: season.view)
                         // 20.2 puts the AI lineup card here.
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
@@ -62,6 +64,24 @@ struct LineupView: View {
         .sheet(item: $pickingSeat) { pick in SeatPicker(model: model, seat: pick.seat) }
         .sheet(item: $pickingBench) { player in BenchPicker(model: model, player: player) }
         .sheet(isPresented: saving) { SaveSheet(model: model) }
+    }
+
+    /// What leads the tab: the Lock In moment, the holes, Banked, or the start/sit verdict.
+    @ViewBuilder private func hero(week: Int) -> some View {
+        switch model.hero {
+        case let .lockIn(moment):
+            LockInCard(moment: moment, playing: model.momentIsNew, week: week, left: model.lineup?.startSit.swaps.count ?? 0) {
+                Task { await model.finishDraftRoom() }
+            }
+        case let .holes(holes):
+            HoleHero(model: model, holes: holes, week: week)
+        case .banked:
+            BankedHero(model: model, week: week)
+        case .startSit:
+            StartSitHero(model: model, week: week)
+        case nil:
+            EmptyView()
+        }
     }
 
     /// The save sheet is up from the consent until ESPN has answered.
@@ -183,6 +203,7 @@ private struct StarterRow: View {
         let next = model.player(model.staged[seat])
         let changed = model.staged[seat] != model.onEspn[seat]
         let locked = model.isLocked(seat)
+        let made = model.madeMove(at: seat)
         Button(action: onTap) {
             RowLayout {
                 SlotText(text: SlotLabel.of(key))
@@ -190,6 +211,7 @@ private struct StarterRow: View {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     if let now {
                         PlayerLine(player: now)
+                        if let made { MadeMark(move: made) }
                     } else {
                         Text("Empty on ESPN").typeStyle(TypeScale.body).foregroundStyle(.dim)
                     }
@@ -206,19 +228,22 @@ private struct StarterRow: View {
             }
             .padding(.horizontal, Spacing.xl)
             .padding(.vertical, Spacing.lg)
-            .background(changed ? Color.sky.opacity(0.06) : .clear)
+            .background(changed ? Color.sky.opacity(0.06) : made != nil ? Color.value.opacity(0.06) : .clear)
+            .overlay(alignment: .leading) {
+                if let made { MadeBar(fresh: model.freshlyMade.contains(made.playerId)) }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(RowButtonStyle())
         .disabled(locked)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(spoken(key: key, now: now, next: next, changed: changed, locked: locked))
+        .accessibilityLabel(spoken(key: key, now: now, next: next, changed: changed, locked: locked, made: made))
         .accessibilityHint(locked ? "" : "Shows who can play \(SlotLabel.of(key))")
         .accessibilityIdentifier("seat-\(seat)")
     }
 
-    private func spoken(key: String, now: ViewPlayer?, next: ViewPlayer?, changed: Bool, locked: Bool) -> String {
+    private func spoken(key: String, now: ViewPlayer?, next: ViewPlayer?, changed: Bool, locked: Bool, made: WarRoomMove?) -> String {
         var parts = [SlotLabel.of(key)]
         if let now {
             parts.append(now.name)
@@ -227,6 +252,7 @@ private struct StarterRow: View {
             parts.append("empty on ESPN")
         }
         if locked { parts.append("locked") }
+        if let made { parts.append("started by Draft Room, \(SeasonFormat.signed(made.gain)) projected") }
         if changed { parts.append(next.map { "swapping in \($0.name)" } ?? "leaving it empty") }
         return parts.joined(separator: ", ")
     }
@@ -249,7 +275,7 @@ private struct SwapLine: View {
     }
 }
 
-private struct TagPill: View {
+struct TagPill: View {
     let tag: SeasonLineup.Tag
 
     var body: some View {

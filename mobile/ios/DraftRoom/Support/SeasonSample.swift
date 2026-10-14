@@ -47,7 +47,11 @@ enum SeasonSample {
             ViewTeam(id: 2, name: "Gridiron Gang", abbrev: "GRD", roster: theirs),
             ViewTeam(id: 3, name: "Hail Marys", abbrev: "HAIL", roster: []),
             ViewTeam(id: 4, name: "Blitz Brigade", abbrev: "BLTZ", roster: []),
-        ])
+        ],
+        matchup: Matchup(
+            me: MatchupSide(teamId: 1, points: 56.1, projected: 98.6, winProbability: 0.61),
+            them: MatchupSide(teamId: 2, points: 51.8, projected: 101.2, winProbability: 0.39)),
+        warRoomMoves: [WarRoomMove(playerId: 2, slot: "RB", gain: 3.1)])
 
     static func side(_ teamId: Int, _ name: String, _ points: Double, left: Int) -> LiveSide {
         LiveSide(teamId: teamId, name: name, points: points, projected: 98.6, left: left)
@@ -89,7 +93,9 @@ enum SeasonSample {
             "5": ["K", "BN"], "6": ["RB", "FLEX", "BN"], "7": ["WR", "FLEX", "BN"], "8": ["TE", "FLEX", "BN"],
         ],
         tags: ["7": .init(label: "OUT", kind: "out")],
-        startSit: .init(level: "gain", headline: "Start these and gain", gain: 7.4, total: 87.4, currentTotal: 80.0, banked: 0),
+        startSit: .init(
+            level: "gain", headline: "Worth a swap", gain: 7.4, total: 87.4, currentTotal: 80.0,
+            swaps: [.init(key: "FLEX", into: 6, out: nil, gain: 7.4, tag: nil)], banked: 3.1),
         holes: [])
 
     static var liveJSON: String {

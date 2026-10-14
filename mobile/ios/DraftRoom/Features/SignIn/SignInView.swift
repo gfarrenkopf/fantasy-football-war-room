@@ -211,8 +211,11 @@ struct ProviderButtonStyle: ButtonStyle {
         configuration.label
             .typeStyle(TypeScale.title)
             .foregroundStyle(prominent ? Color.sky : Color.text)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, Spacing.lg)
+            // At least 50 tall, and taller when the text needs two lines at the accessibility sizes.
+            .frame(maxWidth: .infinity, minHeight: 50)
             .background(configuration.isPressed ? Color.btnHover : Color.panel2, in: RoundedRectangle(cornerRadius: Radius.dialog))
             .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(prominent ? Color.skyLine : Color.line))
             .opacity(isEnabled ? 1 : 0.45)

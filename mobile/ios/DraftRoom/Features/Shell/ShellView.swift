@@ -61,7 +61,7 @@ struct ShellView: View {
                         case .gameDay:
                             GameDayView(store: store, onLineup: { tab = .lineup }, onReconnect: { connecting = true })
                         case .lineup:
-                            LineupView(model: model.lineup(for: league), onReconnect: { connecting = true })
+                            LineupView(model: model.lineup(for: league), onReconnect: { connecting = true }, onWaivers: { tab = .waivers })
                         default:
                             SeasonSectionView(section: section, league: league)
                         }

@@ -103,6 +103,50 @@ final class LineupModel {
         keepStaged = false
     }
 
+    // MARK: The hero
+
+    /// What leads the tab, in the web LineupPanel's order: the Lock In moment just after a save, then
+    /// any hard hole, then what War Room's moves banked once nothing is left to suggest, and otherwise
+    /// the start/sit verdict.
+    enum Hero: Equatable {
+        case lockIn(LockInMoment)
+        case holes([Hole])
+        case banked
+        case startSit
+    }
+
+    var hero: Hero? {
+        guard let lineup, isReady else { return nil }
+        if let moment { return .lockIn(moment) }
+        let hard = lineup.holes.filter { $0.kind == "hard" }
+        if !hard.isEmpty { return .holes(hard) }
+        // ESPN has War Room's lineup and nothing is staged, or its moves banked something already.
+        if !isSuggesting, lineup.startSit.banked >= 0.05 || !hasChanges { return .banked }
+        return .startSit
+    }
+
+    /// War Room has changes to suggest against ESPN's lineup.
+    var isSuggesting: Bool { !(lineup?.startSit.swaps.isEmpty ?? true) }
+
+    /// A doubtful or likely-out starter with nobody behind him: a note under the hero, never the hero.
+    var softHoles: [Hole] { lineup?.holes.filter { $0.kind == "soft" } ?? [] }
+
+    /// The War Room move that put ESPN's player in this seat this week, while he's still there and
+    /// staying ("Started by Draft Room").
+    func madeMove(at seat: Int) -> WarRoomMove? {
+        guard isReady, seats.indices.contains(seat), let id = onEspn[seat], staged[seat] == id else { return nil }
+        return season?.view.warRoomMoves.first { $0.playerId == id && $0.slot == seats[seat] }
+    }
+
+    /// The players the Lock In moment just started for War Room: their markers draw in.
+    var freshlyMade: Set<Int> { Set(moment?.moves.filter { !$0.own }.map(\.playerId) ?? []) }
+
+    /// "Make these moves" after a partial save: stage the rest of War Room's lineup and open the review.
+    func finishDraftRoom() async {
+        startFromDraftRoom()
+        await review()
+    }
+
     // MARK: Staging
 
     /// Who may sit in a seat: anyone not on IR who can play it and isn't locked, War Room's pick
@@ -146,7 +190,8 @@ final class LineupModel {
         editedSinceSave()
     }
 
-    /// One tap back to ESPN's lineup or to War Room's (the web's LineupSources).
+    /// One tap back to ESPN's lineup or to War Room's (the web's LineupSources). The hero's "Use Draft
+    /// Room's lineup" is the second: it only stages, and the save goes through the usual review.
     func startFromEspn() { start(from: onEspn) }
     func startFromDraftRoom() { start(from: recommended) }
 

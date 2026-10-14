@@ -25,7 +25,7 @@ extension StubbedNetwork {
             { _ in .init(status: 200, body: Fixture.data(fixture)) }
         }
 
-        @Test(arguments: ["season-pregame", "season-live", "season-final"])
+        @Test(arguments: ["season-pregame", "season-live", "season-final", "season-startsit", "season-banked", "season-holes"])
         func decodesTheSeasonRoutesFixtures(_ name: String) throws {
             let season = try APIClient.decoder.decode(SeasonResponse.self, from: Fixture.data(name))
             let mine = try #require(season.gameDayView.team(season.gameDayView.myTeamId))

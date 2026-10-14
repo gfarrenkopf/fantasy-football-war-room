@@ -44,6 +44,10 @@ struct SeasonView: Codable, Equatable, Sendable {
     let currentWeek: Int
     let myTeamId: Int
     let teams: [ViewTeam]
+    /// The user's fantasy matchup this week, in ESPN's numbers; null on a bye.
+    let matchup: Matchup?
+    /// The moves War Room got onto ESPN this week, for players still in that slot.
+    let warRoomMoves: [WarRoomMove]
 
     func team(_ id: Int) -> ViewTeam? { teams.first { $0.id == id } }
 
@@ -52,6 +56,30 @@ struct SeasonView: Codable, Equatable, Sendable {
         for team in teams { if let p = team.roster.first(where: { $0.playerId == id }) { return p } }
         return nil
     }
+}
+
+/// One side of the user's matchup as ESPN reports it (the web's MatchupSide).
+struct MatchupSide: Codable, Equatable, Sendable {
+    let teamId: Int
+    let points: Double
+    /// ESPN's projection for the lineup as set on ESPN, live-adjusted once games start.
+    let projected: Double
+    /// ESPN's chance this side wins, 0–1.
+    let winProbability: Double?
+}
+
+struct Matchup: Codable, Equatable, Sendable {
+    let me: MatchupSide
+    let them: MatchupSide
+}
+
+/// A move War Room made on ESPN this week, and what it gained (the "Started by Draft Room" marker).
+struct WarRoomMove: Codable, Equatable, Sendable, Identifiable {
+    let playerId: Int
+    let slot: String
+    let gain: Double
+
+    var id: Int { playerId }
 }
 
 struct ViewTeam: Codable, Equatable, Sendable, Identifiable {
@@ -136,9 +164,13 @@ struct PlayerPace: Codable, Equatable, Sendable {
 
 struct Hole: Codable, Equatable, Sendable {
     let key: String
+    /// hard (nobody can play the slot) or soft (a doubtful or likely-out starter with no backup).
     let kind: String
+    /// out, bye, empty, likely-out or doubtful.
     let reason: String
     let playerId: Int?
+    /// The slot's player's kickoff; null on a bye or for an empty slot.
+    var kickoff: Date? = nil
 }
 
 struct ProjectionCall: Codable, Equatable, Sendable {
@@ -214,7 +246,20 @@ struct SeasonLineup: Codable, Equatable, Sendable {
         let kind: String
     }
 
+    /// One of War Room's suggested changes against ESPN's lineup (the web's StartSitSwap).
+    struct Swap: Codable, Equatable, Sendable {
+        let key: String
+        /// Who starts; null leaves the slot empty.
+        let into: Int?
+        /// Who comes out; null when the slot is empty on ESPN.
+        let out: Int?
+        let gain: Double
+        /// Why the benched player comes out, when it's news.
+        let tag: Tag?
+    }
+
     struct StartSit: Codable, Equatable, Sendable {
+        /// rest, trim, gain, swing or must: how loudly the hero speaks (the web's lineupEmphasis).
         let level: String
         let headline: String
         /// Projected points of War Room's lineup over ESPN's.
@@ -222,6 +267,8 @@ struct SeasonLineup: Codable, Equatable, Sendable {
         /// War Room's lineup's projected total, and ESPN's.
         let total: Double
         let currentTotal: Double
+        /// War Room's changes, slot by slot; empty when ESPN already has its lineup.
+        let swaps: [Swap]
         /// What War Room's moves have already gained this week.
         let banked: Double
     }
