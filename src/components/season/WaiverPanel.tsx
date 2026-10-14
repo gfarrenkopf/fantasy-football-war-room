@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { label } from "@/lib/season/apply";
 import type { AheadFill, WeekHole } from "@/lib/season/holesAhead";
 import type { SeasonView } from "@/lib/season/view";
-import type { Pickup } from "@/lib/season/waivers";
+import { waiverNote, type Pickup } from "@/lib/season/waivers";
 import { AcquireReview } from "./AcquireReview";
 import { ClaimList } from "./ClaimList";
 import { External, Refresh, Warning } from "./Icons";
@@ -21,13 +21,6 @@ async function fetchWaivers(leagueId: string, refresh: boolean): Promise<Load> {
   const body = (await res?.json().catch(() => null)) as { pickups?: Pickup[]; ahead?: Ahead; considered?: number; error?: string } | null;
   if (res?.ok && body?.pickups) return { kind: "ok", pickups: body.pickups, ahead: body.ahead ?? [], considered: body.considered ?? 0 };
   return { kind: "failed", error: body?.error ?? "Can't reach Draft Room right now. Try again in a moment." };
-}
-
-/** "Waiver priority 4 of 12", or FAAB left in a league that bids. */
-function waiverNote(view: SeasonView): string | null {
-  const { rank, budget, left } = view.waiver;
-  if (budget !== null && left !== null) return `$${left} of $${budget} FAAB left`;
-  return rank ? `Waiver priority ${rank} of ${view.teams.length}` : null;
 }
 
 /**

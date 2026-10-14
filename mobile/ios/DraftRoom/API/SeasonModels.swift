@@ -44,10 +44,14 @@ struct SeasonView: Codable, Equatable, Sendable {
     let currentWeek: Int
     let myTeamId: Int
     let teams: [ViewTeam]
+    /// The league's IR slots; nil from a read cached before the app knew of them (APE-387).
+    var irSlots: Int? = nil
     /// The user's fantasy matchup this week, in ESPN's numbers; null on a bye.
     let matchup: Matchup?
     /// The moves War Room got onto ESPN this week, for players still in that slot.
     let warRoomMoves: [WarRoomMove]
+    /// The user's waiver claims pending on ESPN; nil from a read cached before the app knew of them (APE-389).
+    var claims: [PendingClaim]? = nil
 
     func team(_ id: Int) -> ViewTeam? { teams.first { $0.id == id } }
 
@@ -56,6 +60,23 @@ struct SeasonView: Codable, Equatable, Sendable {
         for team in teams { if let p = team.roster.first(where: { $0.playerId == id }) { return p } }
         return nil
     }
+}
+
+/// A waiver claim of the user's, pending on ESPN (the web's ViewClaim).
+struct PendingClaim: Codable, Equatable, Sendable, Identifiable {
+    struct Player: Codable, Equatable, Sendable {
+        let playerId: Int
+        let name: String
+        let pos: String?
+        let team: String?
+    }
+
+    let id: String
+    let add: Player
+    /// Who goes if the claim succeeds.
+    let drop: Int?
+    /// When ESPN processes it; nil when ESPN didn't say.
+    let processesAt: Date?
 }
 
 /// One side of the user's matchup as ESPN reports it (the web's MatchupSide).
@@ -106,6 +127,14 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     /// Projected points this week.
     let points: Double
     let game: GameState?
+    /// Projected points for the rest of the season.
+    var ros: Double? = nil
+    /// Projected points by week, keyed by week number as a string; on the waiver wire's players.
+    var weekly: [String: Double]? = nil
+    /// FREEAGENT or WAIVERS, for a player on the wire.
+    var status: String? = nil
+    /// When a player on waivers clears.
+    var waiverClears: Date? = nil
 
     var id: Int { playerId }
 }

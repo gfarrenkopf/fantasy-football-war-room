@@ -60,6 +60,16 @@ export function forgetWaivers(userId: string, leagueId: string) {
   for (const key of g.__espnWaiverCache?.keys() ?? []) if (key.startsWith(`${userId}:${leagueId}:`)) g.__espnWaiverCache!.delete(key);
 }
 
+/** A player in the pool last read for this league, while it's cached: who the app is adding (APE-386). */
+export function pooledPlayer(userId: string, leagueId: string, playerId: number): FreeAgent | null {
+  for (const [key, hit] of g.__espnWaiverCache ?? []) {
+    if (!key.startsWith(`${userId}:${leagueId}:`)) continue;
+    const found = hit.agents.find((a) => a.playerId === playerId);
+    if (found) return found;
+  }
+  return null;
+}
+
 type PoolRead = { kind: "ok"; view: SeasonView; pool: PoolPlayer[]; fetchedAt: Date } | { kind: "problem"; problem: Problem };
 
 /**

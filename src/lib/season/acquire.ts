@@ -47,6 +47,22 @@ export function checkAcquire(roster: readonly ApplyEntry[], teams: readonly { na
   return problems;
 }
 
+/** Why War Room won't claim in this league: ESPN wants a bid, and War Room doesn't place bids yet (13.4). */
+export const FAAB_CLAIMS = "This league bids on waivers. Place FAAB claims on ESPN for now.";
+
+/** Why this waiver claim can't be sent to ESPN; empty when it can. `budget` is the league's FAAB budget, null when it doesn't bid. */
+export function checkClaim(budget: number | null, roster: readonly ApplyEntry[], teams: readonly { name: string; roster: readonly { playerId: number }[] }[], acquire: Acquire, limit: number): string[] {
+  return [...(budget === null ? [] : [FAAB_CLAIMS]), ...checkAcquire(roster, teams, acquire, limit)];
+}
+
+/** Why this claim can't be cancelled; empty when it can. `mine` is the user's own pending claims. */
+export const checkCancel = (mine: readonly { id: string }[], claimId: string): string[] => (mine.some((c) => c.id === claimId) ? [] : ["That claim isn't pending on ESPN any more."]);
+
+/** Who the user could drop to make room, weakest for the rest of the season first: anyone off IR whose game hasn't started. */
+export function dropCandidates<P extends Pick<ApplyEntry, "playerId" | "slot" | "locked"> & { ros: number }>(roster: readonly P[]): P[] {
+  return roster.filter((p) => p.slot !== "IR" && !p.locked).sort((a, b) => a.ros - b.ros);
+}
+
 export function acquireItems(teamId: number, { add, drop }: Acquire): EspnAcquireItem[] {
   return [{ playerId: add, type: "ADD", toTeamId: teamId }, ...(drop === null ? [] : [{ playerId: drop, type: "DROP" as const, fromTeamId: teamId }])];
 }

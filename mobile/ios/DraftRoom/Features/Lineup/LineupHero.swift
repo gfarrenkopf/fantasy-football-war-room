@@ -295,12 +295,14 @@ enum HoleText {
 }
 
 /// A starting slot nobody on the roster can play this week (the web's HoleHero): a warning where the
-/// ✓ was, and why, slot by slot. The free agent to fill it comes with 19.5. War Room's other swaps
-/// stay listed under it.
+/// ✓ was, and why, slot by slot, each with Fill it (APE-404), which finds the free agent to add and
+/// start there. War Room's other swaps stay listed under it.
 struct HoleHero: View {
     let model: LineupModel
     let holes: [Hole]
     let week: Int
+    /// Opens the fill for a hole.
+    let onFill: (Hole) -> Void
 
     var body: some View {
         let total = model.lineup?.startSit.total ?? 0
@@ -327,7 +329,14 @@ struct HoleHero: View {
                 ForEach(holes, id: \.key) { hole in
                     let holder = model.player(hole.playerId)
                     HoleWhy(hole: hole, holder: holder)
-                    // 19.5 adds the free agent who'd fill it, added and started in one tap.
+                    Button {
+                        onFill(hole)
+                    } label: {
+                        Label("Fill it", systemImage: "plus")
+                    }
+                    .buttonStyle(ProviderButtonStyle(prominent: hole.key == holes.first?.key))
+                    .accessibilityLabel("Fill your \(SlotLabel.of(hole.key)) hole")
+                    .accessibilityIdentifier("fill-hole-\(hole.key)")
                 }
             }
             .padding(Spacing.lg + Spacing.sm)

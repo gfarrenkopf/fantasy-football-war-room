@@ -17,6 +17,8 @@ struct LineupRequest: Encodable, Equatable, Sendable {
     let snapshot: [Seat]
     /// Who sits in each seat; null (sent as JSON null) leaves it empty. Anyone not named goes to the bench.
     let lineup: [Int?]
+    /// Everyone who should be on IR (APE-386): moving a player on or off IR is a change like any other.
+    let ir: [Int]
     /// The ids of the changes to make; all of them when nil.
     let changes: [String]?
 }

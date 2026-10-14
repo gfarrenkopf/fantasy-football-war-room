@@ -59,10 +59,15 @@ enum UITestStub {
             (id: "4:BN,8:TE", text: "Start Tucker Kraft at TE, bench Sam LaPorta"),
         ]
 
-        /// The lineup route: a dry run lists both changes, ticked as the request names them; a save lands them.
+        /// Josh Downs going on IR (APE-387), when the request puts him there.
+        private static let toIr = (id: "7:IR", text: "Move Josh Downs to IR")
+
+        /// The lineup route: a dry run lists the changes, ticked as the request names them; a save lands them.
         private static func lineup(dryRun: Bool, body: Data?) -> (Int, String) {
-            struct Sent: Decodable { let changes: [String]? }
-            let picked = (body.flatMap { try? JSONDecoder().decode(Sent.self, from: $0) }?.changes).map(Set.init)
+            struct Sent: Decodable { let changes: [String]?; let ir: [Int]? }
+            let sent = body.flatMap { try? JSONDecoder().decode(Sent.self, from: $0) }
+            let picked = sent?.changes.map(Set.init)
+            let changes = sent?.ir?.contains(7) == true ? changes + [toIr] : changes
             let chosen = changes.filter { picked?.contains($0.id) ?? true }
             if dryRun {
                 let rows = changes.map { c in #"{"id":"\#(c.id)","text":"\#(c.text)","picked":\#(chosen.contains { $0.id == c.id }),"moves":[]}"# }
@@ -75,8 +80,71 @@ enum UITestStub {
             return (200, #"{"changes":[\#(rows.joined(separator: ","))],"lockIn":\#(lockIn)}"#)
         }
 
+        /// The acquire route: a dry run words the add, claim or cancel; a send lands it.
+        private static func acquire(dryRun: Bool, body: Data?) -> (Int, String) {
+            struct Sent: Decodable { let kind: String; let add: Int?; let drop: Int?; let claimId: String? }
+            guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid request"}"#) }
+            let all = SeasonSample.mine + SeasonSample.wire.pickups.map(\.player) + SeasonSample.wire.ahead.flatMap { $0.fills.map(\.player) }
+            let name = { (id: Int) in all.first { $0.playerId == id }?.name ?? "Player \(id)" }
+            switch (sent.kind, dryRun) {
+            case ("cancel", true):
+                return (200, #"{"text":"Cancel your claim for Keon Coleman.","problems":[]}"#)
+            case ("cancel", false):
+                return (200, #"{"cancelled":true,"landed":true,"result":"Claim for Keon Coleman cancelled."}"#)
+            case ("claim", true):
+                return (200, #"{"text":"Claim \#(name(sent.add ?? 0)) off waivers\#(sent.drop.map { ", dropping \(name($0)) if the claim goes through" } ?? "").","problems":[]}"#)
+            case ("claim", false):
+                return (200, #"{"pending":true,"landed":true,"result":"Claim placed for \#(name(sent.add ?? 0))."}"#)
+            case (_, true):
+                return (200, #"{"text":"Add \#(name(sent.add ?? 0))\#(sent.drop.map { " and drop \(name($0))" } ?? "").","problems":[]}"#)
+            default:
+                return (200, #"{"added":true,"dropped":true,"landed":true,"result":"Done. \#(name(sent.add ?? 0)) is on your team\#(sent.drop.map { ", and \(name($0)) is gone" } ?? "")."}"#)
+            }
+        }
+
+        /// The fill route: a dry run lists the steps for Boswell (Elliott to IR) or Moody (Downs dropped); a send lands them.
+        private static func fill(dryRun: Bool, body: Data?) -> (Int, String) {
+            struct Sent: Decodable { let add: Int }
+            guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid request"}"#) }
+            let boswell = sent.add == 23
+            let name = boswell ? "Chris Boswell" : "Jake Moody"
+            let steps = boswell ? ["Move Jake Elliott to IR", "Add Chris Boswell", "Start Chris Boswell at K"] : ["Add Jake Moody and drop Josh Downs", "Start Jake Moody at K over Jake Elliott"]
+            let quoted = steps.map { "\"\($0)\"" }.joined(separator: ",")
+            if dryRun { return (200, #"{"text":"Fill your K hole with \#(name).","steps":[\#(quoted)],"problems":[]}"#) }
+            let landed = steps.map { #"{"text":"\#($0)","landed":true}"# }.joined(separator: ",")
+            return (200, #"{"landed":true,"result":"Done. \#(name) starts at K.","steps":[\#(landed)],"details":[]}"#)
+        }
+
+        /// The trades route: GET lists the offers; a dry run words the write (and grades a proposal); a send lands it.
+        private static func trades(get: Bool, dryRun: Bool, body: Data?) -> (Int, String) {
+            if get { return (200, SeasonSample.tradesJSON) }
+            struct Sent: Decodable { let kind: String }
+            guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid trade"}"#) }
+            let words: (dry: String, done: String) = switch sent.kind {
+            case "accept": ("Accept on ESPN? You get Bijan Robinson and send Tank Bigsby. It goes through after the league's review.", "Offer accepted. It's in the league's review.")
+            case "decline": ("Decline Gridiron Gang's offer on ESPN?", "Offer declined.")
+            case "withdraw": ("Withdraw your offer to Gridiron Gang on ESPN?", "Offer withdrawn.")
+            default: ("Offer Gridiron Gang this trade on ESPN?", "Offer sent to Gridiron Gang. It's in Pending on ESPN.")
+            }
+            if dryRun {
+                let grade = sent.kind == "propose" ? #","grade":{"headline":"Better for you","level":"gain","perWeek":1.2,"theirs":0.4,"delta":16.8,"weeks":14,"slots":[],"dropLines":[],"drops":[]}"# : ""
+                return (200, #"{"text":"\#(words.dry)","problems":[]\#(grade)}"#)
+            }
+            return (200, #"{"done":true,"landed":true,"result":"\#(words.done)"}"#)
+        }
+
         static func answer(_ path: String, query: String = "", body: Data? = nil) -> (Int, String) {
             switch path {
+            case "/api/v1/leagues/lg-1/team/trades", "/api/v1/leagues/lg-2/team/trades":
+                trades(get: body == nil, dryRun: query.contains("dryRun=1"), body: body)
+            case "/api/v1/leagues/lg-1/team/fills", "/api/v1/leagues/lg-2/team/fills":
+                (200, SeasonSample.fillsJSON)
+            case "/api/v1/leagues/lg-1/team/fill", "/api/v1/leagues/lg-2/team/fill":
+                fill(dryRun: query.contains("dryRun=1"), body: body)
+            case "/api/v1/leagues/lg-1/team/waivers", "/api/v1/leagues/lg-2/team/waivers":
+                (200, SeasonSample.wireJSON)
+            case "/api/v1/leagues/lg-1/team/acquire", "/api/v1/leagues/lg-2/team/acquire":
+                acquire(dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/lineup", "/api/v1/leagues/lg-2/lineup":
                 lineup(dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/espn/write-consent":
@@ -87,7 +155,9 @@ enum UITestStub {
                 (200, #"{"leagues":[{"id":"lg-1","name":"App Tester","espnLeagueId":"704343562","espnTeamId":1,"season":2026},{"id":"lg-2","name":"Sunday Regulars","espnLeagueId":"111","espnTeamId":4,"season":2026}]}"#)
             case "/api/v1/leagues/lg-1/season", "/api/v1/leagues/lg-2/season":
                 // `-uiTestFinal` serves the week decided (a win) instead of the live one.
-                (200, ProcessInfo.processInfo.arguments.contains("-uiTestFinal") ? SeasonSample.json(SeasonSample.final) : SeasonSample.liveJSON)
+                // `-uiTestHole` serves the kicker out with no backup (APE-404).
+                (200, ProcessInfo.processInfo.arguments.contains("-uiTestFinal") ? SeasonSample.json(SeasonSample.final)
+                    : ProcessInfo.processInfo.arguments.contains("-uiTestHole") ? SeasonSample.holedJSON : SeasonSample.liveJSON)
             case "/api/v1/leagues/lg-1/recaps":
                 (200, RecapSample.json(RecapSample.archive))
             case "/api/v1/leagues/lg-2/recaps":

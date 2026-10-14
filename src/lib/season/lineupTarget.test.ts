@@ -80,6 +80,51 @@ describe("lineupTarget (APE-381)", () => {
     expect(lineupTarget(view, lineup({ 2: onEspn[1] }))!.problems).toEqual(["Jahmyr Gibbs is in two slots."]);
   });
 
+  describe("IR (APE-386)", () => {
+    /** The view with these players hurt, and IR spots to put them in. */
+    const hurt = (names: string[], irSlots = 1, slot?: "IR"): SeasonView => ({
+      ...view,
+      irSlots,
+      teams: view.teams.map((t) =>
+        t.id === view.myTeamId ? { ...t, roster: t.roster.map((p) => (names.includes(p.name) ? { ...p, injuryStatus: "OUT" as const, ...(slot ? { slot, espnSlotId: 21 } : {}) } : p)) } : t,
+      ),
+    });
+
+    it("leaves IR alone without `ir`, as before", () => {
+      const v = hurt(["Javonte Williams"], 1, "IR");
+      expect(lineupTarget(v, seatsFromRoster(v.teams.find((t) => t.id === v.myTeamId)!.roster, seats))!.changes).toEqual([]);
+    });
+
+    it("moves a hurt starter to IR and starts the player named in his seat, as one change", () => {
+      const target = lineupTarget(hurt(["James Cook III"]), lineup({ 2: id("Javonte Williams") }), undefined, [id("James Cook III")])!;
+      expect(target.problems).toEqual([]);
+      expect(target.changes.map((c) => c.text)).toEqual(["Move James Cook III to IR; start Javonte Williams at RB"]);
+      expect(target.moves).toEqual(
+        expect.arrayContaining([
+          { playerId: id("James Cook III"), from: "RB", to: "IR" },
+          { playerId: id("Javonte Williams"), from: "BN", to: "RB" },
+        ]),
+      );
+    });
+
+    it("takes a player off IR to the bench when `ir` leaves him out", () => {
+      const v = hurt(["Javonte Williams"], 1, "IR");
+      const target = lineupTarget(v, seatsFromRoster(v.teams.find((t) => t.id === v.myTeamId)!.roster, seats), undefined, [])!;
+      expect(target.changes.map((c) => c.text)).toEqual(["Take Javonte Williams off IR"]);
+    });
+
+    it("says why: a healthy player, a full IR, someone off the team, or a player both started and on IR", () => {
+      expect(lineupTarget(view, onEspn, undefined, [id("Javonte Williams")])!.problems).toEqual([
+        "Javonte Williams isn't hurt enough for IR: ESPN only takes players who are out or on injured reserve.",
+      ]);
+      expect(lineupTarget(hurt(["Javonte Williams", "Terry McLaurin"]), onEspn, undefined, [id("Javonte Williams"), id("Terry McLaurin")])!.problems).toEqual([
+        "That's 2 players on IR; the league has 1 IR spot.",
+      ]);
+      expect(lineupTarget(view, onEspn, undefined, [999])!.problems).toEqual(["Player 999 isn't on your team."]);
+      expect(lineupTarget(hurt(["James Cook III"]), onEspn, undefined, [id("James Cook III")])!.problems).toEqual(["James Cook III is on IR. Take them off IR before starting them."]);
+    });
+  });
+
   it("is null when the lineup doesn't fit the league's seats or a change id isn't this lineup's", () => {
     expect(lineupTarget(view, onEspn.slice(1))).toBeNull();
     expect(lineupTarget(view, lineup({ 2: id("Javonte Williams") }), ["1:QB"])).toBeNull();

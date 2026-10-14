@@ -1,0 +1,19 @@
+{
+  "landed": true,
+  "result": "Done. Drake Maye starts at QB.",
+  "steps": [
+    {
+      "text": "Move Josh Allen to IR",
+      "landed": true
+    },
+    {
+      "text": "Add Drake Maye",
+      "landed": true
+    },
+    {
+      "text": "Start Drake Maye at QB",
+      "landed": true
+    }
+  ],
+  "details": []
+}

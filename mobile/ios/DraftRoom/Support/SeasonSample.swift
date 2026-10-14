@@ -48,10 +48,12 @@ enum SeasonSample {
             ViewTeam(id: 3, name: "Hail Marys", abbrev: "HAIL", roster: []),
             ViewTeam(id: 4, name: "Blitz Brigade", abbrev: "BLTZ", roster: []),
         ],
+        irSlots: 1,
         matchup: Matchup(
             me: MatchupSide(teamId: 1, points: 56.1, projected: 98.6, winProbability: 0.61),
             them: MatchupSide(teamId: 2, points: 51.8, projected: 101.2, winProbability: 0.39)),
-        warRoomMoves: [WarRoomMove(playerId: 2, slot: "RB", gain: 3.1)])
+        warRoomMoves: [WarRoomMove(playerId: 2, slot: "RB", gain: 3.1)],
+        claims: [PendingClaim(id: "claim-1", add: .init(playerId: 24, name: "Keon Coleman", pos: "WR", team: "BUF"), drop: 6, processesAt: kickoff.addingTimeInterval(86_400))])
 
     static func side(_ teamId: Int, _ name: String, _ points: Double, left: Int) -> LiveSide {
         LiveSide(teamId: teamId, name: name, points: points, projected: 98.6, left: left)
@@ -83,14 +85,15 @@ enum SeasonSample {
         lineup: lineup,
         consent: WriteConsent(version: 2, lines: ["Draft Room changes your team on ESPN only when you confirm a change.", "You can stop it any time by disconnecting ESPN."], agreed: false))
 
-    /// War Room fills the empty FLEX with Bigsby; the games already on lock their players in.
+    /// War Room fills the empty FLEX with Bigsby; the games already on lock their players in. Downs
+    /// is out, so he could go to IR.
     static let lineup = SeasonLineup(
         seats: ["QB", "RB", "WR", "TE", "FLEX", "K"],
         onEspn: [1, 2, 3, 4, nil, 5],
         recommended: [1, 2, 3, 4, 6, 5],
         eligible: [
             "1": ["QB", "BN"], "2": ["RB", "FLEX", "BN"], "3": ["WR", "FLEX", "BN"], "4": ["TE", "FLEX", "BN"],
-            "5": ["K", "BN"], "6": ["RB", "FLEX", "BN"], "7": ["WR", "FLEX", "BN"], "8": ["TE", "FLEX", "BN"],
+            "5": ["K", "BN"], "6": ["RB", "FLEX", "BN"], "7": ["WR", "FLEX", "BN", "IR"], "8": ["TE", "FLEX", "BN"],
         ],
         tags: ["7": .init(label: "OUT", kind: "out")],
         startSit: .init(
@@ -160,5 +163,93 @@ enum SeasonSample {
     }
 
     static var liveJSON: String { json(live) }
+
+    // MARK: The waiver wire (APE-388)
+
+    static func wirePlayer(_ id: Int, _ name: String, _ pos: String, points: Double, ros: Double, status: String = "FREEAGENT", clears: Date? = nil) -> ViewPlayer {
+        var p = player(id, name, pos, slot: "BN", actual: nil, points: points, game: game("pre", opponent: "MIA"))
+        p.ros = ros
+        p.weekly = ["3": points, "4": points]
+        p.status = status
+        p.waiverClears = clears
+        return p
+    }
+
+    /// A full roster: Rico Dowdle to add over Downs, Jennings still on waivers, and a week-4 hole at K.
+    static let wire = WaiversResponse(
+        pickups: [
+            Pickup(player: wirePlayer(21, "Rico Dowdle", "RB", points: 10.6, ros: 148.4), delta: 44.8, perWeek: 3.2, drop: 7),
+            Pickup(player: wirePlayer(22, "Jauan Jennings", "WR", points: 9.8, ros: 137.2, status: "WAIVERS", clears: kickoff.addingTimeInterval(86_400)), delta: 30.8, perWeek: 2.2, drop: 7),
+        ],
+        ahead: [
+            Ahead(hole: .init(week: 4, key: "K", playerId: 5, reason: "zero"), fills: [.init(player: wirePlayer(23, "Chris Boswell", "K", points: 8.4, ros: 117.6), drop: 7)]),
+        ],
+        considered: 40, fetchedAt: kickoff, note: "Waiver priority 4 of 12",
+        claims: .init(allowed: true, reason: nil),
+        drops: .init(needed: true, candidates: [7, 6, 8, 5, 4, 3, 2, 1]))
+
+    // MARK: Trades (APE-405)
+
+    /// Gridiron Gang offers Bijan Robinson for Tank Bigsby; the user's own offer for McBride waits on them.
+    static let trades = TradesResponse(
+        offers: [
+            TradeOffer(
+                id: "trade-1", kind: "theirs", partner: .init(id: 2, name: "Gridiron Gang"), gives: [6], gets: [12],
+                when: .init(label: "Expires", at: kickoff.addingTimeInterval(2 * 86_400)), grade: grade(1.8),
+                actions: ["accept", "decline"]),
+            TradeOffer(
+                id: "trade-2", kind: "mine", partner: .init(id: 2, name: "Gridiron Gang"), gives: [8], gets: [14],
+                when: .init(label: "Expires", at: kickoff.addingTimeInterval(86_400)), grade: grade(0.3),
+                actions: ["withdraw"]),
+        ],
+        deadline: .init(at: kickoff.addingTimeInterval(60 * 86_400), passed: false))
+
+    static func grade(_ perWeek: Double) -> TradeGrade {
+        TradeGrade(
+            headline: perWeek >= 0.5 ? "Better for you" : "Slightly better for you", level: perWeek >= 0.5 ? "gain" : "trim",
+            perWeek: perWeek, theirs: -0.4, delta: perWeek * 14, weeks: 14, slots: [.init(key: "RB", change: perWeek)], dropLines: [], drops: [])
+    }
+
+    static var tradesJSON: String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(decoding: (try? encoder.encode(trades)) ?? Data(), as: UTF8.self)
+    }
+
+    // MARK: A hole to fill (APE-404)
+
+    /// `-uiTestHole`: Jake Elliott is out with no other kicker, so K is a hole on the Lineup tab.
+    static var holedJSON: String {
+        guard var season = (try? JSONSerialization.jsonObject(with: Data(liveJSON.utf8))) as? [String: Any],
+              var lineup = season["lineup"] as? [String: Any] else { return liveJSON }
+        lineup["holes"] = [["key": "K", "kind": "hard", "reason": "out", "playerId": 5]]
+        season["lineup"] = lineup
+        return (try? JSONSerialization.data(withJSONObject: season)).map { String(decoding: $0, as: UTF8.self) } ?? liveJSON
+    }
+
+    /// The K hole's fills: Boswell with Elliott to IR first, or Moody over Downs.
+    static let fills = FillsResponse(
+        holes: [Hole(key: "K", kind: "hard", reason: "out", playerId: 5)],
+        fills: [
+            HoleFills(
+                hole: Hole(key: "K", kind: "hard", reason: "out", playerId: 5),
+                fills: [
+                    HoleFill(player: wirePlayer(23, "Chris Boswell", "K", points: 8.4, ros: 117.6), drop: nil, ir: 5),
+                    HoleFill(player: wirePlayer(25, "Jake Moody", "K", points: 7.1, ros: 99.4), drop: 7, ir: nil),
+                ],
+                claims: []),
+        ])
+
+    static var fillsJSON: String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(decoding: (try? encoder.encode(fills)) ?? Data(), as: UTF8.self)
+    }
+
+    static var wireJSON: String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(decoding: (try? encoder.encode(wire)) ?? Data(), as: UTF8.self)
+    }
 }
 #endif

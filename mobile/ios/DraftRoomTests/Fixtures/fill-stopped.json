@@ -1,0 +1,21 @@
+{
+  "landed": false,
+  "result": "ESPN didn't add Drake Maye. Josh Allen is on IR now.",
+  "steps": [
+    {
+      "text": "Move Josh Allen to IR",
+      "landed": true
+    },
+    {
+      "text": "Add Drake Maye",
+      "landed": false
+    },
+    {
+      "text": "Start Drake Maye at QB",
+      "landed": null
+    }
+  ],
+  "details": [
+    "ESPN says the player isn't a free agent any more: ESPN shows him on waivers"
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "offers": [
+    {
+      "id": "trade-1",
+      "kind": "theirs",
+      "partner": {
+        "id": 2,
+        "name": "Gridiron Gang"
+      },
+      "gives": [
+        4870808
+      ],
+      "gets": [
+        4567048
+      ],
+      "when": {
+        "label": "Expires",
+        "at": "2026-09-21T12:00:00.000Z"
+      },
+      "grade": {
+        "headline": "About even for you",
+        "level": "rest",
+        "perWeek": 0,
+        "theirs": 12.471333333333332,
+        "delta": 0,
+        "weeks": 15,
+        "slots": [],
+        "dropLines": [],
+        "drops": []
+      },
+      "actions": [
+        "accept",
+        "decline"
+      ]
+    },
+    {
+      "id": "trade-2",
+      "kind": "mine",
+      "partner": {
+        "id": 2,
+        "name": "Gridiron Gang"
+      },
+      "gives": [
+        4870808
+      ],
+      "gets": [
+        4567048
+      ],
+      "when": {
+        "label": "Expires",
+        "at": "2026-09-21T12:00:00.000Z"
+      },
+      "grade": {
+        "headline": "About even for you",
+        "level": "rest",
+        "perWeek": 0,
+        "theirs": 12.471333333333332,
+        "delta": 0,
+        "weeks": 15,
+        "slots": [],
+        "dropLines": [],
+        "drops": []
+      },
+      "actions": [
+        "withdraw"
+      ]
+    }
+  ],
+  "deadline": {
+    "at": "2026-11-20T17:00:00.000Z",
+    "passed": false
+  }
+}

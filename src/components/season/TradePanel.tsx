@@ -6,6 +6,7 @@ import { tradeEmphasis } from "@/lib/season/emphasis";
 import { canPlay, label, snapshotOf } from "@/lib/season/apply";
 import { thinSlots, type ThinSlot } from "@/lib/season/holesAhead";
 import { evaluateTrade, tradeFromPending, type Trade, type TradeVerdict } from "@/lib/season/trade";
+import { tradeHeadline } from "@/lib/season/tradeWords";
 import type { PendingTrade } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer } from "@/lib/season/view";
 import { AiTradeWriteupCard } from "./AiPanel";
@@ -13,7 +14,7 @@ import { Check, Warning } from "./Icons";
 import { LocalTime, WEEKDAY_DATE_TIME } from "./LocalTime";
 import { PlayerLine, recordText, signed } from "./parts";
 import s from "./season.module.css";
-import { TradeGain, teamName, tradeHeadline } from "./TradeGain";
+import { TradeGain, teamName } from "./TradeGain";
 import { TradeIdeas } from "./TradeIdeas";
 import { TradeWrite } from "./TradeWrite";
 

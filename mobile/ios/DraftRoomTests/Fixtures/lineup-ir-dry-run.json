@@ -1,0 +1,22 @@
+{
+  "changes": [
+    {
+      "id": "4429795:IR,4870808:RB",
+      "text": "Move Jahmyr Gibbs to IR; start Jeremiyah Love at RB",
+      "moves": [
+        {
+          "playerId": 4429795,
+          "from": "RB",
+          "to": "IR"
+        },
+        {
+          "playerId": 4870808,
+          "from": "BN",
+          "to": "RB"
+        }
+      ],
+      "picked": true
+    }
+  ],
+  "problems": []
+}

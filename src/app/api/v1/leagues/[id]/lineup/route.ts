@@ -21,6 +21,8 @@ interface Body {
   season: number;
   snapshot: RosterSnapshot;
   lineup: (number | null)[];
+  /** Everyone who should be on IR (APE-386); left out, IR stays as it is. */
+  ir?: number[];
   changes?: string[];
   consentVersion: number | null;
 }
@@ -30,23 +32,27 @@ function parse(body: unknown): Body | null {
   const snapshot = readSnapshot(body.snapshot);
   if (!snapshot || !Array.isArray(body.lineup) || body.lineup.length > 30) return null;
   if (!body.lineup.every((id) => id === null || Number.isInteger(id))) return null;
+  if (body.ir !== undefined && !(Array.isArray(body.ir) && body.ir.length <= 20 && body.ir.every((id) => Number.isInteger(id)))) return null;
   if (body.changes !== undefined && !(Array.isArray(body.changes) && body.changes.length <= 40 && body.changes.every((c) => typeof c === "string"))) return null;
   return {
     week: body.week as number,
     season: body.season as number,
     snapshot,
     lineup: body.lineup as (number | null)[],
+    ir: body.ir as number[] | undefined,
     changes: body.changes as string[] | undefined,
     consentVersion: consentOf(body),
   };
 }
 
 /**
- * POST /api/v1/leagues/:id/lineup[?dryRun=1] { week, season, snapshot, lineup, changes?, consentVersion? }
+ * POST /api/v1/leagues/:id/lineup[?dryRun=1] { week, season, snapshot, lineup, ir?, changes?, consentVersion? }
  *
  * Sets the user's lineup on ESPN from the iPhone app (APE-381). The app sends the lineup it wants,
  * seat for seat with the season response's `lineup.seats` (null for an empty seat; anyone not named
  * goes to the bench), and the roster it staged against as `snapshot`; the server works out the moves.
+ * `ir` names everyone who should be on IR, as the web's IR picker does (APE-386): moving a player on
+ * or off IR is a change like any other. Left out, IR stays as it is.
  *
  * - `?dryRun=1` → LineupDryRun (src/lib/server/v1/lineup.ts): each change in plain words with an id,
  *   and any problems. Nothing is written and no consent is needed.
@@ -88,7 +94,7 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
     const changed = rosterChanges(body.snapshot, view.teams.find((t) => t.id === view.myTeamId)?.roster ?? []);
     if (changed.length) return refuse({ kind: "changed", changes: changed });
 
-    const target = lineupTarget(view, body.lineup, body.changes);
+    const target = lineupTarget(view, body.lineup, body.changes, body.ir);
     if (!target) return error(400, "That lineup doesn't match this league's slots");
     if (dryRun) return json(200, dryRunResponse(target));
     if (!target.moves.length || target.problems.length) return refuse({ kind: "refused", problems: target.problems.length ? target.problems : ["There's nothing to change."] });

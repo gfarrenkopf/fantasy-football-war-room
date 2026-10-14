@@ -36,3 +36,10 @@ export function rankPickups(view: SeasonView, pool: readonly Pickup["player"][],
     .sort((a, b) => b.delta - a.delta || b.player.ros - a.player.ros)
     .slice(0, limit);
 }
+
+/** "Waiver priority 4 of 12", or FAAB left in a league that bids; null when ESPN gave neither. */
+export function waiverNote(view: Pick<SeasonView, "waiver" | "teams">): string | null {
+  const { rank, budget, left } = view.waiver;
+  if (budget !== null && left !== null) return `$${left} of $${budget} FAAB left`;
+  return rank ? `Waiver priority ${rank} of ${view.teams.length}` : null;
+}

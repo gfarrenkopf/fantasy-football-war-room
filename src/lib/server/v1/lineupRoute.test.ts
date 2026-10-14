@@ -123,6 +123,20 @@ describe("POST /api/v1/leagues/:id/lineup", () => {
     expect(out.problems).toEqual(["James Cook III's game has started, so ESPN won't move them this week."]);
   });
 
+  it("dry-runs and applies IR moves the app sends as `ir`, through the same write (APE-386)", async () => {
+    const hurt = { ...view, irSlots: 1, teams: view.teams.map((t) => (t.id === view.myTeamId ? { ...t, roster: t.roster.map((p) => (p.name === "James Cook III" ? { ...p, injuryStatus: "OUT" as const } : p)) } : t)) };
+    state.load = { ...(state.load as object), view: hurt };
+    const POST = await route();
+    const toIr = { lineup: onEspn.map((p, i) => (i === 2 ? id("Javonte Williams") : p)), ir: [id("James Cook III")] };
+    const out = (await (await POST(post(leagueId, toIr, "?dryRun=1"), ctx(leagueId))).json()) as LineupDryRun;
+    expect(out).toMatchObject({ problems: [], changes: [{ text: "Move James Cook III to IR; start Javonte Williams at RB", picked: true }] });
+
+    await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
+    expect((await POST(post(leagueId, toIr), ctx(leagueId))).status).toBe(200);
+    expect(state.sent[0].moves).toEqual(expect.arrayContaining([{ playerId: id("James Cook III"), from: "RB", to: "IR" }]));
+    expect((await POST(post(leagueId, { ir: ["x"] }, "?dryRun=1"), ctx(leagueId))).status).toBe(400);
+  });
+
   it("asks for consent before writing, and again when the user agreed to an older version", async () => {
     const POST = await route();
     const res = await POST(post(leagueId), ctx(leagueId));

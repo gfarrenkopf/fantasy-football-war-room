@@ -263,14 +263,24 @@ export const changeKey = (group: readonly LineupMove[]) => group.map((m) => `${m
 
 /**
  * A change in plain words, as the confirm step shows it. A straight swap reads as one: "Start
- * Jefferson at FLEX, bench Wilson". Anything else lists its moves.
+ * Jefferson at FLEX, bench Wilson". Anything else lists its moves, IR moves by name: "Move Kamara
+ * to IR; start Wilson at RB".
  */
 export function changeText(group: readonly LineupMove[], name: (id: number) => string): string {
   const into = group.find((m) => m.to !== "BN" && m.to !== "IR");
   const out = group.find((m) => m.to === "BN");
-  if (group.length <= 2 && into && (!out || out.from === into.to)) return `Start ${name(into.playerId)} at ${label(into.to)}${out ? `, bench ${name(out.playerId)}` : ""}`;
+  const swap = into && into.from !== "IR" && group.every((m) => m === into || m === out) && (!out || out.from === into.to);
+  if (group.length <= 2 && swap) return `Start ${name(into.playerId)} at ${label(into.to)}${out ? `, bench ${name(out.playerId)}` : ""}`;
   const line = (m: LineupMove) =>
-    m.to === "BN" ? `bench ${name(m.playerId)}` : m.from === "BN" ? `start ${name(m.playerId)} at ${label(m.to)}` : `move ${name(m.playerId)} from ${label(m.from)} to ${label(m.to)}`;
+    m.to === "IR"
+      ? `move ${name(m.playerId)} to IR`
+      : m.from === "IR" && m.to === "BN"
+        ? `take ${name(m.playerId)} off IR`
+        : m.to === "BN"
+          ? `bench ${name(m.playerId)}`
+          : m.from === "BN"
+            ? `start ${name(m.playerId)} at ${label(m.to)}`
+            : `move ${name(m.playerId)} from ${label(m.from)} to ${label(m.to)}`;
   const text = group.map(line).join("; ");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
