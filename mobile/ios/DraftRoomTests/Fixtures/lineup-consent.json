@@ -1,0 +1,12 @@
+{
+  "error": "Agree to Draft Room changing your team on ESPN first",
+  "consent": {
+    "version": 2,
+    "lines": [
+      "Draft Room may change your team on ESPN when you confirm a change: your lineup, IR, adds and drops, waiver claims, and trade offers and replies.",
+      "It only makes the changes you've just reviewed, only for your own team, and never on its own: not from the Sunday email, not from the AI.",
+      "Right before it writes, it re-reads ESPN and stops if anything has changed or a player's game has started. Afterwards it reads ESPN again and shows you what went through.",
+      "It's unofficial and can stop working if ESPN changes things. Your team on ESPN is always yours to check."
+    ]
+  }
+}

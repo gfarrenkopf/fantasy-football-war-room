@@ -240,6 +240,42 @@ export function madeMoves(moves: readonly (LineupMove & { landed: boolean })[], 
 }
 
 /**
+ * The chosen moves War Room suggested (APE-256): each puts a player in the very seat War Room
+ * recommended him for. Its gain is that seat's: his projection over the player ESPN has there.
+ * `staged`, `recommended` and `onEspn` are seat for seat, as `alignSeats()` lays them.
+ */
+export function suggestedMoves(
+  chosen: readonly LineupMove[],
+  seats: readonly StarterKey[],
+  staged: readonly (number | null)[],
+  recommended: readonly (number | null)[],
+  onEspn: readonly (number | null)[],
+  points: (id: number | null) => number,
+): SuggestedMove[] {
+  return chosen.flatMap((m) => {
+    const seat = staged.indexOf(m.playerId);
+    return seat >= 0 && recommended[seat] === m.playerId && seats[seat] === m.to ? [{ playerId: m.playerId, to: m.to, gain: Math.round((points(m.playerId) - points(onEspn[seat])) * 100) / 100 }] : [];
+  });
+}
+
+/** A change (a group from `groupMoves()`) by what its moves do: the same change keeps its key while the lineup around it changes. */
+export const changeKey = (group: readonly LineupMove[]) => group.map((m) => `${m.playerId}:${m.to}`).join(",");
+
+/**
+ * A change in plain words, as the confirm step shows it. A straight swap reads as one: "Start
+ * Jefferson at FLEX, bench Wilson". Anything else lists its moves.
+ */
+export function changeText(group: readonly LineupMove[], name: (id: number) => string): string {
+  const into = group.find((m) => m.to !== "BN" && m.to !== "IR");
+  const out = group.find((m) => m.to === "BN");
+  if (group.length <= 2 && into && (!out || out.from === into.to)) return `Start ${name(into.playerId)} at ${label(into.to)}${out ? `, bench ${name(out.playerId)}` : ""}`;
+  const line = (m: LineupMove) =>
+    m.to === "BN" ? `bench ${name(m.playerId)}` : m.from === "BN" ? `start ${name(m.playerId)} at ${label(m.to)}` : `move ${name(m.playerId)} from ${label(m.from)} to ${label(m.to)}`;
+  const text = group.map(line).join("; ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
  * ESPN's refusal of any roster transaction (`409`, `details[].type`) in plain words. Unknown types fall back to ESPN's own message.
  */
 export function espnRefusal(type: string, message: string): string {

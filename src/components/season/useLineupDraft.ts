@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { alignSeats, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats, type SuggestedMove } from "@/lib/season/apply";
+import { alignSeats, changeKey, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats, suggestedMoves } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
 import { lockIn, type LockIn, type OwnMove } from "@/lib/season/lockIn";
 import type { SeasonView } from "@/lib/season/view";
@@ -23,9 +23,6 @@ export type Landed = (LineupMove & { landed: boolean })[];
 
 /** Where each of the user's players sits on ESPN: changes whenever a fresh read does. */
 const rosterKey = (roster: readonly { playerId: number; slot: string }[]) => roster.map((p) => `${p.playerId}:${p.slot}`).join(",");
-
-/** A change by what its moves do, so one the user left out stays left out until the staged lineup changes it. */
-export const changeKey = (group: readonly LineupMove[]) => group.map((m) => `${m.playerId}:${m.to}`).join(",");
 
 export function useLineupDraft(view: SeasonView) {
   const roster = useMemo(() => view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [], [view]);
@@ -63,13 +60,8 @@ export function useLineupDraft(view: SeasonView) {
   /** The change each moving player belongs to. */
   const changeOf = new Map(changes.flatMap((g) => g.map((m) => [m.playerId, g] as const)));
   const same = (a: readonly (number | null)[]) => staged.every((id, i) => id === a[i]);
-  // A chosen move is War Room's when it puts the player in the very seat War Room recommended him
-  // for (APE-256). Its gain is that seat's: his projection over the player ESPN has there.
   const points = (id: number | null) => (id === null ? 0 : (byId.get(id)?.points ?? 0));
-  const suggested: SuggestedMove[] = chosen.flatMap((m) => {
-    const seat = staged.indexOf(m.playerId);
-    return seat >= 0 && recommended[seat] === m.playerId && seats[seat] === m.to ? [{ playerId: m.playerId, to: m.to, gain: Math.round((points(m.playerId) - points(onEspn[seat])) * 100) / 100 }] : [];
-  });
+  const suggested = suggestedMoves(chosen, seats, staged, recommended, onEspn, points);
 
   /** Any edit starts over: the review closes and the last apply's results, and their moment, go. */
   const edited = () => {

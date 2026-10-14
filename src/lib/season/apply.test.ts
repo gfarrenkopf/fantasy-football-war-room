@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { alignSeats, checkMoves, chooseSeat, espnRefusal, groupMoves, landedMoves, madeMoves, movesToStaged, rosterChanges, seatsFromRoster, snapshotOf, starterSeats, toEspnItems, type ApplyEntry } from "./apply";
+import {
+  alignSeats,
+  changeKey,
+  changeText,
+  checkMoves,
+  chooseSeat,
+  espnRefusal,
+  groupMoves,
+  landedMoves,
+  madeMoves,
+  movesToStaged,
+  rosterChanges,
+  seatsFromRoster,
+  snapshotOf,
+  starterSeats,
+  suggestedMoves,
+  toEspnItems,
+  type ApplyEntry,
+} from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
 
@@ -265,6 +283,44 @@ describe("madeMoves (APE-256)", () => {
       { playerId: 4, to: "TE" as const, gain: 9 },
     ];
     expect(madeMoves(moves, suggested)).toEqual([{ playerId: 1, from: "BN", to: "RB", gain: 4.2 }]);
+  });
+});
+
+describe("suggestedMoves (APE-256)", () => {
+  it("claims only moves into the very seat War Room recommended, with that seat's gain", () => {
+    const t = team();
+    const seats = starterSeats(STARTERS); // QB RB RB WR FLEX
+    const onEspn = seatsFromRoster(t.roster, seats);
+    const recommended = [t.qb.playerId, t.rb1.playerId, t.benchRb.playerId, t.wr.playerId, t.flex.playerId];
+    // The user took War Room's RB swap and put the bench WR at FLEX on their own.
+    const staged = [t.qb.playerId, t.rb1.playerId, t.benchRb.playerId, t.wr.playerId, t.benchWr.playerId];
+    const points = (id: number | null) => (id === t.benchRb.playerId ? 14.255 : id === t.rb2.playerId ? 10 : 8);
+    expect(suggestedMoves(movesToStaged(t.roster, seats, staged), seats, staged, recommended, onEspn, points)).toEqual([{ playerId: t.benchRb.playerId, to: "RB", gain: 4.26 }]);
+  });
+});
+
+describe("changeText", () => {
+  const t = team();
+  const name = (id: number) => t.roster.find((p) => p.playerId === id)!.name;
+  const seats = starterSeats(STARTERS);
+  const before = seatsFromRoster(t.roster, seats);
+  const groups = (staged: (number | null)[]) => groupMoves(movesToStaged(t.roster, seats, staged), before, staged);
+
+  it("reads a straight swap as one change", () => {
+    const [swap] = groups([t.qb.playerId, t.benchRb.playerId, t.rb2.playerId, t.wr.playerId, t.flex.playerId]);
+    expect(changeText(swap, name)).toBe("Start Bench Rb at RB, bench Rb One");
+    expect(changeKey(swap)).toBe(`${t.rb1.playerId}:BN,${t.benchRb.playerId}:RB`);
+  });
+
+  it("reads a start into an empty seat and a benching alone", () => {
+    const [benched] = groups([t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.wr.playerId, null]);
+    expect(changeText(benched, name)).toBe("Bench Flex Wr");
+    expect(changeText([{ playerId: t.benchWr.playerId, from: "BN", to: "FLEX" }], name)).toBe("Start Bench Wr at FLEX");
+  });
+
+  it("lists each move of a chain", () => {
+    const [chain] = groups([t.qb.playerId, t.rb1.playerId, t.rb2.playerId, t.benchWr.playerId, t.wr.playerId]);
+    expect(changeText(chain, name)).toBe("Move Wr from WR to FLEX; bench Flex Wr; start Bench Wr at WR");
   });
 });
 
