@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Adding a free agent on ESPN (APE-388), after the web's AcquireReview: the write consent the first
-/// time, then who goes to make room (the suggested drop first) and the server's "Add X and drop Y."
-/// Nothing is written until the user taps Add on ESPN, and nothing is ever queued.
+/// Changing the roster on ESPN, after the web's AcquireReview and ClaimList: adding a free agent
+/// (APE-388), claiming a player on waivers, or cancelling a pending claim (APE-389). The write consent
+/// the first time, then who goes to make room (the suggested drop first) and the server's "Add X and
+/// drop Y." Nothing is written until the user confirms, and nothing is ever queued.
 struct AcquireSheet: View {
     let model: WaiversModel
 
@@ -16,7 +17,11 @@ struct AcquireSheet: View {
                     case let .failed(message, details):
                         FailedStep(message: message, details: details) { Task { await model.retry() } }
                     case .review, .checking, .sending:
-                        if let pickup = model.acting { DropStep(model: model, pickup: pickup) }
+                        if let pickup = model.acting {
+                            DropStep(model: model, pickup: pickup)
+                        } else if case let .cancel(claim) = model.action {
+                            ClaimSummary(model: model, claim: claim)
+                        }
                     case .idle:
                         EmptyView()
                     }
@@ -32,21 +37,27 @@ struct AcquireSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { model.cancel() }.disabled(model.phase == .sending)
+                    Button(isCancel ? "Keep it" : "Cancel") { model.dismiss() }.disabled(model.phase == .sending)
                 }
             }
         }
-        .presentationDetents([.large])
+        .presentationDetents(isCancel ? [.medium] : [.large])
         .interactiveDismissDisabled(model.phase == .sending)
         .accessibilityIdentifier("acquire-sheet")
     }
 
     private var isConsent: Bool { if case .consent = model.phase { true } else { false } }
+    private var isCancel: Bool { if case .cancel = model.action { true } else { false } }
     private var isFailed: Bool { if case .failed = model.phase { true } else { false } }
 
     private var title: String {
         if isConsent { return "Before Draft Room changes your team" }
-        return model.acting.map { "Add \(SeasonFormat.shortName($0.player))" } ?? "Add"
+        return switch model.action {
+        case let .add(pickup): "Add \(SeasonFormat.shortName(pickup.player))"
+        case let .claim(pickup): "Claim \(SeasonFormat.shortName(pickup.player))"
+        case .cancel: "Cancel claim"
+        case nil: ""
+        }
     }
 }
 
@@ -95,12 +106,17 @@ private struct DropStep: View {
                 .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(.line))
                 .disabled(model.phase == .sending)
                 if model.drop != nil {
-                    Text("A dropped player goes on waivers, so getting him back takes a claim.")
+                    Text(dropNote)
                         .typeStyle(TypeScale.label).fontWeight(.regular).foregroundStyle(.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+    }
+
+    private var dropNote: String {
+        if case .claim = model.action { return "He's dropped only if the claim goes through. A dropped player goes on waivers, so getting him back takes a claim." }
+        return "A dropped player goes on waivers, so getting him back takes a claim."
     }
 
     /// "RB · Bench · 112.4 rest of season", after the web's option text.
@@ -149,7 +165,32 @@ private struct DropOption: View {
     }
 }
 
-/// The confirm under the thumb: the server's words for the add, any reason it can't go, and the send.
+/// The claim being cancelled: who, who'd have gone, and when ESPN would process it.
+private struct ClaimSummary: View {
+    let model: WaiversModel
+    let claim: PendingClaim
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(claim.add.name).typeStyle(TypeScale.title).foregroundStyle(.text)
+            Text([claim.add.pos.map(SlotLabel.of), claim.add.team].compactMap(\.self).joined(separator: " · "))
+                .typeStyle(TypeScale.label).foregroundStyle(.muted)
+            if let drop = claim.drop {
+                Text("Drop \(model.name(drop) ?? "a player") if it goes through").typeStyle(TypeScale.label).foregroundStyle(.muted)
+            }
+            if let at = claim.processesAt {
+                Text("Processes \(at.formatted(.dateTime.weekday(.abbreviated).hour().minute()))").typeStyle(TypeScale.label).foregroundStyle(.muted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.xl)
+        .background(.panel, in: RoundedRectangle(cornerRadius: Radius.dialog))
+        .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(.line))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The confirm under the thumb: the server's words for the change, any reason it can't go, and the send.
 private struct ConfirmBar: View {
     let model: WaiversModel
 
@@ -172,7 +213,7 @@ private struct ConfirmBar: View {
             } label: {
                 HStack(spacing: Spacing.md) {
                     if busy { ProgressView().tint(.sky) }
-                    Text(model.phase == .sending ? "Adding…" : "Add on ESPN")
+                    Text(model.phase == .sending ? verb.busy : verb.idle)
                 }
             }
             .buttonStyle(ProviderButtonStyle(prominent: true))
@@ -183,5 +224,13 @@ private struct ConfirmBar: View {
         .padding(.vertical, Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.bar)
+    }
+
+    private var verb: (idle: String, busy: String) {
+        switch model.action {
+        case .claim: ("Claim on ESPN", "Claiming…")
+        case .cancel: ("Cancel claim on ESPN", "Cancelling…")
+        default: ("Add on ESPN", "Adding…")
+        }
     }
 }

@@ -80,16 +80,26 @@ enum UITestStub {
             return (200, #"{"changes":[\#(rows.joined(separator: ","))],"lockIn":\#(lockIn)}"#)
         }
 
-        /// The acquire route: a dry run words the add and its drop; a send lands both.
+        /// The acquire route: a dry run words the add, claim or cancel; a send lands it.
         private static func acquire(dryRun: Bool, body: Data?) -> (Int, String) {
-            struct Sent: Decodable { let add: Int; let drop: Int? }
+            struct Sent: Decodable { let kind: String; let add: Int?; let drop: Int?; let claimId: String? }
             guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid request"}"#) }
             let all = SeasonSample.mine + SeasonSample.wire.pickups.map(\.player) + SeasonSample.wire.ahead.flatMap { $0.fills.map(\.player) }
             let name = { (id: Int) in all.first { $0.playerId == id }?.name ?? "Player \(id)" }
-            if dryRun {
-                return (200, #"{"text":"Add \#(name(sent.add))\#(sent.drop.map { " and drop \(name($0))" } ?? "").","problems":[]}"#)
+            switch (sent.kind, dryRun) {
+            case ("cancel", true):
+                return (200, #"{"text":"Cancel your claim for Keon Coleman.","problems":[]}"#)
+            case ("cancel", false):
+                return (200, #"{"cancelled":true,"landed":true,"result":"Claim for Keon Coleman cancelled."}"#)
+            case ("claim", true):
+                return (200, #"{"text":"Claim \#(name(sent.add ?? 0)) off waivers\#(sent.drop.map { ", dropping \(name($0)) if the claim goes through" } ?? "").","problems":[]}"#)
+            case ("claim", false):
+                return (200, #"{"pending":true,"landed":true,"result":"Claim placed for \#(name(sent.add ?? 0))."}"#)
+            case (_, true):
+                return (200, #"{"text":"Add \#(name(sent.add ?? 0))\#(sent.drop.map { " and drop \(name($0))" } ?? "").","problems":[]}"#)
+            default:
+                return (200, #"{"added":true,"dropped":true,"landed":true,"result":"Done. \#(name(sent.add ?? 0)) is on your team\#(sent.drop.map { ", and \(name($0)) is gone" } ?? "")."}"#)
             }
-            return (200, #"{"added":true,"dropped":true,"landed":true,"result":"Done. \#(name(sent.add)) is on your team\#(sent.drop.map { ", and \(name($0)) is gone" } ?? "")."}"#)
         }
 
         static func answer(_ path: String, query: String = "", body: Data? = nil) -> (Int, String) {

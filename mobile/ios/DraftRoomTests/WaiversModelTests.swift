@@ -4,8 +4,8 @@ import Testing
 @testable import DraftRoom
 
 extension StubbedNetwork {
-    /// The Waivers tab (APE-388): the wire from team/waivers, and the add with its drop from consent to
-    /// result against the acquire route's fixtures (APE-386).
+    /// The Waivers tab: the wire from team/waivers and the add with its drop (APE-388), and claims
+    /// placed and cancelled (APE-389), from consent to result against the acquire route's fixtures (APE-386).
     @MainActor
     @Suite
     struct WaiversModelTests {
@@ -102,7 +102,7 @@ extension StubbedNetwork {
                 "\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run"),
             ])
             let bijan = try #require(model.wire?.pickups.first)
-            await model.add(bijan)
+            await model.acquire(bijan)
             #expect(model.acting == bijan)
             #expect(model.drop == 4882093) // the suggested drop
             guard case let .consent(version, _) = model.phase else { Issue.record("expected consent, got \(model.phase)"); return }
@@ -118,7 +118,7 @@ extension StubbedNetwork {
 
         @Test func aNewDropAsksAgainWithTheRequestTheServerExpects() async throws {
             let model = await model(season: try Self.agreed(), routes: ["\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run")])
-            await model.add(try #require(model.wire?.pickups.first))
+            await model.acquire(try #require(model.wire?.pickups.first))
             await model.choose(drop: Self.broncos)
             #expect(acquireRequests().count == 2)
             let body = try Self.sent(acquireRequests().last)
@@ -133,7 +133,7 @@ extension StubbedNetwork {
         @Test func aFullRosterWithNoSuggestionDropsTheWeakest() async throws {
             let model = await model(season: try Self.agreed(), routes: ["\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run")])
             let bijan = try #require(model.wire?.pickups.first)
-            await model.add(Pickup(player: bijan.player, delta: bijan.delta, perWeek: bijan.perWeek, drop: nil))
+            await model.acquire(Pickup(player: bijan.player, delta: bijan.delta, perWeek: bijan.perWeek, drop: nil))
             #expect(model.drop == Self.broncos)
         }
 
@@ -144,7 +144,7 @@ extension StubbedNetwork {
             let model = await model(season: try Self.agreed(), wire: wire, routes: ["\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run")])
             #expect(model.hasRoom)
             let bijan = try #require(model.wire?.pickups.first)
-            await model.add(Pickup(player: bijan.player, delta: bijan.delta, perWeek: bijan.perWeek, drop: nil))
+            await model.acquire(Pickup(player: bijan.player, delta: bijan.delta, perWeek: bijan.perWeek, drop: nil))
             #expect(model.drop == nil)
             let body = try Self.sent(acquireRequests().last)
             #expect(body["drop"] is NSNull) // the key goes, as null
@@ -155,7 +155,7 @@ extension StubbedNetwork {
                 "\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run"),
                 Self.acquirePath: Self.ok("acquire-add-applied"),
             ])
-            await model.add(try #require(model.wire?.pickups.first))
+            await model.acquire(try #require(model.wire?.pickups.first))
             await model.send()
             #expect(model.acting == nil)
             #expect(model.phase == .idle)
@@ -171,7 +171,7 @@ extension StubbedNetwork {
                 "\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run"),
                 Self.acquirePath: Self.ok("acquire-add-missed"),
             ])
-            await model.add(try #require(model.wire?.pickups.first))
+            await model.acquire(try #require(model.wire?.pickups.first))
             await model.send()
             #expect(model.notice?.landed == false)
             #expect(model.notice?.text.hasPrefix("ESPN doesn't show Bijan Robinson") == true)
@@ -182,7 +182,7 @@ extension StubbedNetwork {
                 "\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run"),
                 Self.acquirePath: .init(status: 409, body: Fixture.data("acquire-refused")),
             ])
-            await model.add(try #require(model.wire?.pickups.first))
+            await model.acquire(try #require(model.wire?.pickups.first))
             await model.send()
             #expect(model.phase == .failed("ESPN refused the change. Nothing changed.", details: ["ESPN says the player isn't a free agent any more: ESPN shows him on waivers"]))
             #expect(model.acting != nil) // the sheet stays up with the reason
@@ -190,7 +190,7 @@ extension StubbedNetwork {
 
         @Test func neverQueuesAnAddOffline() async throws {
             let model = await model(season: try Self.agreed(), routes: ["\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run")])
-            await model.add(try #require(model.wire?.pickups.first))
+            await model.acquire(try #require(model.wire?.pickups.first))
             StubURLProtocol.reply = nil // the network drops
             await model.send()
             guard case let .failed(message, _) = model.phase else { Issue.record("expected failed, got \(model.phase)"); return }
@@ -198,10 +198,87 @@ extension StubbedNetwork {
             #expect(acquireRequests().count == 2) // the dry run and the one failed send
         }
 
+        // MARK: Claims (APE-389)
+
+        static let lamb = 4241389
+
+        /// The pregame season with the consent given and one pending claim, processing at `at`.
+        private static func withClaim(processing at: String = "2026-09-23T07:00:00.000Z") throws -> Data {
+            try edit("season-pregame") { json in
+                var consent = try #require(json["consent"] as? [String: Any])
+                consent["agreed"] = true
+                json["consent"] = consent
+                var view = try #require(json["view"] as? [String: Any])
+                view["claims"] = [["id": "claim-1", "drop": Self.broncos, "bid": 0, "processesAt": at, "add": ["playerId": Self.lamb, "name": "CeeDee Lamb", "pos": "WR", "team": "DAL"]]]
+                json["view"] = view
+            }
+        }
+
+        @Test func claimsAPlayerOnWaivers() async throws {
+            let model = await model(season: try Self.agreed(), routes: [
+                "\(Self.acquirePath)?dryRun": Self.ok("acquire-claim-dry-run"),
+                Self.acquirePath: Self.ok("acquire-claim-applied"),
+            ])
+            let lamb = try #require(model.wire?.pickups.first { $0.player.playerId == Self.lamb })
+            #expect(model.canClaim)
+            await model.acquire(lamb)
+            #expect(model.action == .claim(lamb))
+            await model.choose(drop: Self.broncos)
+            guard case let .review(dry) = model.phase else { Issue.record("expected review, got \(model.phase)"); return }
+            #expect(dry.text == "Claim CeeDee Lamb off waivers, dropping Broncos D/ST if the claim goes through.")
+            let body = try Self.sent(acquireRequests().last)
+            let fixture = try #require(JSONSerialization.jsonObject(with: Fixture.data("acquire-claim-request")) as? [String: Any])
+            #expect(body["kind"] as? String == "claim")
+            #expect(body["add"] as? Int == fixture["add"] as? Int)
+            #expect(body["drop"] as? Int == fixture["drop"] as? Int)
+
+            await model.send()
+            #expect(model.action == nil)
+            #expect(model.notice == .init(text: "Claim placed for CeeDee Lamb.", landed: true))
+        }
+
+        @Test func aFAABLeagueClaimsOnESPN() async throws {
+            let model = await model(season: try Self.agreed(), wire: Fixture.data("team-waivers-faab"))
+            #expect(!model.canClaim)
+            #expect(model.wire?.note == "$62 of $100 FAAB left")
+            #expect(model.wire?.claims.reason == "This league bids on waivers. Place FAAB claims on ESPN for now.")
+            let lamb = try #require(model.wire?.pickups.first { $0.player.playerId == Self.lamb })
+            await model.acquire(lamb)
+            #expect(model.action == nil) // no claim to confirm
+            #expect(acquireRequests().isEmpty)
+        }
+
+        @Test func listsPendingClaimsAndSaysWhenTheyProcessSoon() async throws {
+            let model = await model(season: try Self.withClaim())
+            #expect(model.claims.map(\.add.name) == ["CeeDee Lamb"])
+            #expect(model.claims.first?.drop == Self.broncos)
+            let at = try #require(model.claims.first?.processesAt)
+            #expect(model.processingSoon(now: at.addingTimeInterval(-3600)) == at)
+            #expect(model.processingSoon(now: at.addingTimeInterval(-3 * 86_400)) == nil) // days away
+            #expect(model.processingSoon(now: at.addingTimeInterval(60)) == nil) // already processed
+        }
+
+        @Test func cancelsAClaim() async throws {
+            let model = await model(season: try Self.withClaim(), routes: [
+                "\(Self.acquirePath)?dryRun": Self.ok("acquire-cancel-dry-run"),
+                Self.acquirePath: Self.ok("acquire-cancel-applied"),
+            ])
+            let claim = try #require(model.claims.first)
+            await model.cancel(claim)
+            guard case let .review(dry) = model.phase else { Issue.record("expected review, got \(model.phase)"); return }
+            #expect(dry.text == "Cancel your claim for CeeDee Lamb.")
+            let body = try Self.sent(acquireRequests().last)
+            let fixture = try #require(JSONSerialization.jsonObject(with: Fixture.data("acquire-cancel-request")) as? [String: Any])
+            #expect(NSDictionary(dictionary: body) == NSDictionary(dictionary: fixture))
+
+            await model.send()
+            #expect(model.notice == .init(text: "Claim for CeeDee Lamb cancelled.", landed: true))
+        }
+
         @Test func cancelClosesTheSheetWithoutSending() async throws {
             let model = await model(season: try Self.agreed(), routes: ["\(Self.acquirePath)?dryRun": Self.ok("acquire-add-dry-run")])
-            await model.add(try #require(model.wire?.pickups.first))
-            model.cancel()
+            await model.acquire(try #require(model.wire?.pickups.first))
+            model.dismiss()
             #expect(model.acting == nil)
             #expect(acquireRequests().count == 1)
         }

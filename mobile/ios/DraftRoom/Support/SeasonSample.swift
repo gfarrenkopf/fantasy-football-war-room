@@ -52,7 +52,8 @@ enum SeasonSample {
         matchup: Matchup(
             me: MatchupSide(teamId: 1, points: 56.1, projected: 98.6, winProbability: 0.61),
             them: MatchupSide(teamId: 2, points: 51.8, projected: 101.2, winProbability: 0.39)),
-        warRoomMoves: [WarRoomMove(playerId: 2, slot: "RB", gain: 3.1)])
+        warRoomMoves: [WarRoomMove(playerId: 2, slot: "RB", gain: 3.1)],
+        claims: [PendingClaim(id: "claim-1", add: .init(playerId: 24, name: "Keon Coleman", pos: "WR", team: "BUF"), drop: 6, processesAt: kickoff.addingTimeInterval(86_400))])
 
     static func side(_ teamId: Int, _ name: String, _ points: Double, left: Int) -> LiveSide {
         LiveSide(teamId: teamId, name: name, points: points, projected: 98.6, left: left)

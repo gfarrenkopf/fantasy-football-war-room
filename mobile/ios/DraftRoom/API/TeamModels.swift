@@ -66,27 +66,33 @@ struct Ahead: Codable, Equatable, Sendable, Identifiable {
     var id: String { "\(hole.week)-\(hole.key)-\(hole.playerId.map(String.init) ?? "none")" }
 }
 
-/// An add or a claim, as the web's AcquireReview sends it.
+/// An add, a claim or a claim's cancel, as the web's AcquireReview and ClaimList send them.
 struct AcquireRequest: Encodable, Equatable, Sendable {
     enum Kind: String, Encodable, Sendable {
-        case add, claim
+        case add, claim, cancel
     }
 
     let kind: Kind
     let week: Int
-    let snapshot: [LineupRequest.Seat]
-    let add: Int
+    var snapshot: [LineupRequest.Seat] = []
+    var add: Int = 0
     /// Who goes to make room; sent as JSON null when nobody does.
-    let drop: Int?
+    var drop: Int? = nil
+    /// The claim to cancel.
+    var claimId: String? = nil
 
     private enum CodingKeys: String, CodingKey {
-        case kind, week, snapshot, add, drop
+        case kind, week, snapshot, add, drop, claimId
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(kind, forKey: .kind)
         try c.encode(week, forKey: .week)
+        if kind == .cancel {
+            try c.encode(claimId, forKey: .claimId)
+            return
+        }
         try c.encode(snapshot, forKey: .snapshot)
         try c.encode(add, forKey: .add)
         try c.encode(drop, forKey: .drop) // the server wants the key, null or not

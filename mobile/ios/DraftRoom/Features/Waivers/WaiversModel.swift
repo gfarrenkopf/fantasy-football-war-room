@@ -1,9 +1,10 @@
 import Foundation
 import Observation
 
-/// The Waivers tab for one league (APE-388), after the web's WaiverPanel and AcquireReview: the
-/// waiver wire read when the tab opens, and adding a free agent with a drop. The ranking, the drop
-/// candidates and every word of the confirm and the result come from the server.
+/// The Waivers tab for one league, after the web's WaiverPanel, AcquireReview and ClaimList: the
+/// waiver wire read when the tab opens (APE-388), adding a free agent or claiming a player on
+/// waivers with a drop, and cancelling a pending claim (APE-389). The ranking, the drop candidates
+/// and every word of the confirm and the result come from the server.
 @MainActor
 @Observable
 final class WaiversModel {
@@ -19,7 +20,7 @@ final class WaiversModel {
         case idle
         /// The first write: the consent, with the server's text, before anything goes.
         case consent(version: Int, lines: [String])
-        /// Asking the server what the add does, or asking again after a new drop.
+        /// Asking the server what the change does, or asking again after a new drop.
         case checking
         /// The confirm: "Add X and drop Y." in the server's words, and why it can't go.
         case review(TeamDryRun)
@@ -28,7 +29,17 @@ final class WaiversModel {
         case failed(String, details: [String])
     }
 
-    /// What the last add did, in the server's words, until the next one starts.
+    /// The roster change the sheet is confirming.
+    enum Action: Equatable {
+        /// A free agent, at once.
+        case add(Pickup)
+        /// A player on waivers: placed now, decided when waivers process.
+        case claim(Pickup)
+        /// One of the user's pending claims.
+        case cancel(PendingClaim)
+    }
+
+    /// What the last change did, in the server's words, until the next one starts.
     struct Notice: Equatable {
         let text: String
         let landed: Bool
@@ -36,8 +47,8 @@ final class WaiversModel {
 
     let store: SeasonStore
     private(set) var load: Load = .loading
-    /// The pickup being added; the sheet is up while it's set.
-    private(set) var acting: Pickup?
+    /// The change being confirmed; the sheet is up while it's set.
+    private(set) var action: Action?
     /// Who goes to make room: the suggested drop to start with.
     private(set) var drop: Int?
     private(set) var phase: Phase = .idle
@@ -52,6 +63,14 @@ final class WaiversModel {
     init(api: APIClient, store: SeasonStore) {
         self.api = api
         self.store = store
+    }
+
+    /// The player being added or claimed.
+    var acting: Pickup? {
+        switch action {
+        case let .add(pickup), let .claim(pickup): pickup
+        default: nil
+        }
     }
 
     var wire: WaiversResponse? {
@@ -102,13 +121,44 @@ final class WaiversModel {
         }
     }
 
-    // MARK: Adding
+    // MARK: Claims
 
-    /// Opens the add: the suggested drop, or the weakest player when the roster is full and nobody
-    /// was suggested. Then the consent the first time, then the server's confirm.
-    func add(_ pickup: Pickup) async {
-        acting = pickup
+    /// The user's pending claims, from the season read.
+    var claims: [PendingClaim] { store.season?.view.claims ?? [] }
+
+    /// Draft Room claims in this league; in one that bids FAAB, claims go through ESPN for now.
+    var canClaim: Bool { wire?.claims.allowed ?? true }
+
+    /// When the first of the user's claims processes, once that's within a day: the tab says so.
+    func processingSoon(now: Date = .now) -> Date? {
+        claims.compactMap(\.processesAt).filter { $0 > now && $0.timeIntervalSince(now) < 86_400 }.min()
+    }
+
+    // MARK: Changing the roster
+
+    /// Opens the add of a free agent, or the claim of a player on waivers: the suggested drop, or
+    /// the weakest player when the roster is full and nobody was suggested. Then the consent the
+    /// first time, then the server's confirm.
+    func acquire(_ pickup: Pickup) async {
+        let claim = pickup.player.status == "WAIVERS"
+        guard !claim || canClaim else { return }
         drop = pickup.drop ?? (hasRoom ? nil : dropChoices.first?.playerId)
+        await open(claim ? .claim(pickup) : .add(pickup))
+    }
+
+    /// The same, for one of next week's fills (the web's NextWeek): no gain, the fill's drop.
+    func acquire(_ fill: Ahead.Fill) async {
+        await acquire(Pickup(player: fill.player, delta: 0, perWeek: 0, drop: fill.drop))
+    }
+
+    /// Opens the cancel of a pending claim.
+    func cancel(_ claim: PendingClaim) async {
+        drop = nil
+        await open(.cancel(claim))
+    }
+
+    private func open(_ next: Action) async {
+        action = next
         dry = nil
         notice = nil
         if !(agreed ?? store.season?.consent.agreed ?? false), let consent = store.season?.consent {
@@ -116,11 +166,6 @@ final class WaiversModel {
             return
         }
         await check()
-    }
-
-    /// The add, for one of next week's fills (the web's NextWeek): no gain, the fill's drop.
-    func add(_ fill: Ahead.Fill) async {
-        await add(Pickup(player: fill.player, delta: 0, perWeek: 0, drop: fill.drop))
     }
 
     /// Records the consent, then carries on to the confirm.
@@ -142,16 +187,16 @@ final class WaiversModel {
         await check()
     }
 
-    /// Sends the add. Never queued: offline, nothing goes.
+    /// Sends the change. Never queued: offline, nothing goes.
     func send() async {
         guard case let .review(dry) = phase, dry.problems.isEmpty, let request else { return }
         phase = .sending
         do {
             let applied: TeamApplied = try await api.post("api/v1/leagues/\(store.leagueId)/team/acquire", body: request)
             notice = Notice(text: applied.result, landed: applied.landed)
-            acting = nil
+            action = nil
             phase = .idle
-            // The wire and the roster both changed: read them again, skipping the server's caches.
+            // The wire, the roster and the claims all changed: read them again, skipping the server's caches.
             await store.refresh(force: true)
             await refresh(force: true)
         } catch {
@@ -162,21 +207,21 @@ final class WaiversModel {
     /// Asks the server again after a failure.
     func retry() async { await check() }
 
-    /// Closes the sheet without adding.
-    func cancel() {
+    /// Closes the sheet without changing anything.
+    func dismiss() {
         if case .sending = phase { return }
-        acting = nil
+        action = nil
         phase = .idle
     }
 
     private var request: AcquireRequest? {
-        guard let acting, let view = store.season?.view else { return nil }
-        return AcquireRequest(
-            kind: .add,
-            week: view.currentWeek,
-            snapshot: roster.map { .init(playerId: $0.playerId, slot: $0.slot) },
-            add: acting.player.playerId,
-            drop: drop)
+        guard let action, let view = store.season?.view else { return nil }
+        let snapshot = roster.map { LineupRequest.Seat(playerId: $0.playerId, slot: $0.slot) }
+        return switch action {
+        case let .add(pickup): AcquireRequest(kind: .add, week: view.currentWeek, snapshot: snapshot, add: pickup.player.playerId, drop: drop)
+        case let .claim(pickup): AcquireRequest(kind: .claim, week: view.currentWeek, snapshot: snapshot, add: pickup.player.playerId, drop: drop)
+        case let .cancel(claim): AcquireRequest(kind: .cancel, week: view.currentWeek, claimId: claim.id)
+        }
     }
 
     private func check() async {
@@ -201,7 +246,7 @@ final class WaiversModel {
         case .offline:
             phase = .failed("You're offline, so nothing was sent to ESPN. Try again once you're connected.", details: [])
         case .signedOut:
-            acting = nil
+            action = nil
             phase = .idle
         default:
             phase = .failed(error.message, details: [])

@@ -50,6 +50,8 @@ struct SeasonView: Codable, Equatable, Sendable {
     let matchup: Matchup?
     /// The moves War Room got onto ESPN this week, for players still in that slot.
     let warRoomMoves: [WarRoomMove]
+    /// The user's waiver claims pending on ESPN; nil from a read cached before the app knew of them (APE-389).
+    var claims: [PendingClaim]? = nil
 
     func team(_ id: Int) -> ViewTeam? { teams.first { $0.id == id } }
 
@@ -58,6 +60,23 @@ struct SeasonView: Codable, Equatable, Sendable {
         for team in teams { if let p = team.roster.first(where: { $0.playerId == id }) { return p } }
         return nil
     }
+}
+
+/// A waiver claim of the user's, pending on ESPN (the web's ViewClaim).
+struct PendingClaim: Codable, Equatable, Sendable, Identifiable {
+    struct Player: Codable, Equatable, Sendable {
+        let playerId: Int
+        let name: String
+        let pos: String?
+        let team: String?
+    }
+
+    let id: String
+    let add: Player
+    /// Who goes if the claim succeeds.
+    let drop: Int?
+    /// When ESPN processes it; nil when ESPN didn't say.
+    let processesAt: Date?
 }
 
 /// One side of the user's matchup as ESPN reports it (the web's MatchupSide).
