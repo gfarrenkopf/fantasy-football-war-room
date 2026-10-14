@@ -1,0 +1,566 @@
+import SwiftUI
+
+/// Game day (APE-380): the user's matchup as a scoreboard over both lineups, slot by slot, then
+/// ESPN's call, the rest of the league and the bench, in the web panel's order (GameDayPanel.tsx)
+/// as one scrolling column. It reads itself again each minute while a game is on and the screen is
+/// in front of the user, and keeps the last read for when the phone has no signal.
+struct GameDayView: View {
+    let store: SeasonStore
+    /// Opens the Lineup tab, where a hole is filled.
+    let onLineup: () -> Void
+    /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
+    let onReconnect: () -> Void
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var onScreen = false
+
+    var body: some View {
+        Group {
+            if let season = store.season {
+                ScrollView {
+                    VStack(spacing: Spacing.xl) {
+                        if case let .problem(message, reconnect) = store.load {
+                            ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
+                        }
+                        GameDayContent(season: season, offline: store.offline, onLineup: onLineup)
+                    }
+                    .padding(.horizontal, Spacing.xl + Spacing.xs)
+                    .padding(.vertical, Spacing.xl)
+                }
+                .refreshable { await store.refresh(force: true) }
+                .id(season.league.id)
+            } else {
+                switch store.load {
+                case .loading, .ready:
+                    GameDaySkeleton()
+                case let .problem(message, reconnect):
+                    ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
+                        .padding(Spacing.xl * 2)
+                case let .failed(message):
+                    FailedView(message: message) { Task { await store.refresh() } }
+                }
+            }
+        }
+        .background(.bg)
+        .accessibilityIdentifier("gameday")
+        .onAppear { onScreen = true }
+        .onDisappear { onScreen = false }
+        // Only while a game is on, the screen is showing and the app is in front, like the web's useLivePolling.
+        .task(id: onScreen && scenePhase == .active && store.isLive) {
+            guard onScreen, scenePhase == .active, store.isLive else { return }
+            await store.poll()
+        }
+    }
+}
+
+private struct GameDayContent: View {
+    let season: SeasonResponse
+    let offline: Bool
+    let onLineup: () -> Void
+
+    var body: some View {
+        let view = season.gameDayView
+        let day = season.gameDay
+        VStack(spacing: Spacing.xl) {
+            FreshnessNote(season: season, offline: offline)
+            if !day.holes.isEmpty { HoleBanner(holes: day.holes, onLineup: onLineup) }
+            if let live = season.live {
+                Scoreboard(live: live) {
+                    HeadToHead(view: view, day: day)
+                }
+            } else {
+                ByeStarters(view: view, day: day)
+            }
+            if let call = day.espnCall { EspnCallCard(call: call, view: view, live: season.live) }
+            if !day.around.isEmpty { AroundTheLeague(view: view, around: day.around) }
+            BenchCard(view: view, day: day)
+        }
+    }
+}
+
+// MARK: - Scoreboard
+
+/// The matchup as the screen's hero: both scores large, the lead between them in words and tone,
+/// each side's projection and starters still to play, and ESPN's win odds as a split bar. Scores
+/// tick as they change, with a light tap; a lead changing hands gets a heavier one.
+private struct Scoreboard<Rows: View>: View {
+    let live: LiveMatchup
+    @ViewBuilder var rows: () -> Rows
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The scores: 40pt (the web's 34px phone size, scaled), growing with Dynamic Type.
+    @ScaledMetric(relativeTo: .largeTitle) private var scoreSize: CGFloat = 40
+
+    private var leader: Int { live.started ? (live.lead > 0.05 ? 1 : live.lead < -0.05 ? -1 : 0) : 0 }
+    private var tone: Color { !live.started || leader == 0 ? .muted : leader > 0 ? .value : .reachInk }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: Spacing.lg) {
+                HStack(alignment: .firstTextBaseline) {
+                    HStack(spacing: Spacing.sm) {
+                        Text("Week \(live.week)").foregroundStyle(.muted)
+                        if live.live { Circle().fill(.sky).frame(width: 6, height: 6).accessibilityHidden(true) }
+                        Text(live.status).foregroundStyle(live.live ? Color.sky : Color.text)
+                    }
+                    .typeStyle(TypeScale.title)
+                    Spacer()
+                    Text("ESPN's numbers").typeStyle(TypeScale.label).foregroundStyle(.dim)
+                }
+                HStack(alignment: .center, spacing: Spacing.md) {
+                    side(live.me, name: "You", mine: true)
+                    Text(SeasonFormat.lead(live.lead, started: live.started, decided: live.decided))
+                        .typeStyle(TypeScale.body).foregroundStyle(tone)
+                        .multilineTextAlignment(.center)
+                        .contentTransition(.numericText(value: live.lead))
+                        .frame(minWidth: 64)
+                    side(live.them, name: live.them.name, mine: false)
+                }
+                if let win = live.win, !live.decided { WinOdds(win: win) }
+            }
+            .padding(Spacing.xl)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spoken)
+            .accessibilityIdentifier("scoreboard")
+            rows()
+        }
+        .modifier(GlassPanel(tint: leader > 0 ? Color.value.opacity(0.35) : nil))
+        .animation(reduceMotion ? nil : Motion.respond, value: live)
+        .sensoryFeedback(.impact(weight: .light), trigger: live.me.points + live.them.points)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: leader)
+    }
+
+    private func side(_ team: LiveSide, name: String, mine: Bool) -> some View {
+        let number = live.started ? team.points : team.projected
+        return VStack(spacing: Spacing.xs) {
+            Text(name).typeStyle(TypeScale.label).foregroundStyle(mine ? Color.mine : Color.muted).lineLimit(1)
+            Text(SeasonFormat.points(number))
+                .font(.system(size: scoreSize, weight: .bold).monospacedDigit())
+                .minimumScaleFactor(0.6).lineLimit(1)
+                .foregroundStyle(.text)
+                .contentTransition(.numericText(value: number))
+            Text(live.started ? "proj \(SeasonFormat.points(team.projected))\(live.decided ? "" : " · \(team.left == 0 ? "done" : "\(team.left) to play")")" : "projected")
+                .typeStyle(TypeScale.label).foregroundStyle(.dim).monospacedDigit().lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var spoken: String {
+        let you = SeasonFormat.points(live.me.points), them = SeasonFormat.points(live.them.points)
+        var parts = ["Week \(live.week), \(live.status)"]
+        if live.started {
+            parts.append("You \(you), \(live.them.name) \(them), \(SeasonFormat.lead(live.lead, started: true, decided: live.decided))")
+            if !live.decided { parts.append("\(live.me.left) of your players left to play") }
+        } else {
+            parts.append("Projected: you \(SeasonFormat.points(live.me.projected)), \(live.them.name) \(SeasonFormat.points(live.them.projected))")
+        }
+        if let win = live.win, !live.decided { parts.append("ESPN gives you a \(win)% chance to win") }
+        return parts.joined(separator: ". ")
+    }
+}
+
+/// ESPN's win probability as a 4pt split bar: green against a 35% red (DESIGN.md game day).
+private struct WinOdds: View {
+    let win: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    Rectangle().fill(.value).frame(width: geo.size.width * Double(win) / 100)
+                    Rectangle().fill(Color.reach.opacity(0.35))
+                }
+                .clipShape(Capsule())
+            }
+            .frame(height: 4)
+            (Text("ESPN: ") + Text("\(win)%").bold() + Text(" to win"))
+                .typeStyle(TypeScale.label).foregroundStyle(.muted).monospacedDigit()
+                .contentTransition(.numericText(value: Double(win)))
+        }
+    }
+}
+
+/// The scoreboard's panel: Liquid Glass where the OS has it, the panel tone before.
+private struct GlassPanel: ViewModifier {
+    let tint: Color?
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.dialog)
+        if #available(iOS 26, *) {
+            content
+                .background(Color.panel.opacity(0.6), in: shape)
+                .glassEffect(.regular, in: shape)
+                .overlay(shape.stroke(tint ?? Color.line))
+        } else {
+            content
+                .background(.panel, in: shape)
+                .overlay(shape.stroke(tint ?? Color.line))
+        }
+    }
+}
+
+// MARK: - Head to head
+
+/// Both lineups at once (APE-343): the user's starters on the left, their opponent's mirrored on the
+/// right, paired by slot down a narrow spine, the points toward it.
+private struct HeadToHead: View {
+    let view: SeasonView
+    let day: GameDay
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(day.headToHead.enumerated()), id: \.offset) { _, row in
+                Divider().overlay(.rowLine)
+                HStack(spacing: 0) {
+                    H2HSide(player: row.me.flatMap(view.player), pace: row.me.flatMap(day.pace(of:)), theirs: false)
+                    Text(SlotLabel.of(row.key))
+                        .typeStyle(TypeScale.micro).foregroundStyle(.muted)
+                        .frame(width: 40)
+                        .frame(maxHeight: .infinity)
+                        .background(.tier)
+                    H2HSide(player: row.them.flatMap(view.player), pace: row.them.flatMap(day.pace(of:)), theirs: true)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken(row))
+            }
+        }
+    }
+}
+
+extension HeadToHead {
+    /// One slot as a sentence: "QB. Yours: Jalen Hurts, 18.4 points, … Theirs: Joe Burrow, …".
+    func spoken(_ row: GameDay.SlotPair) -> String {
+        func side(_ id: Int?) -> String {
+            guard let id, let player = view.player(id) else { return "empty" }
+            let pace = day.pace(of: id)
+            let started = (pace?.pace ?? .pre) != .pre
+            let points = started ? "\(SeasonFormat.points(player.actual ?? 0)) points of \(SeasonFormat.points(player.points)) projected" : "projected \(SeasonFormat.points(player.points))"
+            let game = player.game.map { ", \(SeasonFormat.gameWhen($0))" } ?? ""
+            return "\(player.name), \(points)\(game)"
+        }
+        return "\(SlotLabel.of(row.key)). Yours: \(side(row.me)). Theirs: \(side(row.them))."
+    }
+}
+
+private struct H2HSide: View {
+    let player: ViewPlayer?
+    let pace: PlayerPace?
+    let theirs: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            if let player {
+                if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading) }
+                PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading)
+                    .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
+                if !theirs { ScoreCell(player: player, pace: pace) }
+            } else {
+                Text("Empty").typeStyle(TypeScale.label).foregroundStyle(.dim)
+                    .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.md)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Other panels
+
+/// Without a matchup (a bye week): the user's starters as set on ESPN.
+private struct ByeStarters: View {
+    let view: SeasonView
+    let day: GameDay
+
+    var body: some View {
+        SeasonCard(title: "Starters", note: "No matchup this week") {
+            VStack(spacing: 0) {
+                ForEach(Array(day.starters.enumerated()), id: \.offset) { _, seat in
+                    Divider().overlay(.rowLine)
+                    if let player = seat.playerId.flatMap(view.player) {
+                        PlayerRow(player: player, pace: day.pace(of: player.playerId), slot: seat.key)
+                    } else {
+                        HStack {
+                            SlotBadge(key: seat.key)
+                            Text("Empty on ESPN").typeStyle(TypeScale.label).foregroundStyle(.dim)
+                            Spacer()
+                        }
+                        .padding(.horizontal, Spacing.xl).padding(.vertical, Spacing.lg)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A slot nobody on the roster can play this week: the fix lives on Lineup.
+private struct HoleBanner: View {
+    let holes: [Hole]
+    let onLineup: () -> Void
+
+    var body: some View {
+        Button(action: onLineup) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.warn)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("\(holes.count == 1 ? "Hole at" : "Holes at") \(SeasonFormat.slots(holes.map(\.key)))")
+                        .typeStyle(TypeScale.body).foregroundStyle(.text)
+                    Text("Nobody on your team can play \(holes.count == 1 ? "it" : "them") this week.")
+                        .typeStyle(TypeScale.label).foregroundStyle(.muted)
+                }
+                Spacer(minLength: Spacing.md)
+                Text(holes.count == 1 ? "Fill it" : "Fill them").typeStyle(TypeScale.body).foregroundStyle(.sky)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.sky)
+            }
+            .padding(Spacing.xl)
+            .background(Color.warn.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.dialog))
+            .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(Color.warn.opacity(0.35)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens Lineup")
+        .accessibilityIdentifier("hole-banner")
+    }
+}
+
+/// ESPN's call (APE-229): what ESPN projected before kickoff for both sides, against what they've scored.
+private struct EspnCallCard: View {
+    let call: EspnCall
+    let view: SeasonView
+    let live: LiveMatchup?
+
+    var body: some View {
+        SeasonCard(title: "ESPN's call", note: "Before kickoff") {
+            VStack(alignment: .leading, spacing: 0) {
+                if let me = call.me { line("You", me, now: live?.me.points) }
+                if let them = call.them { line(live?.them.name ?? "Your opponent", them, now: live?.them.points) }
+                if call.best != nil || call.worst != nil {
+                    row("Surprises") {
+                        HStack(spacing: Spacing.sm) {
+                            if let best = call.best { surprise(best) }
+                            if let worst = call.worst { surprise(worst) }
+                        }
+                    }
+                }
+                if let season = call.season {
+                    Text(seasonLine(season)).typeStyle(TypeScale.label).foregroundStyle(.muted)
+                        .padding(.horizontal, Spacing.xl).padding(.vertical, Spacing.lg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func line(_ who: String, _ call: ProjectionCall, now: Double?) -> some View {
+        row(who) {
+            HStack(spacing: Spacing.xs) {
+                Text("ESPN had") + Text(" \(SeasonFormat.points(call.projected))").bold()
+                if let actual = call.actual {
+                    Text("· scored") + Text(" \(SeasonFormat.points(actual)) ").bold()
+                    Text("(\(SeasonFormat.signed(actual - call.projected)))").foregroundStyle(actual >= call.projected ? Color.valueInk : Color.reachInk)
+                } else if let now {
+                    Text("·") + Text(" \(SeasonFormat.points(now))").bold() + Text(" so far")
+                }
+            }
+            .monospacedDigit()
+        }
+    }
+
+    private func surprise(_ call: PlayerCall) -> some View {
+        let gap = (call.actual ?? call.projected) - call.projected
+        return HStack(spacing: Spacing.xs) {
+            Text(view.player(call.playerId).map(SeasonFormat.shortName) ?? "")
+            Text(SeasonFormat.signed(gap)).foregroundStyle(gap >= 0 ? Color.valueInk : Color.reachInk).monospacedDigit()
+        }
+    }
+
+    private func row(_ who: String, @ViewBuilder _ content: () -> some View) -> some View {
+        VStack(spacing: 0) {
+            Divider().overlay(.rowLine)
+            HStack(alignment: .firstTextBaseline) {
+                Text(who).foregroundStyle(.muted).lineLimit(1).frame(width: 96, alignment: .leading)
+                content().foregroundStyle(.text)
+                Spacer(minLength: 0)
+            }
+            .typeStyle(TypeScale.label)
+            .padding(.horizontal, Spacing.xl).padding(.vertical, Spacing.lg)
+        }
+    }
+
+    private func seasonLine(_ season: CallRecord) -> String {
+        let lean = abs(season.meanBias) >= 0.5 ? ", \(season.meanBias > 0 ? "underrating" : "overrating") you by \(SeasonFormat.points(abs(season.meanBias))) on average" : ""
+        return "Over \(season.weeks) \(season.weeks == 1 ? "week" : "weeks"), ESPN has missed your score by \(SeasonFormat.points(season.meanMiss)) a week\(lean)."
+    }
+}
+
+/// The league's other matchups while games are on (APE-309): small cards that scroll sideways.
+private struct AroundTheLeague: View {
+    let view: SeasonView
+    let around: [GameDay.Around]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text("Around the league").typeStyle(TypeScale.title).foregroundStyle(.text).accessibilityAddTraits(.isHeader)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Spacing.md) {
+                    ForEach(around, id: \.home.teamId) { game in
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            side(game.home, against: game.away)
+                            side(game.away, against: game.home)
+                            Text(game.left == 0 ? "Done" : "\(game.left) to play").typeStyle(TypeScale.label).foregroundStyle(.dim)
+                        }
+                        .padding(Spacing.lg)
+                        .frame(width: 132, alignment: .leading)
+                        .background(.panel, in: RoundedRectangle(cornerRadius: Radius.xl))
+                        .overlay(RoundedRectangle(cornerRadius: Radius.xl).stroke(.line))
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(game.home.name) \(SeasonFormat.points(game.home.points)), \(game.away.name) \(SeasonFormat.points(game.away.points)), \(game.left == 0 ? "done" : "\(game.left) to play")")
+                    }
+                }
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    private func side(_ team: LiveSide, against other: LiveSide) -> some View {
+        let leads = team.points > other.points
+        let abbrev = view.team(team.teamId).map { $0.abbrev.isEmpty ? $0.name : $0.abbrev } ?? team.name
+        return HStack {
+            Text(abbrev).lineLimit(1)
+            Spacer(minLength: Spacing.sm)
+            Text(SeasonFormat.points(team.points)).monospacedDigit().bold()
+                .contentTransition(.numericText(value: team.points))
+        }
+        .typeStyle(TypeScale.body)
+        .foregroundStyle(leads ? Color.text : Color.muted)
+    }
+}
+
+private struct BenchCard: View {
+    let view: SeasonView
+    let day: GameDay
+
+    var body: some View {
+        let players = day.bench.playerIds.compactMap(view.player)
+        SeasonCard(title: "Your bench", note: day.bench.points > 0 ? "\(SeasonFormat.points(day.bench.points)) points on the bench" : "\(players.count) players") {
+            VStack(spacing: 0) {
+                ForEach(players) { player in
+                    Divider().overlay(.rowLine)
+                    PlayerRow(player: player, pace: day.pace(of: player.playerId))
+                }
+            }
+        }
+    }
+}
+
+/// One player on game day: his line on the left, his points on the right over his projection and pace.
+struct PlayerRow: View {
+    let player: ViewPlayer
+    let pace: PlayerPace?
+    var slot: String? = nil
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            if let slot { SlotBadge(key: slot) }
+            PlayerLine(player: player).frame(maxWidth: .infinity, alignment: .leading)
+            ScoreCell(player: player, pace: pace)
+        }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.lg)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct SlotBadge: View {
+    let key: String
+
+    var body: some View {
+        Text(SlotLabel.of(key)).typeStyle(TypeScale.micro).foregroundStyle(.muted)
+            .frame(width: 40, alignment: .leading)
+    }
+}
+
+// MARK: - States
+
+/// When the season shown was read, when that's worth saying: offline, or ESPN didn't answer.
+private struct FreshnessNote: View {
+    let season: SeasonResponse
+    let offline: Bool
+
+    var body: some View {
+        if offline || season.stale || season.projectionsMissing {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                Label(text(now: context.date), systemImage: offline ? "wifi.slash" : "clock.arrow.circlepath")
+                    .typeStyle(TypeScale.label).foregroundStyle(.warnInk)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityIdentifier("freshness")
+        }
+    }
+
+    private func text(now: Date) -> String {
+        if season.projectionsMissing && !offline && !season.stale { return "ESPN's projections didn't load, so players show 0. Pull to refresh in a minute." }
+        let when = SeasonFormat.updated(season.fetchedAt, now: now)
+        return offline ? "Offline · \(when)" : "ESPN didn't answer · \(when)"
+    }
+}
+
+private struct ProblemNote: View {
+    let message: String
+    let reconnect: Bool
+    let onReconnect: () -> Void
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            Text(message).typeStyle(TypeScale.body).foregroundStyle(.text).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Spacing.md) {
+                if reconnect {
+                    Button("Reconnect ESPN", action: onReconnect).buttonStyle(ProviderButtonStyle(prominent: true))
+                        .accessibilityIdentifier("reconnect-espn")
+                }
+                Button("Try again", action: retry).buttonStyle(ProviderButtonStyle())
+            }
+        }
+        .padding(Spacing.xl)
+        .background(.panel, in: RoundedRectangle(cornerRadius: Radius.dialog))
+        .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(Color.warn.opacity(0.35)))
+    }
+}
+
+private struct FailedView: View {
+    let message: String
+    let retry: () -> Void
+
+    var body: some View {
+        VStack(spacing: Spacing.lg) {
+            Image(systemName: "wifi.slash").font(.system(size: 30, weight: .semibold)).foregroundStyle(.muted)
+            Text(message).typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.muted).multilineTextAlignment(.center)
+            Button("Try again", action: retry).buttonStyle(ProviderButtonStyle(prominent: true)).frame(maxWidth: 240)
+        }
+        .padding(Spacing.xl * 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The shape of Game day while the first read is on its way: the scoreboard and a few rows, still.
+private struct GameDaySkeleton: View {
+    @State private var dim = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: Spacing.xl) {
+            RoundedRectangle(cornerRadius: Radius.dialog).fill(.panel).frame(height: 150)
+            ForEach(0 ..< 6, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: Radius.md).fill(.panel).frame(height: 44)
+            }
+            Spacer()
+        }
+        .padding(Spacing.xl + Spacing.xs)
+        .opacity(dim ? 0.55 : 1)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dim = true }
+        }
+        .accessibilityLabel("Loading game day")
+    }
+}

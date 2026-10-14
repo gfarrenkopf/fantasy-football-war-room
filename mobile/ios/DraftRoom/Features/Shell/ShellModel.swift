@@ -17,6 +17,8 @@ final class ShellModel {
 
     private let api: APIClient
     private let defaults: UserDefaults
+    /// Each league's season, kept while the app runs so switching back shows it at once.
+    @ObservationIgnored private var seasons: [String: SeasonStore] = [:]
     private static let lastLeagueKey = "lastLeagueId"
 
     init(api: APIClient, defaults: UserDefaults = .standard) {
@@ -40,6 +42,14 @@ final class ShellModel {
         } catch {
             if leagues.isEmpty { load = .offline(error.message) }
         }
+    }
+
+    /// The league's season store, made on first use.
+    func season(for league: League) -> SeasonStore {
+        if let store = seasons[league.id] { return store }
+        let store = SeasonStore(api: api, leagueId: league.id)
+        seasons[league.id] = store
+        return store
     }
 
     func select(_ id: String?) {

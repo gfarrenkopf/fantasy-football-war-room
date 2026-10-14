@@ -6,6 +6,9 @@ import Foundation
 enum UITestStub {
     @MainActor static func apiIfRequested() -> APIClient? {
         guard ProcessInfo.processInfo.arguments.contains("-uiTestStub") else { return nil }
+        // Every stubbed launch starts the same: on the first league, with nothing kept from a past run.
+        UserDefaults.standard.removeObject(forKey: "lastLeagueId")
+        SeasonCache.shared.clear()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubProtocol.self]
         return APIClient(baseURL: URL(string: "https://stub.invalid")!, session: URLSession(configuration: configuration), tokens: StubTokens())
@@ -37,6 +40,8 @@ enum UITestStub {
                 (200, #"{"user":{"id":"u1","email":"tester@example.test","name":"Test User"},"flags":{"season":true,"ai":true,"payments":false},"minAppVersion":"1.0"}"#)
             case "/api/v1/leagues":
                 (200, #"{"leagues":[{"id":"lg-1","name":"App Tester","espnLeagueId":"704343562","espnTeamId":1,"season":2026},{"id":"lg-2","name":"Sunday Regulars","espnLeagueId":"111","espnTeamId":4,"season":2026}]}"#)
+            case "/api/v1/leagues/lg-1/season", "/api/v1/leagues/lg-2/season":
+                (200, SeasonSample.liveJSON)
             case "/api/v1/espn/login":
                 (200, #"{"login":{"status":"connected","season":2026}}"#)
             case "/api/v1/auth/signout":

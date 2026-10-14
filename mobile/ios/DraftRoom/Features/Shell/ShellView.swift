@@ -50,11 +50,17 @@ struct ShellView: View {
     }
 
     private func tabs(_ model: ShellModel, league: League) -> some View {
-        TabView(selection: $tab) {
+        let store = model.season(for: league)
+        return TabView(selection: $tab) {
             ForEach(SeasonTab.allCases) { section in
                 Tab(section.title, systemImage: section.symbol, value: section) {
                     framed(model, title: league.name) {
-                        SeasonSectionView(section: section, league: league)
+                        switch section {
+                        case .gameDay:
+                            GameDayView(store: store, onLineup: { tab = .lineup }, onReconnect: { connecting = true })
+                        default:
+                            SeasonSectionView(section: section, league: league)
+                        }
                     }
                 }
                 .accessibilityIdentifier("tab-\(section.rawValue)")
@@ -62,6 +68,15 @@ struct ShellView: View {
         }
         .sensoryFeedback(Haptic.choice, trigger: tab)
         .sensoryFeedback(Haptic.choice, trigger: model.selectedId)
+        // On a cold launch or a league switch, open the tab the week calls for (Lineup between
+        // weeks, Game day otherwise); never while the user is moving around in a league.
+        .task(id: league.id) {
+            if let opening = store.openingTab { tab = opening }
+            await store.start()
+        }
+        .onChange(of: store.openingTab) { _, opening in
+            if let opening { tab = opening }
+        }
     }
 
     /// A tab's navigation bar: the league switcher as the title, the account on the right.

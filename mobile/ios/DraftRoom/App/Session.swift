@@ -23,7 +23,10 @@ final class Session {
     init(api: APIClient, appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0") {
         self.api = api
         self.appVersion = appVersion
-        api.onSignedOut = { [weak self] in self?.phase = .signedOut }
+        api.onSignedOut = { [weak self] in
+            SeasonCache.shared.clear()
+            self?.phase = .signedOut
+        }
     }
 
     var me: Me? {
@@ -60,12 +63,15 @@ final class Session {
         // Best effort: the token is forgotten here whatever the server says.
         try? await api.send("POST", "api/v1/auth/signout")
         api.clearToken()
+        // The seasons kept for offline use are this user's: the next one to sign in mustn't see them.
+        SeasonCache.shared.clear()
         phase = .signedOut
     }
 
     func deleteAccount() async throws(APIError) {
         try await api.send("DELETE", "api/v1/account", body: ["confirm": "DELETE"])
         api.clearToken()
+        SeasonCache.shared.clear()
         phase = .signedOut
     }
 

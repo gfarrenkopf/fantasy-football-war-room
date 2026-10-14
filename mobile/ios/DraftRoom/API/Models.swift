@@ -33,6 +33,8 @@ struct Me: Codable, Equatable, Sendable {
 /// The server's error body: `{ "error": "..." }`.
 struct ServerError: Codable, Sendable {
     let error: String
+    /// Why ESPN couldn't be read, on a 409 from the season routes.
+    var problem: String? = nil
 }
 
 // MARK: ESPN (/api/v1/espn)
