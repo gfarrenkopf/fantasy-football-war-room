@@ -115,8 +115,28 @@ enum UITestStub {
             return (200, #"{"landed":true,"result":"Done. \#(name) starts at K.","steps":[\#(landed)],"details":[]}"#)
         }
 
+        /// The trades route: GET lists the offers; a dry run words the write (and grades a proposal); a send lands it.
+        private static func trades(get: Bool, dryRun: Bool, body: Data?) -> (Int, String) {
+            if get { return (200, SeasonSample.tradesJSON) }
+            struct Sent: Decodable { let kind: String }
+            guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid trade"}"#) }
+            let words: (dry: String, done: String) = switch sent.kind {
+            case "accept": ("Accept on ESPN? You get Bijan Robinson and send Tank Bigsby. It goes through after the league's review.", "Offer accepted. It's in the league's review.")
+            case "decline": ("Decline Gridiron Gang's offer on ESPN?", "Offer declined.")
+            case "withdraw": ("Withdraw your offer to Gridiron Gang on ESPN?", "Offer withdrawn.")
+            default: ("Offer Gridiron Gang this trade on ESPN?", "Offer sent to Gridiron Gang. It's in Pending on ESPN.")
+            }
+            if dryRun {
+                let grade = sent.kind == "propose" ? #","grade":{"headline":"Better for you","level":"gain","perWeek":1.2,"theirs":0.4,"delta":16.8,"weeks":14,"slots":[],"dropLines":[],"drops":[]}"# : ""
+                return (200, #"{"text":"\#(words.dry)","problems":[]\#(grade)}"#)
+            }
+            return (200, #"{"done":true,"landed":true,"result":"\#(words.done)"}"#)
+        }
+
         static func answer(_ path: String, query: String = "", body: Data? = nil) -> (Int, String) {
             switch path {
+            case "/api/v1/leagues/lg-1/team/trades", "/api/v1/leagues/lg-2/team/trades":
+                trades(get: body == nil, dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/team/fills", "/api/v1/leagues/lg-2/team/fills":
                 (200, SeasonSample.fillsJSON)
             case "/api/v1/leagues/lg-1/team/fill", "/api/v1/leagues/lg-2/team/fill":

@@ -8,11 +8,33 @@ import { consentGate, writeResponse } from "@/lib/server/espn/writeRoute";
 import { formatServerError } from "@/lib/server/errorLog";
 import { error, json, readJson } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
-import { staleAgainst, tradeApplied, tradeDryRun } from "@/lib/server/v1/team";
+import { staleAgainst, tradeApplied, tradeDryRun, tradesResponse, type TradesResponse } from "@/lib/server/v1/team";
 
 type Ctx = RouteContext<"/api/v1/leagues/[id]/team/trades">;
 
 const ROUTE = "/api/v1/leagues/[id]/team/trades";
+
+/**
+ * GET /api/v1/leagues/:id/team/trades → TradesResponse (src/lib/server/v1/team.ts)
+ *
+ * The user's trades pending on ESPN for the app's Trades tab (APE-405), as the web's TradePanel
+ * shows them: each graded against both starting lineups for the rest of the season, with what the
+ * user can do with it, and the trade deadline. 409 `{ problem }` when ESPN can't be read.
+ */
+export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
+  const gated = seasonGate(email);
+  if (gated) return gated;
+  const { id } = await ctx.params;
+  if (!(await findLeague(db, userId, id))) return error(404, "League not found");
+  try {
+    const load = await loadSeasonView(db, config.espnCodeKey!, userId, id);
+    if (load.kind !== "ok") return json(409, { error: "ESPN couldn't be read for this league", problem: load.kind });
+    return json(200, tradesResponse(load.view) satisfies TradesResponse);
+  } catch (err) {
+    console.error(formatServerError(err, { method: request.method, path: new URL(request.url).pathname }, { routePath: ROUTE, routeType: "route" }));
+    return error(503, "Your trades couldn't be read just now");
+  }
+});
 
 /**
  * POST /api/v1/leagues/:id/team/trades[?dryRun=1]: trades on ESPN for the user's own team from the
@@ -22,8 +44,9 @@ const ROUTE = "/api/v1/leagues/[id]/team/trades";
  * - `{ kind: "accept", week, snapshot, tradeId }` / `{ kind: "decline" | "withdraw", week, tradeId }`
  *
  * `?dryRun=1` → TeamDryRun (src/lib/server/v1/team.ts): the trade in plain words and why it can't go
- * to ESPN, checked against the season view. Nothing is written and no consent is needed. Otherwise
- * → TeamApplied: the write is the web's (writeTrade()), answered in plain words with the web's flags.
+ * to ESPN, checked against the season view; a proposal also carries its `grade`, for the builder.
+ * Nothing is written and no consent is needed. Otherwise → TeamApplied: the write is the web's
+ * (writeTrade()), answered in plain words with the web's flags.
  *
  * Every refusal answers as the web's ESPN writes do (src/lib/server/espn/writeRoute.ts).
  */

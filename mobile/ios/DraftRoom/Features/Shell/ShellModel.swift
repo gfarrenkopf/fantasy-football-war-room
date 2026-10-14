@@ -25,6 +25,7 @@ final class ShellModel {
     @ObservationIgnored private var lineups: [String: LineupModel] = [:]
     @ObservationIgnored private var waivers: [String: WaiversModel] = [:]
     @ObservationIgnored private var fills: [String: FillModel] = [:]
+    @ObservationIgnored private var trades: [String: TradesModel] = [:]
     private static let lastLeagueKey = "lastLeagueId"
 
     init(api: APIClient, defaults: UserDefaults = .standard) {
@@ -79,6 +80,14 @@ final class ShellModel {
         if let model = waivers[league.id] { return model }
         let model = WaiversModel(api: api, store: season(for: league))
         waivers[league.id] = model
+        return model
+    }
+
+    /// The league's trades, made on first use.
+    func trades(for league: League) -> TradesModel {
+        if let model = trades[league.id] { return model }
+        let model = TradesModel(api: api, store: season(for: league))
+        trades[league.id] = model
         return model
     }
 

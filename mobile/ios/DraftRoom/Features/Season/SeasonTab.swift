@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The season's sections, as tabs: the web's season room tabs (SeasonRoom.tsx), in its order.
-/// Recaps live in Game day, as on the web. Epic 18 builds Game day and Lineup, Epic 19 Waivers,
-/// Epic 20 Trades.
+/// Recaps live in Game day, as on the web. Epic 18 builds Game day and Lineup, Epic 19 Waivers and
+/// Trades' offers and builder, and Epic 20 the AI in them.
 enum SeasonTab: String, CaseIterable, Identifiable, Hashable {
     case gameDay = "gameday"
     case lineup
@@ -27,21 +27,5 @@ enum SeasonTab: String, CaseIterable, Identifiable, Hashable {
         case .trade: "arrow.left.arrow.right"
         case .waivers: "person.badge.plus"
         }
-    }
-}
-
-/// Placeholder for a section until its ticket builds it.
-struct SeasonSectionView: View {
-    let section: SeasonTab
-    let league: League
-
-    var body: some View {
-        ContentUnavailableView {
-            Label(section.title, systemImage: section.symbol)
-        } description: {
-            Text("\(league.name) · \(String(league.season))")
-        }
-        .foregroundStyle(.muted)
-        .accessibilityIdentifier("section-\(section.rawValue)")
     }
 }

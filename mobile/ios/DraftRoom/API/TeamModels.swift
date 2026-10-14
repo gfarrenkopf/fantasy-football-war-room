@@ -181,3 +181,90 @@ struct FillApplied: Codable, Equatable, Sendable {
     let steps: [Step]
     let details: [String]
 }
+
+// GET and POST /api/v1/leagues/:id/team/trades (APE-386, APE-405): the user's trades pending on
+// ESPN, graded by the server, and proposing, accepting, declining or withdrawing one.
+
+/// The user's trades pending on ESPN, and the trade deadline.
+struct TradesResponse: Codable, Equatable, Sendable {
+    struct Deadline: Codable, Equatable, Sendable {
+        let at: Date?
+        let passed: Bool
+    }
+
+    let offers: [TradeOffer]
+    let deadline: Deadline
+}
+
+/// A trade pending on ESPN (the web's Offer): who, which way, graded, and what the user can do.
+struct TradeOffer: Codable, Equatable, Sendable, Identifiable {
+    struct Partner: Codable, Equatable, Sendable {
+        let id: Int
+        let name: String
+    }
+
+    struct When: Codable, Equatable, Sendable {
+        /// "Expires" or "Goes through".
+        let label: String
+        let at: Date
+    }
+
+    let id: String
+    /// theirs: offered to the user; mine: the user's own offer; accepted: agreed, waiting on the league.
+    let kind: String
+    let partner: Partner
+    let gives: [Int]
+    let gets: [Int]
+    let when: When?
+    /// Nil when it can't be graded: a player in it is no longer on those rosters.
+    let grade: TradeGrade?
+    /// accept, decline or withdraw.
+    let actions: [String]
+}
+
+/// A trade graded for the user against both starting lineups for the rest of the season (the web's TradeGain).
+struct TradeGrade: Codable, Equatable, Sendable {
+    struct Slot: Codable, Equatable, Sendable {
+        let key: String
+        let change: Double
+    }
+
+    let headline: String
+    /// rest, trim, gain, swing or must: how loudly to say it.
+    let level: String
+    /// Points a week for the user, and for the partner.
+    let perWeek: Double
+    let theirs: Double
+    /// The user's change over the rest of the season.
+    let delta: Double
+    let weeks: Int
+    let slots: [Slot]
+    /// "You'd drop X to make room".
+    let dropLines: [String]
+    /// Who the user would cut; a proposal sends them.
+    let drops: [Int]
+}
+
+/// A proposal, or an answer to an offer, as the web's TradeWrite sends them.
+struct TradeRequest: Encodable, Equatable, Sendable {
+    enum Kind: String, Encodable, Sendable {
+        case propose, accept, decline, withdraw
+    }
+
+    let kind: Kind
+    let week: Int
+    /// The roster staged against: a proposal and an accept check it.
+    var snapshot: [LineupRequest.Seat]? = nil
+    var partner: Int? = nil
+    var gives: [Int]? = nil
+    var gets: [Int]? = nil
+    var drops: [Int]? = nil
+    var tradeId: String? = nil
+}
+
+/// `?dryRun=1` on a trade: the question in plain words, why it can't go, and, for a proposal, its grade.
+struct TradeDryRun: Codable, Equatable, Sendable {
+    let text: String
+    let problems: [String]
+    var grade: TradeGrade? = nil
+}

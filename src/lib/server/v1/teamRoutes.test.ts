@@ -12,7 +12,7 @@ import type { FreeAgent } from "@/lib/season/types";
 import { buildSeasonView, type SeasonView } from "@/lib/season/view";
 import { agreeToWrites, writeConsent } from "../seasonPrefs";
 import { createTestLeague } from "../testLeagues";
-import type { TeamApplied, TeamDryRun, WaiversResponse } from "./team";
+import type { TeamApplied, TeamDryRun, TradesResponse, WaiversResponse } from "./team";
 
 vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({
@@ -265,7 +265,11 @@ describe("POST /api/v1/leagues/:id/team/trades", () => {
     expect(await dry({ kind: "decline", week: view.currentWeek, tradeId: OFFER.id })).toEqual({ text: `Decline ${partner.name}'s offer on ESPN?`, problems: [] });
     expect((await dry({ kind: "withdraw", week: view.currentWeek, tradeId: OFFER.id })).problems).toEqual(["Only the team that made an offer can withdraw it."]);
     const propose = { kind: "propose", week: view.currentWeek, snapshot: snapshotOf(roster), partner: partner.id, gives: [id("Javonte Williams")], gets: [id("Christian McCaffrey")], drops: [] };
-    expect(await dry(propose)).toEqual({ text: `Offer ${partner.name} this trade on ESPN? You send Javonte Williams and get Christian McCaffrey.`, problems: [] });
+    const proposed = (await dry(propose)) as TeamDryRun & { grade: { headline: string; perWeek: number; drops: number[] } };
+    expect(proposed).toMatchObject({ text: `Offer ${partner.name} this trade on ESPN? You send Javonte Williams and get Christian McCaffrey.`, problems: [] });
+    // The builder's verdict rides along, graded as the web's TradePanel grades it.
+    expect(proposed.grade).toMatchObject({ headline: "Costs you", level: "gain" });
+    expect(proposed.grade.perWeek).toBeCloseTo(-0.51, 2);
     expect(state.sent).toEqual([]);
   });
 
@@ -280,11 +284,48 @@ describe("POST /api/v1/leagues/:id/team/trades", () => {
     expect(state.sent.map((s) => s.kind)).toEqual(["respond", "propose"]);
   });
 
+  it("asks for the consent before writing, and says when ESPN doesn't show the change", async () => {
+    const { POST } = await load<Post>("trades");
+    const gated = await POST(post(leagueId, "trades", ACCEPT), ctx(leagueId));
+    expect(gated.status).toBe(409);
+    expect(await gated.json()).toMatchObject({ consent: { version: ESPN_WRITE_VERSION } });
+    expect(state.sent).toEqual([]);
+    state.outcome = { kind: "applied", landed: { done: false } };
+    expect(await (await POST(post(leagueId, "trades", { ...ACCEPT, consentVersion: ESPN_WRITE_VERSION }), ctx(leagueId))).json()).toEqual({
+      done: false,
+      landed: false,
+      result: "ESPN doesn't show that change. Check ESPN. Draft Room has been alerted.",
+    });
+  });
+
   it("answers a failed write as the web does", async () => {
     await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
     state.outcome = { kind: "write-failed", detail: "timeout" };
     const res = await (await load<Post>("trades")).POST(post(leagueId, "trades", ACCEPT), ctx(leagueId));
     expect(res.status).toBe(502);
     expect(errors.some((e) => e.includes("ESPN trade accept failed"))).toBe(true);
+  });
+});
+
+describe("GET /api/v1/leagues/:id/team/trades", () => {
+  it("grades each offer and says what the user can do with it", async () => {
+    const mine = { ...OFFER, id: "trade-2", proposerTeamId: base.myTeamId, partnerTeamId: partner.id };
+    state.load = { ...(state.load as object), view: { ...view, pendingTrades: [OFFER, mine], tradeDeadline: "2026-11-20T17:00:00.000Z" } };
+    const res = await (await load<Get>("trades")).GET(get(leagueId, "trades"), ctx(leagueId));
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as TradesResponse;
+    expect(out.deadline).toEqual({ at: "2026-11-20T17:00:00.000Z", passed: false });
+    const [theirs, own] = out.offers;
+    expect(theirs).toMatchObject({ id: OFFER.id, kind: "theirs", partner: { id: partner.id, name: partner.name }, gets: [id("Bijan Robinson")], gives: [id("Javonte Williams")], actions: ["accept", "decline"] });
+    expect(theirs.grade).toMatchObject({ headline: "Costs you", level: expect.any(String), weeks: expect.any(Number) });
+    expect(own).toMatchObject({ id: "trade-2", kind: "mine", actions: ["withdraw"] });
+  });
+
+  it("offers no accept once the deadline has passed, and nothing on an accepted trade", async () => {
+    const accepted = { ...OFFER, id: "trade-3", status: "accepted" as const, processesAt: "2026-09-24T07:00:00.000Z" };
+    state.load = { ...(state.load as object), view: { ...view, pendingTrades: [OFFER, accepted], tradeDeadlinePassed: true } };
+    const out = (await (await (await load<Get>("trades")).GET(get(leagueId, "trades"), ctx(leagueId))).json()) as TradesResponse;
+    expect(out.offers.map((o) => o.actions)).toEqual([["decline"], []]);
+    expect(out.offers[1]).toMatchObject({ kind: "accepted", when: { label: "Goes through", at: "2026-09-24T07:00:00.000Z" } });
   });
 });

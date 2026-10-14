@@ -4,6 +4,9 @@ import type { AheadFill, WeekHole } from "@/lib/season/holesAhead";
 import { checkMoves, label, rosterChanges, type RosterSnapshot } from "@/lib/season/apply";
 import { fillSteps, type FillPlan } from "@/lib/season/holeFill";
 import type { FreeAgent } from "@/lib/season/types";
+import { tradeEmphasis, type Emphasis } from "@/lib/season/emphasis";
+import { evaluateTrade, tradeFromPending, type Trade } from "@/lib/season/trade";
+import { tradeHeadline } from "@/lib/season/tradeWords";
 import { checkProposal, checkResponse } from "@/lib/season/tradeWrite";
 import type { SeasonView } from "@/lib/season/view";
 import { waiverNote, type Pickup } from "@/lib/season/waivers";
@@ -179,8 +182,88 @@ export function fillApplied(view: SeasonView, hole: Pick<Hole, "key">, fill: Fil
   return { landed: false, result, steps, details };
 }
 
+/** A trade graded for the user (APE-405), as the web's TradeGain and SlotChanges tell it. */
+export interface TradeGrade {
+  headline: string;
+  level: Emphasis;
+  /** Points a week for the user, and for the partner. */
+  perWeek: number;
+  theirs: number;
+  /** The user's change over the rest of the season. */
+  delta: number;
+  weeks: number;
+  /** Where the user's lineup moves, per week, slot by slot; moves under 0.05 are left out. */
+  slots: { key: string; change: number }[];
+  /** "You'd drop X to make room", "Hail Marys would drop Y". */
+  dropLines: string[];
+  /** Who the user would cut to make room; a proposal sends them. */
+  drops: number[];
+}
+
+/** `trade` graded for the user against both starting lineups for the rest of the season; null when it can't be (a player moved, or nobody's in it). */
+export function tradeGrade(view: SeasonView, trade: Trade): TradeGrade | null {
+  const verdict = evaluateTrade(view.teams, view, trade);
+  if (!verdict) return null;
+  const name = namer(view);
+  const partner = view.teams.find((t) => t.id === trade.teamB)?.name ?? "They";
+  return {
+    headline: tradeHeadline(verdict),
+    level: tradeEmphasis(verdict.a.perWeek),
+    perWeek: verdict.a.perWeek,
+    theirs: verdict.b.perWeek,
+    delta: verdict.a.delta,
+    weeks: verdict.weeks,
+    slots: verdict.a.bySlot.filter((slot) => Math.abs(slot.after - slot.before) >= 0.05).map((slot) => ({ key: slot.key, change: slot.after - slot.before })),
+    dropLines: [...verdict.a.drops.map((id) => `You'd drop ${name(id)} to make room`), ...verdict.b.drops.map((id) => `${partner} would drop ${name(id)}`)],
+    drops: verdict.a.drops,
+  };
+}
+
+/** One of the user's trades pending on ESPN, graded, with what the user can do with it (the web's Offer). */
+export interface TradeOffer {
+  id: string;
+  /** theirs: offered to the user; mine: the user's own offer; accepted: agreed, waiting on the league. */
+  kind: "theirs" | "mine" | "accepted";
+  partner: { id: number; name: string };
+  gives: number[];
+  gets: number[];
+  /** "Expires" or "Goes through", and when; null when ESPN didn't say. */
+  when: { label: string; at: string } | null;
+  grade: TradeGrade | null;
+  actions: ("accept" | "decline" | "withdraw")[];
+}
+
+/** GET team/trades: the user's offers pending on ESPN, and the trade deadline. */
+export interface TradesResponse {
+  offers: TradeOffer[];
+  deadline: { at: string | null; passed: boolean };
+}
+
+export function tradesResponse(view: SeasonView): TradesResponse {
+  const offers = view.pendingTrades.flatMap((pending): TradeOffer[] => {
+    const trade = tradeFromPending(pending, view.myTeamId);
+    if (!trade) return [];
+    const kind = pending.status === "accepted" ? "accepted" : pending.proposerTeamId === view.myTeamId ? "mine" : "theirs";
+    const [label, at] = pending.status === "accepted" ? ["Goes through", pending.processesAt] : ["Expires", pending.expiresAt];
+    const actions: TradeOffer["actions"] = pending.status !== "proposed" ? [] : kind === "mine" ? ["withdraw"] : [...(view.tradeDeadlinePassed ? [] : ["accept" as const]), "decline"];
+    return [
+      {
+        id: pending.id,
+        kind,
+        partner: { id: trade.teamB, name: view.teams.find((t) => t.id === trade.teamB)?.name ?? `Team ${trade.teamB}` },
+        gives: [...trade.gives],
+        gets: [...trade.gets],
+        when: at ? { label, at } : null,
+        grade: tradeGrade(view, trade),
+        actions,
+      },
+    ];
+  });
+  return { offers, deadline: { at: view.tradeDeadline, passed: view.tradeDeadlinePassed } };
+}
+
 /** A proposal, or an answer to a pending trade, against the season view, for the confirm sheet. */
-export function tradeDryRun(view: SeasonView, body: TradeBody, now: number): TeamDryRun {
+export function tradeDryRun(view: SeasonView, body: TradeBody, now: number): TeamDryRun & { grade?: TradeGrade | null } {
   const name = namer(view);
   const team = (id: number) => view.teams.find((t) => t.id === id)?.name ?? "that team";
   if (body.kind === "propose") {
@@ -188,6 +271,8 @@ export function tradeDryRun(view: SeasonView, body: TradeBody, now: number): Tea
     return {
       text: `Offer ${team(body.partner)} this trade on ESPN? You send ${list(body.gives, name) || "nothing"} and get ${list(body.gets, name) || "nothing"}${drops}.`,
       problems: checkProposal(view.teams, view, { teamA: view.myTeamId, gives: body.gives, teamB: body.partner, gets: body.gets }, body.drops, now),
+      // The builder's verdict, graded as the web's TradePanel does it.
+      grade: tradeGrade(view, { teamA: view.myTeamId, gives: body.gives, teamB: body.partner, gets: body.gets }),
     };
   }
   const trade = view.pendingTrades.find((t) => t.id === body.tradeId);

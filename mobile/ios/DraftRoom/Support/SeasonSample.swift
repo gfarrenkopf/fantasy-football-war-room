@@ -188,6 +188,34 @@ enum SeasonSample {
         claims: .init(allowed: true, reason: nil),
         drops: .init(needed: true, candidates: [7, 6, 8, 5, 4, 3, 2, 1]))
 
+    // MARK: Trades (APE-405)
+
+    /// Gridiron Gang offers Bijan Robinson for Tank Bigsby; the user's own offer for McBride waits on them.
+    static let trades = TradesResponse(
+        offers: [
+            TradeOffer(
+                id: "trade-1", kind: "theirs", partner: .init(id: 2, name: "Gridiron Gang"), gives: [6], gets: [12],
+                when: .init(label: "Expires", at: kickoff.addingTimeInterval(2 * 86_400)), grade: grade(1.8),
+                actions: ["accept", "decline"]),
+            TradeOffer(
+                id: "trade-2", kind: "mine", partner: .init(id: 2, name: "Gridiron Gang"), gives: [8], gets: [14],
+                when: .init(label: "Expires", at: kickoff.addingTimeInterval(86_400)), grade: grade(0.3),
+                actions: ["withdraw"]),
+        ],
+        deadline: .init(at: kickoff.addingTimeInterval(60 * 86_400), passed: false))
+
+    static func grade(_ perWeek: Double) -> TradeGrade {
+        TradeGrade(
+            headline: perWeek >= 0.5 ? "Better for you" : "Slightly better for you", level: perWeek >= 0.5 ? "gain" : "trim",
+            perWeek: perWeek, theirs: -0.4, delta: perWeek * 14, weeks: 14, slots: [.init(key: "RB", change: perWeek)], dropLines: [], drops: [])
+    }
+
+    static var tradesJSON: String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(decoding: (try? encoder.encode(trades)) ?? Data(), as: UTF8.self)
+    }
+
     // MARK: A hole to fill (APE-404)
 
     /// `-uiTestHole`: Jake Elliott is out with no other kicker, so K is a hole on the Lineup tab.
