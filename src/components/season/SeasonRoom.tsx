@@ -70,6 +70,8 @@ type Props = {
       phase: GameDayPhase;
       /** Every kept week, told for the recap archive (APE-250). */
       archive: ArchiveWeek[];
+      /** The week a shared recap link opened (`?recap=`), shown in the archive on Game day. */
+      openRecap?: { season: number; week: number } | null;
       /** ESPN's pre-game projections against the scores (APE-229), and its season on the user's team. */
       accuracy: ProjectionAccuracy | null;
     }
@@ -86,7 +88,8 @@ const CLOCK_TIME: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-dig
 export function SeasonRoom(props: Props) {
   const phase = "view" in props ? props.phase : "lineup";
   // Game day leads while games are on or the week's result is up; between weeks the lineup does.
-  const [tab, setTab] = useState<Tab>(phase === "lineup" ? "lineup" : "gameday");
+  // A shared recap opens on Game day, where the archive is.
+  const [tab, setTab] = useState<Tab>(phase === "lineup" && !("view" in props && props.openRecap) ? "lineup" : "gameday");
   const title = "view" in props ? props.view.name : (props.leagueName ?? "Your season");
   const view = "view" in props ? props.view : null;
   const ai = "view" in props ? props.ai : null;
@@ -175,7 +178,7 @@ export function SeasonRoom(props: Props) {
             )}
             <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
               {tab === "gameday" ? (
-                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} previous={props.previous} archive={props.archive} onLineupTools={() => setTab("lineup")} />
+                <GameDayPanel leagueId={props.leagueId} view={props.result ?? props.view} phase={props.phase} accuracy={props.accuracy} previous={props.previous} archive={props.archive} openRecap={props.openRecap} onLineupTools={() => setTab("lineup")} />
               ) : tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} onWaivers={() => setTab("waivers")} />
               ) : tab === "trade" ? (

@@ -1,0 +1,500 @@
+{
+  "league": {
+    "id": "lg-1",
+    "name": "App Tester"
+  },
+  "season": 2026,
+  "week": 2,
+  "headline": "Brutal. Gridiron Gang got you by 1.2.",
+  "mine": {
+    "result": "loss",
+    "me": 101.7,
+    "them": 102.9,
+    "opponent": "Gridiron Gang"
+  },
+  "date": "2026-09-23T13:00:00.000Z",
+  "settled": true,
+  "recap": {
+    "week": 2,
+    "mine": {
+      "result": "loss",
+      "me": 101.7,
+      "them": 102.9,
+      "margin": 1.2,
+      "opponent": "Gridiron Gang",
+      "projected": {
+        "me": 142.1,
+        "them": 0
+      },
+      "starters": [
+        {
+          "playerId": 3918298,
+          "name": "Josh Allen",
+          "pos": "QB",
+          "team": "BUF",
+          "slot": "QB",
+          "points": 7.1,
+          "projected": 23.56,
+          "statLine": null
+        },
+        {
+          "playerId": 4429795,
+          "name": "Jahmyr Gibbs",
+          "pos": "RB",
+          "team": "DET",
+          "slot": "RB",
+          "points": 13.9,
+          "projected": 25.34,
+          "statLine": null
+        },
+        {
+          "playerId": 4379399,
+          "name": "James Cook III",
+          "pos": "RB",
+          "team": "BUF",
+          "slot": "RB",
+          "points": 17.8,
+          "projected": 16.95,
+          "statLine": null
+        },
+        {
+          "playerId": 4374302,
+          "name": "Amon-Ra St. Brown",
+          "pos": "WR",
+          "team": "DET",
+          "slot": "WR",
+          "points": 15.9,
+          "projected": 19.86,
+          "statLine": null
+        },
+        {
+          "playerId": 4426502,
+          "name": "Drake London",
+          "pos": "WR",
+          "team": "ATL",
+          "slot": "WR",
+          "points": 23.9,
+          "projected": 15.39,
+          "statLine": null
+        },
+        {
+          "playerId": 4431459,
+          "name": "Tyler Warren",
+          "pos": "TE",
+          "team": "IND",
+          "slot": "TE",
+          "points": 6.8,
+          "projected": 12.3,
+          "statLine": null
+        },
+        {
+          "playerId": 4362238,
+          "name": "Chase Brown",
+          "pos": "RB",
+          "team": "CIN",
+          "slot": "FLEX",
+          "points": 21.6,
+          "projected": 16.58,
+          "statLine": null
+        },
+        {
+          "playerId": -16007,
+          "name": "Broncos D/ST",
+          "pos": "DST",
+          "team": "DEN",
+          "slot": "DST",
+          "points": 4,
+          "projected": 3.81,
+          "statLine": null
+        },
+        {
+          "playerId": 4574716,
+          "name": "Harrison Mevis",
+          "pos": "K",
+          "team": "LAR",
+          "slot": "K",
+          "points": 10.8,
+          "projected": 8.31,
+          "statLine": null
+        }
+      ],
+      "star": {
+        "player": {
+          "playerId": 4426502,
+          "name": "Drake London",
+          "pos": "WR",
+          "team": "ATL",
+          "slot": "WR",
+          "points": 23.9,
+          "projected": 15.39,
+          "statLine": null
+        },
+        "beat": true
+      }
+    },
+    "headline": "Brutal. Gridiron Gang got you by 1.2.",
+    "story": "Brutal. Gridiron Gang got you by 1.2. Drake London's 23.9 deserved better. That's 1–1, 2nd in the league.",
+    "standings": [
+      {
+        "teamId": 3,
+        "rank": 1,
+        "wins": 2,
+        "losses": 0,
+        "ties": 0,
+        "pointsFor": 181,
+        "name": "Fourth and Long",
+        "mine": false
+      },
+      {
+        "teamId": 1,
+        "rank": 2,
+        "wins": 1,
+        "losses": 1,
+        "ties": 0,
+        "pointsFor": 232.9,
+        "name": "Sunday Scaries",
+        "mine": true
+      },
+      {
+        "teamId": 2,
+        "rank": 3,
+        "wins": 1,
+        "losses": 1,
+        "ties": 0,
+        "pointsFor": 223.3,
+        "name": "Gridiron Gang",
+        "mine": false
+      },
+      {
+        "teamId": 4,
+        "rank": 4,
+        "wins": 0,
+        "losses": 2,
+        "ties": 0,
+        "pointsFor": 171,
+        "name": "Hail Marys",
+        "mine": false
+      }
+    ],
+    "topScorers": [
+      {
+        "playerId": 4426502,
+        "name": "Drake London",
+        "pos": "WR",
+        "team": "ATL",
+        "slot": "WR",
+        "points": 23.9,
+        "projected": 15.39,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 8.5
+      },
+      {
+        "playerId": 4362238,
+        "name": "Chase Brown",
+        "pos": "RB",
+        "team": "CIN",
+        "slot": "FLEX",
+        "points": 21.6,
+        "projected": 16.58,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 5
+      },
+      {
+        "playerId": 4379399,
+        "name": "James Cook III",
+        "pos": "RB",
+        "team": "BUF",
+        "slot": "RB",
+        "points": 17.8,
+        "projected": 16.95,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 0.9
+      },
+      {
+        "playerId": 4374302,
+        "name": "Amon-Ra St. Brown",
+        "pos": "WR",
+        "team": "DET",
+        "slot": "WR",
+        "points": 15.9,
+        "projected": 19.86,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -4
+      },
+      {
+        "playerId": 4429795,
+        "name": "Jahmyr Gibbs",
+        "pos": "RB",
+        "team": "DET",
+        "slot": "RB",
+        "points": 13.9,
+        "projected": 25.34,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -11.4
+      }
+    ],
+    "gameChanger": null,
+    "benchwarmers": [
+      {
+        "playerId": 4685702,
+        "name": "Quinshon Judkins",
+        "pos": "RB",
+        "team": "CLE",
+        "slot": "BN",
+        "points": 21.3,
+        "projected": 13.72,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 7.6
+      },
+      {
+        "playerId": 4567750,
+        "name": "Emeka Egbuka",
+        "pos": "WR",
+        "team": "TB",
+        "slot": "BN",
+        "points": 16.1,
+        "projected": 12.37,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 3.7
+      },
+      {
+        "playerId": 4430737,
+        "name": "Kyren Williams",
+        "pos": "RB",
+        "team": "LAR",
+        "slot": "BN",
+        "points": 13.6,
+        "projected": 12.97,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 0.6
+      }
+    ],
+    "falseStarters": [
+      {
+        "playerId": 3918298,
+        "name": "Josh Allen",
+        "pos": "QB",
+        "team": "BUF",
+        "slot": "QB",
+        "points": 7.1,
+        "projected": 23.56,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -16.5
+      },
+      {
+        "playerId": 4429795,
+        "name": "Jahmyr Gibbs",
+        "pos": "RB",
+        "team": "DET",
+        "slot": "RB",
+        "points": 13.9,
+        "projected": 25.34,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -11.4
+      },
+      {
+        "playerId": 4431459,
+        "name": "Tyler Warren",
+        "pos": "TE",
+        "team": "IND",
+        "slot": "TE",
+        "points": 6.8,
+        "projected": 12.3,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -5.5
+      }
+    ]
+  },
+  "swing": {
+    "projected": 142.1,
+    "final": -1.2,
+    "swings": [
+      {
+        "playerId": 3918298,
+        "name": "Josh Allen",
+        "pos": "QB",
+        "side": "me",
+        "points": 7.1,
+        "projected": 23.56,
+        "delta": -16.5,
+        "before": 142.1,
+        "after": 125.6
+      },
+      {
+        "playerId": 4429795,
+        "name": "Jahmyr Gibbs",
+        "pos": "RB",
+        "side": "me",
+        "points": 13.9,
+        "projected": 25.34,
+        "delta": -11.4,
+        "before": 125.6,
+        "after": 114.2
+      },
+      {
+        "playerId": 4426502,
+        "name": "Drake London",
+        "pos": "WR",
+        "side": "me",
+        "points": 23.9,
+        "projected": 15.39,
+        "delta": 8.5,
+        "before": 114.2,
+        "after": 122.7
+      },
+      {
+        "playerId": 4431459,
+        "name": "Tyler Warren",
+        "pos": "TE",
+        "side": "me",
+        "points": 6.8,
+        "projected": 12.3,
+        "delta": -5.5,
+        "before": 122.7,
+        "after": 117.2
+      }
+    ],
+    "rest": {
+      "delta": -118.4,
+      "before": 117.2,
+      "after": -1.2
+    },
+    "mine": -20.3,
+    "theirs": 0,
+    "empty": [],
+    "hindsight": {
+      "total": 129.4,
+      "gain": 27.7,
+      "wouldHaveWon": true,
+      "best": {
+        "name": "Quinshon Judkins",
+        "points": 21.3
+      }
+    }
+  },
+  "card": {
+    "week": 2,
+    "result": "loss",
+    "me": 101.7,
+    "them": 102.9,
+    "margin": 1.2,
+    "opponent": "Gridiron Gang",
+    "starters": [
+      {
+        "slot": "QB",
+        "playerId": 3918298,
+        "name": "Josh Allen",
+        "pos": "QB",
+        "team": "BUF",
+        "points": 7.1,
+        "projected": 23.56
+      },
+      {
+        "slot": "RB",
+        "playerId": 4429795,
+        "name": "Jahmyr Gibbs",
+        "pos": "RB",
+        "team": "DET",
+        "points": 13.9,
+        "projected": 25.34
+      },
+      {
+        "slot": "RB",
+        "playerId": 4379399,
+        "name": "James Cook III",
+        "pos": "RB",
+        "team": "BUF",
+        "points": 17.8,
+        "projected": 16.95
+      },
+      {
+        "slot": "WR",
+        "playerId": 4374302,
+        "name": "Amon-Ra St. Brown",
+        "pos": "WR",
+        "team": "DET",
+        "points": 15.9,
+        "projected": 19.86
+      },
+      {
+        "slot": "WR",
+        "playerId": 4426502,
+        "name": "Drake London",
+        "pos": "WR",
+        "team": "ATL",
+        "points": 23.9,
+        "projected": 15.39
+      },
+      {
+        "slot": "TE",
+        "playerId": 4431459,
+        "name": "Tyler Warren",
+        "pos": "TE",
+        "team": "IND",
+        "points": 6.8,
+        "projected": 12.3
+      },
+      {
+        "slot": "FLEX",
+        "playerId": 4362238,
+        "name": "Chase Brown",
+        "pos": "RB",
+        "team": "CIN",
+        "points": 21.6,
+        "projected": 16.58
+      },
+      {
+        "slot": "DST",
+        "playerId": -16007,
+        "name": "Broncos D/ST",
+        "pos": "DST",
+        "team": "DEN",
+        "points": 4,
+        "projected": 3.81
+      },
+      {
+        "slot": "K",
+        "playerId": 4574716,
+        "name": "Harrison Mevis",
+        "pos": "K",
+        "team": "LAR",
+        "points": 10.8,
+        "projected": 8.31
+      }
+    ],
+    "star": {
+      "player": {
+        "slot": "WR",
+        "playerId": 4426502,
+        "name": "Drake London",
+        "pos": "WR",
+        "team": "ATL",
+        "points": 23.9,
+        "projected": 15.39
+      },
+      "beat": true
+    }
+  }
+}

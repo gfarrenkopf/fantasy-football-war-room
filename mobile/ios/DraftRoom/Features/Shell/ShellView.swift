@@ -8,6 +8,14 @@ struct ShellView: View {
     @State private var tab: SeasonTab = .gameDay
     @State private var showingSettings = false
     @State private var connecting = false
+    /// A league switch, or connecting one, waiting on the user to discard unsaved lineup edits.
+    @State private var pendingSwitch: PendingSwitch?
+    /// Game day's stack: a recap opened from the archive or from a link.
+    @State private var gameDayPath: [RecapKey] = []
+    /// The recap a season link asked for, opened once its league is open.
+    @State private var linkedRecap: RecapKey?
+    /// The league a season link opened, which opens on Game day rather than the tab the week calls for.
+    @State private var linkedLeague: String?
 
     var body: some View {
         Group {
@@ -50,11 +58,19 @@ struct ShellView: View {
     }
 
     private func tabs(_ model: ShellModel, league: League) -> some View {
-        TabView(selection: $tab) {
+        let store = model.season(for: league)
+        return TabView(selection: $tab) {
             ForEach(SeasonTab.allCases) { section in
                 Tab(section.title, systemImage: section.symbol, value: section) {
-                    framed(model, title: league.name) {
-                        SeasonSectionView(section: section, league: league)
+                    framed(model, title: league.name, path: section == .gameDay ? $gameDayPath : nil) {
+                        switch section {
+                        case .gameDay:
+                            GameDayView(store: store, recaps: model.recaps(for: league), onLineup: { tab = .lineup }, onReconnect: { connecting = true })
+                        case .lineup:
+                            LineupView(model: model.lineup(for: league), onReconnect: { connecting = true }, onWaivers: { tab = .waivers })
+                        default:
+                            SeasonSectionView(section: section, league: league)
+                        }
                     }
                 }
                 .accessibilityIdentifier("tab-\(section.rawValue)")
@@ -62,18 +78,80 @@ struct ShellView: View {
         }
         .sensoryFeedback(Haptic.choice, trigger: tab)
         .sensoryFeedback(Haptic.choice, trigger: model.selectedId)
+        // On a cold launch or a league switch, open the tab the week calls for (Lineup between
+        // weeks, Game day otherwise); never while the user is moving around in a league.
+        .task(id: league.id) {
+            if linkedLeague == league.id {
+                tab = .gameDay
+                if let key = linkedRecap { gameDayPath = [key] }
+                linkedRecap = nil
+            } else {
+                gameDayPath = []
+                if let opening = store.openingTab { tab = opening }
+            }
+            await store.start()
+        }
+        .onChange(of: store.openingTab) { _, opening in
+            if let opening, linkedLeague != league.id { tab = opening }
+        }
+        .onChange(of: session.seasonLink, initial: true) { _, link in
+            if let link { follow(link, model) }
+        }
+        .onChange(of: model.lineup(for: league).hasUnsavedEdits, initial: true) { _, unsaved in
+            session.hasUnsavedLineup = unsaved
+        }
+        .confirmationDialog("Your lineup changes aren't saved to ESPN", isPresented: Binding { pendingSwitch != nil } set: { if !$0 { pendingSwitch = nil } }, titleVisibility: .visible) {
+            Button("Discard changes", role: .destructive) {
+                let pending = pendingSwitch
+                pendingSwitch = nil
+                switch pending {
+                case let .league(id): withAnimation(Motion.respond) { model.select(id) }
+                case .connect: connecting = true
+                case nil: break
+                }
+            }
+            Button("Keep editing", role: .cancel) {}
+        }
+    }
+
+    /// Opens what a season link names: its league on Game day, and the week's recap when it names one.
+    /// A link to a league this account doesn't follow is dropped.
+    private func follow(_ link: SeasonLink, _ model: ShellModel) {
+        session.seasonLink = nil
+        guard model.leagues.contains(where: { $0.id == link.leagueId }) else { return }
+        linkedLeague = link.leagueId
+        if model.selected?.id == link.leagueId {
+            tab = .gameDay
+            gameDayPath = link.recap.map { [$0] } ?? []
+        } else {
+            linkedRecap = link.recap
+            leave(to: .league(link.leagueId), model)
+        }
+    }
+
+    /// Switches league, or opens Connect, asking first when the open league has unsaved lineup edits.
+    private func leave(to pending: PendingSwitch, _ model: ShellModel) {
+        if case let .league(id) = pending, id != linkedLeague { linkedLeague = nil }
+        if model.hasUnsavedLineup {
+            pendingSwitch = pending
+            return
+        }
+        switch pending {
+        case let .league(id): withAnimation(Motion.respond) { model.select(id) }
+        case .connect: connecting = true
+        }
     }
 
     /// A tab's navigation bar: the league switcher as the title, the account on the right.
-    private func framed(_ model: ShellModel, title: String, @ViewBuilder content: () -> some View) -> some View {
-        NavigationStack {
+    private func framed(_ model: ShellModel, title: String, path: Binding<[RecapKey]>? = nil, @ViewBuilder content: () -> some View) -> some View {
+        NavigationStack(path: path ?? .constant([])) {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.bg)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        LeagueSwitcher(model: model, title: title) { connecting = true }
+                        LeagueSwitcher(model: model, title: title, onSelect: { leave(to: .league($0), model) }) { leave(to: .connect, model) }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { showingSettings = true } label: {
@@ -88,9 +166,15 @@ struct ShellView: View {
 }
 
 /// The league name, opening the user's leagues and "+ Connect a league". Uncluttered, like the web's league menu.
+private enum PendingSwitch: Equatable {
+    case league(String)
+    case connect
+}
+
 private struct LeagueSwitcher: View {
     let model: ShellModel
     let title: String
+    let onSelect: (String) -> Void
     let onConnect: () -> Void
 
     var body: some View {
@@ -99,7 +183,7 @@ private struct LeagueSwitcher: View {
                 Section("Your leagues") {
                     ForEach(model.leagues) { league in
                         Button {
-                            withAnimation(Motion.respond) { model.select(league.id) }
+                            if league.id != model.selected?.id { onSelect(league.id) }
                         } label: {
                             if league.id == model.selected?.id {
                                 Label(league.name, systemImage: "checkmark")

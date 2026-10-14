@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { stage } from "@/components/draft/stageFont";
 import { asWeekRecap, type ArchiveWeek, type MyWeek, type RecapPlayer } from "@/lib/season/leagueRecap";
 import { posLabel, pts, signed } from "./parts";
@@ -13,21 +13,29 @@ import { WeekSwing } from "./WeekSwing";
  * of week chips picks the week, newest first selected; the user's result and its write-up lead, how
  * it swung follows, and the league's week sits beside it: standings, top scorers, the game changer,
  * the most valuable benchwarmers and the false starters. A season menu appears only once there's a
- * second season to pick.
+ * second season to pick. A shared recap's link (`open`) picks its week and scrolls the archive into view.
  */
-export function RecapArchive({ weeks, league }: { weeks: ArchiveWeek[]; league: string }) {
+export function RecapArchive({ weeks, league, open }: { weeks: ArchiveWeek[]; league: string; open?: { season: number; week: number } | null }) {
   const seasons = [...new Set(weeks.map((w) => w.season))].sort((a, b) => b - a);
-  const [season, setSeason] = useState(seasons[0]);
+  const linked = open && weeks.some((w) => w.season === open.season && w.week === open.week) ? open : null;
+  const [season, setSeason] = useState(linked?.season ?? seasons[0]);
   const inSeason = weeks.filter((w) => w.season === season).sort((a, b) => a.week - b.week);
-  const [picked, setPicked] = useState<number | null>(null);
+  const [picked, setPicked] = useState<number | null>(linked?.week ?? null);
   const shown = inSeason.find((w) => w.week === picked) ?? inSeason.at(-1);
   const titleId = useId();
+  const ref = useRef<HTMLElement>(null);
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!linked || scrolled.current) return;
+    scrolled.current = true;
+    ref.current?.scrollIntoView({ block: "start" });
+  }, [linked]);
   if (!shown) return null;
   const { recap, swing } = shown;
   const mine = recap.mine;
 
   return (
-    <section className={s.archive} aria-labelledby={titleId}>
+    <section ref={ref} className={s.archive} aria-labelledby={titleId}>
       <div className={s.archiveHead}>
         <h2 id={titleId} className={s.archiveTitle}>
           Recaps

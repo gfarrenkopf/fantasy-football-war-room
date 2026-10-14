@@ -1,6 +1,7 @@
 import { Fragment, useId } from "react";
 import type { Emphasis } from "@/lib/season/emphasis";
 import { isRuledOut } from "@/lib/season/lineup";
+import { INJURY_TAG } from "@/lib/season/startSit";
 import type { LineupSlot, Standing } from "@/lib/season/types";
 import { likelyOut, onBye, type ViewPlayer } from "@/lib/season/view";
 import { Check, Lock, Note } from "./Icons";
@@ -48,7 +49,7 @@ export const SLOT_LABEL: Record<LineupSlot, string> = {
 export const signed = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}`;
 
 /** ESPN's injury designations as the short tags ESPN itself shows. */
-export const INJURY_TAG: Record<string, string> = { QUESTIONABLE: "Q", DOUBTFUL: "D", OUT: "OUT", INJURY_RESERVE: "IR", SUSPENSION: "SSPD" };
+export { INJURY_TAG };
 
 /**
  * The page's verdict: a signed number that grows louder the more it's worth (src/lib/season/emphasis.ts).

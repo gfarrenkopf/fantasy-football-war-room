@@ -1,0 +1,58 @@
+{
+  "league": {
+    "id": "lg-1",
+    "name": "App Tester"
+  },
+  "seasons": [
+    2026
+  ],
+  "weeks": [
+    {
+      "season": 2026,
+      "week": 4,
+      "headline": "A 14.4-point win over Gridiron Gang.",
+      "mine": {
+        "result": "win",
+        "me": 118.6,
+        "them": 104.2,
+        "opponent": "Gridiron Gang"
+      },
+      "date": "2026-10-07T03:12:00.000Z",
+      "settled": false
+    },
+    {
+      "season": 2026,
+      "week": 3,
+      "headline": "Bye week",
+      "mine": null,
+      "date": "2026-09-30T13:00:00.000Z",
+      "settled": true
+    },
+    {
+      "season": 2026,
+      "week": 2,
+      "headline": "Brutal. Gridiron Gang got you by 1.2.",
+      "mine": {
+        "result": "loss",
+        "me": 101.7,
+        "them": 102.9,
+        "opponent": "Gridiron Gang"
+      },
+      "date": "2026-09-23T13:00:00.000Z",
+      "settled": true
+    },
+    {
+      "season": 2026,
+      "week": 1,
+      "headline": "A 10.8-point win over Gridiron Gang.",
+      "mine": {
+        "result": "win",
+        "me": 131.2,
+        "them": 120.4,
+        "opponent": "Gridiron Gang"
+      },
+      "date": "2026-09-16T13:00:00.000Z",
+      "settled": true
+    }
+  ]
+}

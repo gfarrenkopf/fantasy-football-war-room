@@ -1,7 +1,7 @@
 "use client";
 
 import { biggestSurprises, trackRecord, type ProjectionAccuracy, type ProjectionCall, type SeasonCalls } from "@/lib/season/accuracy";
-import { gameProgress, headToHead, leftToPlay, matchupDecided, matchupLive, pace, type GameDayPhase, type HeadToHeadRow, type Pace } from "@/lib/season/gameday";
+import { aroundTheLeague, gameDayBench, gameProgress, headToHead, leftToPlay, matchupDecided, pace, scoreboardState, type GameDayPhase, type HeadToHeadRow, type Pace } from "@/lib/season/gameday";
 import { findHoles, holeSlots } from "@/lib/season/holes";
 import { compareLineups } from "@/lib/season/lineup";
 import { weekRecap } from "@/lib/season/recap";
@@ -37,6 +37,7 @@ export function GameDayPanel({
   accuracy,
   previous,
   archive,
+  openRecap,
   onLineupTools,
 }: {
   leagueId: string;
@@ -48,6 +49,8 @@ export function GameDayPanel({
   previous?: { view: SeasonView; accuracy: ProjectionAccuracy | null };
   /** The league's kept weeks, for the recap archive (APE-250); shown whenever no game is on. */
   archive: ArchiveWeek[];
+  /** The week a shared recap link opened. */
+  openRecap?: { season: number; week: number } | null;
   onLineupTools(): void;
 }) {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
@@ -56,8 +59,7 @@ export function GameDayPanel({
   const byId = new Map(mine.roster.map((p) => [p.playerId, p]));
   // The lineup as set on ESPN, in slot order: those are the points that count.
   const starters = compareLineups(mine.roster, view.lineup).map((row) => ({ key: row.key, player: row.now === null ? undefined : byId.get(row.now) }));
-  const bench = mine.roster.filter((p) => p.slot === "BN").sort((a, b) => (b.actual ?? -1) - (a.actual ?? -1) || b.points - a.points);
-  const benchPoints = bench.reduce((sum, p) => sum + (p.actual ?? 0), 0);
+  const { players: bench, points: benchPoints } = gameDayBench(mine.roster);
 
   const offDay = phase === "lineup";
   // The archive tells last week in full once it's kept; until then, its final stands in.
@@ -168,7 +170,7 @@ export function GameDayPanel({
           </button>
         </div>
       </div>
-      {phase !== "live" && <RecapArchive league={view.name} weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
+      {phase !== "live" && <RecapArchive league={view.name} open={openRecap} weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
     </>
   );
 }
@@ -232,8 +234,7 @@ function H2HSide({ player, side, opponent }: { player: HeadToHeadRow["me"]; side
  * names and live scores, the leader bright. Scrolls sideways; nothing to tap.
  */
 function AroundTheLeague({ view }: { view: SeasonView }) {
-  const mine = new Set(view.matchup ? [view.matchup.me.teamId, view.matchup.them.teamId] : [view.myTeamId]);
-  const others = view.matchups.flatMap(({ home, away }) => (away && !mine.has(home.teamId) ? [{ home, away }] : []));
+  const others = aroundTheLeague(view);
   if (!others.length) return null;
   const team = (id: number) => view.teams.find((t) => t.id === id);
   const side = (one: MatchupSide, other: MatchupSide) => {
@@ -248,8 +249,7 @@ function AroundTheLeague({ view }: { view: SeasonView }) {
   return (
     <section aria-label="Around the league">
       <ul className={s.aroundList}>
-        {others.map(({ home, away }) => {
-          const left = leftToPlay(view, home.teamId) + leftToPlay(view, away.teamId);
+        {others.map(({ home, away, left }) => {
           const label = `${team(home.teamId)?.name ?? "Home"} ${pts(home.points)}, ${team(away.teamId)?.name ?? "Away"} ${pts(away.points)}, ${left ? `${left} to play` : "done"}`;
           return (
             <li key={home.teamId} className={s.aroundCard} aria-label={label}>
@@ -372,25 +372,9 @@ function LastWeek({ view, accuracy }: { view: SeasonView; accuracy: ProjectionAc
 function Scoreboard({ view, phase, children }: { view: SeasonView; phase: GameDayPhase; children?: React.ReactNode }) {
   const { me, them } = view.matchup!;
   const opponent = view.teams.find((t) => t.id === them.teamId)?.name ?? "Your opponent";
-  const lead = me.points - them.points;
-  const decided = matchupDecided(view);
-  const theirLeft = leftToPlay(view, them.teamId);
-  const toPlay = leftToPlay(view, me.teamId) + theirLeft;
   // Before the matchup's first kickoff (Wednesday to Thursday night) it's a preview: no score to tie.
-  const started = view.teams.some(
-    (t) => (t.id === me.teamId || t.id === them.teamId) && t.roster.some((p) => p.slot !== "BN" && p.slot !== "IR" && p.game && p.game.state !== "pre"),
-  );
   // Live while a game is on; between games (Sunday night, before Monday's) it says what's left.
-  const status = matchupLive(view)
-    ? "Live"
-    : decided
-      ? "Final"
-      : phase === "results"
-        ? `${theirLeft} left for ${opponent}`
-        : started
-          ? `${toPlay} to play`
-          : "Up next";
-  const win = me.winProbability === null ? null : Math.round(me.winProbability * 100);
+  const { status, started, decided, lead, win } = scoreboardState(view, phase, opponent)!;
   const side = (name: string, team: typeof me, mine: boolean) => {
     const left = leftToPlay(view, team.teamId);
     return (

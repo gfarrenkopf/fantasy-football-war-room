@@ -45,6 +45,10 @@ struct RootView: View {
         }
         .animation(Motion.fade, value: session.phase)
         .task { await session.start() }
+        // Season links (a shared recap, the season emails) wait here until the shell can open them.
+        .onOpenURL { url in
+            if let link = SeasonLink(url) { session.seasonLink = link }
+        }
     }
 }
 

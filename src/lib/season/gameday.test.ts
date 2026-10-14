@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameDayPhase, gameProgress, headToHead, inResultHold, leftToPlay, matchupDecided, matchupLive, nextReset, pace } from "./gameday";
+import { aroundTheLeague, gameDayBench, gameDayPhase, gameProgress, headToHead, inResultHold, leftToPlay, matchupDecided, matchupLive, nextReset, pace, scoreboardState } from "./gameday";
 import type { GameState } from "./scoreboard";
 import type { LineupSlot } from "./types";
 import type { SeasonView, ViewPlayer } from "./view";
@@ -189,5 +189,76 @@ describe("headToHead", () => {
   it("leaves the other side empty without a matchup", () => {
     const v = withSlots({ ...view([player("QB", null)], [player("QB", null)]), matchup: null });
     expect(headToHead(v).every((r) => r.them === null)).toBe(true);
+  });
+});
+
+describe("scoreboardState", () => {
+  const scored = (mine: ViewPlayer[], theirs: ViewPlayer[], me = 50, them = 40, winProbability: number | null = 0.554) => {
+    const v = view(mine, theirs);
+    return { ...v, matchup: { me: { teamId: 1, points: me, projected: 90, winProbability }, them: { teamId: 2, points: them, projected: 85, winProbability: null } } } as SeasonView;
+  };
+
+  it("is a preview before the matchup's first kickoff", () => {
+    expect(scoreboardState(scored([player("WR", game("pre"))], [player("WR", game("pre"))], 0, 0), "lineup", "Rivals")).toEqual({
+      status: "Up next",
+      started: false,
+      decided: false,
+      lead: 0,
+      win: 55,
+    });
+  });
+
+  it("is live while a game is on, and counts what's left between games", () => {
+    expect(scoreboardState(scored([player("WR", game("in"))], [player("WR", game("pre"))]), "live", "Rivals")?.status).toBe("Live");
+    expect(scoreboardState(scored([player("WR", game("post")), player("RB", game("pre"))], [player("WR", game("pre"))]), "live", "Rivals")).toMatchObject({
+      status: "2 to play",
+      started: true,
+      lead: 10,
+    });
+  });
+
+  it("names what the opponent has left once the user's side is done, and says Final when both are", () => {
+    expect(scoreboardState(scored([player("WR", game("post"))], [player("WR", game("pre"))]), "results", "Rivals")?.status).toBe("1 left for Rivals");
+    expect(scoreboardState(scored([player("WR", game("post"))], [player("WR", game("post"))]), "results", "Rivals")).toMatchObject({ status: "Final", decided: true });
+  });
+
+  it("has no win odds when ESPN gives none, and nothing without a matchup", () => {
+    expect(scoreboardState(scored([player("WR", game("pre"))], [], 0, 0, null), "lineup", "Rivals")?.win).toBeNull();
+    expect(scoreboardState({ ...view([]), matchup: null } as SeasonView, "lineup", "Rivals")).toBeNull();
+  });
+});
+
+describe("aroundTheLeague", () => {
+  const side = (teamId: number, points: number) => ({ teamId, points, projected: 0, winProbability: null });
+  it("lists the league's other matchups with what's left in each, leaving out the user's and byes", () => {
+    const v = {
+      ...view([player("WR", game("in"))], [player("WR", game("in"))]),
+      matchup: { me: side(1, 0), them: side(2, 0) },
+      teams: [
+        { id: 1, roster: [] },
+        { id: 2, roster: [] },
+        { id: 3, roster: [player("WR", game("in")), player("RB", game("post"))] },
+        { id: 4, roster: [player("WR", game("pre"))] },
+        { id: 5, roster: [] },
+      ],
+      matchups: [
+        { home: side(1, 10), away: side(2, 12) },
+        { home: side(3, 30), away: side(4, 20) },
+        { home: side(5, 0), away: null },
+      ],
+    } as unknown as SeasonView;
+    expect(aroundTheLeague(v)).toEqual([{ home: side(3, 30), away: side(4, 20), left: 2 }]);
+  });
+});
+
+describe("gameDayBench", () => {
+  it("puts whoever scored most first, then the best projection, and adds up the points left on the bench", () => {
+    const a = player("BN", game("post"), { actual: 4, points: 12 });
+    const b = player("BN", game("pre"), { actual: null, points: 15 });
+    const c = player("BN", game("post"), { actual: 9, points: 8 });
+    const d = player("BN", game("pre"), { actual: null, points: 3 });
+    const { players, points } = gameDayBench([a, player("WR", null), b, c, d]);
+    expect(players).toEqual([c, a, b, d]);
+    expect(points).toBe(13);
   });
 });

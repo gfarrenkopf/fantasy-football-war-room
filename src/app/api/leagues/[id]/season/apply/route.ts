@@ -1,32 +1,24 @@
 import { config } from "@/lib/config";
-import { madeMoves, type SuggestedMove } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
-import type { LineupSlot } from "@/lib/season/types";
 import { withUser } from "@/lib/server/api";
 import { formatServerError } from "@/lib/server/errorLog";
-import { applyLineup, type ApplyRequest } from "@/lib/server/espn/applyLineup";
 import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { isObject, isSlot, readSnapshot, writeLineup, type LineupWrite } from "@/lib/server/espn/lineupWrite";
 import { consentGate, consentOf, writeResponse } from "@/lib/server/espn/writeRoute";
 import { error, json, readJson } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
-import { recordLineupMoves } from "@/lib/server/lineupMoves";
 
 type Ctx = RouteContext<"/api/leagues/[id]/season/apply">;
 
 const ROUTE = "/api/leagues/[id]/season/apply";
 
-const SLOTS = new Set<LineupSlot>(["QB", "RB", "WR", "TE", "FLEX", "SUPERFLEX", "DST", "K", "BN", "IR"]);
-const isSlot = (v: unknown): v is LineupSlot => typeof v === "string" && SLOTS.has(v as LineupSlot);
-const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-
-function parse(body: unknown): (ApplyRequest & { consentVersion: number | null; season: number | null; suggested: SuggestedMove[] }) | null {
-  if (!isObject(body) || !Number.isInteger(body.week) || !Array.isArray(body.snapshot) || !Array.isArray(body.moves)) return null;
-  if (body.snapshot.length > 100 || body.moves.length > 40) return null;
-  const snapshot = body.snapshot.flatMap((p) => (isObject(p) && Number.isInteger(p.playerId) && isSlot(p.slot) ? [{ playerId: p.playerId as number, slot: p.slot }] : []));
+function parse(body: unknown): (LineupWrite & { consentVersion: number | null }) | null {
+  if (!isObject(body) || !Number.isInteger(body.week) || !Array.isArray(body.moves) || body.moves.length > 40) return null;
+  const snapshot = readSnapshot(body.snapshot);
   const moves: LineupMove[] = body.moves.flatMap((m) =>
     isObject(m) && Number.isInteger(m.playerId) && isSlot(m.from) && isSlot(m.to) ? [{ playerId: m.playerId as number, from: m.from, to: m.to }] : [],
   );
-  if (snapshot.length !== body.snapshot.length || moves.length !== body.moves.length) return null;
+  if (!snapshot || moves.length !== body.moves.length) return null;
   const listed = Array.isArray(body.suggested) ? body.suggested.slice(0, 40) : [];
   const suggested = listed.flatMap((m) =>
     isObject(m) && Number.isInteger(m.playerId) && isSlot(m.to) && typeof m.gain === "number" && Number.isFinite(m.gain) ? [{ playerId: m.playerId as number, to: m.to, gain: m.gain }] : [],
@@ -54,30 +46,23 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
   const body = parse(read.body);
   if (!body) return error(400, "Invalid lineup moves");
   const where = { method: request.method, path: new URL(request.url).pathname };
-  const alert = (message: string) => console.error(formatServerError(new Error(message), where, { routePath: ROUTE, routeType: "route" }));
+  const failed = (err: unknown) => console.error(formatServerError(err, where, { routePath: ROUTE, routeType: "route" }));
+  const alert = (message: string) => failed(new Error(message));
 
   try {
     if (!(await findLeague(db, userId, id))) return error(404, "League not found");
     const gate = await consentGate(db, userId, body.consentVersion);
     if (gate) return gate;
 
-    const out = await applyLineup(db, config.espnCodeKey, userId, id, body);
-    const made = out.kind === "applied" ? madeMoves(out.moves, body.suggested) : [];
-    // The lineup is set either way: failing to remember War Room's part mustn't fail the apply.
-    if (made.length && body.season !== null)
-      await recordLineupMoves(db, id, body.season, body.week, made).catch((err) => console.error(formatServerError(err, where, { routePath: ROUTE, routeType: "route" })));
+    const out = await writeLineup(db, config.espnCodeKey, userId, id, body, { alert, failed });
     return writeResponse(out.kind === "applied" ? { kind: "applied", landed: out.moves } : out, {
       what: "lineup apply",
       alert,
       unverified: { moves: out.kind === "unverified" ? out.moves : [] },
-      applied: (moves) => {
-        const missed = moves.filter((m) => !m.landed);
-        if (missed.length) alert(`ESPN lineup apply: ${missed.length} of ${moves.length} moves didn't land (${missed.map((m) => `${m.playerId} ${m.from}->${m.to}`).join(", ")})`);
-        return json(200, { moves });
-      },
+      applied: (moves) => json(200, { moves }),
     });
   } catch (err) {
-    console.error(formatServerError(err, where, { routePath: ROUTE, routeType: "route" }));
+    failed(err);
     return error(503, "Setting your lineup on ESPN is temporarily unavailable");
   }
 });

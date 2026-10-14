@@ -3,44 +3,20 @@
 import { useEffect, useId, useState, type CSSProperties } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { canPlay } from "@/lib/season/apply";
-import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
+import { lineupEmphasis } from "@/lib/season/emphasis";
 import { findHoles, holeSlots } from "@/lib/season/holes";
-import { compareLineups, isRuledOut } from "@/lib/season/lineup";
+import { isRuledOut } from "@/lib/season/lineup";
+import { LINEUP_HEADLINE, outTag, startSitSwaps } from "@/lib/season/startSit";
 import type { LineupSlot } from "@/lib/season/types";
-import { likelyOut, onBye, type SeasonView, type ViewPlayer, type WarRoomMove } from "@/lib/season/view";
+import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
 import { HoleHero, HoleNote } from "./HoleHero";
 import { ArrowLeft, ArrowRight, Check, External } from "./Icons";
-import { Gain, hasStarted, INJURY_TAG, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
+import { Gain, hasStarted, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
 import { Banked, LockIn } from "./LockIn";
 import s from "./season.module.css";
 import { useLineupDraft, type LineupDraft } from "./useLineupDraft";
-
-const HEADLINE: Record<Emphasis, string> = {
-  rest: "Your lineup is set",
-  trim: "A small tweak",
-  gain: "Worth a swap",
-  swing: "Big swing on your bench",
-  must: "Points stuck on your bench",
-};
-
-interface OutTag {
-  label: string;
-  kind: "out" | "warn";
-}
-
-/**
- * Why a starter is coming out, when it's news, in the word managers use: his designation (OUT, IR,
- * SSPD), BYE, or LIKELY OUT when ESPN projects him for nothing with a game to play (APE-338). That
- * last is ESPN's guess, not a designation, so it's amber rather than red.
- */
-function outTag(p: ViewPlayer): OutTag | null {
-  if (isRuledOut(p.injuryStatus)) return { label: INJURY_TAG[p.injuryStatus] ?? "OUT", kind: "out" };
-  if (onBye(p)) return { label: "BYE", kind: "out" };
-  if (likelyOut(p)) return { label: "LIKELY OUT", kind: "warn" };
-  return null;
-}
 
 /** Where a player is on ESPN, as the end of "up from …": "the bench", "WR". */
 const fromWhere = (p: ViewPlayer) => (p.slot === "BN" ? "the bench" : SLOT_LABEL[p.slot]);
@@ -74,13 +50,14 @@ export function LineupPanel({
   const suggested = lineup.moves.length > 0;
   // War Room's changes, seat by seat: the hero names them, whatever the user has staged since.
   const byId = draft.byId;
-  const suggestions = compareLineups(mine.roster, lineup)
-    .filter((r) => r.changed)
-    .map((r) => {
-      const into = r.next === null ? undefined : byId.get(r.next);
-      const out = r.now === null ? undefined : byId.get(r.now);
-      return { key: `${r.key}-${r.next}`, slot: SLOT_LABEL[r.key], into, out, gain: (into?.points ?? 0) - (out?.points ?? 0), tag: out ? outTag(out) : null };
-    });
+  const suggestions = startSitSwaps(mine.roster, lineup).map((m) => ({
+    key: `${m.key}-${m.into}`,
+    slot: SLOT_LABEL[m.key],
+    into: m.into === null ? undefined : byId.get(m.into),
+    out: m.out === null ? undefined : byId.get(m.out),
+    gain: m.gain,
+    tag: m.tag,
+  }));
   const gain = lineup.total - lineup.currentTotal;
   const level = suggested ? lineupEmphasis(gain) : "rest";
   const swaps = draft.seats.filter((_, i) => draft.onEspn[i] !== draft.staged[i]).length;
@@ -137,7 +114,7 @@ export function LineupPanel({
             level={level}
             value={gain}
             unit="pts"
-            headline={HEADLINE[level]}
+            headline={LINEUP_HEADLINE[level]}
             aside={
               suggested && (
                 <p className={s.gainShift}>

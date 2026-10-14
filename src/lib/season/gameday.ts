@@ -1,5 +1,5 @@
 import type { GameState } from "./scoreboard";
-import type { LineupSlotCount } from "./types";
+import type { LineupSlotCount, Matchup } from "./types";
 import type { SeasonView, ViewPlayer } from "./view";
 
 /**
@@ -114,6 +114,63 @@ export function headToHead(view: SeasonView): HeadToHeadRow[] {
   return view.starters.flatMap(({ key, count }) =>
     Array.from({ length: count }, () => ({ key, me: me.get(key)?.shift() ?? null, them: them.get(key)?.shift() ?? null })),
   );
+}
+
+/** The scoreboard's state line and what it shows, so the web and the iPhone app (APE-379) say the same. */
+export interface ScoreboardState {
+  /** "Live", "Final", "3 left for Opponent", "5 to play" or "Up next". */
+  status: string;
+  /** Whether a starter on either side has kicked off. Before then the projections are the numbers to show. */
+  started: boolean;
+  decided: boolean;
+  /** The user's points less their opponent's. */
+  lead: number;
+  /** ESPN's chance the user wins, as a whole percent; null when ESPN didn't say. */
+  win: number | null;
+}
+
+/**
+ * The user's matchup as the game-day scoreboard tells it (APE-226). Null without a matchup. Between
+ * games it says what's left; before the matchup's first kickoff it's a preview with no score to tie.
+ */
+export function scoreboardState(view: SeasonView, phase: GameDayPhase, opponent: string): ScoreboardState | null {
+  if (!view.matchup) return null;
+  const { me, them } = view.matchup;
+  const decided = matchupDecided(view);
+  const theirLeft = leftToPlay(view, them.teamId);
+  const toPlay = leftToPlay(view, me.teamId) + theirLeft;
+  const started = [me.teamId, them.teamId].some((id) => starting(rosterOf(view, id)).some((p) => p.game && p.game.state !== "pre"));
+  const status = matchupLive(view)
+    ? "Live"
+    : decided
+      ? "Final"
+      : phase === "results"
+        ? `${theirLeft} left for ${opponent}`
+        : started
+          ? `${toPlay} to play`
+          : "Up next";
+  return { status, started, decided, lead: me.points - them.points, win: me.winProbability === null ? null : Math.round(me.winProbability * 100) };
+}
+
+/** One of the league's other matchups while games are on (APE-309), and how many starters are still to play in it. */
+export interface AroundMatchup {
+  home: Matchup["home"];
+  away: NonNullable<Matchup["away"]>;
+  left: number;
+}
+
+/** The league's other matchups this week, byes left out (APE-309). */
+export function aroundTheLeague(view: SeasonView): AroundMatchup[] {
+  const mine = new Set(view.matchup ? [view.matchup.me.teamId, view.matchup.them.teamId] : [view.myTeamId]);
+  return view.matchups.flatMap(({ home, away }) =>
+    away && !mine.has(home.teamId) ? [{ home, away, left: leftToPlay(view, home.teamId) + leftToPlay(view, away.teamId) }] : [],
+  );
+}
+
+/** The user's bench on game day: whoever has scored most first, then by projection, and the points left on it. */
+export function gameDayBench(roster: readonly ViewPlayer[]): { players: ViewPlayer[]; points: number } {
+  const players = roster.filter((p) => p.slot === "BN").sort((a, b) => (b.actual ?? -1) - (a.actual ?? -1) || b.points - a.points);
+  return { players, points: players.reduce((sum, p) => sum + (p.actual ?? 0), 0) };
 }
 
 /** Whether every starter on both sides of the user's matchup is done, so the score is final. */

@@ -49,6 +49,8 @@ export interface LeagueRecap {
   week: number;
   /** Null when the user had a bye or ESPN didn't list their matchup. */
   mine: MyWeek | null;
+  /** The week in a line, for a list of weeks: the story's first line, or "Bye week" without a matchup. */
+  headline: string;
   /** A few sentences on the user's week; empty without a matchup. */
   story: string;
   standings: StandingRow[];
@@ -117,10 +119,12 @@ export function leagueRecap(facts: WeekFacts): LeagueRecap {
   const byPlayer = (a: RecapPlayer, b: RecapPlayer) => a.playerId - b.playerId;
 
   const mine = myWeek(facts, nameOf);
+  const lines = mine ? story(facts, mine) : [];
   return {
     week: facts.week,
     mine,
-    story: mine ? story(facts, mine) : "",
+    headline: lines[0] ?? "Bye week",
+    story: lines.join(" "),
     standings: facts.standings.map((s) => ({ ...s, name: nameOf(s.teamId), mine: s.teamId === facts.myTeamId })),
     topScorers: [...starters].sort((a, b) => b.points - a.points || byPlayer(a, b)).slice(0, TOP_SCORERS),
     gameChanger: gameChanger(facts, starters, nameOf),
@@ -178,7 +182,7 @@ function gameChanger(facts: WeekFacts, starters: readonly RecapPlayer[], nameOf:
 }
 
 /** A few sentences on the user's week: how it went, who carried it, and where it leaves them. */
-function story(facts: WeekFacts, w: MyWeek): string {
+function story(facts: WeekFacts, w: MyWeek): string[] {
   const highest = Math.max(...facts.matchups.flatMap((m) => [m.home.points, m.away?.points ?? 0]));
   const lines: string[] = [];
 
@@ -212,7 +216,7 @@ function story(facts: WeekFacts, w: MyWeek): string {
     const first = standing.rank === 1;
     lines.push(first ? `That's ${record}, and first in the league.` : `That's ${record}, ${ordinal(standing.rank)} in the league.`);
   }
-  return lines.join(" ");
+  return lines;
 }
 
 function ordinal(n: number): string {

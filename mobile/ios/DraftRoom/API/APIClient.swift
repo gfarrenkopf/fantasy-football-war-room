@@ -7,6 +7,13 @@ enum APIError: Error, Equatable {
     case signedOut
     /// Any other error status, with the server's own message (`{ error }`) when it sent one.
     case server(status: Int, message: String)
+    /// 409 `{ error, problem }`: ESPN couldn't be read for a league. `problem` names why
+    /// (not-linked, no-login, disconnected, unavailable, invalid).
+    case problem(String, message: String)
+    /// 409 from an ESPN write: the user hasn't agreed to the current consent, whose text this is.
+    case consentNeeded(version: Int, lines: [String])
+    /// 409 from an ESPN write that sent nothing: the server's sentence, and the reasons it lists.
+    case declined(String, details: [String])
     /// No answer: offline, timed out, or the server is down.
     case offline
     /// The answer wasn't the JSON this build expects.
@@ -17,6 +24,9 @@ enum APIError: Error, Equatable {
         switch self {
         case .signedOut: "You've been signed out. Sign in again to carry on."
         case let .server(_, message): message
+        case let .problem(_, message): message
+        case .consentNeeded: "Agree to Draft Room changing your team on ESPN first."
+        case let .declined(message, _): message
         case .offline: "Can't reach Draft Room. Check your connection and try again."
         case .unreadable: "Draft Room sent something this version of the app can't read. Try updating the app."
         }
@@ -92,7 +102,11 @@ final class APIClient {
     }
 
     private func perform(_ method: String, _ path: String, body: Data?) async throws(APIError) -> Data {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        // `appending(path:)` would escape a query's "?", so the query is added on its own.
+        let parts = path.split(separator: "?", maxSplits: 1)
+        var url = baseURL.appending(path: String(parts[0]))
+        if parts.count > 1 { url = URL(string: "\(url.absoluteString)?\(parts[1])") ?? url }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {
@@ -122,6 +136,13 @@ final class APIClient {
                 throw .signedOut
             }
             throw .server(status: 401, message: Self.message(in: data, status: 401))
+        case 409:
+            if let body = try? JSONDecoder().decode(ServerError.self, from: data) {
+                if let problem = body.problem { throw .problem(problem, message: body.error) }
+                if let consent = body.consent { throw .consentNeeded(version: consent.version, lines: consent.lines) }
+                if let details = body.changed ?? body.problems ?? body.refused { throw .declined(body.error, details: details) }
+            }
+            throw .server(status: 409, message: Self.message(in: data, status: 409))
         default:
             throw .server(status: http.statusCode, message: Self.message(in: data, status: http.statusCode))
         }

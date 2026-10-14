@@ -48,14 +48,47 @@ export async function saveWeek(
     });
 }
 
+/** A kept week and when it was kept. */
+export interface KeptWeek {
+  facts: WeekFacts;
+  /** The last save, and the Wednesday job's settling save once ESPN's stat corrections are in. */
+  savedAt: Date;
+  settledAt: Date | null;
+}
+
+const keptColumns = { facts: seasonRecaps.facts, version: seasonRecaps.version, savedAt: seasonRecaps.savedAt, settledAt: seasonRecaps.settledAt };
+const readable = (rows: { facts: WeekFacts; version: number; savedAt: Date; settledAt: Date | null }[]): KeptWeek[] =>
+  rows.flatMap(({ version, ...r }) => (version === WEEK_FACTS_VERSION ? [r] : []));
+
+/** A league's kept weeks this War Room can read, with when they were kept: the newest season first, each season's weeks in order. */
+export async function listKeptWeeks(db: Db, leagueId: string): Promise<KeptWeek[]> {
+  const rows = await db.select(keptColumns).from(seasonRecaps).where(eq(seasonRecaps.leagueId, leagueId)).orderBy(desc(seasonRecaps.season), asc(seasonRecaps.week));
+  return readable(rows);
+}
+
 /** A league's kept weeks this War Room can read: the newest season first, each season's weeks in order. */
 export async function listWeeks(db: Db, leagueId: string): Promise<WeekFacts[]> {
+  return (await listKeptWeeks(db, leagueId)).map((w) => w.facts);
+}
+
+/** One kept week, or null when it isn't kept or was kept in a shape this War Room can't read. */
+export async function findKeptWeek(db: Db, leagueId: string, season: number, week: number): Promise<KeptWeek | null> {
   const rows = await db
-    .select({ facts: seasonRecaps.facts, version: seasonRecaps.version })
+    .select(keptColumns)
     .from(seasonRecaps)
-    .where(eq(seasonRecaps.leagueId, leagueId))
-    .orderBy(desc(seasonRecaps.season), asc(seasonRecaps.week));
-  return rows.flatMap((r) => (r.version === WEEK_FACTS_VERSION ? [r.facts] : []));
+    .where(and(eq(seasonRecaps.leagueId, leagueId), eq(seasonRecaps.season, season), eq(seasonRecaps.week, week)));
+  return readable(rows)[0] ?? null;
+}
+
+/** The newest season a league has a week kept in, or null with none. */
+export async function latestKeptSeason(db: Db, leagueId: string): Promise<number | null> {
+  const [row] = await db
+    .select({ season: seasonRecaps.season })
+    .from(seasonRecaps)
+    .where(and(eq(seasonRecaps.leagueId, leagueId), eq(seasonRecaps.version, WEEK_FACTS_VERSION)))
+    .orderBy(desc(seasonRecaps.season))
+    .limit(1);
+  return row?.season ?? null;
 }
 
 export interface KeepOptions {

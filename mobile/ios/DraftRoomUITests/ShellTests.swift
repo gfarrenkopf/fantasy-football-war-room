@@ -13,13 +13,15 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Lineup"].exists)
         XCTAssertTrue(app.tabBars.buttons["Trades"].exists)
         XCTAssertTrue(app.tabBars.buttons["Waivers"].exists)
-        XCTAssertTrue(app.staticTexts["App Tester · 2026"].exists)
 
         app.tabBars.buttons["Lineup"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["section-lineup"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["seat-0"].waitForExistence(timeout: 5))
 
+        // A league switch opens the tab the new league's week calls for: Game day while games are on.
         app.buttons["league-switcher"].firstMatch.tap()
         app.buttons["Sunday Regulars"].tap()
-        XCTAssertTrue(app.staticTexts["Sunday Regulars · 2026"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["scoreboard"].waitForExistence(timeout: 5))
+        XCTAssertTrue(gameDay.isSelected)
     }
 }

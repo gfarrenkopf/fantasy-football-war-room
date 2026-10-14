@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { alignSeats, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats, type SuggestedMove } from "@/lib/season/apply";
+import { alignSeats, changeKey, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats, suggestedMoves } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
-import { lockIn, type LockIn, type OwnMove } from "@/lib/season/lockIn";
+import { lockInOf, type LockIn } from "@/lib/season/lockIn";
 import type { SeasonView } from "@/lib/season/view";
 
 /**
@@ -23,9 +23,6 @@ export type Landed = (LineupMove & { landed: boolean })[];
 
 /** Where each of the user's players sits on ESPN: changes whenever a fresh read does. */
 const rosterKey = (roster: readonly { playerId: number; slot: string }[]) => roster.map((p) => `${p.playerId}:${p.slot}`).join(",");
-
-/** A change by what its moves do, so one the user left out stays left out until the staged lineup changes it. */
-export const changeKey = (group: readonly LineupMove[]) => group.map((m) => `${m.playerId}:${m.to}`).join(",");
 
 export function useLineupDraft(view: SeasonView) {
   const roster = useMemo(() => view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [], [view]);
@@ -63,13 +60,8 @@ export function useLineupDraft(view: SeasonView) {
   /** The change each moving player belongs to. */
   const changeOf = new Map(changes.flatMap((g) => g.map((m) => [m.playerId, g] as const)));
   const same = (a: readonly (number | null)[]) => staged.every((id, i) => id === a[i]);
-  // A chosen move is War Room's when it puts the player in the very seat War Room recommended him
-  // for (APE-256). Its gain is that seat's: his projection over the player ESPN has there.
   const points = (id: number | null) => (id === null ? 0 : (byId.get(id)?.points ?? 0));
-  const suggested: SuggestedMove[] = chosen.flatMap((m) => {
-    const seat = staged.indexOf(m.playerId);
-    return seat >= 0 && recommended[seat] === m.playerId && seats[seat] === m.to ? [{ playerId: m.playerId, to: m.to, gain: Math.round((points(m.playerId) - points(onEspn[seat])) * 100) / 100 }] : [];
-  });
+  const suggested = suggestedMoves(chosen, seats, staged, recommended, onEspn, points);
 
   /** Any edit starts over: the review closes and the last apply's results, and their moment, go. */
   const edited = () => {
@@ -137,20 +129,7 @@ export function useLineupDraft(view: SeasonView) {
     /** ESPN took the apply: show what landed, and keep what was left out on offer. */
     applied(result: Landed) {
       setLanded(result);
-      // The starting seats this apply changed, and what each does to the projection.
-      const seatMoves = seats.flatMap((to, i) => {
-        const group = changeOf.get(staged[i] ?? onEspn[i] ?? -1);
-        return staged[i] !== onEspn[i] && (!group || picked.includes(group)) ? [{ i, to, delta: points(staged[i]) - points(onEspn[i]) }] : [];
-      });
-      // The ones the user made themselves.
-      const own: OwnMove[] = seatMoves.flatMap(({ i, to, delta }) => {
-        const id = staged[i];
-        return id !== null && !suggested.some((m) => m.playerId === id && m.to === to) ? [{ playerId: id, to, delta: Math.round(delta * 100) / 100 }] : [];
-      });
-      const total = (lineup: readonly (number | null)[]) => lineup.reduce((sum: number, id) => sum + points(id), 0);
-      const before = total(onEspn);
-      const after = before + seatMoves.reduce((sum, m) => sum + m.delta, 0);
-      const found = lockIn({ landed: result, suggested, own, before, after, recommended: total(recommended) });
+      const found = lockInOf(result, { seats, staged, onEspn, recommended, sent: chosen, suggested, points });
       setMoment(found && { ...found, sentFrom: rosterKey(roster) });
       setKeepStaged(chosen.length < moves.length);
       setPhase({ kind: "idle" });
