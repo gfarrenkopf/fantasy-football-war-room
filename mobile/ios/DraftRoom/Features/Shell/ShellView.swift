@@ -8,6 +8,8 @@ struct ShellView: View {
     @State private var tab: SeasonTab = .gameDay
     @State private var showingSettings = false
     @State private var connecting = false
+    /// A league switch, or connecting one, waiting on the user to discard unsaved lineup edits.
+    @State private var pendingSwitch: PendingSwitch?
 
     var body: some View {
         Group {
@@ -58,6 +60,8 @@ struct ShellView: View {
                         switch section {
                         case .gameDay:
                             GameDayView(store: store, onLineup: { tab = .lineup }, onReconnect: { connecting = true })
+                        case .lineup:
+                            LineupView(model: model.lineup(for: league), onReconnect: { connecting = true })
                         default:
                             SeasonSectionView(section: section, league: league)
                         }
@@ -77,6 +81,33 @@ struct ShellView: View {
         .onChange(of: store.openingTab) { _, opening in
             if let opening { tab = opening }
         }
+        .onChange(of: model.lineup(for: league).hasUnsavedEdits, initial: true) { _, unsaved in
+            session.hasUnsavedLineup = unsaved
+        }
+        .confirmationDialog("Your lineup changes aren't saved to ESPN", isPresented: Binding { pendingSwitch != nil } set: { if !$0 { pendingSwitch = nil } }, titleVisibility: .visible) {
+            Button("Discard changes", role: .destructive) {
+                let pending = pendingSwitch
+                pendingSwitch = nil
+                switch pending {
+                case let .league(id): withAnimation(Motion.respond) { model.select(id) }
+                case .connect: connecting = true
+                case nil: break
+                }
+            }
+            Button("Keep editing", role: .cancel) {}
+        }
+    }
+
+    /// Switches league, or opens Connect, asking first when the open league has unsaved lineup edits.
+    private func leave(to pending: PendingSwitch, _ model: ShellModel) {
+        if model.hasUnsavedLineup {
+            pendingSwitch = pending
+            return
+        }
+        switch pending {
+        case let .league(id): withAnimation(Motion.respond) { model.select(id) }
+        case .connect: connecting = true
+        }
     }
 
     /// A tab's navigation bar: the league switcher as the title, the account on the right.
@@ -88,7 +119,7 @@ struct ShellView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        LeagueSwitcher(model: model, title: title) { connecting = true }
+                        LeagueSwitcher(model: model, title: title, onSelect: { leave(to: .league($0), model) }) { leave(to: .connect, model) }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { showingSettings = true } label: {
@@ -103,9 +134,15 @@ struct ShellView: View {
 }
 
 /// The league name, opening the user's leagues and "+ Connect a league". Uncluttered, like the web's league menu.
+private enum PendingSwitch: Equatable {
+    case league(String)
+    case connect
+}
+
 private struct LeagueSwitcher: View {
     let model: ShellModel
     let title: String
+    let onSelect: (String) -> Void
     let onConnect: () -> Void
 
     var body: some View {
@@ -114,7 +151,7 @@ private struct LeagueSwitcher: View {
                 Section("Your leagues") {
                     ForEach(model.leagues) { league in
                         Button {
-                            withAnimation(Motion.respond) { model.select(league.id) }
+                            if league.id != model.selected?.id { onSelect(league.id) }
                         } label: {
                             if league.id == model.selected?.id {
                                 Label(league.name, systemImage: "checkmark")

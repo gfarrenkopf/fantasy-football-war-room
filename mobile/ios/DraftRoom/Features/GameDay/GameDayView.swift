@@ -482,7 +482,7 @@ struct SlotBadge: View {
 // MARK: - States
 
 /// When the season shown was read, when that's worth saying: offline, or ESPN didn't answer.
-private struct FreshnessNote: View {
+struct FreshnessNote: View {
     let season: SeasonResponse
     let offline: Bool
 
@@ -504,7 +504,7 @@ private struct FreshnessNote: View {
     }
 }
 
-private struct ProblemNote: View {
+struct ProblemNote: View {
     let message: String
     let reconnect: Bool
     let onReconnect: () -> Void
@@ -527,7 +527,7 @@ private struct ProblemNote: View {
     }
 }
 
-private struct FailedView: View {
+struct FailedView: View {
     let message: String
     let retry: () -> Void
 

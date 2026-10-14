@@ -19,6 +19,8 @@ final class ShellModel {
     private let defaults: UserDefaults
     /// Each league's season, kept while the app runs so switching back shows it at once.
     @ObservationIgnored private var seasons: [String: SeasonStore] = [:]
+    /// Each league's staged lineup, kept with its season so edits survive switching tabs.
+    @ObservationIgnored private var lineups: [String: LineupModel] = [:]
     private static let lastLeagueKey = "lastLeagueId"
 
     init(api: APIClient, defaults: UserDefaults = .standard) {
@@ -50,6 +52,20 @@ final class ShellModel {
         let store = SeasonStore(api: api, leagueId: league.id)
         seasons[league.id] = store
         return store
+    }
+
+    /// The league's lineup, made on first use.
+    func lineup(for league: League) -> LineupModel {
+        if let model = lineups[league.id] { return model }
+        let model = LineupModel(api: api, store: season(for: league))
+        lineups[league.id] = model
+        return model
+    }
+
+    /// Whether the open league has lineup edits that switching away would lose.
+    var hasUnsavedLineup: Bool {
+        guard let id = selected?.id else { return false }
+        return lineups[id]?.hasUnsavedEdits == true
     }
 
     func select(_ id: String?) {

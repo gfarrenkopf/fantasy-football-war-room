@@ -162,7 +162,7 @@ struct SeasonFormatTests {
 
     @Test func shortensNamesButNotDefenses() {
         let player = { (name: String, pos: String) in
-            ViewPlayer(playerId: 1, name: name, pos: pos, team: nil, slot: "BN", injuryStatus: "ACTIVE", actual: nil, points: 0, game: nil)
+            ViewPlayer(playerId: 1, name: name, pos: pos, team: nil, slot: "BN", injuryStatus: "ACTIVE", locked: false, actual: nil, points: 0, game: nil)
         }
         #expect(SeasonFormat.shortName(player("Jahmyr Gibbs", "RB")) == "J. Gibbs")
         #expect(SeasonFormat.shortName(player("Amon-Ra St. Brown", "WR")) == "A. St. Brown")

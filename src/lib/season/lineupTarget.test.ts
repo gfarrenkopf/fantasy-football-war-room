@@ -24,7 +24,7 @@ const withLocked = (name: string): SeasonView => ({
 
 describe("lineupTarget (APE-381)", () => {
   it("turns ESPN's own lineup into no changes", () => {
-    expect(lineupTarget(view, onEspn)).toEqual({ changes: [], moves: [], suggested: [], problems: [] });
+    expect(lineupTarget(view, onEspn)).toMatchObject({ changes: [], moves: [], suggested: [], problems: [] });
   });
 
   it("turns a target lineup into the moves that set it, one change per swap, in plain words", () => {

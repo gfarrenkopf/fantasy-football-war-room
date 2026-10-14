@@ -1,5 +1,6 @@
 import { alignSeats, changeKey, changeText, checkMoves, groupMoves, movesToStaged, seatsFromRoster, starterSeats, suggestedMoves, type SuggestedMove } from "./apply";
 import type { LineupMove } from "./lineup";
+import { lockInOf, type LockIn } from "./lockIn";
 import type { SeasonView } from "./view";
 
 /**
@@ -27,6 +28,8 @@ export interface LineupTarget {
   suggested: SuggestedMove[];
   /** Why the picked changes can't go to ESPN, in words for the user; empty when they can. */
   problems: string[];
+  /** The Lock In moment (APE-294) for what landed, once ESPN took the picked moves; null when it doesn't play. */
+  lockIn: (landed: readonly (LineupMove & { landed: boolean })[]) => LockIn | null;
 }
 
 /**
@@ -50,7 +53,7 @@ export function lineupTarget(view: SeasonView, lineup: readonly (number | null)[
     else if (p.slot === "IR") problems.push(`${p.name} is on IR. Take them off IR before starting them.`);
     else if (named.indexOf(id) !== named.lastIndexOf(id)) problems.push(`${p.name} is in two slots.`);
   }
-  if (problems.length) return { changes: [], moves: [], suggested: [], problems };
+  if (problems.length) return { changes: [], moves: [], suggested: [], problems, lockIn: () => null };
 
   const onEspn = seatsFromRoster(roster, seats);
   const staged = alignSeats(seats, onEspn, lineup);
@@ -61,10 +64,12 @@ export function lineupTarget(view: SeasonView, lineup: readonly (number | null)[
   const moves = changes.flatMap((c) => (c.picked ? c.moves : []));
   const recommended = alignSeats(seats, onEspn, view.lineup.starters.map((f) => f.playerId));
   const points = (id: number | null) => (id === null ? 0 : (byId.get(id)?.points ?? 0));
+  const suggested = suggestedMoves(moves, seats, staged, recommended, onEspn, points);
   return {
     changes,
     moves,
-    suggested: suggestedMoves(moves, seats, staged, recommended, onEspn, points),
+    suggested,
     problems: moves.length ? checkMoves(roster, moves, view.starters, view.benchSize, view.irSlots) : [],
+    lockIn: (landed) => lockInOf(landed, { seats, staged, onEspn, recommended, sent: moves, suggested, points }),
   };
 }

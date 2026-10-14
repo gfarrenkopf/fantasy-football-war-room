@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { alignSeats, changeKey, checkMoves, chooseSeat, groupMoves, movesToStaged, seatsFromRoster, starterSeats, suggestedMoves } from "@/lib/season/apply";
 import type { LineupMove } from "@/lib/season/lineup";
-import { lockIn, type LockIn, type OwnMove } from "@/lib/season/lockIn";
+import { lockInOf, type LockIn } from "@/lib/season/lockIn";
 import type { SeasonView } from "@/lib/season/view";
 
 /**
@@ -129,20 +129,7 @@ export function useLineupDraft(view: SeasonView) {
     /** ESPN took the apply: show what landed, and keep what was left out on offer. */
     applied(result: Landed) {
       setLanded(result);
-      // The starting seats this apply changed, and what each does to the projection.
-      const seatMoves = seats.flatMap((to, i) => {
-        const group = changeOf.get(staged[i] ?? onEspn[i] ?? -1);
-        return staged[i] !== onEspn[i] && (!group || picked.includes(group)) ? [{ i, to, delta: points(staged[i]) - points(onEspn[i]) }] : [];
-      });
-      // The ones the user made themselves.
-      const own: OwnMove[] = seatMoves.flatMap(({ i, to, delta }) => {
-        const id = staged[i];
-        return id !== null && !suggested.some((m) => m.playerId === id && m.to === to) ? [{ playerId: id, to, delta: Math.round(delta * 100) / 100 }] : [];
-      });
-      const total = (lineup: readonly (number | null)[]) => lineup.reduce((sum: number, id) => sum + points(id), 0);
-      const before = total(onEspn);
-      const after = before + seatMoves.reduce((sum, m) => sum + m.delta, 0);
-      const found = lockIn({ landed: result, suggested, own, before, after, recommended: total(recommended) });
+      const found = lockInOf(result, { seats, staged, onEspn, recommended, sent: chosen, suggested, points });
       setMoment(found && { ...found, sentFrom: rosterKey(roster) });
       setKeepStaged(chosen.length < moves.length);
       setPhase({ kind: "idle" });

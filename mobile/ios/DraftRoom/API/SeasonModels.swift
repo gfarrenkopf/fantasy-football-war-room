@@ -25,6 +25,10 @@ struct SeasonResponse: Codable, Equatable, Sendable {
     let result: SeasonView?
     let live: LiveMatchup?
     let gameDay: GameDay
+    /// The Lineup tab: ESPN's lineup and War Room's, seat for seat, and who may sit where.
+    let lineup: SeasonLineup
+    /// The ESPN write consent: the text, its version, and whether the user has agreed to it.
+    let consent: WriteConsent
 
     /// The league Game day shows.
     var gameDayView: SeasonView { result ?? view }
@@ -67,6 +71,8 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     /// Where he sits on ESPN: a starting slot, BN or IR.
     let slot: String
     let injuryStatus: String
+    /// His game has started, so ESPN won't move him this week.
+    let locked: Bool
     /// Points scored this week; null before his game.
     let actual: Double?
     /// Projected points this week.
@@ -197,6 +203,50 @@ struct GameDay: Codable, Equatable, Sendable {
     let showArchive: Bool
 
     func pace(of playerId: Int) -> PlayerPace? { pace[String(playerId)] }
+}
+
+/// The Lineup tab's data (the server's `lineup`, src/lib/server/v1/season.ts).
+struct SeasonLineup: Codable, Equatable, Sendable {
+    struct Tag: Codable, Equatable, Sendable {
+        /// OUT, BYE, LIKELY OUT.
+        let label: String
+        /// out or warn.
+        let kind: String
+    }
+
+    struct StartSit: Codable, Equatable, Sendable {
+        let level: String
+        let headline: String
+        /// Projected points of War Room's lineup over ESPN's.
+        let gain: Double
+        /// War Room's lineup's projected total, and ESPN's.
+        let total: Double
+        let currentTotal: Double
+        /// What War Room's moves have already gained this week.
+        let banked: Double
+    }
+
+    /// Every starting seat in order: RB twice for two RBs.
+    let seats: [String]
+    /// Who sits in each seat on ESPN now, and in War Room's lineup; null for an empty seat.
+    let onEspn: [Int?]
+    let recommended: [Int?]
+    /// The slots each of the user's players may move to, keyed by player id as a string.
+    let eligible: [String: [String]]
+    /// Why a player would come out, when it's news; keyed by player id as a string.
+    let tags: [String: Tag]
+    let startSit: StartSit
+    let holes: [Hole]
+
+    func canPlay(_ playerId: Int, _ slot: String) -> Bool { eligible[String(playerId)]?.contains(slot) == true }
+    func tag(of playerId: Int) -> Tag? { tags[String(playerId)] }
+}
+
+/// The consent to change the user's team on ESPN (Epic 13). The text always comes from the server.
+struct WriteConsent: Codable, Equatable, Sendable {
+    let version: Int
+    let lines: [String]
+    let agreed: Bool
 }
 
 /// Slot and position names as ESPN shows them (the web's SLOT_LABEL and posLabel in parts.tsx).

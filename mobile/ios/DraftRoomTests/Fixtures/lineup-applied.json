@@ -1,4 +1,27 @@
 {
+  "lockIn": {
+    "banked": 4.45,
+    "before": 142.1,
+    "after": 143.05,
+    "leftover": 3.5,
+    "level": "gain",
+    "headline": "Lineup locked",
+    "confetti": false,
+    "moves": [
+      {
+        "playerId": 4361579,
+        "text": "Javonte Williams in at RB",
+        "gain": 4.45,
+        "own": false
+      },
+      {
+        "playerId": 3121422,
+        "text": "Terry McLaurin in at WR",
+        "gain": -3.5,
+        "own": true
+      }
+    ]
+  },
   "changes": [
     {
       "id": "4379399:BN,4361579:RB",

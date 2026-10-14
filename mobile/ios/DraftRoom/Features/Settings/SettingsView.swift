@@ -12,6 +12,7 @@ struct SettingsView: View {
     /// nil while loading or when in-season features are off; .some(nil) when not connected.
     @State private var espn: EspnLoginStatus?
     @State private var connecting = false
+    @State private var confirmingSignOut = false
 
     var body: some View {
         NavigationStack {
@@ -47,14 +48,14 @@ struct SettingsView: View {
                 }
                 Section {
                     Button("Sign out") {
-                        Task {
-                            working = true
-                            await session.signOut()
-                            working = false
-                        }
+                        if session.hasUnsavedLineup { confirmingSignOut = true } else { signOut() }
                     }
                     .foregroundStyle(.text)
                     .accessibilityIdentifier("settings-signout")
+                    .confirmationDialog("Your lineup changes aren't saved to ESPN", isPresented: $confirmingSignOut, titleVisibility: .visible) {
+                        Button("Discard changes and sign out", role: .destructive) { signOut() }
+                        Button("Keep editing", role: .cancel) {}
+                    }
                 }
                 Section {
                     Button("Delete account", role: .destructive) {
@@ -95,6 +96,14 @@ struct SettingsView: View {
             } message: {
                 Text("Everything saved to your account is deleted for good. Type DELETE to confirm.")
             }
+        }
+    }
+
+    private func signOut() {
+        Task {
+            working = true
+            await session.signOut()
+            working = false
         }
     }
 

@@ -1,0 +1,288 @@
+import Foundation
+import Observation
+
+/// The lineup the user is staging for ESPN in one league (APE-382), after the web's useLineupDraft.ts.
+/// It starts as War Room's lineup; once ESPN's lineup changes under it (after a save, or a refresh),
+/// it starts again from what ESPN has. Kept by the shell per league, so edits survive switching tabs.
+///
+/// Staging is only seat bookkeeping: who sits where, from the season response's seats and eligible
+/// slots. The moves, their words, their checks and the Lock In moment all come from the server.
+@MainActor
+@Observable
+final class LineupModel {
+    enum Phase: Equatable {
+        case idle
+        /// The first save: the write consent, with the server's text, before anything goes.
+        case consent(version: Int, lines: [String])
+        /// Asking the server what the lineup changes, or re-asking after a toggle.
+        case checking
+        /// The confirm sheet: each change in the server's words, with a toggle.
+        case review(LineupDryRun)
+        case sending
+        /// ESPN took the save; the sheet closes and the screen shows what landed.
+        case saved(LineupApplied)
+        /// Nothing was sent, or what was sent couldn't be checked: the server's words and its reasons.
+        case failed(String, details: [String])
+    }
+
+    let store: SeasonStore
+    private(set) var staged: [Int?] = []
+    private(set) var phase: Phase = .idle
+    /// The change ids the user left ticked in the confirm sheet; nil until the first dry run.
+    private(set) var picked: Set<String>?
+    /// The last list of changes the server sent, kept on screen while a toggle is re-checked.
+    private(set) var dry: LineupDryRun?
+    /// The last save's results, kept on screen until the next edit.
+    private(set) var lastSave: LineupApplied?
+    /// The Lock In moment from the last save, and whether this is its first showing this week.
+    private(set) var moment: LockInMoment?
+    private(set) var momentIsNew = false
+    /// The user has changed the lineup by hand since it was last set up: switching away asks first.
+    private(set) var edited = false
+
+    private let api: APIClient
+    private let defaults: UserDefaults
+    /// Where each of the user's players sat on ESPN when staging started.
+    private var seen: String?
+    private var agreed = false
+    /// After a save that left changes out, keep the staged lineup so they're still on offer.
+    private var keepStaged = false
+
+    init(api: APIClient, store: SeasonStore, defaults: UserDefaults = .standard) {
+        self.api = api
+        self.store = store
+        self.defaults = defaults
+        sync()
+    }
+
+    private var season: SeasonResponse? { store.season }
+    var lineup: SeasonLineup? { season?.lineup }
+    var seats: [String] { lineup?.seats ?? [] }
+    var onEspn: [Int?] { lineup?.onEspn ?? [] }
+    var recommended: [Int?] { lineup?.recommended ?? [] }
+
+    /// The user's roster this week.
+    var roster: [ViewPlayer] {
+        guard let view = season?.view else { return [] }
+        return view.team(view.myTeamId)?.roster ?? []
+    }
+
+    func player(_ id: Int?) -> ViewPlayer? { id.flatMap { id in roster.first { $0.playerId == id } } }
+
+    var bench: [ViewPlayer] { roster.filter { $0.slot == "BN" }.sorted { $0.points > $1.points } }
+    var injuredReserve: [ViewPlayer] { roster.filter { $0.slot == "IR" } }
+
+    /// Staging has caught up with the season read: rows may index `staged` by seat.
+    var isReady: Bool { !seats.isEmpty && staged.count == seats.count && onEspn.count == seats.count }
+
+    /// The seats whose player would change.
+    var changedSeats: [Int] {
+        guard isReady else { return [] }
+        return seats.indices.filter { staged[$0] != onEspn[$0] }
+    }
+    var hasChanges: Bool { !changedSeats.isEmpty }
+    var isOnEspn: Bool { staged == onEspn }
+    var isRecommended: Bool { staged == recommended }
+    /// Edits the user would lose by switching league or signing out.
+    var hasUnsavedEdits: Bool { edited && hasChanges }
+
+    /// Starts again when ESPN's lineup has changed under the staged one. Call after each season read.
+    func sync() {
+        guard let lineup else { return }
+        let key = roster.map { "\($0.playerId):\($0.slot)" }.joined(separator: ",")
+        guard key != seen else { return }
+        let first = seen == nil
+        seen = key
+        if !agreed { agreed = season?.consent.agreed == true }
+        if first {
+            staged = lineup.recommended
+        } else if !keepStaged {
+            staged = lineup.onEspn
+            edited = false
+        }
+        keepStaged = false
+    }
+
+    // MARK: Staging
+
+    /// Who may sit in a seat: anyone not on IR who can play it and isn't locked, War Room's pick
+    /// first, then ESPN's, then by projection. Whoever holds the seat stays on the list.
+    func options(for seat: Int) -> [ViewPlayer] {
+        guard let lineup, isReady, seats.indices.contains(seat) else { return [] }
+        let key = seats[seat]
+        let rank = { (id: Int) in id == self.recommended[seat] ? 0 : id == self.onEspn[seat] ? 1 : 2 }
+        return roster
+            .filter { $0.slot != "IR" && lineup.canPlay($0.playerId, key) && (!$0.locked || $0.playerId == staged[seat]) }
+            .sorted { (rank($0.playerId), -$0.points) < (rank($1.playerId), -$1.points) }
+    }
+
+    /// The seats a bench player could take: those his position can play whose holder isn't locked.
+    func seats(for benched: ViewPlayer) -> [Int] {
+        guard let lineup, !benched.locked else { return [] }
+        let at = staged.firstIndex(of: benched.playerId)
+        return seats.indices.filter { i in
+            i != at && lineup.canPlay(benched.playerId, seats[i]) && player(staged[i])?.locked != true
+        }
+    }
+
+    /// Whether a seat can be changed at all: not while its player's game is on.
+    func isLocked(_ seat: Int) -> Bool {
+        guard isReady, seats.indices.contains(seat) else { return false }
+        return player(staged[seat])?.locked == true || player(onEspn[seat])?.locked == true
+    }
+
+    /// Puts a player in a seat, or empties it with nil (the web's chooseSeat). Picking someone staged
+    /// elsewhere swaps the two when the other seat can take the player displaced.
+    func choose(_ seat: Int, _ id: Int?) {
+        guard let lineup, isReady, seats.indices.contains(seat), staged[seat] != id else { return }
+        var next = staged
+        if let id, let was = next.firstIndex(of: id), was != seat {
+            let displaced = next[seat]
+            next[was] = displaced.flatMap { lineup.canPlay($0, seats[was]) ? $0 : nil }
+        }
+        next[seat] = id
+        staged = Self.align(seats: seats, before: onEspn, after: next)
+        edited = true
+        editedSinceSave()
+    }
+
+    /// One tap back to ESPN's lineup or to War Room's (the web's LineupSources).
+    func startFromEspn() { start(from: onEspn) }
+    func startFromDraftRoom() { start(from: recommended) }
+
+    private func start(from lineup: [Int?]) {
+        staged = lineup
+        edited = lineup != recommended
+        editedSinceSave()
+    }
+
+    private func editedSinceSave() {
+        lastSave = nil
+        moment = nil
+        if case .failed = phase { phase = .idle }
+    }
+
+    /// Lays a staged lineup against ESPN's, seat for seat (the web's alignSeats): a player who holds
+    /// a slot on ESPN keeps his seat there, so two RBs trading seats aren't a change.
+    static func align(seats: [String], before: [Int?], after: [Int?]) -> [Int?] {
+        var aligned = [Int?](repeating: nil, count: seats.count)
+        var placed = Set<Int>()
+        for (i, key) in seats.enumerated() {
+            guard let id = before[i], seats.indices.contains(where: { seats[$0] == key && after[$0] == id }) else { continue }
+            aligned[i] = id
+            placed.insert(id)
+        }
+        for (i, key) in seats.enumerated() {
+            guard let id = after[i], !placed.contains(id) else { continue }
+            if let open = seats.indices.first(where: { seats[$0] == key && aligned[$0] == nil }) {
+                aligned[open] = id
+                placed.insert(id)
+            }
+        }
+        return aligned
+    }
+
+    // MARK: Saving
+
+    /// Opens the save: the consent the first time, then the server's list of changes.
+    func review() async {
+        guard let season else { return }
+        picked = nil
+        dry = nil
+        if !agreed {
+            phase = .consent(version: season.consent.version, lines: season.consent.lines)
+            return
+        }
+        await check()
+    }
+
+    /// Records the consent, then carries on to the list of changes.
+    func agree(version: Int) async {
+        phase = .checking
+        do {
+            let _: ConsentGrant = try await api.post("api/v1/espn/write-consent", body: ConsentRequest(version: version))
+            agreed = true
+            await check()
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// Ticks or unticks a change, then asks the server again: one change can depend on another.
+    func toggle(_ id: String, on: Bool) async {
+        guard case let .review(dry) = phase else { return }
+        var next = picked ?? Set(dry.changes.filter(\.picked).map(\.id))
+        if on { next.insert(id) } else { next.remove(id) }
+        picked = next
+        await check()
+    }
+
+    /// Sends the ticked changes. Never queued: offline, nothing goes.
+    func send() async {
+        guard case let .review(dry) = phase, dry.problems.isEmpty, dry.changes.contains(where: \.picked), let request = request(changes: dry.changes.filter(\.picked).map(\.id)) else { return }
+        phase = .sending
+        do {
+            let applied: LineupApplied = try await api.post("api/v1/leagues/\(store.leagueId)/lineup", body: request)
+            lastSave = applied
+            keepStaged = dry.changes.contains { !$0.picked }
+            edited = keepStaged && edited
+            if let lockIn = applied.lockIn, let season = self.season {
+                let key = "moment:\(store.leagueId):\(season.view.season):\(season.view.currentWeek):lineup"
+                momentIsNew = !defaults.bool(forKey: key)
+                defaults.set(true, forKey: key)
+                moment = lockIn
+            }
+            phase = .saved(applied)
+            // Game day and the lineup both read ESPN as it now is.
+            await store.refresh(force: true)
+            sync()
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// Closes the sheet without saving.
+    func cancel() {
+        if case .sending = phase { return }
+        phase = .idle
+    }
+
+    private func check() async {
+        guard let request = request(changes: picked.map { Array($0).sorted() }) else { return }
+        phase = .checking
+        do {
+            let dry: LineupDryRun = try await api.post("api/v1/leagues/\(store.leagueId)/lineup?dryRun=1", body: request)
+            if picked == nil { picked = Set(dry.changes.filter(\.picked).map(\.id)) }
+            self.dry = dry
+            phase = .review(dry)
+        } catch {
+            fail(error)
+        }
+    }
+
+    private func request(changes: [String]?) -> LineupRequest? {
+        guard let season else { return nil }
+        return LineupRequest(
+            week: season.view.currentWeek,
+            season: season.view.season,
+            snapshot: roster.map { .init(playerId: $0.playerId, slot: $0.slot) },
+            lineup: staged,
+            changes: changes)
+    }
+
+    private func fail(_ error: APIError) {
+        switch error {
+        case let .consentNeeded(version, lines):
+            agreed = false
+            phase = .consent(version: version, lines: lines)
+        case let .declined(message, details):
+            phase = .failed(message, details: details)
+        case .offline:
+            phase = .failed("You're offline, so nothing was sent to ESPN. Save again once you're connected.", details: [])
+        case .signedOut:
+            phase = .idle
+        default:
+            phase = .failed(error.message, details: [])
+        }
+    }
+}

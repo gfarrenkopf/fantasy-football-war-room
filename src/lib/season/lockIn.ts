@@ -69,6 +69,48 @@ export function lockIn({
   };
 }
 
+/**
+ * The moment for an apply that ESPN took, from the lineup as staged (seat for seat with `seats`, as
+ * `alignSeats()` lays it): the starting seats the sent moves changed, what each does to the
+ * projection, and which of them the user made themselves. Shared by the web's lineup and the app's
+ * lineup route, so both tell the same story.
+ */
+export function lockInOf(
+  landed: readonly (LineupMove & { landed: boolean })[],
+  {
+    seats,
+    staged,
+    onEspn,
+    recommended,
+    sent,
+    suggested,
+    points,
+  }: {
+    seats: readonly LineupSlot[];
+    staged: readonly (number | null)[];
+    onEspn: readonly (number | null)[];
+    recommended: readonly (number | null)[];
+    /** The moves sent: a seat changes only if its move went. */
+    sent: readonly LineupMove[];
+    suggested: readonly SuggestedMove[];
+    points: (id: number | null) => number;
+  },
+): LockIn | null {
+  const went = new Set(sent.map((m) => m.playerId));
+  const seatMoves = seats.flatMap((to, i) => {
+    const mover = staged[i] ?? onEspn[i];
+    return staged[i] !== onEspn[i] && mover !== null && went.has(mover) ? [{ i, to, delta: points(staged[i]) - points(onEspn[i]) }] : [];
+  });
+  const own: OwnMove[] = seatMoves.flatMap(({ i, to, delta }) => {
+    const id = staged[i];
+    return id !== null && !suggested.some((m) => m.playerId === id && m.to === to) ? [{ playerId: id, to, delta: round(delta) }] : [];
+  });
+  const total = (lineup: readonly (number | null)[]) => lineup.reduce((sum: number, id) => sum + points(id), 0);
+  const before = total(onEspn);
+  const after = before + seatMoves.reduce((sum, m) => sum + m.delta, 0);
+  return lockIn({ landed, suggested, own, before, after, recommended: total(recommended) });
+}
+
 /** The moment's headline, on the ladder step of what was banked. */
 export function lockInHeadline(level: Emphasis, banked: number): string {
   switch (level) {

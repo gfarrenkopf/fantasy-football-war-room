@@ -11,7 +11,7 @@ enum SeasonSample {
     }
 
     static func player(_ id: Int, _ name: String, _ pos: String, slot: String, actual: Double?, points: Double, game: GameState?, injury: String = "ACTIVE") -> ViewPlayer {
-        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, actual: actual, points: points, game: game)
+        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, locked: game.map { $0.state != "pre" } ?? false, actual: actual, points: points, game: game)
     }
 
     static let mine: [ViewPlayer] = [
@@ -20,8 +20,9 @@ enum SeasonSample {
         player(3, "Puka Nacua", "WR", slot: "WR", actual: 9.6, points: 15.1, game: game("post")),
         player(4, "Sam LaPorta", "TE", slot: "TE", actual: nil, points: 10.2, game: game("pre", opponent: "GB")),
         player(5, "Jake Elliott", "K", slot: "K", actual: nil, points: 8.0, game: game("pre", opponent: "DAL")),
-        player(6, "Tank Bigsby", "RB", slot: "BN", actual: 6.2, points: 7.4, game: game("post")),
+        player(6, "Tank Bigsby", "RB", slot: "BN", actual: nil, points: 7.4, game: game("pre", opponent: "GB")),
         player(7, "Josh Downs", "WR", slot: "BN", actual: nil, points: 9.1, game: nil, injury: "OUT"),
+        player(8, "Tucker Kraft", "TE", slot: "BN", actual: nil, points: 11.6, game: game("pre", opponent: "CHI")),
     ]
 
     static let theirs: [ViewPlayer] = [
@@ -71,10 +72,25 @@ enum SeasonSample {
             starters: [],
             pace: pace(mine + theirs),
             around: [.init(home: side(3, "Hail Marys", 71.2, left: 2), away: side(4, "Blitz Brigade", 64.0, left: 3), left: 5)],
-            bench: .init(playerIds: [6, 7], points: 6.2),
+            bench: .init(playerIds: [8, 6, 7], points: 0),
             holes: [Hole(key: "FLEX", kind: "hard", reason: "empty", playerId: nil)],
             espnCall: EspnCall(me: .init(projected: 98.6, actual: nil), them: .init(projected: 101.2, actual: nil), best: .init(playerId: 2, projected: 16.3, actual: 22.1), worst: nil, season: CallRecord(weeks: 2, meanMiss: 11.4, meanBias: -2.1)),
-            showArchive: false))
+            showArchive: false),
+        lineup: lineup,
+        consent: WriteConsent(version: 2, lines: ["Draft Room changes your team on ESPN only when you confirm a change.", "You can stop it any time by disconnecting ESPN."], agreed: false))
+
+    /// War Room fills the empty FLEX with Bigsby; the games already on lock their players in.
+    static let lineup = SeasonLineup(
+        seats: ["QB", "RB", "WR", "TE", "FLEX", "K"],
+        onEspn: [1, 2, 3, 4, nil, 5],
+        recommended: [1, 2, 3, 4, 6, 5],
+        eligible: [
+            "1": ["QB", "BN"], "2": ["RB", "FLEX", "BN"], "3": ["WR", "FLEX", "BN"], "4": ["TE", "FLEX", "BN"],
+            "5": ["K", "BN"], "6": ["RB", "FLEX", "BN"], "7": ["WR", "FLEX", "BN"], "8": ["TE", "FLEX", "BN"],
+        ],
+        tags: ["7": .init(label: "OUT", kind: "out")],
+        startSit: .init(level: "gain", headline: "Start these and gain", gain: 7.4, total: 87.4, currentTotal: 80.0, banked: 0),
+        holes: [])
 
     static var liveJSON: String {
         let encoder = JSONEncoder()

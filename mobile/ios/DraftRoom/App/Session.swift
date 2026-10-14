@@ -18,6 +18,8 @@ final class Session {
 
     private(set) var phase: Phase = .starting
     let api: APIClient
+    /// The open league has lineup edits not yet saved to ESPN: signing out asks first.
+    var hasUnsavedLineup = false
     private let appVersion: String
 
     init(api: APIClient, appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0") {

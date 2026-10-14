@@ -10,6 +10,10 @@ enum APIError: Error, Equatable {
     /// 409 `{ error, problem }`: ESPN couldn't be read for a league. `problem` names why
     /// (not-linked, no-login, disconnected, unavailable, invalid).
     case problem(String, message: String)
+    /// 409 from an ESPN write: the user hasn't agreed to the current consent, whose text this is.
+    case consentNeeded(version: Int, lines: [String])
+    /// 409 from an ESPN write that sent nothing: the server's sentence, and the reasons it lists.
+    case declined(String, details: [String])
     /// No answer: offline, timed out, or the server is down.
     case offline
     /// The answer wasn't the JSON this build expects.
@@ -21,6 +25,8 @@ enum APIError: Error, Equatable {
         case .signedOut: "You've been signed out. Sign in again to carry on."
         case let .server(_, message): message
         case let .problem(_, message): message
+        case .consentNeeded: "Agree to Draft Room changing your team on ESPN first."
+        case let .declined(message, _): message
         case .offline: "Can't reach Draft Room. Check your connection and try again."
         case .unreadable: "Draft Room sent something this version of the app can't read. Try updating the app."
         }
@@ -131,8 +137,10 @@ final class APIClient {
             }
             throw .server(status: 401, message: Self.message(in: data, status: 401))
         case 409:
-            if let body = try? JSONDecoder().decode(ServerError.self, from: data), let problem = body.problem {
-                throw .problem(problem, message: body.error)
+            if let body = try? JSONDecoder().decode(ServerError.self, from: data) {
+                if let problem = body.problem { throw .problem(problem, message: body.error) }
+                if let consent = body.consent { throw .consentNeeded(version: consent.version, lines: consent.lines) }
+                if let details = body.changed ?? body.problems ?? body.refused { throw .declined(body.error, details: details) }
             }
             throw .server(status: 409, message: Self.message(in: data, status: 409))
         default:

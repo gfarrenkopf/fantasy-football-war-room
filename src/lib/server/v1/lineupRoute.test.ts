@@ -141,6 +141,15 @@ describe("POST /api/v1/leagues/:id/lineup", () => {
     const out = (await res.json()) as LineupApplied;
     expect(out.changes).toHaveLength(2);
     expect(out.changes.every((c) => c.landed && c.result === "Done on ESPN.")).toBe(true);
+    // War Room's move leads the Lock In moment; the user's own is their call.
+    expect(out.lockIn).toMatchObject({
+      headline: expect.any(String),
+      moves: [
+        { playerId: id("Javonte Williams"), text: "Javonte Williams in at RB", own: false },
+        { playerId: id("Terry McLaurin"), text: "Terry McLaurin in at WR", own: true },
+      ],
+    });
+    expect(out.lockIn!.after).toBeCloseTo(out.lockIn!.before + out.lockIn!.moves.reduce((sum, m) => sum + m.gain, 0), 1);
     expect(state.sent).toHaveLength(1);
     expect(state.sent[0]).toMatchObject({ week: view.currentWeek, snapshot: snapshotOf(roster) });
     expect(state.sent[0].moves).toHaveLength(4);
@@ -167,6 +176,7 @@ describe("POST /api/v1/leagues/:id/lineup", () => {
     const wr = out.changes.find((c) => c.text.includes("McLaurin"))!;
     expect(wr).toMatchObject({ landed: false, result: "Only part of this landed on ESPN: Drake London didn't move. Check it there." });
     expect(out.changes.find((c) => c !== wr)).toMatchObject({ landed: true });
+    expect(out.lockIn).toBeNull();
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("1 of 4 moves didn't land");
   });

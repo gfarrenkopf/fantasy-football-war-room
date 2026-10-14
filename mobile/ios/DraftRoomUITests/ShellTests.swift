@@ -16,7 +16,7 @@ final class ShellTests: XCTestCase {
 
         app.tabBars.buttons["Lineup"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["section-lineup"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["App Tester · 2026"].exists)
+        XCTAssertTrue(app.buttons["seat-0"].waitForExistence(timeout: 5))
 
         // A league switch opens the tab the new league's week calls for: Game day while games are on.
         app.buttons["league-switcher"].firstMatch.tap()

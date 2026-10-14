@@ -32,9 +32,19 @@ struct Me: Codable, Equatable, Sendable {
 
 /// The server's error body: `{ "error": "..." }`.
 struct ServerError: Codable, Sendable {
+    struct Consent: Codable, Sendable {
+        let version: Int
+        let lines: [String]
+    }
+
     let error: String
     /// Why ESPN couldn't be read, on a 409 from the season routes.
     var problem: String? = nil
+    /// An ESPN write's 409s (src/lib/server/espn/writeRoute.ts): the consent to agree to first, or why nothing was sent.
+    var consent: Consent? = nil
+    var changed: [String]? = nil
+    var problems: [String]? = nil
+    var refused: [String]? = nil
 }
 
 // MARK: ESPN (/api/v1/espn)
