@@ -19,6 +19,8 @@ final class ShellModel {
     private let defaults: UserDefaults
     /// Each league's season, kept while the app runs so switching back shows it at once.
     @ObservationIgnored private var seasons: [String: SeasonStore] = [:]
+    /// Each league's recap archive, kept with its season.
+    @ObservationIgnored private var recaps: [String: RecapsStore] = [:]
     /// Each league's staged lineup, kept with its season so edits survive switching tabs.
     @ObservationIgnored private var lineups: [String: LineupModel] = [:]
     private static let lastLeagueKey = "lastLeagueId"
@@ -51,6 +53,14 @@ final class ShellModel {
         if let store = seasons[league.id] { return store }
         let store = SeasonStore(api: api, leagueId: league.id)
         seasons[league.id] = store
+        return store
+    }
+
+    /// The league's recap archive, made on first use.
+    func recaps(for league: League) -> RecapsStore {
+        if let store = recaps[league.id] { return store }
+        let store = RecapsStore(api: api, leagueId: league.id)
+        recaps[league.id] = store
         return store
     }
 

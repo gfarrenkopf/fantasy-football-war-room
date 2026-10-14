@@ -5,9 +5,11 @@ import SwiftUI
 /// as one scrolling column. Once the week is decided its result leads, and between weeks ESPN's
 /// season on the user's team and last week's final follow the preview (APE-402). It reads itself
 /// again each minute while a game is on and the screen is in front of the user, and keeps the last
-/// read for when the phone has no signal.
+/// read for when the phone has no signal. Whenever no game is on, the league's recap archive
+/// follows (APE-384), each week opening its recap.
 struct GameDayView: View {
     let store: SeasonStore
+    let recaps: RecapsStore
     /// Opens the Lineup tab, where a hole is filled.
     let onLineup: () -> Void
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
@@ -25,11 +27,19 @@ struct GameDayView: View {
                             ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
                         }
                         GameDayContent(season: season, offline: store.offline, onLineup: onLineup)
+                        if season.gameDay.showArchive {
+                            RecapArchiveView(store: recaps, hiding: season.gameDay.result == nil ? nil : RecapKey(season: season.gameDayView.season, week: season.gameDayView.currentWeek), firstWeek: season.gameDay.week)
+                                .task(id: recaps.leagueId) { await recaps.start() }
+                        }
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
                 }
-                .refreshable { await store.refresh(force: true) }
+                .refreshable {
+                    async let season: Void = store.refresh(force: true)
+                    async let archive: Void = recaps.refresh()
+                    _ = await (season, archive)
+                }
                 .id(season.league.id)
             } else {
                 switch store.load {
@@ -44,6 +54,7 @@ struct GameDayView: View {
             }
         }
         .background(.bg)
+        .navigationDestination(for: RecapKey.self) { key in RecapReaderView(store: recaps, key: key) }
         .accessibilityIdentifier("gameday")
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }

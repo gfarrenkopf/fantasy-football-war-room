@@ -20,6 +20,8 @@ final class Session {
     let api: APIClient
     /// The open league has lineup edits not yet saved to ESPN: signing out asks first.
     var hasUnsavedLineup = false
+    /// A season link opened from outside the app (a Universal Link), waiting for the signed-in shell to follow it.
+    var seasonLink: SeasonLink?
     private let appVersion: String
 
     init(api: APIClient, appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0") {
@@ -27,6 +29,7 @@ final class Session {
         self.appVersion = appVersion
         api.onSignedOut = { [weak self] in
             SeasonCache.shared.clear()
+            RecapCache.shared.clear()
             self?.phase = .signedOut
         }
     }
@@ -67,6 +70,7 @@ final class Session {
         api.clearToken()
         // The seasons kept for offline use are this user's: the next one to sign in mustn't see them.
         SeasonCache.shared.clear()
+        RecapCache.shared.clear()
         phase = .signedOut
     }
 
@@ -74,6 +78,7 @@ final class Session {
         try await api.send("DELETE", "api/v1/account", body: ["confirm": "DELETE"])
         api.clearToken()
         SeasonCache.shared.clear()
+        RecapCache.shared.clear()
         phase = .signedOut
     }
 

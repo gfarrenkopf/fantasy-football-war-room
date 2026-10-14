@@ -37,6 +37,7 @@ export function GameDayPanel({
   accuracy,
   previous,
   archive,
+  openRecap,
   onLineupTools,
 }: {
   leagueId: string;
@@ -48,6 +49,8 @@ export function GameDayPanel({
   previous?: { view: SeasonView; accuracy: ProjectionAccuracy | null };
   /** The league's kept weeks, for the recap archive (APE-250); shown whenever no game is on. */
   archive: ArchiveWeek[];
+  /** The week a shared recap link opened. */
+  openRecap?: { season: number; week: number } | null;
   onLineupTools(): void;
 }) {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
@@ -167,7 +170,7 @@ export function GameDayPanel({
           </button>
         </div>
       </div>
-      {phase !== "live" && <RecapArchive league={view.name} weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
+      {phase !== "live" && <RecapArchive league={view.name} open={openRecap} weeks={shownAbove ? archive.filter((w) => !(w.season === view.season && w.week === view.currentWeek)) : archive} />}
     </>
   );
 }

@@ -18,10 +18,17 @@ import { findLeague } from "@/lib/server/leagues";
 
 export const metadata: Metadata = { title: "Your season · Draft Room" };
 
+/** `?recap=2026-4`, from a shared recap (APE-384): the week to open in the recap archive. */
+function recapParam(raw: string | string[] | undefined): { season: number; week: number } | null {
+  const match = typeof raw === "string" ? /^(\d{4})-(\d{1,2})$/.exec(raw) : null;
+  return match ? { season: Number(match[1]), week: Number(match[2]) } : null;
+}
+
 /**
  * A league's in-season page (10.5): this week's recommended lineup, and trades (10.6), plus in-season
  * AI when it's on (Epic 11), and setting the lineup on ESPN (12.1). Everything
- * comes from ESPN, read on the server with the user's stored login; `?refresh=1` skips the cache.
+ * comes from ESPN, read on the server with the user's stored login; `?refresh=1` skips the cache,
+ * and `?recap=2026-4` (a shared recap) opens Game day on that week's recap.
  * Hosted only, and signed in only.
  */
 export default async function Season({ params, searchParams }: PageProps<"/season/[leagueId]">) {
@@ -70,6 +77,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
       phase={load.phase}
       accuracy={accuracy}
       archive={kept.map(archiveWeek)}
+      openRecap={recapParam(query.recap)}
     />
   );
 }

@@ -12,6 +12,7 @@ enum UITestStub {
             UserDefaults.standard.removeObject(forKey: key)
         }
         SeasonCache.shared.clear()
+        RecapCache.shared.clear()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubProtocol.self]
         return APIClient(baseURL: URL(string: "https://stub.invalid")!, session: URLSession(configuration: configuration), tokens: StubTokens())
@@ -87,6 +88,12 @@ enum UITestStub {
             case "/api/v1/leagues/lg-1/season", "/api/v1/leagues/lg-2/season":
                 // `-uiTestFinal` serves the week decided (a win) instead of the live one.
                 (200, ProcessInfo.processInfo.arguments.contains("-uiTestFinal") ? SeasonSample.json(SeasonSample.final) : SeasonSample.liveJSON)
+            case "/api/v1/leagues/lg-1/recaps":
+                (200, RecapSample.json(RecapSample.archive))
+            case "/api/v1/leagues/lg-2/recaps":
+                (200, RecapSample.json(RecapSample.empty))
+            case let recaps where recaps.hasPrefix("/api/v1/leagues/lg-1/recaps/"):
+                RecapSample.recap(week: Int(recaps.split(separator: "/").last ?? "") ?? 0).map { (200, RecapSample.json($0)) } ?? (404, #"{"error":"No recap for that week yet"}"#)
             case "/api/v1/espn/login":
                 (200, #"{"login":{"status":"connected","season":2026}}"#)
             case "/api/v1/auth/signout":
