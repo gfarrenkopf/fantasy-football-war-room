@@ -8,6 +8,9 @@ enum UITestStub {
         guard ProcessInfo.processInfo.arguments.contains("-uiTestStub") else { return nil }
         // Every stubbed launch starts the same: on the first league, with nothing kept from a past run.
         UserDefaults.standard.removeObject(forKey: "lastLeagueId")
+        for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("moment:") {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         SeasonCache.shared.clear()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubProtocol.self]
@@ -82,7 +85,8 @@ enum UITestStub {
             case "/api/v1/leagues":
                 (200, #"{"leagues":[{"id":"lg-1","name":"App Tester","espnLeagueId":"704343562","espnTeamId":1,"season":2026},{"id":"lg-2","name":"Sunday Regulars","espnLeagueId":"111","espnTeamId":4,"season":2026}]}"#)
             case "/api/v1/leagues/lg-1/season", "/api/v1/leagues/lg-2/season":
-                (200, SeasonSample.liveJSON)
+                // `-uiTestFinal` serves the week decided (a win) instead of the live one.
+                (200, ProcessInfo.processInfo.arguments.contains("-uiTestFinal") ? SeasonSample.json(SeasonSample.final) : SeasonSample.liveJSON)
             case "/api/v1/espn/login":
                 (200, #"{"login":{"status":"connected","season":2026}}"#)
             case "/api/v1/auth/signout":

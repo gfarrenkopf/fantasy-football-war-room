@@ -233,8 +233,122 @@ struct GameDay: Codable, Equatable, Sendable {
     let holes: [Hole]
     let espnCall: EspnCall?
     let showArchive: Bool
+    /// The decided week (phase results): the result and how the week swung.
+    var result: WeekResult? = nil
+    /// ESPN's season on the user's team, between weeks.
+    var trackRecord: TrackRecord? = nil
+    /// Last week's final, between weeks, until the recap archive tells it.
+    var lastWeek: WeekRecap? = nil
 
     func pace(of playerId: Int) -> PlayerPace? { pace[String(playerId)] }
+}
+
+struct WeekResult: Codable, Equatable, Sendable {
+    let recap: WeekRecap
+    let swing: WeekSwing?
+}
+
+/// The week told as a result (src/lib/season/recap.ts): the final, the margin, the user's starters
+/// as they scored, and the star of the week.
+struct WeekRecap: Codable, Equatable, Sendable {
+    enum Outcome: String, Codable, Sendable {
+        case win, loss, tie
+    }
+
+    struct Starter: Codable, Equatable, Sendable, Identifiable {
+        let slot: String
+        let playerId: Int
+        let name: String
+        let pos: String
+        let team: String?
+        let points: Double
+        /// ESPN's call before kickoff when it was recorded, otherwise the projection.
+        let projected: Double
+
+        var id: Int { playerId }
+    }
+
+    struct Star: Codable, Equatable, Sendable {
+        let player: Starter
+        /// He beat his projection; otherwise he's simply the top scorer.
+        let beat: Bool
+    }
+
+    let week: Int
+    let result: Outcome
+    let me: Double
+    let them: Double
+    let margin: Double
+    let opponent: String
+    let starters: [Starter]
+    let star: Star?
+}
+
+/// Why the week went the way it did (src/lib/season/swing.ts): ESPN's margin before kickoff, the
+/// players who moved it, and the rest, adding up to the final.
+struct WeekSwing: Codable, Equatable, Sendable {
+    struct Swing: Codable, Equatable, Sendable, Identifiable {
+        let playerId: Int
+        let name: String
+        let pos: String
+        /// me or them: whose starter he was.
+        let side: String
+        let points: Double
+        let projected: Double
+        /// What he did to the user's margin.
+        let delta: Double
+        let before: Double
+        let after: Double
+
+        var id: Int { playerId }
+    }
+
+    struct Rest: Codable, Equatable, Sendable {
+        let delta: Double
+        let before: Double
+        let after: Double
+    }
+
+    struct Hindsight: Codable, Equatable, Sendable {
+        struct Best: Codable, Equatable, Sendable {
+            let name: String
+            let points: Double
+        }
+
+        let total: Double
+        let gain: Double
+        let wouldHaveWon: Bool
+        let best: Best?
+    }
+
+    let projected: Double
+    let final: Double
+    let swings: [Swing]
+    let rest: Rest?
+    /// Each side's starters against their projections, signed for the user.
+    let mine: Double
+    let theirs: Double
+    /// The user's starters projected for nothing who scored nothing.
+    let empty: [String]
+    let hindsight: Hindsight?
+}
+
+/// ESPN's season on the user's team (the web's TrackRecord): its miss, its lean, how often it
+/// called the team too high, and the players it has read most and least closely.
+struct TrackRecord: Codable, Equatable, Sendable {
+    struct Player: Codable, Equatable, Sendable {
+        let playerId: Int
+        let weeks: Int
+        let meanMiss: Double
+        let meanBias: Double
+    }
+
+    let weeks: Int
+    let meanMiss: Double
+    let meanBias: Double
+    let overcalled: Int
+    let surest: Player
+    let shakiest: Player
 }
 
 /// The Lineup tab's data (the server's `lineup`, src/lib/server/v1/season.ts).

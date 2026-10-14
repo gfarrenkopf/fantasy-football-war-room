@@ -2,8 +2,10 @@ import SwiftUI
 
 /// Game day (APE-380): the user's matchup as a scoreboard over both lineups, slot by slot, then
 /// ESPN's call, the rest of the league and the bench, in the web panel's order (GameDayPanel.tsx)
-/// as one scrolling column. It reads itself again each minute while a game is on and the screen is
-/// in front of the user, and keeps the last read for when the phone has no signal.
+/// as one scrolling column. Once the week is decided its result leads, and between weeks ESPN's
+/// season on the user's team and last week's final follow the preview (APE-402). It reads itself
+/// again each minute while a game is on and the screen is in front of the user, and keeps the last
+/// read for when the phone has no signal.
 struct GameDayView: View {
     let store: SeasonStore
     /// Opens the Lineup tab, where a hole is filled.
@@ -64,7 +66,23 @@ private struct GameDayContent: View {
         VStack(spacing: Spacing.xl) {
             FreshnessNote(season: season, offline: offline)
             if !day.holes.isEmpty { HoleBanner(holes: day.holes, onLineup: onLineup) }
-            if let live = season.live {
+            if let result = day.result {
+                // The week is decided (APE-402): the result leads, both lineups as they finished below it.
+                ResultMoment(leagueId: season.league.id, view: view, result: result)
+                SeasonCard(title: "Head to head", note: "As set on ESPN") {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("You").foregroundStyle(.mine)
+                            Spacer(minLength: Spacing.md)
+                            Text(result.recap.opponent).foregroundStyle(.muted).lineLimit(1)
+                        }
+                        .typeStyle(TypeScale.label)
+                        .padding(.horizontal, Spacing.xl).padding(.bottom, Spacing.md)
+                        .accessibilityHidden(true)
+                        HeadToHead(view: view, day: day)
+                    }
+                }
+            } else if let live = season.live {
                 Scoreboard(live: live) {
                     HeadToHead(view: view, day: day)
                 }
@@ -72,6 +90,9 @@ private struct GameDayContent: View {
                 ByeStarters(view: view, day: day)
             }
             if let call = day.espnCall { EspnCallCard(call: call, view: view, live: season.live) }
+            // Between weeks: ESPN's season on the user's team, and last week until the archive keeps it.
+            if let record = day.trackRecord { TrackRecordCard(record: record, view: view) }
+            if let lastWeek = day.lastWeek { LastWeekCard(recap: lastWeek) }
             if !day.around.isEmpty { AroundTheLeague(view: view, around: day.around) }
             BenchCard(view: view, day: day)
         }
@@ -352,16 +373,20 @@ private struct EspnCallCard: View {
 
     private func line(_ who: String, _ call: ProjectionCall, now: Double?) -> some View {
         row(who) {
-            HStack(spacing: Spacing.xs) {
-                Text("ESPN had") + Text(" \(SeasonFormat.points(call.projected))").bold()
+            // One run of text, so it wraps between words rather than between pieces.
+            let had = Text("ESPN had ") + Text(SeasonFormat.points(call.projected)).bold()
+            Group {
                 if let actual = call.actual {
-                    Text("· scored") + Text(" \(SeasonFormat.points(actual)) ").bold()
-                    Text("(\(SeasonFormat.signed(actual - call.projected)))").foregroundStyle(actual >= call.projected ? Color.valueInk : Color.reachInk)
+                    had + Text(" · scored ") + Text(SeasonFormat.points(actual)).bold() + Text(" ")
+                        + Text("(\(SeasonFormat.signed(actual - call.projected)))").foregroundColor(actual >= call.projected ? .valueInk : .reachInk)
                 } else if let now {
-                    Text("·") + Text(" \(SeasonFormat.points(now))").bold() + Text(" so far")
+                    had + Text(" · ") + Text(SeasonFormat.points(now)).bold() + Text(" so far")
+                } else {
+                    had
                 }
             }
             .monospacedDigit()
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 

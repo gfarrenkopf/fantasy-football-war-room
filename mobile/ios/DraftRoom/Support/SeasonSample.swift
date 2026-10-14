@@ -98,10 +98,67 @@ enum SeasonSample {
             swaps: [.init(key: "FLEX", into: 6, out: nil, gain: 7.4, tag: nil)], banked: 3.1),
         holes: [])
 
-    static var liveJSON: String {
+    // MARK: The week decided (APE-402)
+
+    /// The same week once every game is final: a win, 79.0 to 59.9.
+    static let finalScores: [Int: Double] = [1: 24.1, 2: 22.1, 3: 9.6, 4: 14.2, 5: 9.0, 6: 11.3, 7: 0, 8: 6.2, 11: 14.0, 12: 24.5, 13: 6.3, 14: 8.1, 15: 7.0]
+
+    static func finished(_ players: [ViewPlayer]) -> [ViewPlayer] {
+        players.map { p in
+            ViewPlayer(playerId: p.playerId, name: p.name, pos: p.pos, team: p.team, slot: p.slot, injuryStatus: p.injuryStatus, locked: true,
+                       actual: finalScores[p.playerId], points: p.points, game: p.game.map { _ in game("post") })
+        }
+    }
+
+    static func starter(_ id: Int, slot: String) -> WeekRecap.Starter {
+        let p = mine.first { $0.playerId == id }!
+        return .init(slot: slot, playerId: id, name: p.name, pos: p.pos, team: p.team, points: finalScores[id] ?? 0, projected: p.points)
+    }
+
+    static let finalResult = WeekResult(
+        recap: WeekRecap(
+            week: 3, result: .win, me: 79.0, them: 59.9, margin: 19.1, opponent: "Gridiron Gang",
+            starters: [starter(1, slot: "QB"), starter(2, slot: "RB"), starter(3, slot: "WR"), starter(4, slot: "TE"), starter(5, slot: "K")],
+            star: .init(player: starter(2, slot: "RB"), beat: true)),
+        swing: WeekSwing(
+            projected: -3.3, final: 19.1,
+            swings: [
+                .init(playerId: 13, name: "CeeDee Lamb", pos: "WR", side: "them", points: 6.3, projected: 16.0, delta: 9.7, before: -3.3, after: 6.4),
+                .init(playerId: 12, name: "Bijan Robinson", pos: "RB", side: "them", points: 24.5, projected: 17.9, delta: -6.6, before: 6.4, after: -0.2),
+                .init(playerId: 2, name: "Jahmyr Gibbs", pos: "RB", side: "me", points: 22.1, projected: 16.3, delta: 5.8, before: -0.2, after: 5.6),
+                .init(playerId: 11, name: "Joe Burrow", pos: "QB", side: "them", points: 14.0, projected: 19.8, delta: 5.8, before: 5.6, after: 11.4),
+            ],
+            rest: .init(delta: 7.7, before: 11.4, after: 19.1), mine: 8.2, theirs: -14.2, empty: [],
+            hindsight: .init(total: 90.3, gain: 11.3, wouldHaveWon: false, best: .init(name: "Tank Bigsby", points: 11.3))))
+
+    static let final: SeasonResponse = {
+        let decided = SeasonView(
+            name: view.name, season: view.season, currentWeek: 3, myTeamId: 1,
+            teams: view.teams.map { ViewTeam(id: $0.id, name: $0.name, abbrev: $0.abbrev, roster: finished($0.roster)) },
+            matchup: Matchup(me: MatchupSide(teamId: 1, points: 79.0, projected: 79.0, winProbability: nil), them: MatchupSide(teamId: 2, points: 59.9, projected: 59.9, winProbability: nil)),
+            warRoomMoves: view.warRoomMoves)
+        let players = finished(mine + theirs)
+        return SeasonResponse(
+            league: live.league, fetchedAt: kickoff, stale: false, projectionsMissing: false, phase: .results, defaultTab: "gameday",
+            view: view, result: decided,
+            live: LiveMatchup(week: 3, status: "Final", live: false, started: true, decided: true, lead: 19.1, win: nil,
+                              me: LiveSide(teamId: 1, name: "Sunday Scaries", points: 79.0, projected: 79.0, left: 0),
+                              them: LiveSide(teamId: 2, name: "Gridiron Gang", points: 59.9, projected: 59.9, left: 0)),
+            gameDay: GameDay(
+                week: 3, headToHead: live.gameDay.headToHead, starters: [],
+                pace: Dictionary(uniqueKeysWithValues: players.map { (String($0.playerId), PlayerPace(pace: ($0.actual ?? 0) >= $0.points ? .boom : .behind, progress: nil)) }),
+                around: [], bench: .init(playerIds: [6, 8, 7], points: 17.5), holes: [],
+                espnCall: EspnCall(me: .init(projected: 70.8, actual: 79.0), them: .init(projected: 74.1, actual: 59.9), best: .init(playerId: 2, projected: 16.3, actual: 22.1), worst: .init(playerId: 3, projected: 15.1, actual: 9.6), season: CallRecord(weeks: 2, meanMiss: 11.4, meanBias: -2.1)),
+                showArchive: true, result: finalResult),
+            lineup: lineup, consent: live.consent)
+    }()
+
+    static func json(_ season: SeasonResponse) -> String {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        return String(decoding: (try? encoder.encode(live)) ?? Data(), as: UTF8.self)
+        return String(decoding: (try? encoder.encode(season)) ?? Data(), as: UTF8.self)
     }
+
+    static var liveJSON: String { json(live) }
 }
 #endif
