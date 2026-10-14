@@ -83,4 +83,39 @@ final class LineupTests: XCTestCase {
         XCTAssertEqual(review.label, "Review 1 swap")
         XCTAssertFalse(app.buttons["use-draftroom"].exists)
     }
+
+    /// IR (APE-387): Downs is out, so the checklist offers him; he goes on IR and saves with the lineup.
+    @MainActor
+    func testMoveAPlayerToIRAndSave() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestStub"]
+        app.launch()
+
+        let tab = app.tabBars.buttons["Lineup"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        tab.tap()
+
+        let downs = app.switches["ir-7"]
+        for _ in 0..<5 where !downs.isHittable { app.swipeUp() }
+        XCTAssertTrue(downs.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["IR · 0 of 1"].exists)
+        downs.switches.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["IR · 1 of 1"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["bench-7"].label.contains("going on IR"), app.buttons["bench-7"].label)
+
+        let review = app.buttons["review-lineup"]
+        XCTAssertTrue(review.waitForExistence(timeout: 5))
+        XCTAssertEqual(review.label, "Review changes")
+        review.tap()
+        let consent = app.switches["consent-toggle"]
+        XCTAssertTrue(consent.waitForExistence(timeout: 5))
+        consent.switches.firstMatch.tap()
+        app.buttons["consent-agree"].tap()
+
+        // The IR move is a change like any other, with its own toggle.
+        XCTAssertTrue(app.switches["change-7:IR"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Move Josh Downs to IR"].exists)
+        app.buttons["apply-lineup"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["lock-in"].waitForExistence(timeout: 5))
+    }
 }

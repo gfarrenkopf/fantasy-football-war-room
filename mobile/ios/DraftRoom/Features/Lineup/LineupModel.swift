@@ -27,6 +27,8 @@ final class LineupModel {
 
     let store: SeasonStore
     private(set) var staged: [Int?] = []
+    /// Who should be on IR (the web's IR picker, APE-387): saved with the lineup.
+    private(set) var ir: [Int] = []
     private(set) var phase: Phase = .idle
     /// The change ids the user left ticked in the confirm sheet; nil until the first dry run.
     private(set) var picked: Set<String>?
@@ -71,6 +73,20 @@ final class LineupModel {
 
     var bench: [ViewPlayer] { roster.filter { $0.slot == "BN" }.sorted { $0.points > $1.points } }
     var injuredReserve: [ViewPlayer] { roster.filter { $0.slot == "IR" } }
+    /// Who's on IR on ESPN now.
+    var onIr: [Int] { injuredReserve.map(\.playerId) }
+    var irSlots: Int { season?.view.irSlots ?? 0 }
+
+    /// The IR checklist (the web's IrPicker): who's on IR, and who could go there, players ESPN lists
+    /// as out or on injured reserve whose game hasn't started. The server says who's eligible. Empty
+    /// when the league has no IR slots or nobody qualifies, and then the checklist isn't shown.
+    var irCandidates: [ViewPlayer] {
+        guard let lineup, irSlots > 0 else { return [] }
+        return roster.filter { $0.slot == "IR" || (lineup.canPlay($0.playerId, "IR") && !$0.locked) }
+    }
+
+    /// Players moving on or off IR.
+    var irChanges: Int { Set(ir).symmetricDifference(onIr).count }
 
     /// Staging has caught up with the season read: rows may index `staged` by seat.
     var isReady: Bool { !seats.isEmpty && staged.count == seats.count && onEspn.count == seats.count }
@@ -80,7 +96,7 @@ final class LineupModel {
         guard isReady else { return [] }
         return seats.indices.filter { staged[$0] != onEspn[$0] }
     }
-    var hasChanges: Bool { !changedSeats.isEmpty }
+    var hasChanges: Bool { !changedSeats.isEmpty || irChanges > 0 }
     var isOnEspn: Bool { staged == onEspn }
     var isRecommended: Bool { staged == recommended }
     /// Edits the user would lose by switching league or signing out.
@@ -96,8 +112,10 @@ final class LineupModel {
         if !agreed { agreed = season?.consent.agreed == true }
         if first {
             staged = lineup.recommended
+            ir = onIr
         } else if !keepStaged {
             staged = lineup.onEspn
+            ir = onIr
             edited = false
         }
         keepStaged = false
@@ -149,20 +167,20 @@ final class LineupModel {
 
     // MARK: Staging
 
-    /// Who may sit in a seat: anyone not on IR who can play it and isn't locked, War Room's pick
+    /// Who may sit in a seat: anyone not staged for IR who can play it and isn't locked, War Room's pick
     /// first, then ESPN's, then by projection. Whoever holds the seat stays on the list.
     func options(for seat: Int) -> [ViewPlayer] {
         guard let lineup, isReady, seats.indices.contains(seat) else { return [] }
         let key = seats[seat]
         let rank = { (id: Int) in id == self.recommended[seat] ? 0 : id == self.onEspn[seat] ? 1 : 2 }
         return roster
-            .filter { $0.slot != "IR" && lineup.canPlay($0.playerId, key) && (!$0.locked || $0.playerId == staged[seat]) }
+            .filter { !ir.contains($0.playerId) && lineup.canPlay($0.playerId, key) && (!$0.locked || $0.playerId == staged[seat]) }
             .sorted { (rank($0.playerId), -$0.points) < (rank($1.playerId), -$1.points) }
     }
 
     /// The seats a bench player could take: those his position can play whose holder isn't locked.
     func seats(for benched: ViewPlayer) -> [Int] {
-        guard let lineup, !benched.locked else { return [] }
+        guard let lineup, !benched.locked, !ir.contains(benched.playerId) else { return [] }
         let at = staged.firstIndex(of: benched.playerId)
         return seats.indices.filter { i in
             i != at && lineup.canPlay(benched.playerId, seats[i]) && player(staged[i])?.locked != true
@@ -190,6 +208,19 @@ final class LineupModel {
         editedSinceSave()
     }
 
+    /// Moves a player on or off IR. A player going on IR gives up his seat (the web's toggleIr).
+    func toggleIr(_ id: Int, on: Bool) {
+        guard isReady, player(id)?.locked != true, ir.contains(id) != on else { return }
+        if on {
+            ir.append(id)
+            staged = staged.map { $0 == id ? nil : $0 }
+        } else {
+            ir.removeAll { $0 == id }
+        }
+        edited = true
+        editedSinceSave()
+    }
+
     /// One tap back to ESPN's lineup or to War Room's (the web's LineupSources). The hero's "Use Draft
     /// Room's lineup" is the second: it only stages, and the save goes through the usual review.
     func startFromEspn() { start(from: onEspn) }
@@ -197,6 +228,7 @@ final class LineupModel {
 
     private func start(from lineup: [Int?]) {
         staged = lineup
+        ir = onIr
         edited = lineup != recommended
         editedSinceSave()
     }
@@ -312,6 +344,7 @@ final class LineupModel {
             season: season.view.season,
             snapshot: roster.map { .init(playerId: $0.playerId, slot: $0.slot) },
             lineup: staged,
+            ir: ir,
             changes: changes)
     }
 

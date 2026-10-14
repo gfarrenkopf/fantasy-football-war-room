@@ -257,6 +257,130 @@ extension StubbedNetwork {
             #expect(lineupRequests().count == 2) // the dry run and the one failed send, nothing replayed
         }
 
+        // MARK: IR (APE-387)
+
+        static let love = 4870808, allen = 3918298
+
+        /// The pregame season with one player hurt: ESPN's status, and the server's IR eligibility.
+        private static func season(hurt playerId: Int, status: String = "OUT", slot: String? = nil, locked: Bool = false, irEligible: Bool = true, agreed: Bool = false) throws -> Data {
+            var json = try #require(JSONSerialization.jsonObject(with: Fixture.data("season-pregame")) as? [String: Any])
+            var view = try #require(json["view"] as? [String: Any])
+            var teams = try #require(view["teams"] as? [[String: Any]])
+            for t in teams.indices {
+                guard var roster = teams[t]["roster"] as? [[String: Any]] else { continue }
+                for p in roster.indices where roster[p]["playerId"] as? Int == playerId {
+                    roster[p]["injuryStatus"] = status
+                    roster[p]["locked"] = locked
+                    if let slot { roster[p]["slot"] = slot }
+                }
+                teams[t]["roster"] = roster
+            }
+            view["teams"] = teams
+            json["view"] = view
+            var lineup = try #require(json["lineup"] as? [String: Any])
+            var eligible = try #require(lineup["eligible"] as? [String: [String]])
+            if irEligible { eligible[String(playerId)]?.append("IR") }
+            lineup["eligible"] = eligible
+            if slot == "IR", var onEspn = lineup["onEspn"] as? [Any] {
+                onEspn = onEspn.map { ($0 as? Int) == playerId ? NSNull() : $0 }
+                lineup["onEspn"] = onEspn
+                lineup["recommended"] = onEspn
+            }
+            json["lineup"] = lineup
+            if agreed, var consent = json["consent"] as? [String: Any] {
+                consent["agreed"] = true
+                json["consent"] = consent
+            }
+            return try JSONSerialization.data(withJSONObject: json)
+        }
+
+        @Test func aHealthyTeamHasNoIRChecklist() async {
+            let model = await model()
+            #expect(model.irSlots == 1)
+            #expect(model.irCandidates.isEmpty)
+        }
+
+        @Test func offersIROnlyToPlayersOutOrAlreadyThere() async throws {
+            let out = await model(season: try Self.season(hurt: Self.gibbs))
+            #expect(out.irCandidates.map(\.playerId) == [Self.gibbs])
+
+            let doubtful = await model(season: try Self.season(hurt: Self.gibbs, status: "DOUBTFUL", irEligible: false))
+            #expect(doubtful.irCandidates.isEmpty)
+
+            // A player whose game is on stays off the list, as on the web.
+            let locked = await model(season: try Self.season(hurt: Self.gibbs, locked: true))
+            #expect(locked.irCandidates.isEmpty)
+
+            // Already on IR, he's listed even once he's healthy, so he can come off.
+            let onIr = await model(season: try Self.season(hurt: Self.gibbs, status: "ACTIVE", slot: "IR", irEligible: false))
+            #expect(onIr.irCandidates.map(\.playerId) == [Self.gibbs])
+            #expect(onIr.ir == [Self.gibbs])
+            #expect(!onIr.hasChanges)
+        }
+
+        @Test func goingOnIRFreesTheSeat() async throws {
+            let model = await model(season: try Self.season(hurt: Self.gibbs))
+            model.toggleIr(Self.gibbs, on: true)
+            #expect(model.ir == [Self.gibbs])
+            #expect(model.staged[1] == nil)
+            #expect(model.irChanges == 1)
+            #expect(model.hasUnsavedEdits)
+            #expect(!model.options(for: 1).contains { $0.playerId == Self.gibbs })
+
+            model.toggleIr(Self.gibbs, on: false)
+            #expect(model.ir.isEmpty)
+            #expect(model.irChanges == 0)
+            model.startFromDraftRoom()
+            #expect(model.staged == model.recommended)
+            #expect(!model.hasChanges)
+        }
+
+        @Test func comingOffIRFreesHimToStart() async throws {
+            let model = await model(season: try Self.season(hurt: Self.gibbs, status: "ACTIVE", slot: "IR", irEligible: false))
+            #expect(!model.options(for: 1).contains { $0.playerId == Self.gibbs })
+            model.toggleIr(Self.gibbs, on: false)
+            #expect(model.hasChanges)
+            #expect(model.options(for: 1).contains { $0.playerId == Self.gibbs })
+        }
+
+        @Test func aResetPutsIRBackAsESPNHasIt() async throws {
+            let model = await model(season: try Self.season(hurt: Self.gibbs))
+            model.toggleIr(Self.gibbs, on: true)
+            model.startFromEspn()
+            #expect(model.ir.isEmpty)
+            #expect(model.staged == model.onEspn)
+        }
+
+        @Test func sendsIRWithTheLineupAndShowsTheChange() async throws {
+            let model = await model(season: try Self.season(hurt: Self.gibbs, agreed: true), routes: [
+                "\(Self.lineupPath)?dryRun": Self.ok("lineup-ir-dry-run"),
+                Self.lineupPath: .init(status: 200, body: Data(#"{"changes":[{"id":"4429795:IR,4870808:RB","text":"Move Jahmyr Gibbs to IR; start Jeremiyah Love at RB","landed":true,"result":"Done on ESPN."}],"lockIn":null}"#.utf8)),
+            ])
+            model.toggleIr(Self.gibbs, on: true)
+            model.choose(1, Self.love)
+            await model.review()
+
+            // The same request the server's fixture was made from (.research/ape386).
+            let body = try Self.sent(lineupRequests().last)
+            let fixture = try #require(JSONSerialization.jsonObject(with: Fixture.data("lineup-ir-request")) as? [String: Any])
+            #expect(body["ir"] as? [Int] == fixture["ir"] as? [Int])
+            #expect(body["lineup"] as? [Int] == fixture["lineup"] as? [Int])
+            guard case let .review(dry) = model.phase else { Issue.record("expected review, got \(model.phase)"); return }
+            #expect(dry.changes.map(\.text) == ["Move Jahmyr Gibbs to IR; start Jeremiyah Love at RB"])
+
+            await model.send()
+            guard case let .saved(applied) = model.phase else { Issue.record("expected saved, got \(model.phase)"); return }
+            #expect(applied.allLanded)
+            #expect(try Self.sent(lineupRequests().last)["ir"] as? [Int] == [Self.gibbs])
+        }
+
+        @Test func leavesIRAsItIsWhenUntouched() async throws {
+            let model = await model(season: try Self.agreed(), routes: ["\(Self.lineupPath)?dryRun": Self.ok("lineup-dry-run")])
+            model.choose(2, Self.javonte)
+            await model.review()
+            #expect(try Self.sent(lineupRequests().last)["ir"] as? [Int] == [])
+        }
+
         /// The pregame season with the write consent already given.
         private static func agreed() throws -> Data {
             var json = try #require(JSONSerialization.jsonObject(with: Fixture.data("season-pregame")) as? [String: Any])

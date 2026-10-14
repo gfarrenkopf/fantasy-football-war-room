@@ -44,6 +44,8 @@ struct SeasonView: Codable, Equatable, Sendable {
     let currentWeek: Int
     let myTeamId: Int
     let teams: [ViewTeam]
+    /// The league's IR slots; nil from a read cached before the app knew of them (APE-387).
+    var irSlots: Int? = nil
     /// The user's fantasy matchup this week, in ESPN's numbers; null on a bye.
     let matchup: Matchup?
     /// The moves War Room got onto ESPN this week, for players still in that slot.

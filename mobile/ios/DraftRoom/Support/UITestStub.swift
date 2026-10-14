@@ -59,10 +59,15 @@ enum UITestStub {
             (id: "4:BN,8:TE", text: "Start Tucker Kraft at TE, bench Sam LaPorta"),
         ]
 
-        /// The lineup route: a dry run lists both changes, ticked as the request names them; a save lands them.
+        /// Josh Downs going on IR (APE-387), when the request puts him there.
+        private static let toIr = (id: "7:IR", text: "Move Josh Downs to IR")
+
+        /// The lineup route: a dry run lists the changes, ticked as the request names them; a save lands them.
         private static func lineup(dryRun: Bool, body: Data?) -> (Int, String) {
-            struct Sent: Decodable { let changes: [String]? }
-            let picked = (body.flatMap { try? JSONDecoder().decode(Sent.self, from: $0) }?.changes).map(Set.init)
+            struct Sent: Decodable { let changes: [String]?; let ir: [Int]? }
+            let sent = body.flatMap { try? JSONDecoder().decode(Sent.self, from: $0) }
+            let picked = sent?.changes.map(Set.init)
+            let changes = sent?.ir?.contains(7) == true ? changes + [toIr] : changes
             let chosen = changes.filter { picked?.contains($0.id) ?? true }
             if dryRun {
                 let rows = changes.map { c in #"{"id":"\#(c.id)","text":"\#(c.text)","picked":\#(chosen.contains { $0.id == c.id }),"moves":[]}"# }

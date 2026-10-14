@@ -37,6 +37,7 @@ struct LineupView: View {
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
                     .animation(Motion.respond, value: model.staged)
+                    .animation(Motion.respond, value: model.ir)
                 }
                 .refreshable { await store.refresh(force: true) }
                 .safeAreaInset(edge: .bottom) {
@@ -60,6 +61,7 @@ struct LineupView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("section-lineup")
         .sensoryFeedback(Haptic.choice, trigger: model.staged)
+        .sensoryFeedback(Haptic.choice, trigger: model.ir)
         .onChange(of: store.season, initial: true) { model.sync() }
         .sheet(item: $pickingSeat) { pick in SeatPicker(model: model, seat: pick.seat) }
         .sheet(item: $pickingBench) { player in BenchPicker(model: model, player: player) }
@@ -324,22 +326,95 @@ private struct BenchCard: View {
                     Divider().overlay(.rowLine)
                     BenchRow(model: model, player: player) { onPick(player) }
                 }
-                // 19.2 adds moving players on and off IR here.
-                ForEach(model.injuredReserve) { player in
-                    Divider().overlay(.rowLine)
-                    RowLayout {
-                        SlotText(text: "IR")
-                    } player: {
-                        PlayerLine(player: player)
-                    } points: {
-                        RowPoints(player: player, locked: false)
+                let candidates = model.irCandidates
+                if candidates.isEmpty {
+                    ForEach(model.injuredReserve) { player in
+                        Divider().overlay(.rowLine)
+                        RowLayout {
+                            SlotText(text: "IR")
+                        } player: {
+                            PlayerLine(player: player)
+                        } points: {
+                            RowPoints(player: player, locked: false)
+                        }
+                        .padding(.horizontal, Spacing.xl)
+                        .padding(.vertical, Spacing.lg)
+                        .accessibilityElement(children: .combine)
                     }
-                    .padding(.horizontal, Spacing.xl)
-                    .padding(.vertical, Spacing.lg)
-                    .accessibilityElement(children: .combine)
+                } else {
+                    IrList(model: model, candidates: candidates)
                 }
             }
         }
+    }
+}
+
+/// Who's on IR, and who could go there (the web's IrPicker): one toggle each, staged with the rest of
+/// the lineup and saved through the same review. It stands in for the IR rows, so nobody shows twice.
+private struct IrList: View {
+    let model: LineupModel
+    let candidates: [ViewPlayer]
+
+    var body: some View {
+        let over = model.ir.count > model.irSlots
+        Divider().overlay(.rowLine)
+        HStack {
+            Text("IR · \(model.ir.count) of \(model.irSlots)")
+                .typeStyle(TypeScale.micro).monospacedDigit()
+                .foregroundStyle(over ? Color.warnInk : Color.muted)
+            Spacer()
+        }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.top, Spacing.lg)
+        .padding(.bottom, Spacing.sm)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Injured reserve, \(model.ir.count) of \(model.irSlots) slots")
+        .accessibilityAddTraits(.isHeader)
+        ForEach(candidates) { player in
+            IrRow(model: model, player: player)
+        }
+    }
+}
+
+private struct IrRow: View {
+    let model: LineupModel
+    let player: ViewPlayer
+
+    var body: some View {
+        let on = model.ir.contains(player.playerId)
+        let wasOn = player.slot == "IR"
+        let moving = on != wasOn
+        Toggle(isOn: Binding(get: { on }, set: { model.toggleIr(player.playerId, on: $0) })) {
+            RowLayout {
+                SlotText(text: player.slot == "BN" ? "BN" : SlotLabel.of(player.slot))
+            } player: {
+                // PlayerLine carries ESPN's injury tag; the bench row says "Going on IR".
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    PlayerLine(player: player)
+                    if moving && !on {
+                        Label("Coming off IR, to the bench", systemImage: "arrow.uturn.left")
+                            .typeStyle(TypeScale.label).foregroundStyle(.sky)
+                            .transition(.opacity)
+                    }
+                }
+            } points: {
+                EmptyView()
+            }
+        }
+        .tint(.sky)
+        .disabled(player.locked)
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.lg)
+        .background(moving ? Color.sky.opacity(0.06) : .clear)
+        .accessibilityLabel(
+            ([player.name, status, player.locked ? "locked" : nil, moving ? (on ? "going on IR" : "coming off IR") : nil] as [String?])
+                .compactMap(\.self).joined(separator: ", "))
+        .accessibilityIdentifier("ir-\(player.playerId)")
+    }
+
+    /// ESPN's designation as the web words it: "out", "injured reserve".
+    private var status: String {
+        player.injuryStatus == "INJURY_RESERVE" ? "Injured reserve" : player.injuryStatus.capitalized
     }
 }
 
@@ -350,13 +425,18 @@ private struct BenchRow: View {
 
     var body: some View {
         let seat = model.staged.firstIndex(of: player.playerId)
+        let toIr = model.ir.contains(player.playerId)
         Button(action: onTap) {
             RowLayout {
                 SlotText(text: "BN")
             } player: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     PlayerLine(player: player)
-                    if let seat {
+                    if toIr {
+                        Label("Going on IR", systemImage: "cross.case")
+                            .typeStyle(TypeScale.label).foregroundStyle(.sky)
+                            .transition(.opacity)
+                    } else if let seat {
                         Label("Starting at \(SlotLabel.of(model.seats[seat]))", systemImage: "arrow.turn.right.up")
                             .typeStyle(TypeScale.label).foregroundStyle(.sky)
                             .transition(.opacity)
@@ -367,17 +447,17 @@ private struct BenchRow: View {
             }
             .padding(.horizontal, Spacing.xl)
             .padding(.vertical, Spacing.lg)
-            .background(seat != nil ? Color.sky.opacity(0.06) : .clear)
+            .background(seat != nil || toIr ? Color.sky.opacity(0.06) : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(RowButtonStyle())
-        .disabled(player.locked)
+        .disabled(player.locked || toIr)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(
-            ["Bench", player.name, "projected \(SeasonFormat.points(player.points))", player.locked ? "locked" : nil, seat.map { "starting at \(SlotLabel.of(model.seats[$0]))" }]
+            ["Bench", player.name, "projected \(SeasonFormat.points(player.points))", player.locked ? "locked" : nil, toIr ? "going on IR" as String? : seat.map { "starting at \(SlotLabel.of(model.seats[$0]))" }]
                 .compactMap(\.self).joined(separator: ", "))
-        .accessibilityHint(player.locked ? "" : "Shows where he can start")
+        .accessibilityHint(player.locked || toIr ? "" : "Shows where he can start")
         .accessibilityIdentifier("bench-\(player.playerId)")
     }
 }
@@ -399,7 +479,8 @@ private struct ReviewBar: View {
         Button {
             Task { await model.review() }
         } label: {
-            Text(swaps == 1 ? "Review 1 swap" : "Review \(swaps) swaps")
+            // An IR move and the seat it frees are one change on the server, so only seats get counted.
+            Text(model.irChanges > 0 ? "Review changes" : swaps == 1 ? "Review 1 swap" : "Review \(swaps) swaps")
         }
         .buttonStyle(ProviderButtonStyle(prominent: true))
         .accessibilityIdentifier("review-lineup")

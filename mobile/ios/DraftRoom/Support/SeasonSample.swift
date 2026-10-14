@@ -48,6 +48,7 @@ enum SeasonSample {
             ViewTeam(id: 3, name: "Hail Marys", abbrev: "HAIL", roster: []),
             ViewTeam(id: 4, name: "Blitz Brigade", abbrev: "BLTZ", roster: []),
         ],
+        irSlots: 1,
         matchup: Matchup(
             me: MatchupSide(teamId: 1, points: 56.1, projected: 98.6, winProbability: 0.61),
             them: MatchupSide(teamId: 2, points: 51.8, projected: 101.2, winProbability: 0.39)),
@@ -83,14 +84,15 @@ enum SeasonSample {
         lineup: lineup,
         consent: WriteConsent(version: 2, lines: ["Draft Room changes your team on ESPN only when you confirm a change.", "You can stop it any time by disconnecting ESPN."], agreed: false))
 
-    /// War Room fills the empty FLEX with Bigsby; the games already on lock their players in.
+    /// War Room fills the empty FLEX with Bigsby; the games already on lock their players in. Downs
+    /// is out, so he could go to IR.
     static let lineup = SeasonLineup(
         seats: ["QB", "RB", "WR", "TE", "FLEX", "K"],
         onEspn: [1, 2, 3, 4, nil, 5],
         recommended: [1, 2, 3, 4, 6, 5],
         eligible: [
             "1": ["QB", "BN"], "2": ["RB", "FLEX", "BN"], "3": ["WR", "FLEX", "BN"], "4": ["TE", "FLEX", "BN"],
-            "5": ["K", "BN"], "6": ["RB", "FLEX", "BN"], "7": ["WR", "FLEX", "BN"], "8": ["TE", "FLEX", "BN"],
+            "5": ["K", "BN"], "6": ["RB", "FLEX", "BN"], "7": ["WR", "FLEX", "BN", "IR"], "8": ["TE", "FLEX", "BN"],
         ],
         tags: ["7": .init(label: "OUT", kind: "out")],
         startSit: .init(
