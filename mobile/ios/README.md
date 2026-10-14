@@ -36,6 +36,12 @@ xcodebuild test -project mobile/ios/DraftRoom.xcodeproj -scheme DraftRoom \
 
 Debug builds launched with `-uiTestStub` answer the API from canned JSON (`Support/UITestStub.swift`): signed in, with two leagues. UI tests use it to drive the signed-in app without a server, and it's handy for screenshots: `xcrun simctl launch booted tech.apeman.draftroom -uiTestStub`. Release builds don't contain it.
 
+Hand off code for testing email link login on simulator
+```sh
+code=$(node --env-file-if-exists=.env.local --conditions=react-server --import tsx .research/ios-e2e/handoff.mts [EMAIL_TO_TEST] | tail -1)
+xcrun simctl openurl booted "draftroom://auth/callback?code=$code"
+```
+
 ## Layout
 
 The project uses folder-synchronized groups: any file added under `DraftRoom/`, `DraftRoomTests/` or `DraftRoomUITests/` joins its target automatically, with no project-file edit.
