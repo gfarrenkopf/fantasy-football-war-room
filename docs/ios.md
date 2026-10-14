@@ -60,6 +60,8 @@ src/lib/server/*  ──▶ Postgres, ESPN, AI, Resend, APNs
 - **The app holds no business logic of its own in v1.** Everything the season page computes on the server (`loadSeasonView` in `src/lib/server/espn/seasonView.ts`, the AI outputs, lineup writes through `applyLineup.ts`) is exposed as JSON under `/api/v1/` and rendered natively.
 - **`/api/v1/` is versioned** because App Store builds stay on phones for months; the web can change freely, but a v1 route only gains fields. A breaking change means a `/api/v2/` route.
 - Each v1 route has vitest tests next to the server function it wraps, like the existing route tests (`src/lib/server/espn/*Route.test.ts`). The Swift side decodes the same JSON with `Codable` types and tests against recorded fixtures.
+- **One season route feeds Game day and Lineup** (`GET /api/v1/leagues/[id]/season`, APE-379), the way one server page feeds both tabs on the web. Values the web derives inside its components (scoreboard status, bench order, `outTag`, start/sit swaps) live in pure functions in `src/lib/season/` that the web and the route share, so the app never re-implements season math.
+- **Live scores are polled, not streamed.** While the matchup is live and the app is in the foreground, it re-fetches the season route every 60 seconds, the interval of the web's `useLivePolling.ts`; the server's 45-second ESPN cache keeps that cheap. The route's `live` object is the shape the Live Activity reuses.
 - Gates carry over unchanged: `withUser()` (404 when cloud is off, 401 signed out), `config.espnSeasonEnabled` and `mayUseSeason()` for in-season features, and the AI entitlement checks in `src/lib/server/entitlements.ts`.
 - **v2** runs the pure-TypeScript draft engine (`src/lib/draft/`, including the simulator) in **JavaScriptCore**, which ships with iOS: a build step bundles it into one JS file the app loads. One engine, no Swift rewrite.
 
@@ -120,6 +122,8 @@ app opens ESPN sign-in in a WKWebView ──▶ user signs in to ESPN (Disney On
 - Dark only, like the web.
 - The delight moments in [`DESIGN.md`](../DESIGN.md) are rebuilt natively, not imitated: springs, haptics (`sensoryFeedback`), `matchedGeometryEffect`, Liquid Glass where the OS has it. Each screen ticket owns its own moments.
 - Every UI ticket goes through an `/impeccable` pass, as on the web.
+- **Share images are drawn natively** with `ImageRenderer` and the design tokens (the win card, the recap card), not rendered on the server; the API carries the content they show.
+- **Accessibility in every UI ticket:** Dynamic Type up to the accessibility sizes, VoiceOver labels on scores and lineup slots, Reduce Motion turns celebrations into fades, and haptics follow the system setting.
 
 ## 8. Building and testing
 
