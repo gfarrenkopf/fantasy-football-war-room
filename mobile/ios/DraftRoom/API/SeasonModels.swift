@@ -108,6 +108,14 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     /// Projected points this week.
     let points: Double
     let game: GameState?
+    /// Projected points for the rest of the season.
+    var ros: Double? = nil
+    /// Projected points by week, keyed by week number as a string; on the waiver wire's players.
+    var weekly: [String: Double]? = nil
+    /// FREEAGENT or WAIVERS, for a player on the wire.
+    var status: String? = nil
+    /// When a player on waivers clears.
+    var waiverClears: Date? = nil
 
     var id: Int { playerId }
 }

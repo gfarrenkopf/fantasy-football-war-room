@@ -162,5 +162,35 @@ enum SeasonSample {
     }
 
     static var liveJSON: String { json(live) }
+
+    // MARK: The waiver wire (APE-388)
+
+    static func wirePlayer(_ id: Int, _ name: String, _ pos: String, points: Double, ros: Double, status: String = "FREEAGENT", clears: Date? = nil) -> ViewPlayer {
+        var p = player(id, name, pos, slot: "BN", actual: nil, points: points, game: game("pre", opponent: "MIA"))
+        p.ros = ros
+        p.weekly = ["3": points, "4": points]
+        p.status = status
+        p.waiverClears = clears
+        return p
+    }
+
+    /// A full roster: Rico Dowdle to add over Downs, Jennings still on waivers, and a week-4 hole at K.
+    static let wire = WaiversResponse(
+        pickups: [
+            Pickup(player: wirePlayer(21, "Rico Dowdle", "RB", points: 10.6, ros: 148.4), delta: 44.8, perWeek: 3.2, drop: 7),
+            Pickup(player: wirePlayer(22, "Jauan Jennings", "WR", points: 9.8, ros: 137.2, status: "WAIVERS", clears: kickoff.addingTimeInterval(86_400)), delta: 30.8, perWeek: 2.2, drop: 7),
+        ],
+        ahead: [
+            Ahead(hole: .init(week: 4, key: "K", playerId: 5, reason: "zero"), fills: [.init(player: wirePlayer(23, "Chris Boswell", "K", points: 8.4, ros: 117.6), drop: 7)]),
+        ],
+        considered: 40, fetchedAt: kickoff, note: "Waiver priority 4 of 12",
+        claims: .init(allowed: true, reason: nil),
+        drops: .init(needed: true, candidates: [7, 6, 8, 5, 4, 3, 2, 1]))
+
+    static var wireJSON: String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(decoding: (try? encoder.encode(wire)) ?? Data(), as: UTF8.self)
+    }
 }
 #endif

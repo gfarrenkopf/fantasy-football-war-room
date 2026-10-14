@@ -49,7 +49,7 @@ struct SaveSheet: View {
 }
 
 /// The write consent, in the server's words (never the app's): asked once, recorded on the server.
-private struct ConsentStep: View {
+struct ConsentStep: View {
     let lines: [String]
     let onAgree: () -> Void
     @State private var agreed = false
@@ -136,7 +136,7 @@ private struct ReviewStep: View {
     }
 }
 
-private struct FailedStep: View {
+struct FailedStep: View {
     let message: String
     let details: [String]
     let retry: () -> Void

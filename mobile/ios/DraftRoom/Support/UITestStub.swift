@@ -80,8 +80,24 @@ enum UITestStub {
             return (200, #"{"changes":[\#(rows.joined(separator: ","))],"lockIn":\#(lockIn)}"#)
         }
 
+        /// The acquire route: a dry run words the add and its drop; a send lands both.
+        private static func acquire(dryRun: Bool, body: Data?) -> (Int, String) {
+            struct Sent: Decodable { let add: Int; let drop: Int? }
+            guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid request"}"#) }
+            let all = SeasonSample.mine + SeasonSample.wire.pickups.map(\.player) + SeasonSample.wire.ahead.flatMap { $0.fills.map(\.player) }
+            let name = { (id: Int) in all.first { $0.playerId == id }?.name ?? "Player \(id)" }
+            if dryRun {
+                return (200, #"{"text":"Add \#(name(sent.add))\#(sent.drop.map { " and drop \(name($0))" } ?? "").","problems":[]}"#)
+            }
+            return (200, #"{"added":true,"dropped":true,"landed":true,"result":"Done. \#(name(sent.add)) is on your team\#(sent.drop.map { ", and \(name($0)) is gone" } ?? "")."}"#)
+        }
+
         static func answer(_ path: String, query: String = "", body: Data? = nil) -> (Int, String) {
             switch path {
+            case "/api/v1/leagues/lg-1/team/waivers", "/api/v1/leagues/lg-2/team/waivers":
+                (200, SeasonSample.wireJSON)
+            case "/api/v1/leagues/lg-1/team/acquire", "/api/v1/leagues/lg-2/team/acquire":
+                acquire(dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/lineup", "/api/v1/leagues/lg-2/lineup":
                 lineup(dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/espn/write-consent":

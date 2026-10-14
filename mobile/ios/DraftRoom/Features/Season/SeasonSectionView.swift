@@ -30,7 +30,7 @@ enum SeasonTab: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// Placeholder for a section until its Epic 18 ticket builds it.
+/// Placeholder for a section until its ticket builds it.
 struct SeasonSectionView: View {
     let section: SeasonTab
     let league: League
