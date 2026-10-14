@@ -1,0 +1,212 @@
+{
+  "league": {
+    "id": "lg-1",
+    "name": "App Tester"
+  },
+  "season": 2026,
+  "week": 3,
+  "headline": "Bye week",
+  "mine": null,
+  "date": "2026-09-30T13:00:00.000Z",
+  "settled": true,
+  "recap": {
+    "week": 3,
+    "mine": null,
+    "headline": "Bye week",
+    "story": "",
+    "standings": [
+      {
+        "teamId": 3,
+        "rank": 1,
+        "wins": 3,
+        "losses": 0,
+        "ties": 0,
+        "pointsFor": 273,
+        "name": "Fourth and Long",
+        "mine": false
+      },
+      {
+        "teamId": 1,
+        "rank": 2,
+        "wins": 1,
+        "losses": 1,
+        "ties": 0,
+        "pointsFor": 232.9,
+        "name": "Sunday Scaries",
+        "mine": true
+      },
+      {
+        "teamId": 2,
+        "rank": 3,
+        "wins": 1,
+        "losses": 1,
+        "ties": 0,
+        "pointsFor": 223.3,
+        "name": "Gridiron Gang",
+        "mine": false
+      },
+      {
+        "teamId": 4,
+        "rank": 4,
+        "wins": 0,
+        "losses": 3,
+        "ties": 0,
+        "pointsFor": 258,
+        "name": "Hail Marys",
+        "mine": false
+      }
+    ],
+    "topScorers": [
+      {
+        "playerId": 4362238,
+        "name": "Chase Brown",
+        "pos": "RB",
+        "team": "CIN",
+        "slot": "FLEX",
+        "points": 25.7,
+        "projected": 16.58,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 9.1
+      },
+      {
+        "playerId": 4379399,
+        "name": "James Cook III",
+        "pos": "RB",
+        "team": "BUF",
+        "slot": "RB",
+        "points": 22,
+        "projected": 16.95,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 5.1
+      },
+      {
+        "playerId": 4374302,
+        "name": "Amon-Ra St. Brown",
+        "pos": "WR",
+        "team": "DET",
+        "slot": "WR",
+        "points": 20.9,
+        "projected": 19.86,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 1
+      },
+      {
+        "playerId": 4429795,
+        "name": "Jahmyr Gibbs",
+        "pos": "RB",
+        "team": "DET",
+        "slot": "RB",
+        "points": 20.3,
+        "projected": 25.34,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -5
+      },
+      {
+        "playerId": 3918298,
+        "name": "Josh Allen",
+        "pos": "QB",
+        "team": "BUF",
+        "slot": "QB",
+        "points": 13,
+        "projected": 23.56,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -10.6
+      }
+    ],
+    "gameChanger": null,
+    "benchwarmers": [
+      {
+        "playerId": 4567750,
+        "name": "Emeka Egbuka",
+        "pos": "WR",
+        "team": "TB",
+        "slot": "BN",
+        "points": 19.2,
+        "projected": 12.37,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 6.8
+      },
+      {
+        "playerId": 4430737,
+        "name": "Kyren Williams",
+        "pos": "RB",
+        "team": "LAR",
+        "slot": "BN",
+        "points": 16.9,
+        "projected": 12.97,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 3.9
+      },
+      {
+        "playerId": 4361579,
+        "name": "Javonte Williams",
+        "pos": "RB",
+        "team": "DAL",
+        "slot": "BN",
+        "points": 15.8,
+        "projected": 15,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": 0.8
+      }
+    ],
+    "falseStarters": [
+      {
+        "playerId": 4426502,
+        "name": "Drake London",
+        "pos": "WR",
+        "team": "ATL",
+        "slot": "WR",
+        "points": 4.6,
+        "projected": 15.39,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -10.8
+      },
+      {
+        "playerId": 3918298,
+        "name": "Josh Allen",
+        "pos": "QB",
+        "team": "BUF",
+        "slot": "QB",
+        "points": 13,
+        "projected": 23.56,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -10.6
+      },
+      {
+        "playerId": 4429795,
+        "name": "Jahmyr Gibbs",
+        "pos": "RB",
+        "team": "DET",
+        "slot": "RB",
+        "points": 20.3,
+        "projected": 25.34,
+        "statLine": null,
+        "teamId": 1,
+        "teamName": "Sunday Scaries",
+        "gap": -5
+      }
+    ]
+  },
+  "swing": null,
+  "card": null
+}

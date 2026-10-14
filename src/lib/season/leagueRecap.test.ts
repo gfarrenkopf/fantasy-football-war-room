@@ -79,6 +79,7 @@ describe("leagueRecap", () => {
     const r = leagueRecap(f);
     expect(r.mine).toBeNull();
     expect(r.story).toBe("");
+    expect(r.headline).toBe("Bye week");
     expect(r.benchwarmers).toEqual([]);
     expect(r.gameChanger).toBeNull();
   });
@@ -98,6 +99,8 @@ describe("leagueRecap", () => {
       standings: [{ teamId: 1, rank: 3, wins: 3, losses: 3, ties: 0, pointsFor: 600 }],
     });
     expect(leagueRecap(lost).story).toBe("Brutal. Rival got you by 1.0. Puka Nacua blew past ESPN's 15.0 with 30.0. That's 3–3, 3rd in the league.");
+    // The headline is the story's first line, for the app's list of weeks.
+    expect(leagueRecap(lost).headline).toBe("Brutal. Rival got you by 1.0.");
   });
 });
 
