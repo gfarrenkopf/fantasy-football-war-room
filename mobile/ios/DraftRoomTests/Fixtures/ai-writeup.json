@@ -1,0 +1,30 @@
+{
+  "lean": "counter",
+  "leanLabel": "Counter",
+  "summary": "Close. You'd gain a little, but Gridiron Gang gets the better player for the playoffs.",
+  "reasons": [
+    "Kenneth Walker III only helps on your bye weeks.",
+    "Javonte Williams has the easier playoff schedule."
+  ],
+  "counter": {
+    "give": [
+      {
+        "id": 4361579,
+        "name": "Javonte Williams"
+      }
+    ],
+    "get": [
+      {
+        "id": 4567048,
+        "name": "Kenneth Walker III"
+      },
+      {
+        "id": 4426354,
+        "name": "George Pickens"
+      }
+    ],
+    "note": "Ask for a throw-in.",
+    "text": "Send Javonte Williams; ask for Kenneth Walker III, George Pickens. Ask for a throw-in."
+  },
+  "createdAt": "2026-09-17T15:00:00.000Z"
+}

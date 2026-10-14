@@ -39,6 +39,7 @@ export async function seasonAiState(db: Db, who: Who, league: { id: string; seas
 
 export interface SeasonAiRequest {
   model: PlanModel;
+  league: { id: string; season: number };
   view: SeasonView;
   access: Extract<SeasonAiAccess, { kind: "allowed" }>;
   /** Starts the account's trial, if this request is its first AI use. Call it once something was written. */
@@ -66,6 +67,7 @@ export async function seasonAiRequest(db: Db, who: Who, leagueId: string): Promi
   if (access.kind === "needs-purchase") return json(402, SEASON_NEEDS_PURCHASE);
   return {
     model,
+    league: { id: league.id, season: league.season },
     view,
     access,
     began: async () => {
