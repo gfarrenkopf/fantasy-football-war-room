@@ -1,10 +1,12 @@
 import type { Db } from "@/lib/db/types";
 import { earlyMoves, gameHoles, kickoffLabel, lateHoles, renderEarlyEmail } from "@/lib/season/email";
+import { earlyPush } from "@/lib/season/pushes";
 import type { HoleFills } from "@/lib/season/holes";
 import { dueKickoff, type Schedule } from "@/lib/season/schedule";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { recordProjections } from "./seasonProjections";
-import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobMail } from "./seasonJobs";
+import { notify } from "./notify";
+import { activeLeagues, jobError, unsubscribeUrl, type JobMail } from "./seasonJobs";
 
 /**
  * The early-kickoff alert (Epic 11, 11.4). The Sunday AI lineup (11.3) comes too late for players
@@ -42,11 +44,13 @@ export interface EarlySummary {
   withMoves: number;
   failed: number;
   emails: number;
+  /** Phones the alert was pushed to (21.3). */
+  pushes: number;
 }
 
 export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: { dryRun?: boolean } = {}): Promise<EarlySummary> {
   const now = deps.now ?? new Date();
-  const summary: EarlySummary = { dryRun, kickoff: null, when: null, leagues: 0, inactive: 0, withMoves: 0, failed: 0, emails: 0 };
+  const summary: EarlySummary = { dryRun, kickoff: null, when: null, leagues: 0, inactive: 0, withMoves: 0, failed: 0, emails: 0, pushes: 0 };
   const due = dueKickoff(deps.schedule, now.getTime());
   if (!due) return summary;
   summary.kickoff = new Date(due.at).toISOString();
@@ -56,7 +60,7 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
   summary.leagues = total;
   summary.inactive = inactive;
   for (const [userId, list] of byUser) {
-    const alerts: { name: string; url: string; moves: string[] }[] = [];
+    const alerts: { leagueId: string; name: string; url: string; moves: string[] }[] = [];
     for (const league of list) {
       try {
         const load = await deps.loadView(userId, league.leagueId);
@@ -75,7 +79,7 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
         const moves = due.when === "early" ? earlyMoves(load.view, due.teams, fills) : lateHoles(load.view, due.teams, fills);
         if (!moves.length) continue;
         summary.withMoves++;
-        alerts.push({ name: league.name, url: new URL(`/season/${encodeURIComponent(league.leagueId)}`, deps.baseUrl).toString(), moves });
+        alerts.push({ leagueId: league.leagueId, name: league.name, url: new URL(`/season/${encodeURIComponent(league.leagueId)}`, deps.baseUrl).toString(), moves });
       } catch (error) {
         jobError("early", (error as Error).message, { leagueId: league.leagueId });
         summary.failed++;
@@ -83,8 +87,10 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
     }
     const to = list[0].email;
     if (dryRun || !to || !alerts.length) continue;
-    const email = renderEarlyEmail({ kickoff: kickoffLabel(due.at), when: due.when, leagues: alerts, unsubscribeUrl: unsubscribeUrl(deps, userId) });
-    if (await sendOnce(db, deps, { job: "early", userId, to, kind: "early", slot: summary.kickoff, now }, email)) summary.emails++;
+    const email = renderEarlyEmail({ kickoff: kickoffLabel(due.at), when: due.when, leagues: alerts, unsubscribeUrl: unsubscribeUrl(deps, userId, "kickoff") });
+    const sent = await notify(db, deps, { job: "early", userId, to, kind: "early", slot: summary.kickoff, now }, { email, push: earlyPush({ kickoff: kickoffLabel(due.at), leagues: alerts }) });
+    if (sent.email) summary.emails++;
+    summary.pushes += sent.push;
   }
   return summary;
 }

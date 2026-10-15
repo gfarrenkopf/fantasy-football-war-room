@@ -7,6 +7,7 @@ import type { AiTradeIdeas } from "@/lib/ai/season/tradeIdeas";
 import type { PlanJobStatus } from "@/lib/ai/planView";
 import type { PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
+import type { StoredAlerts } from "@/lib/season/alerts";
 import type { EspnConnection } from "@/lib/storage/types";
 import type { WeekFacts } from "@/lib/season/weekFacts";
 
@@ -517,7 +518,7 @@ export const seasonRecaps = pgTable(
   (t) => [primaryKey({ columns: [t.leagueId, t.season, t.week] })],
 );
 
-/** A user's email settings. No row means the defaults. */
+/** A user's email and alert settings. No row means the defaults. */
 export const userPrefs = pgTable("user_prefs", {
   userId: text("user_id")
     .primaryKey()
@@ -526,6 +527,8 @@ export const userPrefs = pgTable("user_prefs", {
   seasonEmails: boolean("season_emails").notNull().default(true),
   /** The version of the consent to change the user's ESPN team (12.1, Epic 13; ESPN_WRITE_VERSION) they agreed to; null until they first confirm a change. The column keeps its 12.1 name. */
   lineupWriteConsent: integer("lineup_write_consent"),
+  /** How each season alert reaches the user (21.3): only the ones they've changed. See resolveAlerts(). */
+  alerts: jsonb("alerts").$type<StoredAlerts>().notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 

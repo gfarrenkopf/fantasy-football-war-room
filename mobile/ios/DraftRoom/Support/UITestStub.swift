@@ -59,6 +59,21 @@ enum UITestStub {
             (id: "4:BN,8:TE", text: "Start Tucker Kraft at TE, bench Sam LaPorta"),
         ]
 
+        /// The season alerts (21.3), with a PUT's change applied. Not kept between requests.
+        private static func notifications(body: Data?) -> String {
+            struct Sent: Decodable { let alerts: [String: String] }
+            let changed = body.flatMap { try? JSONDecoder().decode(Sent.self, from: $0) }?.alerts ?? [:]
+            let rows = [
+                ("lineup", "Sunday AI lineup", "When your Sunday lineup is ready."),
+                ("kickoff", "Before kickoff", "Changes for an early game, and starters ruled out after the Sunday lineup."),
+                ("reconnect", "ESPN reconnect", "When ESPN signs Draft Room out."),
+                ("draft", "Draft day", "Before your draft starts."),
+            ].map { kind, title, detail in
+                #"{"kind":"\#(kind)","title":"\#(title)","detail":"\#(detail)","channel":"\#(changed[kind] ?? "both")"}"#
+            }
+            return #"{"alerts":[\#(rows.joined(separator: ","))],"email":true,"push":true,"hasDevice":true}"#
+        }
+
         /// Josh Downs going on IR (APE-387), when the request puts him there.
         private static let toIr = (id: "7:IR", text: "Move Josh Downs to IR")
 
@@ -191,6 +206,8 @@ enum UITestStub {
                 (200, #"{"login":{"status":"connected","season":2026}}"#)
             case "/api/v1/auth/signout":
                 (204, "")
+            case "/api/v1/notifications":
+                (200, notifications(body: body))
             default:
                 (404, #"{"error":"Not found"}"#)
             }

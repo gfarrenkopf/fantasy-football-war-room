@@ -66,7 +66,7 @@ describe("runEarlyJob", () => {
 
   it("emails only the league with a move involving a Thursday player, skipping idle leagues", async () => {
     const summary = await runEarlyJob(db, deps);
-    expect(summary).toEqual({ dryRun: false, kickoff: new Date(THURSDAY).toISOString(), when: "early", leagues: 3, inactive: 1, withMoves: 1, failed: 0, emails: 1 });
+    expect(summary).toEqual({ dryRun: false, kickoff: new Date(THURSDAY).toISOString(), when: "early", leagues: 3, inactive: 1, withMoves: 1, failed: 0, emails: 1, pushes: 0 });
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toMatch(/^alice/);
     expect(sent[0].email.subject).toBe("Set your lineup before Thursday's 8:15 PM ET kickoff");

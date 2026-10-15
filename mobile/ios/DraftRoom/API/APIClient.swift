@@ -75,6 +75,10 @@ final class APIClient {
         try decode(await perform("POST", path, body: encode(body), timeout: timeout))
     }
 
+    func put<Response: Decodable>(_ path: String, body: some Encodable, as _: Response.Type = Response.self) async throws(APIError) -> Response {
+        try decode(await perform("PUT", path, body: encode(body)))
+    }
+
     /// A POST with no body.
     func post<Response: Decodable>(_ path: String, timeout: TimeInterval? = nil, as _: Response.Type = Response.self) async throws(APIError) -> Response {
         try decode(await perform("POST", path, body: nil, timeout: timeout))

@@ -78,3 +78,9 @@ export async function sendPush(db: Db, userId: string, alert: PushAlert, apns: A
   }
   return result;
 }
+
+/** For the season jobs: pushes to a user, or null when push is off. Like getEmailSender(). */
+export function getPushSender(db: Db): ((userId: string, alert: PushAlert) => Promise<PushResult>) | null {
+  const apns = apnsClient();
+  return apns ? (userId, alert) => sendPush(db, userId, alert, apns) : null;
+}

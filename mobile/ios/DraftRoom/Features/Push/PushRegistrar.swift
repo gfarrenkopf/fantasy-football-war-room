@@ -74,6 +74,11 @@ final class PushRegistrar {
         }
     }
 
+    /// Whether iOS lets the app show notifications.
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        await system.authorizationStatus()
+    }
+
     /// After a league connects: ask, the first time only.
     func askOnce() async {
         guard await system.authorizationStatus() == .notDetermined else { return }

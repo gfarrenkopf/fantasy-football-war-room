@@ -1,6 +1,7 @@
 import { config } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { getEmailSender } from "@/lib/server/email";
+import { getPushSender } from "@/lib/server/push";
 import { formatServerError } from "@/lib/server/errorLog";
 import { getEspnSchedule } from "@/lib/server/espn/schedule";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
@@ -36,6 +37,7 @@ export async function POST(request: Request): Promise<Response> {
           return load.kind === "ok" ? load.fills : null;
         },
         sendEmail: getEmailSender(),
+        sendPush: getPushSender(db),
         baseUrl: config.nextAuthUrl ?? new URL(request.url).origin,
         secret: nextAuthSecret,
         now,

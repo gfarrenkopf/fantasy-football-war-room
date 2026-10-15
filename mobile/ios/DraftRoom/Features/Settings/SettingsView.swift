@@ -39,6 +39,11 @@ struct SettingsView: View {
                             ProgressView()
                         }
                     }
+                    Section {
+                        NavigationLink("Notifications") { NotificationsView() }
+                            .foregroundStyle(.text)
+                            .accessibilityIdentifier("settings-notifications")
+                    }
                 }
                 Section {
                     Button("Privacy policy") {

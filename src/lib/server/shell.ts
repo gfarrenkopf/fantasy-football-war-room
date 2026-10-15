@@ -7,7 +7,6 @@ import { loginStatus } from "./espn/logins";
 import { mayUseSeason } from "./espn/seasonAccess";
 import { listSeasonLinks } from "./espn/seasonLinks";
 import { getDraft, listLeagues } from "./leagues";
-import { wantsSeasonEmails } from "./seasonPrefs";
 
 /** A league in the app bar's league menu, and where picking it lands. */
 export interface ShellLeague {
@@ -23,8 +22,8 @@ export interface ShellLeague {
 
 /** The user's ESPN connection, for the account menu: one login reads every league. */
 export interface ShellEspn {
-  /** Whether the Sunday lineup email goes out; null when there's no such email to offer. */
-  seasonEmails: boolean | null;
+  /** The season alerts are offered (21.3): the jobs run and can email or push. */
+  alerts: boolean;
   /** The login's state, or null when there's none yet: the menu then offers to connect (APE-335). */
   login: "connected" | "disconnected" | null;
 }
@@ -61,7 +60,7 @@ export async function loadShell(db: Db, user: { userId: string; email?: string |
   );
   // Offered whenever in-season help is: to connect when there's no login yet, to manage it when there is.
   const espn = season
-    ? { seasonEmails: login && config.seasonJobEnabled && config.emailAuthEnabled ? await wantsSeasonEmails(db, user.userId) : null, login: login?.status ?? null }
+    ? { alerts: Boolean(login) && config.seasonJobEnabled && (config.emailAuthEnabled || config.pushEnabled), login: login?.status ?? null }
     : null;
   return { leagues, espn, season };
 }

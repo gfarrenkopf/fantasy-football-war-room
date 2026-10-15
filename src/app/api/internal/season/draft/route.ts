@@ -1,6 +1,7 @@
 import { config } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { getEmailSender } from "@/lib/server/email";
+import { getPushSender } from "@/lib/server/push";
 import { formatServerError } from "@/lib/server/errorLog";
 import { error, hasBearer, json } from "@/lib/server/http";
 import { runDraftDayJob } from "@/lib/server/seasonDraftDay";
@@ -17,10 +18,11 @@ export async function POST(request: Request): Promise<Response> {
   const { cronSecret, nextAuthSecret } = config;
   if (!config.seasonJobEnabled || !cronSecret || !nextAuthSecret) return error(404, "Not found");
   if (!hasBearer(request, cronSecret)) return error(401, "Unauthorized");
+  const db = getDb();
   try {
     const summary = await runDraftDayJob(
-      getDb(),
-      { sendEmail: getEmailSender(), baseUrl: config.nextAuthUrl ?? new URL(request.url).origin, secret: nextAuthSecret },
+      db,
+      { sendEmail: getEmailSender(), sendPush: getPushSender(db), baseUrl: config.nextAuthUrl ?? new URL(request.url).origin, secret: nextAuthSecret },
       { dryRun: new URL(request.url).searchParams.get("dryRun") === "1" },
     );
     if (summary.drafts) console.log(`[season-draft] ${JSON.stringify(summary)}`);

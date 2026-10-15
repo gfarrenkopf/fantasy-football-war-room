@@ -111,7 +111,7 @@ describe("runSundayJob", () => {
 
   it("writes for paid and trial leagues only, skips an idle one, and sends one email per user", async () => {
     const summary = await runSundayJob(db, deps);
-    expect(summary).toEqual({ dryRun: false, leagues: 6, inactive: 1, notEntitled: 1, notConnected: 0, written: 3, existing: 0, failed: 0, emails: 2, reconnects: 1 });
+    expect(summary).toEqual({ dryRun: false, leagues: 6, inactive: 1, notEntitled: 1, notConnected: 0, written: 3, existing: 0, failed: 0, emails: 2, reconnects: 1, pushes: 0 });
 
     expect(Object.keys(await findAiLineups(db, ids.alice1, 2026, 5))).toEqual(["lineup-sunday"]);
     expect(await findAiLineups(db, ids.bob, 2026, 5)).toEqual({});
