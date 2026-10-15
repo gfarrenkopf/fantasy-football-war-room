@@ -14,6 +14,9 @@ enum APIError: Error, Equatable {
     case consentNeeded(version: Int, lines: [String])
     /// 409 from an ESPN write that sent nothing: the server's sentence, and the reasons it lists.
     case declined(String, details: [String])
+    /// 402 from in-season AI: the league's free weeks are over. The server's words say where the
+    /// season pass is, with no link or price (App Store guideline 3.1.1).
+    case locked(String)
     /// No answer: offline, timed out, or the server is down.
     case offline
     /// The answer wasn't the JSON this build expects.
@@ -27,6 +30,7 @@ enum APIError: Error, Equatable {
         case let .problem(_, message): message
         case .consentNeeded: "Agree to Draft Room changing your team on ESPN first."
         case let .declined(message, _): message
+        case let .locked(message): message
         case .offline: "Can't reach Draft Room. Check your connection and try again."
         case .unreadable: "Draft Room sent something this version of the app can't read. Try updating the app."
         }
@@ -66,8 +70,14 @@ final class APIClient {
         try decode(await perform("GET", path, body: nil))
     }
 
-    func post<Response: Decodable>(_ path: String, body: some Encodable, as _: Response.Type = Response.self) async throws(APIError) -> Response {
-        try decode(await perform("POST", path, body: encode(body)))
+    /// `timeout` is for the slow routes, like in-season AI, which can take 90 seconds to write.
+    func post<Response: Decodable>(_ path: String, body: some Encodable, timeout: TimeInterval? = nil, as _: Response.Type = Response.self) async throws(APIError) -> Response {
+        try decode(await perform("POST", path, body: encode(body), timeout: timeout))
+    }
+
+    /// A POST with no body.
+    func post<Response: Decodable>(_ path: String, timeout: TimeInterval? = nil, as _: Response.Type = Response.self) async throws(APIError) -> Response {
+        try decode(await perform("POST", path, body: nil, timeout: timeout))
     }
 
     /// For routes that answer 204 with no body.
@@ -101,13 +111,14 @@ final class APIClient {
         do { return try Self.decoder.decode(Response.self, from: data) } catch { throw .unreadable }
     }
 
-    private func perform(_ method: String, _ path: String, body: Data?) async throws(APIError) -> Data {
+    private func perform(_ method: String, _ path: String, body: Data?, timeout: TimeInterval? = nil) async throws(APIError) -> Data {
         // `appending(path:)` would escape a query's "?", so the query is added on its own.
         let parts = path.split(separator: "?", maxSplits: 1)
         var url = baseURL.appending(path: String(parts[0]))
         if parts.count > 1 { url = URL(string: "\(url.absoluteString)?\(parts[1])") ?? url }
         var request = URLRequest(url: url)
         request.httpMethod = method
+        if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {
             request.httpBody = body
@@ -143,6 +154,8 @@ final class APIClient {
                 if let details = body.changed ?? body.problems ?? body.refused { throw .declined(body.error, details: details) }
             }
             throw .server(status: 409, message: Self.message(in: data, status: 409))
+        case 402:
+            throw .locked(Self.message(in: data, status: 402))
         default:
             throw .server(status: http.statusCode, message: Self.message(in: data, status: http.statusCode))
         }

@@ -226,6 +226,27 @@ final class LineupModel {
     func startFromEspn() { start(from: onEspn) }
     func startFromDraftRoom() { start(from: recommended) }
 
+    /// Stages the AI lineup (APE-391): its starters seat by seat, slot by slot in order, everyone else
+    /// on the bench. Like "Use Draft Room's lineup", it only stages; the save is the usual review.
+    func startFromAi(_ starters: [AiLineup.Starter]) {
+        guard isReady else { return }
+        start(from: aiLineup(starters))
+    }
+
+    /// Whether the staged lineup is the AI's already.
+    func isStaged(ai starters: [AiLineup.Starter]) -> Bool {
+        isReady && staged == aiLineup(starters) && ir == onIr
+    }
+
+    private func aiLineup(_ starters: [AiLineup.Starter]) -> [Int?] {
+        var left = starters
+        let lineup = seats.map { key -> Int? in
+            guard let i = left.firstIndex(where: { $0.key == key }) else { return nil }
+            return left.remove(at: i).playerId
+        }
+        return Self.align(seats: seats, before: onEspn, after: lineup)
+    }
+
     private func start(from lineup: [Int?]) {
         staged = lineup
         ir = onIr

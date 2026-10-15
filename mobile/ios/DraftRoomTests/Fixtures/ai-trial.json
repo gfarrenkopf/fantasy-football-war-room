@@ -1,0 +1,141 @@
+{
+  "access": {
+    "state": "trial",
+    "trialWeek": 2,
+    "trialWeeks": 5,
+    "note": "Free trial · week 2 of 5"
+  },
+  "week": 3,
+  "lineup": {
+    "intro": "Your lineup is close to set. One call goes the other way: the FLEX is a coin flip, and the matchup tips it.",
+    "createdAt": "2026-09-17T15:00:00.000Z",
+    "total": 142.1,
+    "departures": "Start Jeremiyah Love over Chase Brown at FLEX: a close call the AI makes differently from the recommended lineup.",
+    "calls": [
+      {
+        "slot": "QB",
+        "player": {
+          "id": 3918298,
+          "name": "Josh Allen"
+        },
+        "reason": "Your QB is the safest start of the week."
+      },
+      {
+        "slot": "FLEX",
+        "player": {
+          "id": 4870808,
+          "name": "Jeremiyah Love"
+        },
+        "reason": "Jeremiyah Love draws a soft run defense; within a point of the engine's pick."
+      }
+    ],
+    "starters": [
+      {
+        "key": "QB",
+        "playerId": 3918298,
+        "locked": false
+      },
+      {
+        "key": "RB",
+        "playerId": 4429795,
+        "locked": false
+      },
+      {
+        "key": "RB",
+        "playerId": 4379399,
+        "locked": false
+      },
+      {
+        "key": "WR",
+        "playerId": 4374302,
+        "locked": false
+      },
+      {
+        "key": "WR",
+        "playerId": 4426502,
+        "locked": false
+      },
+      {
+        "key": "TE",
+        "playerId": 4431459,
+        "locked": false
+      },
+      {
+        "key": "FLEX",
+        "playerId": 4870808,
+        "locked": false
+      },
+      {
+        "key": "DST",
+        "playerId": -16007,
+        "locked": false
+      },
+      {
+        "key": "K",
+        "playerId": 4574716,
+        "locked": false
+      }
+    ],
+    "espn": {
+      "matches": false,
+      "text": "Not on ESPN yet: Jeremiyah Love at FLEX."
+    }
+  },
+  "lineupAction": "rewrite",
+  "lineupNote": null,
+  "ideas": {
+    "createdAt": "2026-09-17T15:00:00.000Z",
+    "ideas": [
+      {
+        "kind": "safe",
+        "label": "Win-win",
+        "partner": {
+          "id": 2,
+          "name": "Gridiron Gang"
+        },
+        "gives": [
+          {
+            "id": 4361579,
+            "name": "Javonte Williams"
+          }
+        ],
+        "gets": [
+          {
+            "id": 4567048,
+            "name": "Kenneth Walker III"
+          }
+        ],
+        "status": "ok",
+        "note": null,
+        "grade": {
+          "headline": "Costs you",
+          "level": "gain",
+          "perWeek": -0.5053333333332982,
+          "theirs": 14.655333333333333,
+          "delta": -7.5799999999994725,
+          "weeks": 15,
+          "slots": [
+            {
+              "key": "RB",
+              "change": -0.4453333333333447
+            },
+            {
+              "key": "FLEX",
+              "change": -0.05999999999999517
+            }
+          ],
+          "dropLines": [],
+          "drops": []
+        },
+        "moved": "Numbers moved since it was found: +1.8 → −0.5 a week for you.",
+        "why": "Kenneth Walker III fills the hole your bye weeks leave, and Gridiron Gang needs depth at RB.",
+        "pitch": "Hey, want Javonte Williams for Kenneth Walker III? Helps us both out.",
+        "canOffer": true
+      }
+    ],
+    "missing": [
+      "No bolder swing this week that a partner would plausibly take."
+    ]
+  },
+  "canFindIdeas": false
+}

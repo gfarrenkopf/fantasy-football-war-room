@@ -61,6 +61,10 @@ final class TradesModel {
     /// The builder's trade graded by the server; nil until there's one to grade.
     private(set) var grade: TradeGrade?
     private(set) var grading = false
+    /// The trade idea open in the builder (APE-392), until either side changes.
+    private(set) var loadedIdea: String?
+    /// Bumped each time a trade is opened in the builder, so the tab can scroll to it.
+    private(set) var loads = 0
 
     private let api: APIClient
     private var agreed: Bool?
@@ -124,6 +128,7 @@ final class TradesModel {
         guard id != partner?.id else { return }
         partnerId = id
         gets = []
+        loadedIdea = nil
         await regrade()
     }
 
@@ -133,6 +138,7 @@ final class TradesModel {
         case .send: gives = gives.contains(id) ? gives.filter { $0 != id } : gives + [id]
         case .get: gets = gets.contains(id) ? gets.filter { $0 != id } : gets + [id]
         }
+        loadedIdea = nil
         await regrade()
     }
 
@@ -143,7 +149,32 @@ final class TradesModel {
         gives = []
         gets = []
         grade = nil
+        loadedIdea = nil
         picks += 1
+    }
+
+    /// Opens a trade in the builder: a trade idea, or the AI's counter-offer (the web's "Load into
+    /// builder" and "Check this counter").
+    func load(partner: Int, gives: [Int], gets: [Int], idea: String? = nil) async {
+        partnerId = partner
+        self.gives = gives
+        self.gets = gets
+        side = .send
+        loadedIdea = idea
+        loads += 1
+        await regrade()
+    }
+
+    /// Offers a trade idea on ESPN: into the builder, graded, then the usual confirm.
+    func offer(_ idea: AiIdea) async {
+        await load(partner: idea.partner.id, gives: idea.gives.map(\.id), gets: idea.gets.map(\.id), idea: idea.kind)
+        await propose()
+    }
+
+    /// The builder's trade, as the AI write-up asks for it; nil while it's empty.
+    var aiTrade: AiTradeRequest? {
+        guard let partner, !(gives.isEmpty && gets.isEmpty) else { return nil }
+        return AiTradeRequest(partner: partner.id, gives: gives, gets: gets)
     }
 
     private var proposal: TradeRequest? {
