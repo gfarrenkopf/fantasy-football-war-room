@@ -38,6 +38,16 @@ const appleKeyId = readEnv("AUTH_APPLE_KEY_ID");
 /** The .p8 file's PEM. One line in .env files, so `\n` escapes stand for its line breaks. */
 const applePrivateKeyRaw = readEnv("AUTH_APPLE_PRIVATE_KEY")?.replace(/\\n/g, "\n").trim();
 const applePrivateKey = applePrivateKeyRaw && isPrivateKey(applePrivateKeyRaw) ? applePrivateKeyRaw : undefined;
+/**
+ * Push notifications to the iPhone app (21.2), sent straight to APNs: the APNs key's id, the
+ * developer team id, the key's .p8 contents and the app's bundle ID.
+ */
+const apnsKeyId = readEnv("APNS_KEY_ID");
+const apnsTeamId = readEnv("APNS_TEAM_ID");
+/** The .p8 file's PEM, with `\n` escapes for line breaks like AUTH_APPLE_PRIVATE_KEY. */
+const apnsPrivateKeyRaw = readEnv("APNS_PRIVATE_KEY")?.replace(/\\n/g, "\n").trim();
+const apnsPrivateKey = apnsPrivateKeyRaw && isPrivateKey(apnsPrivateKeyRaw) ? apnsPrivateKeyRaw : undefined;
+const apnsBundleId = readEnv("APNS_BUNDLE_ID") ?? "tech.apeman.draftroom";
 const resendApiKey = readEnv("AUTH_RESEND_KEY");
 const emailFrom = readEnv("EMAIL_FROM");
 /** Shared with the droplet's timers: authorizes the internal job routes (src/app/api/internal). */
@@ -92,6 +102,8 @@ const emailAuthEnabled = cloudEnabled && Boolean(resendApiKey && emailFrom);
 const appleVars = { AUTH_APPLE_ID: appleClientId, AUTH_APPLE_TEAM_ID: appleTeamId, AUTH_APPLE_KEY_ID: appleKeyId, AUTH_APPLE_PRIVATE_KEY: applePrivateKeyRaw };
 const appleMissing = Object.keys(appleVars).filter((name) => !appleVars[name as keyof typeof appleVars]);
 const appleAuthEnabled = cloudEnabled && appleMissing.length === 0 && applePrivateKey !== undefined;
+const apnsVars = { APNS_KEY_ID: apnsKeyId, APNS_TEAM_ID: apnsTeamId, APNS_PRIVATE_KEY: apnsPrivateKeyRaw };
+const apnsMissing = Object.keys(apnsVars).filter((name) => !apnsVars[name as keyof typeof apnsVars]);
 /** API key per AI provider. Add a provider here when it gets an adapter in src/lib/ai/providers. */
 const aiApiKeys: Record<string, { env: string; key: string | undefined }> = {
   anthropic: { env: "ANTHROPIC_API_KEY", key: anthropicApiKey },
@@ -113,6 +125,10 @@ export const config = Object.freeze({
   appleTeamId,
   appleKeyId,
   applePrivateKey,
+  apnsKeyId,
+  apnsTeamId,
+  apnsPrivateKey,
+  apnsBundleId,
   resendApiKey,
   emailFrom,
   cronSecret,
@@ -163,6 +179,8 @@ export const config = Object.freeze({
    * without Resend the Sunday job still writes lineups, and no alerts go out.
    */
   seasonJobEnabled: cloudEnabled && espnCodeKey !== null && Boolean(cronSecret),
+  /** Push notifications to the iPhone app, sent to APNs. Needs accounts (device tokens are per user) and the APNs key. */
+  pushEnabled: cloudEnabled && apnsMissing.length === 0 && apnsPrivateKey !== undefined,
 });
 
 export type Config = typeof config;
@@ -204,6 +222,13 @@ if (appleMissing.length > 0 && appleMissing.length < Object.keys(appleVars).leng
   warnings.push(`${appleMissing.join(", ")} ${appleMissing.length > 1 ? "are" : "is"} not set, so Sign in with Apple is off.`);
 } else if (applePrivateKeyRaw && !applePrivateKey) {
   warnings.push("AUTH_APPLE_PRIVATE_KEY isn't the PEM of a Sign in with Apple .p8 key, so Sign in with Apple is off.");
+}
+if (apnsMissing.length > 0 && apnsMissing.length < Object.keys(apnsVars).length) {
+  warnings.push(`${apnsMissing.join(", ")} ${apnsMissing.length > 1 ? "are" : "is"} not set, so push notifications are off.`);
+} else if (apnsPrivateKeyRaw && !apnsPrivateKey) {
+  warnings.push("APNS_PRIVATE_KEY isn't the PEM of an APNs .p8 key, so push notifications are off.");
+} else if (apnsMissing.length === 0 && !cloudEnabled) {
+  warnings.push("The APNS_* variables are set but cloud features are disabled, so push notifications are off.");
 }
 if (Boolean(resendApiKey) !== Boolean(emailFrom)) {
   warnings.push("Only one of AUTH_RESEND_KEY and EMAIL_FROM is set, so email sign-in is off.");
