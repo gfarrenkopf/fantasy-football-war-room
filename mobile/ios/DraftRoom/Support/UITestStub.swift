@@ -133,8 +133,25 @@ enum UITestStub {
             return (200, #"{"done":true,"landed":true,"result":"\#(words.done)"}"#)
         }
 
+        /// Whether the stub's AI lineup has been written this launch.
+        nonisolated(unsafe) private static var aiWritten = false
+
+        /// The AI routes (APE-390): the state, and a lineup write that lands.
+        private static func ai(write: Bool) -> (Int, String) {
+            let locked = ProcessInfo.processInfo.arguments.contains("-uiTestAiLocked")
+            if write {
+                if locked { return (402, #"{"error":"\#(AiSample.lockedNote)","locked":true}"#) }
+                aiWritten = true
+            }
+            return (200, AiSample.json(written: aiWritten, locked: locked))
+        }
+
         static func answer(_ path: String, query: String = "", body: Data? = nil) -> (Int, String) {
             switch path {
+            case "/api/v1/leagues/lg-1/ai", "/api/v1/leagues/lg-2/ai":
+                ai(write: false)
+            case "/api/v1/leagues/lg-1/ai/lineup", "/api/v1/leagues/lg-2/ai/lineup":
+                ai(write: true)
             case "/api/v1/leagues/lg-1/team/trades", "/api/v1/leagues/lg-2/team/trades":
                 trades(get: body == nil, dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/team/fills", "/api/v1/leagues/lg-2/team/fills":

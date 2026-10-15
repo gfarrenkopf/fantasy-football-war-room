@@ -7,11 +7,14 @@ struct LineupView: View {
     let model: LineupModel
     /// Filling a hole from the hole card (APE-404).
     let fill: FillModel
+    /// The AI lineup card (APE-391).
+    let ai: AiModel
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
     /// Opens the Waivers tab, for a pickup behind a doubtful starter.
     var onWaivers: () -> Void = {}
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var pickingSeat: SeatPick?
     @State private var pickingBench: ViewPlayer?
 
@@ -34,14 +37,17 @@ struct LineupView: View {
                         StartersCard(model: model) { pickingSeat = SeatPick(seat: $0) }
                         BenchCard(model: model) { pickingBench = $0 }
                         MatchupCard(view: season.view)
-                        // 20.2 puts the AI lineup card here.
+                        AiLineupCard(ai: ai, lineup: model)
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
                     .animation(Motion.respond, value: model.staged)
                     .animation(Motion.respond, value: model.ir)
                 }
-                .refreshable { await store.refresh(force: true) }
+                .refreshable {
+                    await store.refresh(force: true)
+                    await ai.refresh()
+                }
                 .safeAreaInset(edge: .bottom) {
                     if model.hasChanges { ReviewBar(model: model) }
                 }
@@ -65,6 +71,11 @@ struct LineupView: View {
         .sensoryFeedback(Haptic.choice, trigger: model.staged)
         .sensoryFeedback(Haptic.choice, trigger: model.ir)
         .onChange(of: store.season, initial: true) { model.sync() }
+        .task { await ai.start() }
+        // Back in the app: an AI lineup left writing may have finished.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, ai.working == nil { Task { await ai.refresh() } }
+        }
         .sheet(item: $pickingSeat) { pick in SeatPicker(model: model, seat: pick.seat) }
         .sheet(item: $pickingBench) { player in BenchPicker(model: model, player: player) }
         .sheet(isPresented: saving) { SaveSheet(model: model) }
@@ -637,5 +648,5 @@ private struct PickerOption: View {
 #Preview {
     let api = APIClient(baseURL: URL(string: "http://localhost:3000")!)
     let store = SeasonStore(api: api, leagueId: "lg-1")
-    LineupView(model: LineupModel(api: api, store: store), fill: FillModel(api: api, store: store), onReconnect: {})
+    LineupView(model: LineupModel(api: api, store: store), fill: FillModel(api: api, store: store), ai: AiModel(api: api, store: store), onReconnect: {})
 }
