@@ -2,6 +2,7 @@ import Foundation
 
 /// In-season AI for previews and the `-uiTestStub` API (APE-391), on SeasonSample's week: an AI
 /// lineup that starts Tank Bigsby at the empty FLEX and Tucker Kraft over Sam LaPorta at TE.
+/// Trade ideas (APE-392): Josh Downs for CeeDee Lamb with Gridiron Gang, and no bolder swing.
 /// `-uiTestAiLocked` serves a league past its free weeks.
 enum AiSample {
     static let trial = #"{"state":"trial","trialWeek":2,"trialWeeks":5,"note":"Free trial · week 2 of 5"}"#
@@ -18,11 +19,33 @@ enum AiSample {
      "espn":{"matches":false,"text":"Not on ESPN yet: Tucker Kraft at TE, Tank Bigsby at FLEX."}}
     """#
 
-    /// GET ai: before the lineup is written, or after.
-    static func json(written: Bool, locked: Bool = false) -> String {
+    static let ideas = #"""
+    {"createdAt":"2026-09-17T15:00:00.000Z",
+     "ideas":[{"kind":"safe","label":"Win-win","partner":{"id":2,"name":"Gridiron Gang"},
+               "gives":[{"id":7,"name":"Josh Downs"}],"gets":[{"id":13,"name":"CeeDee Lamb"}],
+               "status":"ok","note":null,
+               "grade":{"headline":"Better for you","level":"gain","perWeek":2.1,"theirs":0.6,"delta":29.4,"weeks":14,"slots":[{"key":"WR","change":2.1}],"dropLines":[],"drops":[]},
+               "moved":null,
+               "why":"Downs is out this week but healthy for the playoffs; Lamb fills your WR spot now, and Gridiron Gang needs depth more than a star.",
+               "pitch":"Downs for Lamb? You get a WR2 back for the stretch run, I get through my bye weeks.",
+               "canOffer":true}],
+     "missing":["No bolder swing this week that a partner would plausibly take."]}
+    """#
+
+    /// POST ai/trade: a counter, asking for Aubrey too.
+    static let writeup = #"""
+    {"lean":"counter","leanLabel":"Counter","summary":"Lamb is the better player, but Gridiron Gang loses little. Ask for a kicker on top.",
+     "reasons":["Lamb adds 2.1 points a week to your WR spot.","Downs comes back from injury in week 5."],
+     "counter":{"give":[{"id":7,"name":"Josh Downs"}],"get":[{"id":13,"name":"CeeDee Lamb"},{"id":15,"name":"Brandon Aubrey"}],"note":"Ask for Aubrey as a throw-in.",
+                "text":"Send Josh Downs; ask for CeeDee Lamb, Brandon Aubrey. Ask for Aubrey as a throw-in."},
+     "createdAt":"2026-09-17T15:00:00.000Z"}
+    """#
+
+    /// GET ai: before the lineup is written, or after, and before the ideas are found, or after.
+    static func json(written: Bool, found: Bool = false, locked: Bool = false) -> String {
         if locked {
             return #"{"access":{"state":"locked","note":"\#(lockedNote)"},"week":3,"lineup":null,"lineupAction":null,"lineupNote":null,"ideas":null,"canFindIdeas":false}"#
         }
-        return #"{"access":\#(trial),"week":3,"lineup":\#(written ? lineup : "null"),"lineupAction":\#(written ? "null" : #""write""#),"lineupNote":null,"ideas":null,"canFindIdeas":true}"#
+        return #"{"access":\#(trial),"week":3,"lineup":\#(written ? lineup : "null"),"lineupAction":\#(written ? "null" : #""write""#),"lineupNote":null,"ideas":\#(found ? ideas : "null"),"canFindIdeas":\#(!found)}"#
     }
 }

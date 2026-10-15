@@ -133,17 +133,19 @@ enum UITestStub {
             return (200, #"{"done":true,"landed":true,"result":"\#(words.done)"}"#)
         }
 
-        /// Whether the stub's AI lineup has been written this launch.
+        /// Whether the stub's AI lineup has been written, and its trade ideas found, this launch.
         nonisolated(unsafe) private static var aiWritten = false
+        nonisolated(unsafe) private static var aiFound = false
 
-        /// The AI routes (APE-390): the state, and a lineup write that lands.
-        private static func ai(write: Bool) -> (Int, String) {
+        /// The AI routes (APE-390): the state, and a lineup write or a search for ideas that lands.
+        private static func ai(write: Bool = false, find: Bool = false) -> (Int, String) {
             let locked = ProcessInfo.processInfo.arguments.contains("-uiTestAiLocked")
-            if write {
+            if write || find {
                 if locked { return (402, #"{"error":"\#(AiSample.lockedNote)","locked":true}"#) }
-                aiWritten = true
+                if write { aiWritten = true }
+                if find { aiFound = true }
             }
-            return (200, AiSample.json(written: aiWritten, locked: locked))
+            return (200, AiSample.json(written: aiWritten, found: aiFound, locked: locked))
         }
 
         static func answer(_ path: String, query: String = "", body: Data? = nil) -> (Int, String) {
@@ -152,6 +154,10 @@ enum UITestStub {
                 ai(write: false)
             case "/api/v1/leagues/lg-1/ai/lineup", "/api/v1/leagues/lg-2/ai/lineup":
                 ai(write: true)
+            case "/api/v1/leagues/lg-1/ai/trade-ideas", "/api/v1/leagues/lg-2/ai/trade-ideas":
+                ai(find: true)
+            case "/api/v1/leagues/lg-1/ai/trade", "/api/v1/leagues/lg-2/ai/trade":
+                (200, AiSample.writeup)
             case "/api/v1/leagues/lg-1/team/trades", "/api/v1/leagues/lg-2/team/trades":
                 trades(get: body == nil, dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/team/fills", "/api/v1/leagues/lg-2/team/fills":

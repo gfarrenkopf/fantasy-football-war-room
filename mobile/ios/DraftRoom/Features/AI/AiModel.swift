@@ -21,6 +21,7 @@ final class AiModel {
     /// A write in flight. Writing takes up to 90 seconds.
     enum Job: Equatable {
         case lineup
+        case ideas
     }
 
     let store: SeasonStore
@@ -28,6 +29,16 @@ final class AiModel {
     private(set) var working: Job?
     /// Why the last AI lineup write didn't land, in the server's words.
     private(set) var lineupError: String?
+    /// Why the last search for trade ideas didn't land.
+    private(set) var ideasError: String?
+    /// The last search found no trade that clears the bar; searching again is free.
+    private(set) var ideasNone = false
+
+    /// The write-up of the builder's trade, and the trade it's for. A different trade starts over.
+    private(set) var writeup: AiWriteup?
+    private(set) var writeupFor: AiTradeRequest?
+    private(set) var writingUp: AiTradeRequest?
+    private(set) var writeupError: String?
 
     private let api: APIClient
     private var reading = false
@@ -95,4 +106,54 @@ final class AiModel {
             await refresh()
         }
     }
+
+    // MARK: Trade ideas
+
+    /// Finds this week's trade ideas (the web's "Find trades"), or searches again after none.
+    func findIdeas() async {
+        guard working == nil else { return }
+        working = .ideas
+        ideasError = nil
+        ideasNone = false
+        defer { working = nil }
+        do {
+            let found: AiResponse = try await api.post("api/v1/leagues/\(store.leagueId)/ai/trade-ideas", timeout: Self.writeTimeout)
+            ideasNone = found.none == true
+            load = .ready(found)
+        } catch .signedOut {
+        } catch .locked {
+            await refresh()
+        } catch .offline {
+            await refresh()
+            if ai?.ideas == nil { ideasError = APIError.offline.message }
+        } catch {
+            ideasError = error.message
+            await refresh()
+        }
+    }
+
+    // MARK: Trade write-ups
+
+    /// The write-up for `trade`, when it's the one written.
+    func writeup(for trade: AiTradeRequest) -> AiWriteup? { writeupFor == trade ? writeup : nil }
+
+    /// Asks for the AI write-up of a trade. Asking again for the same trade this week costs nothing.
+    func writeUp(_ trade: AiTradeRequest) async {
+        guard writingUp == nil else { return }
+        writingUp = trade
+        writeupError = nil
+        defer { writingUp = nil }
+        do {
+            writeup = try await api.post("api/v1/leagues/\(store.leagueId)/ai/trade", body: trade, timeout: Self.writeTimeout)
+            writeupFor = trade
+        } catch .signedOut {
+        } catch .locked {
+            await refresh()
+        } catch {
+            writeupError = error.message
+        }
+    }
+
+    /// The builder's trade changed: the error belonged to the old one.
+    func forgetWriteupError() { writeupError = nil }
 }

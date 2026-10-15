@@ -127,5 +127,60 @@ extension StubbedNetwork {
             #expect(ai.lineupError == "The AI lineup couldn't be written just now. The recommended lineup still stands.")
             #expect(ai.ai?.lineupAction == "write")
         }
+
+        // MARK: Trade ideas and write-ups (APE-392)
+
+        @Test func findsTradeIdeasAndSaysWhenThereAreNone() async throws {
+            var none = try #require(JSONSerialization.jsonObject(with: Fixture.data("ai-empty")) as? [String: Any])
+            none["none"] = true
+            let noneBody = try JSONSerialization.data(withJSONObject: none)
+            let store = await store(ai: [Self.aiPath: Self.ok("ai-empty"), "\(Self.aiPath)/trade-ideas": .init(status: 200, body: noneBody)])
+            let ai = AiModel(api: api, store: store)
+            await ai.start()
+            await ai.findIdeas()
+            #expect(ai.ideasNone)
+            #expect(ai.ai?.canFindIdeas == true)
+
+            let found = Self.ok("ai-trial")
+            StubURLProtocol.reply = { request in
+                request.url?.path() == "/api/v1/leagues/lg-1/ai/trade-ideas" ? found : .init(status: 200, body: Fixture.data("season-pregame"))
+            }
+            await ai.findIdeas()
+            #expect(!ai.ideasNone)
+            #expect(ai.ai?.ideas?.ideas.first?.label == "Win-win")
+        }
+
+        @Test func keysTheWriteupToItsTrade() async throws {
+            let store = await store(ai: [Self.aiPath: Self.ok("ai-trial"), "\(Self.aiPath)/trade": Self.ok("ai-writeup")])
+            let ai = AiModel(api: api, store: store)
+            await ai.start()
+            let trade = AiTradeRequest(partner: 2, gives: [1], gets: [2])
+            await ai.writeUp(trade)
+            #expect(ai.writeup(for: trade)?.leanLabel == "Counter")
+            #expect(ai.writeup(for: AiTradeRequest(partner: 2, gives: [1], gets: [3])) == nil)
+            let sent = try #require(StubURLProtocol.requests.last { $0.url?.path() == "\(Self.aiPath)/trade" }?.httpBody)
+            let body = try #require(JSONSerialization.jsonObject(with: sent) as? NSDictionary)
+            #expect(body == ["partner": 2, "gives": [1], "gets": [2]])
+        }
+
+        @Test func loadsAnIdeaIntoTheBuilderUntilEitherSideChanges() async throws {
+            let store = await store(ai: [Self.aiPath: Self.ok("ai-trial")])
+            let ai = AiModel(api: api, store: store)
+            await ai.start()
+            let trades = TradesModel(api: api, store: store)
+            let idea = try #require(ai.ai?.ideas?.ideas.first)
+            await trades.load(partner: idea.partner.id, gives: idea.gives.map(\.id), gets: idea.gets.map(\.id), idea: idea.kind)
+            #expect(trades.loadedIdea == "safe")
+            #expect(trades.loads == 1)
+            #expect(trades.aiTrade == AiTradeRequest(partner: idea.partner.id, gives: idea.gives.map(\.id), gets: idea.gets.map(\.id)))
+
+            trades.side = .get
+            let more = try #require(trades.partner?.roster.first { !idea.gets.map(\.id).contains($0.playerId) })
+            await trades.toggle(more.playerId)
+            #expect(trades.loadedIdea == nil)
+            #expect(trades.aiTrade?.gets.count == 2)
+            trades.clear()
+            #expect(trades.aiTrade == nil)
+        }
     }
 }

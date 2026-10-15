@@ -2,52 +2,63 @@ import SwiftUI
 
 /// The Trades tab (APE-405), after the web's TradePanel: the user's trades pending on ESPN, each
 /// graded, with Accept and Decline on offers to the user and Withdraw on their own; then a builder
-/// that grades a trade as players are picked and offers it on ESPN. 20.3 adds the AI ideas here.
+/// that grades a trade as players are picked and offers it on ESPN. The AI's trade ideas lead, and
+/// the builder offers the AI's write-up of its trade (APE-392).
 struct TradesView: View {
     let model: TradesModel
+    let ai: AiModel
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: Spacing.xl) {
-                if let notice = model.notice { TradeNotice(notice: notice) }
-                switch model.load {
-                case .loading:
-                    VStack(spacing: Spacing.lg) {
-                        ProgressView().tint(.muted)
-                        Text("Reading your trades on ESPN…").typeStyle(TypeScale.label).foregroundStyle(.muted)
+        ScrollViewReader { scroll in
+            ScrollView {
+                VStack(spacing: Spacing.xl) {
+                    if let notice = model.notice { TradeNotice(notice: notice) }
+                    switch model.load {
+                    case .loading:
+                        VStack(spacing: Spacing.lg) {
+                            ProgressView().tint(.muted)
+                            Text("Reading your trades on ESPN…").typeStyle(TypeScale.label).foregroundStyle(.muted)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Spacing.xl * 3)
+                    case let .problem(message, reconnect):
+                        ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await model.refresh() } }
+                    case let .failed(message):
+                        FailedView(message: message) { Task { await model.refresh() } }
+                    case let .ready(trades):
+                        if trades.deadline.passed, let at = trades.deadline.at {
+                            Label("The trade deadline passed \(at.formatted(.dateTime.weekday(.abbreviated).month().day().hour().minute())). Trades here are what-ifs now: ESPN won't process new ones this season.", systemImage: "clock")
+                                .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.warnInk)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        TradeIdeasCard(ai: ai, trades: model)
+                        PendingCard(model: model, trades: trades)
+                        BuilderCard(model: model, ai: ai).id("builder")
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Spacing.xl * 3)
-                case let .problem(message, reconnect):
-                    ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await model.refresh() } }
-                case let .failed(message):
-                    FailedView(message: message) { Task { await model.refresh() } }
-                case let .ready(trades):
-                    if trades.deadline.passed, let at = trades.deadline.at {
-                        Label("The trade deadline passed \(at.formatted(.dateTime.weekday(.abbreviated).month().day().hour().minute())). Trades here are what-ifs now: ESPN won't process new ones this season.", systemImage: "clock")
-                            .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.warnInk)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    PendingCard(model: model, trades: trades)
-                    BuilderCard(model: model)
                 }
+                .padding(.horizontal, Spacing.xl + Spacing.xs)
+                .padding(.vertical, Spacing.xl)
+                .animation(Motion.respond, value: model.notice)
+                .animation(Motion.respond, value: model.grade)
             }
-            .padding(.horizontal, Spacing.xl + Spacing.xs)
-            .padding(.vertical, Spacing.xl)
-            .animation(Motion.respond, value: model.notice)
-            .animation(Motion.respond, value: model.grade)
-        }
-        .refreshable {
-            await model.store.refresh(force: true)
-            await model.refresh()
+            .refreshable {
+                await model.store.refresh(force: true)
+                await model.refresh()
+                await ai.refresh()
+            }
+            // An idea or a counter opened in the builder: show it there.
+            .onChange(of: model.loads) { withAnimation(Motion.settle) { scroll.scrollTo("builder", anchor: .top) } }
         }
         .background(.bg)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("section-trade")
-        .task { await model.start() }
+        .task {
+            await model.start()
+            await ai.start()
+        }
         .sensoryFeedback(trigger: model.notice) { _, notice in
             notice.map { $0.landed ? Haptic.success : Haptic.failure }
         }
@@ -180,7 +191,7 @@ private struct OfferRow: View {
 
 /// A grade in a line or two (the web's compact TradeGain): what it does a week for the user, in words,
 /// then what it does for them and over the season.
-private struct GradeLine: View {
+struct GradeLine: View {
     let grade: TradeGrade
     let partner: String
 
@@ -211,6 +222,7 @@ private struct GradeLine: View {
 /// it can go to ESPN as an offer.
 private struct BuilderCard: View {
     let model: TradesModel
+    let ai: AiModel
 
     var body: some View {
         SeasonCard(title: "Check a trade") {
@@ -242,6 +254,8 @@ private struct BuilderCard: View {
                             .buttonStyle(ProviderButtonStyle(prominent: true))
                             .accessibilityIdentifier("trade-propose")
                     }
+
+                    TradeWriteupSection(ai: ai, trades: model)
 
                     Picker("Which roster", selection: Binding(get: { model.side }, set: { model.side = $0 })) {
                         Text(model.gives.isEmpty ? "You send" : "You send · \(model.gives.count)").tag(TradesModel.Side.send)

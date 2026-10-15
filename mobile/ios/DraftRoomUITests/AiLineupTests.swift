@@ -27,7 +27,8 @@ final class AiLineupTests: XCTestCase {
         let use = app.buttons["ai-use-lineup"]
         XCTAssertTrue(use.waitForExistence(timeout: 5))
         use.tap()
-        XCTAssertTrue(app.buttons["In your lineup above"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["In your lineup above. Review it to send it to ESPN."].waitForExistence(timeout: 5))
+        XCTAssertFalse(use.exists)
 
         // Staged, not saved: the review bar counts the AI's changes, and the save is the usual review.
         let review = app.buttons["review-lineup"]
