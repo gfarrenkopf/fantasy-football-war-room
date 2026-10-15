@@ -3,7 +3,9 @@ import { drafts, espnBridgeTokens, espnSeasonLinks, leagues, users } from "@/lib
 import type { Db } from "@/lib/db/types";
 import { espnDraftPage, espnSetup } from "@/lib/espn/pages";
 import { draftTimeLabel, renderDraftDayEmail } from "@/lib/season/email";
-import { sendOnce, unsubscribeUrl, type JobMail } from "./seasonJobs";
+import { draftPush } from "@/lib/season/pushes";
+import { notify } from "./notify";
+import { unsubscribeUrl, type JobMail } from "./seasonJobs";
 
 /**
  * The draft-day reminder (APE-336). A user who connected their ESPN season before the draft still
@@ -28,11 +30,13 @@ export interface DraftDaySummary {
   /** Of those, already connected or under way. */
   connected: number;
   emails: number;
+  /** Phones the reminder was pushed to (21.3). */
+  pushes: number;
 }
 
 export async function runDraftDayJob(db: Db, deps: JobMail & { now?: Date }, { dryRun = false }: { dryRun?: boolean } = {}): Promise<DraftDaySummary> {
   const now = deps.now ?? new Date();
-  const summary: DraftDaySummary = { dryRun, drafts: 0, connected: 0, emails: 0 };
+  const summary: DraftDaySummary = { dryRun, drafts: 0, connected: 0, emails: 0, pushes: 0 };
   const from = now.getTime() + DRAFT_ROOM_OPENS_MS - RUN_EVERY_MS;
   const to = now.getTime() + DRAFT_ROOM_OPENS_MS;
 
@@ -80,10 +84,13 @@ export async function runDraftDayJob(db: Db, deps: JobMail & { now?: Date }, { d
     const email = renderDraftDayEmail({
       leagues: list.map((r) => ({ name: r.name, draftUrl: espnDraftPage(r), time: draftTimeLabel(r.at) })),
       helpUrl: new URL(espnSetup("draft", list[0].leagueId), deps.baseUrl).toString(),
-      unsubscribeUrl: unsubscribeUrl(deps, userId),
+      unsubscribeUrl: unsubscribeUrl(deps, userId, "draft"),
     });
     const slot = new Date(Math.min(...list.map((r) => r.at))).toISOString();
-    if (await sendOnce(db, deps, { job: "draft", userId, to, kind: "draft", slot, now }, email)) summary.emails++;
+    const push = draftPush(list.map((r) => ({ name: r.name, time: draftTimeLabel(r.at) })));
+    const sent = await notify(db, deps, { job: "draft", userId, to, kind: "draft", slot, now }, { email, push });
+    if (sent.email) summary.emails++;
+    summary.pushes += sent.push;
   }
   return summary;
 }

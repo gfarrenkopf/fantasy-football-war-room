@@ -18,6 +18,7 @@ import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { DraftState } from "@/lib/draft/types";
 import { deleteAccount } from "./account";
 import { createAppSession, createHandoffCode } from "./appAuth";
+import { registerDevice } from "./devices";
 import { grantEntitlement, SEASON_PASS } from "./entitlements";
 import { storeLogin } from "./espn/logins";
 import { createTestLeague } from "./testLeagues";
@@ -40,7 +41,8 @@ async function seed(email: string) {
   await grantEntitlement(db, { leagueId, userId, kind: SEASON_PASS, source, amountTotal: 999, currency: "usd" });
   await storeLogin(db, key, userId, { espnS2: "s2", swid: "{SWID}" }, { season: 2026, consentVersion: 3 });
   await db.insert(accounts).values({ userId, type: "oidc", provider: "apple", providerAccountId: `apple-${userId}` });
-  await createAppSession(db, userId);
+  const { token: session } = await createAppSession(db, userId);
+  await registerDevice(db, userId, session, { token: crypto.randomUUID().replaceAll("-", ""), environment: "production", appVersion: "1.0" });
   await createHandoffCode(db, userId);
   await db.insert(verificationTokens).values({ identifier: email, token: `t-${userId}`, expires: new Date(Date.now() + 60_000) });
   await db.insert(espnDisclosureAcks).values({ userId, version: 3 });

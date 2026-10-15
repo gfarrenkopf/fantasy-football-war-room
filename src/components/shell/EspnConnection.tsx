@@ -1,20 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { AlertChannel, AlertKind } from "@/lib/season/alerts";
+import type { NotificationsResponse } from "@/lib/server/v1/notifications";
 import s from "./appBar.module.css";
 
 /**
  * The user's ESPN connection (Epic 15), opened from the account menu: one login reads every league,
- * so disconnecting and the Sunday email are the account's, not any one league's. Moved here from the
+ * so disconnecting and the season alerts are the account's, not any one league's. Moved here from the
  * foot of the season page. Reconnecting, or connecting another league, goes to the bookmark's
  * setup page (APE-335).
  */
 export function EspnConnectionDialog({
-  seasonEmails,
+  alerts,
   login,
   onClose,
 }: {
-  seasonEmails: boolean | null;
+  /** The season alerts are offered: the jobs run and can email or push. */
+  alerts: boolean;
   /** ESPN still accepts the login, or has signed Draft Room out and it needs the bookmark again. */
   login: "connected" | "disconnected";
   onClose(): void;
@@ -53,7 +56,7 @@ export function EspnConnectionDialog({
                 {login === "disconnected" ? "Reconnect ESPN" : "Connect another ESPN league"}
               </a>
             </p>
-            {seasonEmails !== null && <SeasonEmails initial={seasonEmails} />}
+            {alerts && <Alerts />}
             <div className={s.dialogDanger}>
               {phase === "confirm" || phase === "working" ? (
                 <>
@@ -88,25 +91,65 @@ export function EspnConnectionDialog({
   );
 }
 
-/** The Sunday job's email (11.3): on unless the user turns it off here or from the email. */
-function SeasonEmails({ initial }: { initial: boolean }) {
-  const [on, setOn] = useState(initial);
+const CHANNEL_LABEL: Record<AlertChannel, string> = { email: "Email", push: "iPhone", both: "Email and iPhone", off: "Off" };
+
+/**
+ * Each season alert and how it reaches the user (21.3): email, a push to the iPhone app, both or
+ * off. The iPhone choices appear once the user has the app; the app's settings show the same list.
+ */
+function Alerts() {
+  const [data, setData] = useState<NotificationsResponse | null>(null);
   const [failed, setFailed] = useState(false);
-  async function toggle(next: boolean) {
-    setOn(next);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/v1/notifications")
+      .then((res) => (res.ok ? (res.json() as Promise<NotificationsResponse>) : null))
+      .catch(() => null)
+      .then((body) => live && (body ? setData(body) : setFailed(true)));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  async function choose(kind: AlertKind, channel: AlertChannel) {
+    if (!data) return;
+    const before = data;
+    setData({ ...data, alerts: data.alerts.map((a) => (a.kind === kind ? { ...a, channel } : a)) });
     setFailed(false);
-    const res = await fetch("/api/season/emails", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: next }) }).catch(() => null);
-    if (!res?.ok) {
-      setOn(!next);
+    const res = await fetch("/api/v1/notifications", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ alerts: { [kind]: channel } }) }).catch(() => null);
+    if (res?.ok) setData((await res.json()) as NotificationsResponse);
+    else {
+      setData(before);
       setFailed(true);
     }
   }
+
+  if (!data) return failed ? <p className={s.warnText}>Couldn&apos;t load your alerts. Try again later.</p> : null;
+  const phone = data.push && data.hasDevice;
+  const options = (current: AlertChannel, pushOnly: boolean) =>
+    (["email", "push", "both", "off"] as const).filter(
+      (c) => c === current || c === "off" || (!pushOnly && (c === "email" || c === "both") && data.email && (c === "email" || phone)) || (c === "push" && phone),
+    );
   return (
-    <p className={s.dialogText}>
-      <label className={s.checkRow}>
-        <input type="checkbox" checked={on} onChange={(e) => toggle(e.target.checked)} /> Email me when my Sunday AI lineup is ready
-      </label>
-      {failed && <span className={s.warnText}> Couldn&apos;t save that. Try again.</span>}
-    </p>
+    <div className={s.alerts}>
+      <h3 className={s.alertsTitle}>Alerts</h3>
+      {data.alerts.filter((a) => !a.pushOnly || phone).map((a) => (
+        <label key={a.kind} className={s.alertRow}>
+          <span>
+            <span className={s.alertName}>{a.title}</span>
+            <span className={s.dialogText}>{a.detail}</span>
+          </span>
+          <select className={s.alertSelect} value={a.channel} onChange={(e) => choose(a.kind, e.target.value as AlertChannel)}>
+            {options(a.channel, a.pushOnly).map((c) => (
+              <option key={c} value={c}>
+                {CHANNEL_LABEL[c]}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+      {data.push && !data.hasDevice && <p className={s.dialogText}>Get these on your phone too: sign in to the Draft Room iPhone app.</p>}
+      {failed && <span className={s.warnText}>Couldn&apos;t save that. Try again.</span>}
+    </div>
   );
 }

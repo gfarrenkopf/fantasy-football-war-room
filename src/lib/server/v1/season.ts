@@ -1,3 +1,4 @@
+import type { LiveMatchup, LiveSide } from "@/lib/season/liveMatchup";
 import { biggestSurprises, trackRecord, type CallRecord, type PlayerCall, type ProjectionAccuracy, type ProjectionCall } from "@/lib/season/accuracy";
 import { canPlay, irEligible, seatsFromRoster, starterSeats, alignSeats } from "@/lib/season/apply";
 import { lineupEmphasis, type Emphasis } from "@/lib/season/emphasis";
@@ -57,31 +58,7 @@ export interface SeasonResponse {
   consent: { version: number; lines: readonly string[]; agreed: boolean };
 }
 
-export interface LiveSide {
-  teamId: number;
-  name: string;
-  points: number;
-  projected: number;
-  /** Starters still to finish. */
-  left: number;
-}
-
-export interface LiveMatchup {
-  week: number;
-  /** "Live", "Final", "3 left for Opponent", "5 to play" or "Up next". */
-  status: string;
-  /** A game on either side is under way. */
-  live: boolean;
-  /** A starter on either side has kicked off; before then, show the projections. */
-  started: boolean;
-  decided: boolean;
-  /** The user's points less their opponent's. */
-  lead: number;
-  /** ESPN's chance the user wins, as a whole percent; null when ESPN didn't say. */
-  win: number | null;
-  me: LiveSide;
-  them: LiveSide;
-}
+export type { LiveMatchup, LiveSide };
 
 export interface PlayerPace {
   pace: Pace;

@@ -1,11 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { userPrefs } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
+import { emailTurnedOff, resolveAlerts, type AlertChannel, type AlertKind, type StoredAlerts } from "@/lib/season/alerts";
+import { hasDevice } from "./devices";
 
 /**
- * Whether a user gets the Sunday job's emails (11.3): "Your Sunday lineup is ready", and the
- * reconnect email. On unless they opt out, on the season page or with the email's unsubscribe link.
+ * The season emails' master switch (11.3), from before each alert had its own setting (21.3). Only
+ * the original unsubscribe link turns it off now; resolveAlerts() applies it to untouched alerts.
  */
 
 export async function wantsSeasonEmails(db: Db, userId: string): Promise<boolean> {
@@ -18,6 +20,40 @@ export async function setSeasonEmails(db: Db, userId: string, on: boolean, now =
     .insert(userPrefs)
     .values({ userId, seasonEmails: on, updatedAt: now })
     .onConflictDoUpdate({ target: userPrefs.userId, set: { seasonEmails: on, updatedAt: now } });
+}
+
+/** How each season alert reaches the user (21.3), with the defaults filled in. */
+export async function alertChannels(db: Db, userId: string, now = new Date()): Promise<Record<AlertKind, AlertChannel>> {
+  const [[row], device] = await Promise.all([
+    db.select({ alerts: userPrefs.alerts, seasonEmails: userPrefs.seasonEmails }).from(userPrefs).where(eq(userPrefs.userId, userId)),
+    hasDevice(db, userId, now),
+  ]);
+  return resolveAlerts(row?.alerts ?? {}, { seasonEmails: row?.seasonEmails ?? true, hasDevice: device });
+}
+
+/** Saves the user's choice for some alerts, keeping the rest. */
+export async function setAlertChannels(db: Db, userId: string, changes: StoredAlerts, now = new Date()): Promise<void> {
+  await db
+    .insert(userPrefs)
+    .values({ userId, alerts: changes, updatedAt: now })
+    .onConflictDoUpdate({ target: userPrefs.userId, set: { alerts: sql`${userPrefs.alerts} || ${JSON.stringify(changes)}::jsonb`, updatedAt: now } });
+}
+
+/**
+ * An email's unsubscribe link: email off for that alert, push left as it was. A link from before
+ * alerts had their own settings names none, and turns email off for all of them: the master switch
+ * for the untouched ones (so they still gain push with the app), and each chosen one directly.
+ */
+export async function unsubscribe(db: Db, userId: string, kind: AlertKind | null, now = new Date()): Promise<void> {
+  if (kind) {
+    await setAlertChannels(db, userId, emailTurnedOff(await alertChannels(db, userId, now), [kind]), now);
+    return;
+  }
+  const [row] = await db.select({ alerts: userPrefs.alerts }).from(userPrefs).where(eq(userPrefs.userId, userId));
+  const stored = row?.alerts ?? {};
+  const changes = emailTurnedOff(stored, Object.keys(stored) as AlertKind[]);
+  if (Object.keys(changes).length) await setAlertChannels(db, userId, changes, now);
+  await setSeasonEmails(db, userId, false, now);
 }
 
 const PURPOSE = "season-emails-unsubscribe";

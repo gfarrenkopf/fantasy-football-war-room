@@ -54,7 +54,7 @@ describe("runDraftDayJob (APE-336)", () => {
     await connected("Earlier League", in_(40));
     await connected("Date Only", "2026-08-30");
 
-    expect(await runDraftDayJob(db, deps())).toEqual({ dryRun: false, drafts: 1, connected: 0, emails: 1 });
+    expect(await runDraftDayJob(db, deps())).toEqual({ dryRun: false, drafts: 1, connected: 0, emails: 1, pushes: 0 });
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toMatch(/^homeleague/);
     expect(sent[0].email.subject).toBe("Your ESPN draft room is open: Home League");
@@ -68,12 +68,12 @@ describe("runDraftDayJob (APE-336)", () => {
   it("leaves a draft that's already connected alone", async () => {
     const { userId, leagueId, espnLeagueId } = await connected("Paired", in_(50));
     await mintBridgeToken(db, { userId, leagueId, espnLeagueId, espnTeamId: 2, season: 2026 });
-    expect(await runDraftDayJob(db, deps())).toEqual({ dryRun: false, drafts: 1, connected: 1, emails: 0 });
+    expect(await runDraftDayJob(db, deps())).toEqual({ dryRun: false, drafts: 1, connected: 1, emails: 0, pushes: 0 });
   });
 
   it("counts without sending on a dry run", async () => {
     await connected("Dry", in_(55));
-    expect(await runDraftDayJob(db, deps(), { dryRun: true })).toEqual({ dryRun: true, drafts: 1, connected: 0, emails: 0 });
+    expect(await runDraftDayJob(db, deps(), { dryRun: true })).toEqual({ dryRun: true, drafts: 1, connected: 0, emails: 0, pushes: 0 });
     expect(sent).toEqual([]);
   });
 });

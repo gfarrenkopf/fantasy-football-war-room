@@ -37,7 +37,7 @@ extension SeasonCard where Accessory == EmptyView {
 
 enum SeasonFormat {
     /// Points as the web shows them: one decimal.
-    static func points(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(1))) }
+    static func points(_ value: Double) -> String { LiveFormat.points(value) }
 
     /// A signed gain: "+4.2", "−1.5" (a true minus, like the web's `signed()`).
     static func signed(_ value: Double) -> String { (value >= 0 ? "+" : "−") + points(abs(value)) }
@@ -98,9 +98,7 @@ enum SeasonFormat {
 
     /// The lead in words, never a bare signed number (DESIGN.md): "Up 15.3", "Lost by 4.0", "Tied".
     static func lead(_ lead: Double, started: Bool, decided: Bool) -> String {
-        if abs(lead) < 0.05 { return started ? "Tied" : "vs" }
-        let word = lead > 0 ? (decided ? "Won by" : "Up") : (decided ? "Lost by" : "Down")
-        return "\(word) \(points(abs(lead)))"
+        LiveFormat.lead(lead, started: started, decided: decided)
     }
 
     /// "Updated 3 min ago".

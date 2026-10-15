@@ -9,16 +9,13 @@ import { deleteLogin } from "./espn/logins";
  *
  * Most of it goes by ON DELETE CASCADE from `users`: sessions and linked sign-ins, leagues (and,
  * through them, drafts, entitlements, AI plans and every season table), ESPN bridge tokens,
- * disclosure acks, server clients, the ESPN login, season links, AI trials, prefs and sent-email
- * records. The rest is done here:
+ * disclosure acks, server clients, the ESPN login, season links, AI trials, prefs, sent-email
+ * records and push device tokens. The rest is done here:
  * - purchases are copied to `deleted_account_purchases` first, without user or league, for tax and
  *   refunds (docs/payments.md);
  * - AI usage records (`ai_generations`, no foreign key so cost history survives) lose their user id;
  * - pending sign-in links and app hand-off codes, keyed by email or user id, are deleted;
  * - the ESPN login is deleted explicitly through deleteLogin(), the one place logins are removed.
- *
- * TODO(Epic 21): device tokens. Give the table an ON DELETE CASCADE foreign key to users.id and
- * nothing here has to change; the deletion test seeds every user-owned table and will catch it.
  *
  * Returns false when there was no such user.
  */

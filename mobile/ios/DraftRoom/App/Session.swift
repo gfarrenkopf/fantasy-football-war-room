@@ -18,15 +18,22 @@ final class Session {
 
     private(set) var phase: Phase = .starting
     let api: APIClient
+    /// Sends this iPhone's push token to the server.
+    let push: PushRegistrar
+    /// The Game day Live Activity (21.5).
+    let live: LiveActivityController
     /// The open league has lineup edits not yet saved to ESPN: signing out asks first.
     var hasUnsavedLineup = false
     /// A season link opened from outside the app (a Universal Link), waiting for the signed-in shell to follow it.
     var seasonLink: SeasonLink?
     private let appVersion: String
 
-    init(api: APIClient, appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0") {
+    init(api: APIClient, push: PushSystem = NoPush(), appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0") {
         self.api = api
+        self.push = PushRegistrar(api: api, system: push, appVersion: appVersion)
+        live = LiveActivityController(api: api)
         self.appVersion = appVersion
+        live.onStartToken = { [weak self] token in Task { await self?.push.didGetStartToken(token) } }
         api.onSignedOut = { [weak self] in
             SeasonCache.shared.clear()
             RecapCache.shared.clear()
@@ -51,6 +58,10 @@ final class Session {
         do {
             let me: Me = try await api.get("api/v1/me")
             phase = Self.isOlder(appVersion, than: me.minAppVersion) ? .updateRequired : .signedIn(me)
+            if case .signedIn = phase {
+                live.start()
+                await push.refresh()
+            }
         } catch .signedOut {
             phase = .signedOut
         } catch {

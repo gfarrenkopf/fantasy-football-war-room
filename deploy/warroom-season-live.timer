@@ -1,0 +1,11 @@
+[Unit]
+Description=Game day Live Activity updates
+
+[Timer]
+# Every minute. Almost every run finds no Live Activity running and no game on, and does nothing.
+OnCalendar=*:*:00
+AccuracySec=1s
+# No Persistent=: a score from a missed minute is worth nothing.
+
+[Install]
+WantedBy=timers.target

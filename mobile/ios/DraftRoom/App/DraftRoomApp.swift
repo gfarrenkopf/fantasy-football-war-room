@@ -2,19 +2,25 @@ import SwiftUI
 
 @main
 struct DraftRoomApp: App {
-    @State private var session = Session(api: DraftRoomApp.makeAPI())
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var session = DraftRoomApp.makeSession()
 
-    @MainActor private static func makeAPI() -> APIClient {
+    @MainActor private static func makeSession() -> Session {
         #if DEBUG
-        if let stub = UITestStub.apiIfRequested() { return stub }
+        // The stub never asks for notifications: the prompt would block the UI tests.
+        if let stub = UITestStub.apiIfRequested() { return Session(api: stub) }
         #endif
-        return APIClient(baseURL: AppEnvironment.current.apiBaseURL)
+        return Session(api: APIClient(baseURL: AppEnvironment.current.apiBaseURL), push: SystemPush())
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(session)
+                .onAppear {
+                    appDelegate.push = session.push
+                    appDelegate.session = session
+                }
                 .preferredColorScheme(.dark)
                 .tint(.focus)
         }

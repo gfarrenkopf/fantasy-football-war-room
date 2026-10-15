@@ -2,12 +2,14 @@ import type { PlanModel } from "@/lib/ai/provider";
 import type { Db } from "@/lib/db/types";
 import { espnLeaguePage } from "@/lib/espn/pages";
 import { holeLines, lineupMoves, renderReconnectEmail, renderSundayEmail, type LeagueSummary } from "@/lib/season/email";
+import { reconnectPush, sundayPush } from "@/lib/season/pushes";
 import { findHoles, type HoleFills } from "@/lib/season/holes";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { seasonAiAccess } from "./seasonAi";
 import { writeAiLineup } from "./seasonAiOutputs";
 import { recordProjections } from "./seasonProjections";
-import { activeLeagues, jobError, sendOnce, unsubscribeUrl, type JobLeague, type JobMail } from "./seasonJobs";
+import { notify } from "./notify";
+import { activeLeagues, jobError, unsubscribeUrl, type JobLeague, type JobMail } from "./seasonJobs";
 import { espnSetup } from "@/lib/espn/pages";
 
 /**
@@ -15,7 +17,8 @@ import { espnSetup } from "@/lib/espn/pages";
  * after the inactives for the 1pm games are posted. For every league whose user has opened its
  * season page in the last two weeks, it re-reads ESPN and writes the Sunday AI lineup if the league
  * is paid for, or its account is in a trial it has already started. Then it sends each user one
- * email covering all their leagues. A user whose ESPN login has lapsed gets a reconnect email instead.
+ * email covering all their leagues, and a push if they've chosen one (21.3). A user whose ESPN login
+ * has lapsed gets a reconnect alert instead.
  *
  * Reruns are safe: stored lineups aren't rewritten, and at most one email of each kind goes to a
  * user per day. Failures are logged as [server-error] lines, which the alert emails pick up.
@@ -49,17 +52,19 @@ export interface SundaySummary {
   failed: number;
   emails: number;
   reconnects: number;
+  /** Phones the lineup and reconnect alerts were pushed to. */
+  pushes: number;
 }
 
 export async function runSundayJob(db: Db, deps: SundayDeps, { dryRun = false }: { dryRun?: boolean } = {}): Promise<SundaySummary> {
   const now = deps.now ?? new Date();
-  const summary: SundaySummary = { dryRun, leagues: 0, inactive: 0, notEntitled: 0, notConnected: 0, written: 0, existing: 0, failed: 0, emails: 0, reconnects: 0 };
+  const summary: SundaySummary = { dryRun, leagues: 0, inactive: 0, notEntitled: 0, notConnected: 0, written: 0, existing: 0, failed: 0, emails: 0, reconnects: 0, pushes: 0 };
   const { total, inactive, byUser } = await activeLeagues(db, now);
   summary.leagues = total;
   summary.inactive = inactive;
 
   for (const [userId, list] of byUser) {
-    const lineups: LeagueSummary[] = [];
+    const lineups: (LeagueSummary & { leagueId: string })[] = [];
     let reconnect: JobLeague | null = null;
     for (const league of list) {
       const outcome = await runLeague(db, deps, league, { dryRun, lineups });
@@ -71,16 +76,29 @@ export async function runSundayJob(db: Db, deps: SundayDeps, { dryRun = false }:
     }
     const to = list[0].email;
     if (dryRun || !to) continue;
-    const unsubscribe = unsubscribeUrl(deps, userId);
-    if (lineups.length && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "lineup", now }, renderSundayEmail({ leagues: lineups, unsubscribeUrl: unsubscribe })))) summary.emails++;
-    if (reconnect && (await sendOnce(db, deps, { job: "sunday", userId, to, kind: "reconnect", now }, renderReconnectEmail({ espnUrl: espnLeaguePage(reconnect), helpUrl: new URL(espnSetup("season"), deps.baseUrl).toString(), unsubscribeUrl: unsubscribe })))) summary.reconnects++;
+    if (lineups.length) {
+      const sent = await notify(db, deps, { job: "sunday", userId, to, kind: "lineup", now }, {
+        email: renderSundayEmail({ leagues: lineups, unsubscribeUrl: unsubscribeUrl(deps, userId, "lineup") }),
+        push: sundayPush(lineups),
+      });
+      if (sent.email) summary.emails++;
+      summary.pushes += sent.push;
+    }
+    if (reconnect) {
+      const sent = await notify(db, deps, { job: "sunday", userId, to, kind: "reconnect", now }, {
+        email: renderReconnectEmail({ espnUrl: espnLeaguePage(reconnect), helpUrl: new URL(espnSetup("season"), deps.baseUrl).toString(), unsubscribeUrl: unsubscribeUrl(deps, userId, "reconnect") }),
+        push: reconnectPush(),
+      });
+      if (sent.email) summary.reconnects++;
+      summary.pushes += sent.push;
+    }
   }
   return summary;
 }
 
 type LeagueOutcome = "written" | "existing" | "notEntitled" | "notConnected" | "failed" | "disconnected";
 
-async function runLeague(db: Db, deps: SundayDeps, league: JobLeague, { dryRun, lineups }: { dryRun: boolean; lineups: LeagueSummary[] }): Promise<LeagueOutcome> {
+async function runLeague(db: Db, deps: SundayDeps, league: JobLeague, { dryRun, lineups }: { dryRun: boolean; lineups: (LeagueSummary & { leagueId: string })[] }): Promise<LeagueOutcome> {
   try {
     const load = await deps.loadView(league.userId, league.leagueId);
     if (load.kind === "disconnected") return "disconnected";
@@ -116,6 +134,7 @@ async function runLeague(db: Db, deps: SundayDeps, league: JobLeague, { dryRun, 
     const holes = findHoles(view).filter((h) => h.kind === "hard");
     const fills = holes.length && deps.loadFills ? await deps.loadFills(league.userId, league.leagueId).catch(() => null) : null;
     lineups.push({
+      leagueId: league.leagueId,
       name: league.name,
       url: new URL(`/season/${encodeURIComponent(league.leagueId)}`, deps.baseUrl).toString(),
       gain: result.output.total - view.lineup.currentTotal,

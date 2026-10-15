@@ -76,6 +76,9 @@ struct LineupView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, ai.working == nil { Task { await ai.refresh() } }
         }
+        // A tapped "is out" push names a starter: open his slot's swaps.
+        .onChange(of: model.focus, initial: true) { openFocus() }
+        .onChange(of: model.isReady) { openFocus() }
         .sheet(item: $pickingSeat) { pick in SeatPicker(model: model, seat: pick.seat) }
         .sheet(item: $pickingBench) { player in BenchPicker(model: model, player: player) }
         .sheet(isPresented: saving) { SaveSheet(model: model) }
@@ -117,6 +120,14 @@ struct LineupView: View {
         } set: { shown in
             if !shown { model.cancel() }
         }
+    }
+}
+
+extension LineupView {
+    private func openFocus() {
+        guard let id = model.focus, model.isReady else { return }
+        model.focus = nil
+        if let seat = model.staged.firstIndex(of: id) { pickingSeat = SeatPick(seat: seat) }
     }
 }
 

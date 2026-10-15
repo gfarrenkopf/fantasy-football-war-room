@@ -2,6 +2,7 @@ import { config } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { getPlanModel } from "@/lib/server/ai";
 import { getEmailSender } from "@/lib/server/email";
+import { getPushSender } from "@/lib/server/push";
 import { formatServerError } from "@/lib/server/errorLog";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
 import { loadFills } from "@/lib/server/espn/waivers";
@@ -34,6 +35,7 @@ export async function POST(request: Request): Promise<Response> {
           return load.kind === "ok" ? load.fills : null;
         },
         sendEmail: getEmailSender(),
+        sendPush: getPushSender(db),
         paymentsEnabled: config.paymentsEnabled,
         allowlist: config.aiAllowlist,
         baseUrl: config.nextAuthUrl ?? new URL(request.url).origin,

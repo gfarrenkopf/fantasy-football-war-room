@@ -30,7 +30,7 @@ describe("the account menu's ESPN connection (APE-335)", () => {
   it("offers to connect when there's no login yet, and shows its state when there is", async () => {
     const { loadShell, logins } = await load();
     const userId = await createTestUser(db);
-    expect((await loadShell(db, { userId })).espn).toEqual({ seasonEmails: null, login: null });
+    expect((await loadShell(db, { userId })).espn).toEqual({ alerts: false, login: null });
 
     await logins.storeLogin(db, KEY, userId, LOGIN, { season: 2026, consentVersion: 3 });
     expect((await loadShell(db, { userId })).espn).toMatchObject({ login: "connected" });

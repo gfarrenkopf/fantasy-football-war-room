@@ -14,8 +14,10 @@ struct ShellView: View {
     @State private var gameDayPath: [RecapKey] = []
     /// The recap a season link asked for, opened once its league is open.
     @State private var linkedRecap: RecapKey?
-    /// The league a season link opened, which opens on Game day rather than the tab the week calls for.
+    /// The league a season link opened, which opens on Game day (or the link's tab) rather than the tab the week calls for.
     @State private var linkedLeague: String?
+    /// The tab a season link asked for (a tapped push, 21.4), opened once its league is open.
+    @State private var linkedTab: SeasonTab?
 
     var body: some View {
         Group {
@@ -84,9 +86,10 @@ struct ShellView: View {
         // weeks, Game day otherwise); never while the user is moving around in a league.
         .task(id: league.id) {
             if linkedLeague == league.id {
-                tab = .gameDay
+                tab = linkedTab ?? .gameDay
                 if let key = linkedRecap { gameDayPath = [key] }
                 linkedRecap = nil
+                linkedTab = nil
             } else {
                 gameDayPath = []
                 if let opening = store.openingTab { tab = opening }
@@ -116,17 +119,20 @@ struct ShellView: View {
         }
     }
 
-    /// Opens what a season link names: its league on Game day, and the week's recap when it names one.
-    /// A link to a league this account doesn't follow is dropped.
+    /// Opens what a season link names: its league on Game day (or the tab a push names, with the
+    /// player's slot open), and the week's recap when it names one. A link to a league this account
+    /// doesn't follow is dropped.
     private func follow(_ link: SeasonLink, _ model: ShellModel) {
         session.seasonLink = nil
-        guard model.leagues.contains(where: { $0.id == link.leagueId }) else { return }
+        guard let league = model.leagues.first(where: { $0.id == link.leagueId }) else { return }
         linkedLeague = link.leagueId
+        if let player = link.playerId { model.lineup(for: league).focus = player }
         if model.selected?.id == link.leagueId {
-            tab = .gameDay
+            tab = link.tab ?? .gameDay
             gameDayPath = link.recap.map { [$0] } ?? []
         } else {
             linkedRecap = link.recap
+            linkedTab = link.tab
             leave(to: .league(link.leagueId), model)
         }
     }
