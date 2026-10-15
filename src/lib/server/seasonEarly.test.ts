@@ -6,6 +6,9 @@ import type { Db } from "@/lib/db/types";
 import type { SeasonEmail } from "@/lib/season/email";
 import type { Schedule } from "@/lib/season/schedule";
 import type { SeasonViewLoad } from "./espn/seasonView";
+import { createAppSession } from "./appAuth";
+import { registerDevice } from "./devices";
+import type { PushAlert } from "./push";
 import { runEarlyJob, type EarlyDeps } from "./seasonEarly";
 import { projectionAccuracy } from "./seasonProjections";
 import { createTestLeague } from "./testLeagues";
@@ -66,7 +69,7 @@ describe("runEarlyJob", () => {
 
   it("emails only the league with a move involving a Thursday player, skipping idle leagues", async () => {
     const summary = await runEarlyJob(db, deps);
-    expect(summary).toEqual({ dryRun: false, kickoff: new Date(THURSDAY).toISOString(), when: "early", leagues: 3, inactive: 1, withMoves: 1, failed: 0, emails: 1, pushes: 0 });
+    expect(summary).toEqual({ dryRun: false, kickoff: new Date(THURSDAY).toISOString(), when: "early", leagues: 3, inactive: 1, withMoves: 1, failed: 0, emails: 1, pushes: 0, reminders: 0 });
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toMatch(/^alice/);
     expect(sent[0].email.subject).toBe("Set your lineup before Thursday's 8:15 PM ET kickoff");
@@ -129,6 +132,85 @@ describe("runEarlyJob", () => {
       }
       expect(await runEarlyJob(db, { ...deps, now: new Date(NIGHT - 70 * MIN) })).toMatchObject({ when: "late", withMoves: 0, emails: 0 });
       expect(sent).toEqual([]);
+    });
+  });
+
+  describe("pushes (21.4)", () => {
+    const ok = (view: typeof thursdayMove): SeasonViewLoad => ({ kind: "ok", view, fetchedAt: new Date(), stale: false, projectionsMissing: false, phase: "lineup" });
+    let pushes: { userId: string; alert: PushAlert }[];
+    beforeEach(() => {
+      pushes = [];
+      deps.sendPush = async (userId, alert) => {
+        pushes.push({ userId, alert });
+        return { sent: 1, removed: 0, failed: 0 };
+      };
+    });
+    async function withPhone(name: string) {
+      const userId = await createTestUser(db, `${name}-${crypto.randomUUID()}@example.test`);
+      const { token } = await createAppSession(db, userId);
+      await registerDevice(db, userId, token, { token: crypto.randomUUID().replaceAll("-", "").repeat(2), environment: "production", appVersion: "1.0" });
+      return userId;
+    }
+
+    it("pushes a starter ruled out for a late game, time-sensitive, to his slot, once", async () => {
+      const qb = player("Night QB", "QB", 0, { team: "SF", injuryStatus: "OUT" });
+      const userId = await withPhone("hal");
+      const leagueId = await link(userId, "Hal league", 1);
+      loads.set(leagueId, ok(seasonView([at("QB", qb), ...thursdayMove.teams[0].roster.filter((p) => p.pos !== "QB")])));
+      const late = { ...deps, now: new Date(NIGHT - 70 * MIN) };
+      expect(await runEarlyJob(db, late)).toMatchObject({ when: "late", emails: 1, pushes: 1 });
+      expect(pushes).toEqual([
+        {
+          userId,
+          alert: {
+            title: "Night QB is out",
+            body: "Hole at QB: Night QB is out, and nobody else can play QB. Fill it before Sunday's 8:20 PM ET kickoff.",
+            data: { leagueId, tab: "lineup", playerId: String(qb.playerId) },
+            threadId: `league-${leagueId}`,
+            category: "lineup-hole",
+            timeSensitive: true,
+          },
+        },
+      ]);
+      expect(await runEarlyJob(db, late)).toMatchObject({ emails: 0, pushes: 0 });
+      expect(pushes).toHaveLength(1);
+    });
+
+    it("reminds a user with the app of a hole before the week's first kickoff, leaving that game's to the kickoff alert", async () => {
+      const ruledOut = player("Sunday RB", "RB", 0, { team: "CHI", injuryStatus: "OUT" });
+      const thursdayOut = player("Thursday QB", "QB", 0, { team: "DET", injuryStatus: "OUT" });
+      const view = seasonView([at("QB", thursdayOut), at("RB", ruledOut), at("RB", player("RB2", "RB", 6, { team: "CHI" })), at("FLEX", player("Flex WR", "WR", 5, { team: "MIN" }))]);
+      const userId = await withPhone("ida");
+      const leagueId = await link(userId, "Ida league", 1);
+      loads.set(leagueId, ok(view));
+      // Without the app there's no reminder: it's push-only.
+      loads.set(await link(await createTestUser(db), "No app", 1), ok(view));
+
+      const summary = await runEarlyJob(db, deps);
+      expect(summary).toMatchObject({ when: "early", reminders: 1 });
+      const reminder = pushes.find((p) => p.alert.collapseId === "lineup-reminder")!;
+      expect(reminder).toEqual({
+        userId,
+        alert: {
+          title: "Your lineup has a hole",
+          body: "Ida league: Hole at RB: Sunday RB is out, and nobody else can play RB.",
+          data: { leagueId, tab: "lineup" },
+          threadId: `league-${leagueId}`,
+          category: "lineup-hole",
+          collapseId: "lineup-reminder",
+        },
+      });
+      // The Thursday hole went in the kickoff alert, not the time-sensitive one.
+      expect(pushes.filter((p) => p.userId === userId).map((p) => p.alert.title)).toEqual(["Set your lineup before Thursday's 8:15 PM ET kickoff", "Your lineup has a hole"]);
+      expect((await runEarlyJob(db, deps)).reminders).toBe(0);
+    });
+
+    it("sends no reminder before a later early kickoff", async () => {
+      const LONDON = Date.parse("2026-10-11T13:30:00Z"); // Sun 9:30 AM ET, after Thursday
+      const withLondon: Schedule = new Map([[5, new Map([...schedule.get(5)!, ["JAX", LONDON], ["PIT", LONDON]])]]);
+      const userId = await withPhone("jo");
+      loads.set(await link(userId, "Jo league", 1), ok(seasonView([at("RB", player("Sunday RB", "RB", 0, { team: "CHI", injuryStatus: "OUT" }))])));
+      expect(await runEarlyJob(db, { ...deps, schedule: withLondon, now: new Date(LONDON - 70 * MIN) })).toMatchObject({ when: "early", reminders: 0 });
     });
   });
 

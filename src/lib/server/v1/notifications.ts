@@ -1,13 +1,14 @@
 import { eq } from "drizzle-orm";
 import { users } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
-import { ALERT_KINDS, ALERT_LABELS, type AlertChannel, type AlertKind } from "@/lib/season/alerts";
+import { ALERT_KINDS, ALERT_LABELS, PUSH_ONLY, type AlertChannel, type AlertKind } from "@/lib/season/alerts";
 import { hasDevice } from "../devices";
 import { alertChannels } from "../seasonPrefs";
 
 /** GET/PUT /api/v1/notifications: each season alert and how it reaches the user (21.3). */
 export interface NotificationsResponse {
-  alerts: { kind: AlertKind; title: string; detail: string; channel: AlertChannel }[];
+  /** `pushOnly`: there's no email for it, so it's iPhone or off. */
+  alerts: { kind: AlertKind; title: string; detail: string; channel: AlertChannel; pushOnly: boolean }[];
   /** This server sends email and the account has an address: email choices do something. */
   email: boolean;
   /** This server sends push notifications. */
@@ -23,7 +24,7 @@ export async function notificationsResponse(db: Db, userId: string, server: { em
     db.select({ email: users.email }).from(users).where(eq(users.id, userId)),
   ]);
   return {
-    alerts: ALERT_KINDS.map((kind) => ({ kind, ...ALERT_LABELS[kind], channel: channels[kind] })),
+    alerts: ALERT_KINDS.map((kind) => ({ kind, ...ALERT_LABELS[kind], channel: channels[kind], pushOnly: PUSH_ONLY.has(kind) })),
     email: server.email && Boolean(user?.email),
     push: server.push,
     hasDevice: device,

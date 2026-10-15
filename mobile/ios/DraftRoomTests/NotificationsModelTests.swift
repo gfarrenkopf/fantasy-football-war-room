@@ -12,8 +12,8 @@ extension StubbedNetwork {
         nonisolated static func settings(lineup: String = "email", push: Bool = true) -> Data {
             Data(#"""
             {"alerts":[
-              {"kind":"lineup","title":"Sunday AI lineup","detail":"When your Sunday lineup is ready.","channel":"\#(lineup)"},
-              {"kind":"draft","title":"Draft day","detail":"Before your draft starts.","channel":"off"}
+              {"kind":"lineup","title":"Sunday AI lineup","detail":"When your Sunday lineup is ready.","channel":"\#(lineup)","pushOnly":false},
+              {"kind":"draft","title":"Draft day","detail":"Before your draft starts.","channel":"off","pushOnly":false}
             ],"email":true,"push":\#(push),"hasDevice":true}
             """#.utf8)
         }

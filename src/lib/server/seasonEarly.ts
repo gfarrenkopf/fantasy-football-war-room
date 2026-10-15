@@ -1,8 +1,8 @@
 import type { Db } from "@/lib/db/types";
-import { earlyMoves, gameHoles, kickoffLabel, lateHoles, renderEarlyEmail } from "@/lib/season/email";
-import { earlyPush } from "@/lib/season/pushes";
-import type { HoleFills } from "@/lib/season/holes";
-import { dueKickoff, type Schedule } from "@/lib/season/schedule";
+import { earlyMoves, gameHoles, holeLines, kickoffLabel, lateHoles, renderEarlyEmail } from "@/lib/season/email";
+import { earlyPush, reminderPush, ruledOutPush, type RuledOut } from "@/lib/season/pushes";
+import { findHoles, type HoleFills } from "@/lib/season/holes";
+import { dueKickoff, earlyKickoffs, type Schedule } from "@/lib/season/schedule";
 import type { SeasonViewLoad } from "./espn/seasonView";
 import { recordProjections } from "./seasonProjections";
 import { notify } from "./notify";
@@ -19,6 +19,9 @@ import { activeLeagues, jobError, unsubscribeUrl, type JobMail } from "./seasonJ
  * The same timer covers the kickoffs after the Sunday 1 PM slot (APE-347): the late afternoon games,
  * Sunday and Monday nights. Their inactives come out after the Sunday email, so a starter ruled out
  * there would go unnoticed. For those, it emails only the holes, with the pickup that fills each.
+ *
+ * Before the week's first kickoff it also pushes a lineup reminder (21.4) to users with the app, for
+ * the holes no kickoff alert covers yet: an empty slot, a starter on a bye or ruled out.
  *
  * Reruns are safe: at most one alert per user and kickoff. A lapsed ESPN login is left to the
  * Sunday job's reconnect email.
@@ -46,11 +49,13 @@ export interface EarlySummary {
   emails: number;
   /** Phones the alert was pushed to (21.3). */
   pushes: number;
+  /** Phones the lineup reminder was pushed to, before the week's first kickoff (21.4). */
+  reminders: number;
 }
 
 export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: { dryRun?: boolean } = {}): Promise<EarlySummary> {
   const now = deps.now ?? new Date();
-  const summary: EarlySummary = { dryRun, kickoff: null, when: null, leagues: 0, inactive: 0, withMoves: 0, failed: 0, emails: 0, pushes: 0 };
+  const summary: EarlySummary = { dryRun, kickoff: null, when: null, leagues: 0, inactive: 0, withMoves: 0, failed: 0, emails: 0, pushes: 0, reminders: 0 };
   const due = dueKickoff(deps.schedule, now.getTime());
   if (!due) return summary;
   summary.kickoff = new Date(due.at).toISOString();
@@ -59,8 +64,12 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
   const { total, inactive, byUser } = await activeLeagues(db, now);
   summary.leagues = total;
   summary.inactive = inactive;
+  // Before the week's first kickoff, a reminder covers the holes no kickoff alert has yet (21.4).
+  const firstOfWeek = earlyKickoffs(deps.schedule.get(due.week) ?? new Map())[0] === due.at;
   for (const [userId, list] of byUser) {
     const alerts: { leagueId: string; name: string; url: string; moves: string[] }[] = [];
+    const ruledOut: RuledOut[] = [];
+    const reminders: { leagueId: string; name: string; lines: string[] }[] = [];
     for (const league of list) {
       try {
         const load = await deps.loadView(userId, league.leagueId);
@@ -77,6 +86,17 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
         const holes = gameHoles(load.view, due.teams);
         const fills = holes.length && deps.loadFills ? ((await deps.loadFills(userId, league.leagueId).catch(() => null)) ?? undefined) : undefined;
         const moves = due.when === "early" ? earlyMoves(load.view, due.teams, fills) : lateHoles(load.view, due.teams, fills);
+        if (due.when === "late") {
+          const roster = load.view.teams.find((t) => t.id === load.view.myTeamId)?.roster ?? [];
+          for (const hole of holes) {
+            const name = roster.find((p) => p.playerId === hole.playerId)?.name ?? null;
+            ruledOut.push({ leagueId: league.leagueId, league: league.name, playerId: hole.playerId, name, line: holeLines(load.view, [hole], fills)[0] });
+          }
+        }
+        if (firstOfWeek) {
+          const later = findHoles(load.view).filter((h) => h.kind === "hard" && !holes.some((g) => g.key === h.key && g.playerId === h.playerId));
+          if (later.length) reminders.push({ leagueId: league.leagueId, name: league.name, lines: holeLines(load.view, later) });
+        }
         if (!moves.length) continue;
         summary.withMoves++;
         alerts.push({ leagueId: league.leagueId, name: league.name, url: new URL(`/season/${encodeURIComponent(league.leagueId)}`, deps.baseUrl).toString(), moves });
@@ -85,12 +105,20 @@ export async function runEarlyJob(db: Db, deps: EarlyDeps, { dryRun = false }: {
         summary.failed++;
       }
     }
+    if (dryRun) continue;
     const to = list[0].email;
-    if (dryRun || !to || !alerts.length) continue;
-    const email = renderEarlyEmail({ kickoff: kickoffLabel(due.at), when: due.when, leagues: alerts, unsubscribeUrl: unsubscribeUrl(deps, userId, "kickoff") });
-    const sent = await notify(db, deps, { job: "early", userId, to, kind: "early", slot: summary.kickoff, now }, { email, push: earlyPush({ kickoff: kickoffLabel(due.at), leagues: alerts }) });
-    if (sent.email) summary.emails++;
-    summary.pushes += sent.push;
+    if (alerts.length) {
+      const kickoff = kickoffLabel(due.at);
+      const email = renderEarlyEmail({ kickoff, when: due.when, leagues: alerts, unsubscribeUrl: unsubscribeUrl(deps, userId, "kickoff") });
+      const push = due.when === "late" && ruledOut.length ? ruledOutPush({ kickoff, holes: ruledOut }) : earlyPush({ kickoff, leagues: alerts });
+      const sent = await notify(db, deps, { job: "early", userId, to, kind: "early", slot: summary.kickoff, now }, { email, push });
+      if (sent.email) summary.emails++;
+      summary.pushes += sent.push;
+    }
+    if (reminders.length) {
+      const sent = await notify(db, deps, { job: "early", userId, to, kind: "reminder", slot: summary.kickoff, now }, { push: reminderPush(reminders) });
+      summary.reminders += sent.push;
+    }
   }
   return summary;
 }

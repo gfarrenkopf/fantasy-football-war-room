@@ -17,7 +17,10 @@ struct DraftRoomApp: App {
         WindowGroup {
             RootView()
                 .environment(session)
-                .onAppear { appDelegate.push = session.push }
+                .onAppear {
+                    appDelegate.push = session.push
+                    appDelegate.session = session
+                }
                 .preferredColorScheme(.dark)
                 .tint(.focus)
         }

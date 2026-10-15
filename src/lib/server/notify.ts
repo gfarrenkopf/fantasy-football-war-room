@@ -8,7 +8,7 @@ import { jobError, unsubscribeUrl, type JobMail } from "./seasonJobs";
 import { alertChannels } from "./seasonPrefs";
 
 /** Which setting governs each kind of season job message. */
-export const ALERT_FOR: Record<SeasonEmailKind, AlertKind> = { lineup: "lineup", reconnect: "reconnect", early: "kickoff", draft: "draft" };
+export const ALERT_FOR: Record<SeasonEmailKind, AlertKind> = { lineup: "lineup", reconnect: "reconnect", early: "kickoff", draft: "draft", reminder: "reminder" };
 
 export type Notified = { email: boolean; push: number };
 

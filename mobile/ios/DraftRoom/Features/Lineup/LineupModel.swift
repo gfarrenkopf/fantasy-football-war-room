@@ -41,6 +41,8 @@ final class LineupModel {
     private(set) var momentIsNew = false
     /// The user has changed the lineup by hand since it was last set up: switching away asks first.
     private(set) var edited = false
+    /// A player whose slot the tab should open: a tapped "is out" push (21.4). Cleared once shown.
+    var focus: Int?
 
     private let api: APIClient
     private let defaults: UserDefaults

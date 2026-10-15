@@ -41,12 +41,19 @@ export async function setAlertChannels(db: Db, userId: string, changes: StoredAl
 
 /**
  * An email's unsubscribe link: email off for that alert, push left as it was. A link from before
- * alerts had their own settings names none, and turns email off for all of them.
+ * alerts had their own settings names none, and turns email off for all of them: the master switch
+ * for the untouched ones (so they still gain push with the app), and each chosen one directly.
  */
 export async function unsubscribe(db: Db, userId: string, kind: AlertKind | null, now = new Date()): Promise<void> {
-  const channels = await alertChannels(db, userId, now);
-  await setAlertChannels(db, userId, emailTurnedOff(channels, kind ? [kind] : undefined), now);
-  if (!kind) await setSeasonEmails(db, userId, false, now);
+  if (kind) {
+    await setAlertChannels(db, userId, emailTurnedOff(await alertChannels(db, userId, now), [kind]), now);
+    return;
+  }
+  const [row] = await db.select({ alerts: userPrefs.alerts }).from(userPrefs).where(eq(userPrefs.userId, userId));
+  const stored = row?.alerts ?? {};
+  const changes = emailTurnedOff(stored, Object.keys(stored) as AlertKind[]);
+  if (Object.keys(changes).length) await setAlertChannels(db, userId, changes, now);
+  await setSeasonEmails(db, userId, false, now);
 }
 
 const PURPOSE = "season-emails-unsubscribe";

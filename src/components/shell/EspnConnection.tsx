@@ -126,19 +126,21 @@ function Alerts() {
 
   if (!data) return failed ? <p className={s.warnText}>Couldn&apos;t load your alerts. Try again later.</p> : null;
   const phone = data.push && data.hasDevice;
-  const options = (current: AlertChannel) =>
-    (["email", "push", "both", "off"] as const).filter((c) => c === current || c === "off" || ((c === "email" || c === "both") && data.email && (c === "email" || phone)) || (c === "push" && phone));
+  const options = (current: AlertChannel, pushOnly: boolean) =>
+    (["email", "push", "both", "off"] as const).filter(
+      (c) => c === current || c === "off" || (!pushOnly && (c === "email" || c === "both") && data.email && (c === "email" || phone)) || (c === "push" && phone),
+    );
   return (
     <div className={s.alerts}>
       <h3 className={s.alertsTitle}>Alerts</h3>
-      {data.alerts.map((a) => (
+      {data.alerts.filter((a) => !a.pushOnly || phone).map((a) => (
         <label key={a.kind} className={s.alertRow}>
           <span>
             <span className={s.alertName}>{a.title}</span>
             <span className={s.dialogText}>{a.detail}</span>
           </span>
           <select className={s.alertSelect} value={a.channel} onChange={(e) => choose(a.kind, e.target.value as AlertChannel)}>
-            {options(a.channel).map((c) => (
+            {options(a.channel, a.pushOnly).map((c) => (
               <option key={c} value={c}>
                 {CHANNEL_LABEL[c]}
               </option>

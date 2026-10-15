@@ -66,10 +66,11 @@ enum UITestStub {
             let rows = [
                 ("lineup", "Sunday AI lineup", "When your Sunday lineup is ready."),
                 ("kickoff", "Before kickoff", "Changes for an early game, and starters ruled out after the Sunday lineup."),
+                ("reminder", "Lineup reminder", "Before the week's first kickoff, when your lineup has a hole."),
                 ("reconnect", "ESPN reconnect", "When ESPN signs Draft Room out."),
                 ("draft", "Draft day", "Before your draft starts."),
             ].map { kind, title, detail in
-                #"{"kind":"\#(kind)","title":"\#(title)","detail":"\#(detail)","channel":"\#(changed[kind] ?? "both")"}"#
+                #"{"kind":"\#(kind)","title":"\#(title)","detail":"\#(detail)","channel":"\#(changed[kind] ?? (kind == "reminder" ? "push" : "both"))","pushOnly":\#(kind == "reminder")}"#
             }
             return #"{"alerts":[\#(rows.joined(separator: ","))],"email":true,"push":true,"hasDevice":true}"#
         }

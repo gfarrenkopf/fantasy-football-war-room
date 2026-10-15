@@ -31,12 +31,12 @@ async function withPhone(userId: string) {
 
 describe("resolveAlerts", () => {
   it("defaults to email without the app, and email and push with it", () => {
-    expect(resolveAlerts({}, { seasonEmails: true, hasDevice: false })).toEqual({ lineup: "email", kickoff: "email", reconnect: "email", draft: "email" });
-    expect(resolveAlerts({ draft: "off" }, { seasonEmails: true, hasDevice: true })).toEqual({ lineup: "both", kickoff: "both", reconnect: "both", draft: "off" });
+    expect(resolveAlerts({}, { seasonEmails: true, hasDevice: false })).toEqual({ lineup: "email", kickoff: "email", reminder: "off", reconnect: "email", draft: "email" });
+    expect(resolveAlerts({ draft: "off" }, { seasonEmails: true, hasDevice: true })).toEqual({ lineup: "both", kickoff: "both", reminder: "push", reconnect: "both", draft: "off" });
   });
 
   it("takes email out of untouched alerts when season emails were turned off the old way", () => {
-    expect(resolveAlerts({ lineup: "email" }, { seasonEmails: false, hasDevice: false })).toEqual({ lineup: "email", kickoff: "off", reconnect: "off", draft: "off" });
+    expect(resolveAlerts({ lineup: "email" }, { seasonEmails: false, hasDevice: false })).toEqual({ lineup: "email", kickoff: "off", reminder: "off", reconnect: "off", draft: "off" });
     expect(resolveAlerts({}, { seasonEmails: false, hasDevice: true }).kickoff).toBe("push");
   });
 
@@ -45,6 +45,9 @@ describe("resolveAlerts", () => {
     expect(parseAlertChanges({ alerts: { kickoff: "sms" } })).toBeNull();
     expect(parseAlertChanges({ alerts: { weather: "push" } })).toBeNull();
     expect(parseAlertChanges({ alerts: {} })).toBeNull();
+    // The reminder is push-only: there's no email to choose.
+    expect(parseAlertChanges({ alerts: { reminder: "both" } })).toBeNull();
+    expect(parseAlertChanges({ alerts: { reminder: "push" } })).toEqual({ reminder: "push" });
     expect(parseAlertChanges(null)).toBeNull();
   });
 });
@@ -61,12 +64,15 @@ describe("alert preferences", () => {
     const one = await createTestUser(db);
     await withPhone(one);
     await unsubscribe(db, one, "lineup");
-    expect(await alertChannels(db, one)).toEqual({ lineup: "push", kickoff: "both", reconnect: "both", draft: "both" });
+    expect(await alertChannels(db, one)).toEqual({ lineup: "push", kickoff: "both", reminder: "push", reconnect: "both", draft: "both" });
 
     const all = await createTestUser(db);
     await setAlertChannels(db, all, { kickoff: "both" });
     await unsubscribe(db, all, null);
-    expect(await alertChannels(db, all)).toEqual({ lineup: "off", kickoff: "push", reconnect: "off", draft: "off" });
+    expect(await alertChannels(db, all)).toEqual({ lineup: "off", kickoff: "push", reminder: "off", reconnect: "off", draft: "off" });
+    // Untouched alerts still gain push when the app arrives.
+    await withPhone(all);
+    expect(await alertChannels(db, all)).toEqual({ lineup: "push", kickoff: "push", reminder: "push", reconnect: "push", draft: "push" });
   });
 });
 
@@ -157,10 +163,11 @@ describe("/api/v1/notifications and the unsubscribe link", () => {
     const res = await GET(new Request("http://localhost/api/v1/notifications"), undefined as never);
     expect(await res.json()).toEqual({
       alerts: [
-        { kind: "lineup", title: "Sunday AI lineup", detail: "When your Sunday lineup is ready.", channel: "email" },
-        { kind: "kickoff", title: "Before kickoff", detail: expect.any(String), channel: "email" },
-        { kind: "reconnect", title: "ESPN reconnect", detail: expect.any(String), channel: "email" },
-        { kind: "draft", title: "Draft day", detail: expect.any(String), channel: "email" },
+        { kind: "lineup", title: "Sunday AI lineup", detail: "When your Sunday lineup is ready.", channel: "email", pushOnly: false },
+        { kind: "kickoff", title: "Before kickoff", detail: expect.any(String), channel: "email", pushOnly: false },
+        { kind: "reminder", title: "Lineup reminder", detail: expect.any(String), channel: "off", pushOnly: true },
+        { kind: "reconnect", title: "ESPN reconnect", detail: expect.any(String), channel: "email", pushOnly: false },
+        { kind: "draft", title: "Draft day", detail: expect.any(String), channel: "email", pushOnly: false },
       ],
       email: true,
       push: false,
@@ -169,7 +176,7 @@ describe("/api/v1/notifications and the unsubscribe link", () => {
     const put = (body: unknown) =>
       PUT(new Request("http://localhost/api/v1/notifications", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), undefined as never);
     const changed = await put({ alerts: { draft: "off" } });
-    expect((await changed.json()).alerts[3]).toMatchObject({ kind: "draft", channel: "off" });
+    expect((await changed.json()).alerts[4]).toMatchObject({ kind: "draft", channel: "off" });
     expect((await put({ alerts: { draft: "loud" } })).status).toBe(400);
   });
 
@@ -178,7 +185,7 @@ describe("/api/v1/notifications and the unsubscribe link", () => {
     const { POST } = await import("@/app/api/season/unsubscribe/route");
     const url = `http://localhost/api/season/unsubscribe?u=${userId}&t=${unsubscribeToken("secret", userId)}&k=kickoff`;
     expect((await POST(new Request(url, { method: "POST" }))).status).toBe(204);
-    expect(await alertChannels(db, userId)).toEqual({ lineup: "email", kickoff: "off", reconnect: "email", draft: "email" });
+    expect(await alertChannels(db, userId)).toEqual({ lineup: "email", kickoff: "off", reminder: "off", reconnect: "email", draft: "email" });
     expect((await POST(new Request(url.replace(/t=[^&]+/, "t=nope"), { method: "POST" }))).status).toBe(400);
   });
 });

@@ -23,6 +23,8 @@ struct NotificationSettings: Decodable, Equatable, Sendable {
         let title: String
         let detail: String
         var channel: AlertChannel
+        /// There's no email for it (the lineup reminder), so it's iPhone or off.
+        let pushOnly: Bool
         var id: String { kind }
     }
 
@@ -37,8 +39,8 @@ struct NotificationSettings: Decodable, Equatable, Sendable {
     /// The choices that do something here: email ones only when email works, iPhone ones only when push does.
     func choices(for alert: Alert) -> [AlertChannel] {
         AlertChannel.allCases.filter { c in
-            c == alert.channel || c == .off
-                || (c == .email && email) || (c == .push && push) || (c == .both && email && push)
+            c == alert.channel || c == .off || (c == .push && push)
+                || (!alert.pushOnly && ((c == .email && email) || (c == .both && email && push)))
         }
     }
 }
