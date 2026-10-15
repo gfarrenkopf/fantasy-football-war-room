@@ -169,6 +169,13 @@
       "when": 1791903819412,
       "tag": "0023_deleted_account_purchases",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792026482333,
+      "tag": "0024_device_tokens",
+      "breakpoints": true
     }
   ]
 }

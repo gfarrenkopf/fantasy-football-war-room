@@ -146,6 +146,8 @@ struct EspnConnectView: View {
             ConnectedView(name: name) {
                 onConnected(connected.leagueId)
                 dismiss()
+                // A league to be alerted about is the moment notifications make sense.
+                Task { await session.push.askOnce() }
             }
 
         case let .failed(message):

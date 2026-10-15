@@ -552,3 +552,30 @@ export const seasonEmails = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.kind, t.sentOn, t.slot] })],
 );
+
+/** Which APNs server a device token belongs to: Xcode and debug builds get sandbox tokens, TestFlight and App Store builds production ones. */
+export type ApnsEnvironment = "sandbox" | "production";
+
+/**
+ * The iPhones to push to (21.1). One row per APNs device token, registered by the app on each launch.
+ * Tied to the app session that registered it, so signing out (which deletes the session) or an expired
+ * session stops the pushes, and account deletion removes it through the user. A token that moves to
+ * another account moves with it.
+ */
+export const deviceTokens = pgTable(
+  "device_tokens",
+  {
+    token: text("token").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionToken: text("session_token")
+      .notNull()
+      .references(() => sessions.sessionToken, { onDelete: "cascade" }),
+    environment: text("environment").$type<ApnsEnvironment>().notNull(),
+    appVersion: text("app_version").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("device_tokens_user_id_idx").on(t.userId)],
+);
