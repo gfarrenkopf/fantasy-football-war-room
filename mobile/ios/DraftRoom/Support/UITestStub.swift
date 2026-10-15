@@ -207,6 +207,10 @@ enum UITestStub {
                 (200, #"{"login":{"status":"connected","season":2026}}"#)
             case "/api/v1/auth/signout":
                 (204, "")
+            case let path where path.contains("/live-activity"):
+                (204, "")
+            case "/api/v1/devices":
+                (204, "")
             case "/api/v1/notifications":
                 (200, notifications(body: body))
             default:

@@ -97,6 +97,7 @@ private struct GameDayContent: View {
                 Scoreboard(live: live) {
                     HeadToHead(view: view, day: day)
                 }
+                if !live.decided { FollowLive(league: season.league, live: live) }
             } else {
                 ByeStarters(view: view, day: day)
             }
@@ -107,6 +108,44 @@ private struct GameDayContent: View {
             if !day.around.isEmpty { AroundTheLeague(view: view, around: day.around) }
             BenchCard(view: view, day: day)
         }
+    }
+}
+
+// MARK: - Follow live
+
+/// "Follow live" (21.5): the matchup on the lock screen and in the Dynamic Island until the week is
+/// decided. While the app is open, each new read updates it at once.
+private struct FollowLive: View {
+    let league: SeasonResponse.LeagueRef
+    let live: LiveMatchup
+    @Environment(Session.self) private var session
+
+    var body: some View {
+        let controller = session.live
+        Group {
+            if controller.isFollowing(league.id) {
+                HStack(spacing: Spacing.md) {
+                    Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(.sky).accessibilityHidden(true)
+                    Text("On your lock screen").foregroundStyle(.muted)
+                    Spacer()
+                    Button("Stop") { Task { await controller.stop(leagueId: league.id) } }
+                        .foregroundStyle(.muted)
+                }
+                .typeStyle(TypeScale.label)
+            } else if controller.enabled {
+                Button {
+                    controller.follow(leagueId: league.id, league: league.name, live: live)
+                } label: {
+                    Label("Follow live on your lock screen", systemImage: "dot.radiowaves.left.and.right")
+                        .typeStyle(TypeScale.label)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.sky)
+            }
+        }
+        .accessibilityIdentifier("follow-live")
+        .task(id: live) { await controller.update(leagueId: league.id, live: live) }
     }
 }
 

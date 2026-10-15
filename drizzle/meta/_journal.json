@@ -183,6 +183,13 @@
       "when": 1792027044613,
       "tag": "0025_alert_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792028046634,
+      "tag": "0026_live_activities",
+      "breakpoints": true
     }
   ]
 }

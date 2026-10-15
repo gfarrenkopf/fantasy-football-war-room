@@ -10,6 +10,7 @@ import type { DraftState, LeagueSettings } from "@/lib/draft/types";
 import type { StoredAlerts } from "@/lib/season/alerts";
 import type { EspnConnection } from "@/lib/storage/types";
 import type { WeekFacts } from "@/lib/season/weekFacts";
+import type { LiveMatchup } from "@/lib/season/liveMatchup";
 
 /**
  * The hosted database. Change it here, then run `npm run db:generate` to write a migration
@@ -535,7 +536,8 @@ export const userPrefs = pgTable("user_prefs", {
 /** Which email a season job sent: the Sunday lineups, a request to reconnect ESPN, or an early-kickoff alert (11.4). */
 /** "draft" is the draft-day reminder (APE-336): its slot is the draft time. */
 /** "reminder" is the push-only lineup reminder before the week's first kickoff (21.4); the table keeps its email name. */
-export type SeasonEmailKind = "lineup" | "reconnect" | "early" | "draft" | "reminder";
+/** "live" is a Game day Live Activity started from the server (21.5): its slot is the league and week. */
+export type SeasonEmailKind = "lineup" | "reconnect" | "early" | "draft" | "reminder" | "live";
 
 /**
  * Emails the season jobs have sent (11.3, 11.4), one per user, kind, day and slot, so a rerun never
@@ -578,8 +580,40 @@ export const deviceTokens = pgTable(
       .references(() => sessions.sessionToken, { onDelete: "cascade" }),
     environment: text("environment").$type<ApnsEnvironment>().notNull(),
     appVersion: text("app_version").notNull().default(""),
+    /** The app's Live Activity push-to-start token (21.5, iOS 17.2+): starts the Game day activity from the server. */
+    startToken: text("start_token"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("device_tokens_user_id_idx").on(t.userId)],
+);
+
+/**
+ * Game day Live Activities running on users' iPhones (21.5), one row per activity: its APNs update
+ * token, the league and week it follows, and the last content state pushed to it, so the live job
+ * only sends a change. Tied to the app session like device tokens.
+ */
+export const liveActivities = pgTable(
+  "live_activities",
+  {
+    token: text("token").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    leagueId: text("league_id")
+      .notNull()
+      .references(() => leagues.id, { onDelete: "cascade" }),
+    sessionToken: text("session_token")
+      .notNull()
+      .references(() => sessions.sessionToken, { onDelete: "cascade" }),
+    environment: text("environment").$type<ApnsEnvironment>().notNull(),
+    week: integer("week").notNull(),
+    /** The content state last pushed (LiveMatchup); null until the first push. */
+    state: jsonb("state").$type<LiveMatchup>(),
+    sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
+    /** Set when the job ended it (the week was decided) or the app reported it gone. */
+    endedAt: timestamp("ended_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("live_activities_league_id_idx").on(t.leagueId)],
 );

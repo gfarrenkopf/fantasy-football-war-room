@@ -49,6 +49,11 @@ final class PushRegistrar {
     private let appVersion: String
     /// The token last sent in this run, so a repeat from APNs isn't sent twice.
     @ObservationIgnored private var sent: String?
+    /// The device token from APNs, kept to send again with a push-to-start token that arrives later.
+    @ObservationIgnored private var deviceToken: String?
+    /// The Live Activity push-to-start token (21.5), sent with the device token; nil until iOS gives one.
+    @ObservationIgnored private var startToken: String?
+    @ObservationIgnored private var sentStart: String?
 
     init(api: APIClient, system: PushSystem, appVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0") {
         self.api = api
@@ -88,15 +93,28 @@ final class PushRegistrar {
     /// APNs answered with this device's token.
     func didRegister(deviceToken: Data) async {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        guard token != sent else { return }
+        self.deviceToken = token
+        await send()
+    }
+
+    /// iOS gave the app a Live Activity push-to-start token: the server needs it with the device token.
+    func didGetStartToken(_ token: String) async {
+        startToken = token
+        await send()
+    }
+
+    private func send() async {
+        guard let token = deviceToken, token != sent || startToken != sentStart else { return }
         struct Body: Encodable {
             let token: String
             let environment: String
             let appVersion: String
+            let startToken: String?
         }
         do {
-            try await api.send("POST", "api/v1/devices", body: Body(token: token, environment: Self.environment, appVersion: appVersion))
+            try await api.send("POST", "api/v1/devices", body: Body(token: token, environment: Self.environment, appVersion: appVersion, startToken: startToken))
             sent = token
+            sentStart = startToken
         } catch {
             // Best effort: the next launch sends it again.
         }

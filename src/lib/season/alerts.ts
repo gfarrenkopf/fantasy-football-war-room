@@ -4,7 +4,7 @@
  * src/lib/server/notify.ts.
  */
 
-export const ALERT_KINDS = ["lineup", "kickoff", "reminder", "reconnect", "draft"] as const;
+export const ALERT_KINDS = ["lineup", "kickoff", "reminder", "live", "reconnect", "draft"] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 
 export const ALERT_CHANNELS = ["email", "push", "both", "off"] as const;
@@ -15,12 +15,15 @@ export const ALERT_LABELS: Record<AlertKind, { title: string; detail: string }> 
   lineup: { title: "Sunday AI lineup", detail: "When your Sunday lineup is ready." },
   kickoff: { title: "Before kickoff", detail: "Changes for an early game, and starters ruled out after the Sunday lineup." },
   reminder: { title: "Lineup reminder", detail: "Before the week's first kickoff, when your lineup has a hole." },
+  live: { title: "Follow live", detail: "Your matchup on the lock screen from your first kickoff, until it's decided." },
   reconnect: { title: "ESPN reconnect", detail: "When ESPN signs Draft Room out." },
   draft: { title: "Draft day", detail: "Before your draft starts." },
 };
 
 /** Alerts that only exist as a push (21.4): there's no email for them. */
-export const PUSH_ONLY: ReadonlySet<AlertKind> = new Set(["reminder"]);
+export const PUSH_ONLY: ReadonlySet<AlertKind> = new Set(["reminder", "live"]);
+/** Push-only alerts that stay off until the user turns them on: starting a Live Activity unasked is too much (21.5). */
+const OFF_UNTIL_ASKED: ReadonlySet<AlertKind> = new Set(["live"]);
 
 /** The channels an alert can use. */
 export const channelsFor = (kind: AlertKind): readonly AlertChannel[] => (PUSH_ONLY.has(kind) ? ["push", "off"] : ALERT_CHANNELS);
@@ -34,14 +37,15 @@ const withoutEmail = (c: AlertChannel): AlertChannel => (c === "both" ? "push" :
 
 /**
  * Each alert's channel. An untouched alert goes by email for a user without the app, and by email
- * and push once they've signed in on an iPhone; a push-only alert is off until then. `seasonEmails`
+ * and push once they've signed in on an iPhone; a push-only alert is off until then (and "Follow
+ * live" until the user turns it on). `seasonEmails`
  * off (the original "stop these emails" link, before alerts had their own settings) takes email out
  * of the untouched ones.
  */
 export function resolveAlerts(stored: StoredAlerts, { seasonEmails, hasDevice }: { seasonEmails: boolean; hasDevice: boolean }): Record<AlertKind, AlertChannel> {
   const fallback: AlertChannel = hasDevice ? "both" : "email";
   const untouched = seasonEmails ? fallback : withoutEmail(fallback);
-  return Object.fromEntries(ALERT_KINDS.map((kind) => [kind, stored[kind] ?? (PUSH_ONLY.has(kind) ? (hasDevice ? "push" : "off") : untouched)])) as Record<AlertKind, AlertChannel>;
+  return Object.fromEntries(ALERT_KINDS.map((kind) => [kind, stored[kind] ?? (PUSH_ONLY.has(kind) ? (hasDevice && !OFF_UNTIL_ASKED.has(kind) ? "push" : "off") : untouched)])) as Record<AlertKind, AlertChannel>;
 }
 
 /** The same channels with email turned off, for `kinds`: what an unsubscribe link does. Push-only alerts have no email to turn off. */

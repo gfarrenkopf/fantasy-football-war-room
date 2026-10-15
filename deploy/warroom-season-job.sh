@@ -6,12 +6,13 @@
 #   warroom-season-job.sh early             # warroom-season-early.timer: kickoff alerts, every 15 minutes (11.4, APE-347)
 #   warroom-season-job.sh recaps            # warroom-season-recaps.timer: the week's recaps, Wednesdays 07:00 ET (APE-308)
 #   warroom-season-job.sh draft             # warroom-season-draft.timer: draft-day reminders, every 15 minutes (APE-336)
+#   warroom-season-job.sh live              # warroom-season-live.timer: Game day Live Activity updates, every minute (21.5)
 #   warroom-season-job.sh <job> --dry-run   # counts what it would do, without the model or emails
 set -euo pipefail
 
 : "${CRON_SECRET:?CRON_SECRET is not set}"
-job="${1:?usage: warroom-season-job.sh sunday|early|recaps|draft [--dry-run]}"
-case "$job" in sunday | early | recaps | draft) ;; *) echo "unknown job: $job" >&2; exit 2 ;; esac
+job="${1:?usage: warroom-season-job.sh sunday|early|recaps|draft|live [--dry-run]}"
+case "$job" in sunday | early | recaps | draft | live) ;; *) echo "unknown job: $job" >&2; exit 2 ;; esac
 url="http://127.0.0.1:3000/api/internal/season/$job"
 [[ "${2:-}" == "--dry-run" ]] && url="$url?dryRun=1"
 

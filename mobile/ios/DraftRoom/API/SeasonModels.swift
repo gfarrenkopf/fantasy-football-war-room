@@ -155,32 +155,6 @@ struct GameState: Codable, Equatable, Sendable {
     let score: Score?
 }
 
-struct LiveSide: Codable, Equatable, Sendable {
-    let teamId: Int
-    let name: String
-    let points: Double
-    let projected: Double
-    /// Starters still to finish.
-    let left: Int
-}
-
-/// The user's matchup as the scoreboard tells it. Its shape is the Live Activity's too (APE-397).
-struct LiveMatchup: Codable, Equatable, Sendable {
-    let week: Int
-    /// "Live", "Final", "3 left for Rivals", "5 to play" or "Up next".
-    let status: String
-    let live: Bool
-    /// A starter on either side has kicked off; before then the projections are the numbers.
-    let started: Bool
-    let decided: Bool
-    /// The user's points less their opponent's.
-    let lead: Double
-    /// ESPN's chance the user wins, as a whole percent.
-    let win: Int?
-    let me: LiveSide
-    let them: LiveSide
-}
-
 enum Pace: String, Codable, Sendable {
     case pre, behind, on, ahead, boom
 }
