@@ -30,16 +30,16 @@ export type ProjectionSource = (query: ProjectionQuery) => Promise<Map<number, P
 
 export interface ProjectionSourceOptions {
   fetchImpl?: typeof fetch;
-  /** Where cached projections live; the process-wide source keeps it across hot reloads. */
-  cache?: Map<number, Entry>;
+  /** Where cached projections live, by week range and player; the process-wide source keeps it across hot reloads. */
+  cache?: Map<string, Entry>;
   now?: () => number;
   ttlMs?: number;
   timeoutMs?: number;
 }
 
 interface Entry {
-  range: string;
-  player: PlayerProjections;
+  /** Null when ESPN had no projections for him, so he isn't asked for again on every read. */
+  player: PlayerProjections | null;
   fetchedAt: number;
 }
 
@@ -60,18 +60,22 @@ export function createProjectionSource({
   }
 
   return async ({ season, playerIds, fromWeek, toWeek, maxAgeMs = ttlMs }) => {
-    const range = `${season}:${fromWeek}-${toWeek}`;
-    const fresh = (e: Entry | undefined): e is Entry => !!e && e.range === range && now() - e.fetchedAt < maxAgeMs;
+    // Keyed by range too: this week's view and last week's ask for the same players over different
+    // weeks, and with one entry per player each read pushed the other's out.
+    const at = (id: number) => `${season}:${fromWeek}-${toWeek}:${id}`;
+    const fresh = (e: Entry | undefined): e is Entry => !!e && now() - e.fetchedAt < maxAgeMs;
     const wanted = [...new Set(playerIds)];
-    const missing = wanted.filter((id) => !fresh(cache.get(id)));
+    const missing = wanted.filter((id) => !fresh(cache.get(at(id))));
 
     for (let i = 0; i < missing.length; i += BATCH) {
       const batch = missing.slice(i, i + BATCH);
       try {
         const fetchedAt = now();
-        for (const player of await fetchBatch(season, batch, fromWeek, toWeek)) cache.set(player.id, { range, player, fetchedAt });
+        const players = await fetchBatch(season, batch, fromWeek, toWeek);
+        for (const id of batch) cache.set(at(id), { player: null, fetchedAt });
+        for (const player of players) cache.set(at(player.id), { player, fetchedAt });
       } catch (err) {
-        const stale = batch.filter((id) => cache.get(id)?.range === range);
+        const stale = batch.filter((id) => cache.has(at(id)));
         if (stale.length < batch.length) throw err;
         console.warn(`[espn-sync] projection refresh failed, serving cached projections: ${(err as Error).message}`);
       }
@@ -79,14 +83,14 @@ export function createProjectionSource({
 
     const out = new Map<number, PlayerProjections>();
     for (const id of wanted) {
-      const entry = cache.get(id);
-      if (entry?.range === range) out.set(id, entry.player);
+      const player = cache.get(at(id))?.player;
+      if (player) out.set(id, player);
     }
     return out;
   };
 }
 
-const g = globalThis as { __espnProjectionCache?: Map<number, Entry> };
+const g = globalThis as { __espnProjectionsByRange?: Map<string, Entry> };
 
 /** The process-wide source. Only its cache survives hot reloads, so edits to the code take effect. */
-export const getEspnProjections: ProjectionSource = (query) => createProjectionSource({ cache: (g.__espnProjectionCache ??= new Map()) })(query);
+export const getEspnProjections: ProjectionSource = (query) => createProjectionSource({ cache: (g.__espnProjectionsByRange ??= new Map()) })(query);

@@ -52,6 +52,25 @@ describe("createProjectionSource", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
+  it("keeps each week range's projections, so this week's read and last week's don't push each other out", async () => {
+    const { source, fetchImpl } = setup();
+    await source(query([1, 2]));
+    await source(query([1, 2], { fromWeek: 2 }));
+    await source(query([1, 2]));
+    await source(query([1, 2], { fromWeek: 2 }));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("doesn't ask again for a player ESPN had no projections for, until the ttl", async () => {
+    const { source, fetchImpl, advance } = setup((ids) => ok(ids.filter((id) => id !== 2)));
+    expect([...(await source(query([1, 2]))).keys()]).toEqual([1]);
+    expect([...(await source(query([1, 2]))).keys()]).toEqual([1]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    advance(1000);
+    await source(query([2]));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("serves stale projections when a refresh fails, and throws when it has none", async () => {
     let down = false;
     const { source, advance } = setup((ids) => (down ? new Response("no", { status: 503 }) : ok(ids)));
