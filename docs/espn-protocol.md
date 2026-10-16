@@ -230,6 +230,14 @@ Lineup slot ids are the ones in `espn/league.ts`: 0 QB, 2 RB, 4 WR, 6 TE, 16 D/S
 ### Free agents (APE-212)
 
 - **The league-scoped `kona_player_info` lists available players** with an `X-Fantasy-Filter` such as `{"players":{"filterStatus":{"value":["FREEAGENT","WAIVERS"]},"filterSlotIds":{"value":[0,2,4,6,16,17]},"limit":100,"sortPercOwned":{"sortAsc":false,"sortPriority":1}}}` and cookies (2026-09-29: 50 players ≈ 565 KB with stats). Each entry has `id`, `status` (`FREEAGENT` or `WAIVERS`), `waiverProcessDate` (epoch ms) and `player` (`fullName`, `defaultPositionId`, `proTeamId`, `injuryStatus`, `ownership`).
+- **The same read searches and pages (APE-408, 2026-10-16, week 6).**
+  - **Search by name:** `filterName: { value }` narrows the pool to players with a word in their name that starts with `value`, ignoring case. `"bass"` and `"Tyler B"` find Tyler Bass; `"ass"` finds nobody.
+    - Punctuation must match: `"Ka'imi"` hits, `"Kaimi"` doesn't.
+    - `filterStatus` still applies, so a rostered player's name returns nothing.
+    - `filterNameSearch` and `filterFullName` are ignored, and the unfiltered pool comes back.
+  - **Paging:** `offset` next to `limit` pages the sorted pool. `offset: 10, limit: 10` returned the next ten, with no overlap.
+  - **One position:** `filterSlotIds: { value: [17] }` lists kickers only.
+  - The probe is `.research/season/search.mts`. A trimmed capture is `src/lib/season/__fixtures__/espn-free-agents-2026.json`.
 - **Waiver settings** are in `mSettings` `acquisitionSettings` (`acquisitionType`, `isUsingAcquisitionBudget`, `acquisitionBudget`, `waiverProcessDays`, `waiverProcessHour`). Each team's `waiverRank` and `transactionCounter.acquisitionBudgetSpent` are in `mTeam`.
 
 ### Lineup writes
