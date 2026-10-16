@@ -74,3 +74,10 @@ export const Warning = ({ className }: IconProps) => (
     <path d="M12 10v4.5M12 17.2v.1" />
   </svg>
 );
+
+export const Search = ({ className }: IconProps) => (
+  <svg {...base} className={className}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m16 16 4.5 4.5" />
+  </svg>
+);

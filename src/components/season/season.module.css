@@ -3072,28 +3072,6 @@ li + li > .pickerOption {
   color: var(--color-dst);
 }
 
-.espnLink {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin: 4px 14px 14px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--color-sky-line);
-  background: var(--color-panel2);
-  color: var(--color-sky);
-  font-weight: 600;
-  text-decoration: none;
-}
-.espnLink:hover {
-  background: var(--color-btn-hover);
-}
-.espnLink svg {
-  width: 13px;
-  height: 13px;
-}
-
 /* ------------------------------------------------------------------ apply to ESPN (12.1) */
 
 .apply {
@@ -3705,8 +3683,25 @@ li + li > .pickerOption {
 
 /* ------------------------------------------------------------------ waivers (APE-212) */
 
-.waivers {
+/*
+ * The pickups, then every other available player (APE-410). One column up to 1100px; wider, the two
+ * sit side by side as the lineup tab's panels do, the decision on the left and the search beside it.
+ */
+.wire {
+  display: grid;
+  gap: 14px;
   max-width: 760px;
+}
+@media (min-width: 1100px) {
+  .wire {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    max-width: none;
+  }
+}
+/* What he's worth, who goes, and the action, right-aligned beside his name. */
+.wireSide {
+  text-align: right;
 }
 .pickupWho {
   display: grid;
@@ -3760,6 +3755,136 @@ li + li > .pickerOption {
 .waiverFoot svg {
   width: 12px;
   height: 12px;
+}
+
+/* ------------------------------------------------------------------ free agents (APE-410) */
+
+/* The search field and the position switch on one row; the switch drops under the field on a phone. */
+.faTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-row-line);
+}
+.faField {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.faIcon {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  width: 14px;
+  height: 14px;
+  translate: 0 -50%;
+  color: var(--color-dim);
+  pointer-events: none;
+}
+.faField input {
+  width: 100%;
+  padding: 7px 10px 7px 30px;
+  background: var(--color-panel2);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  color: var(--color-text);
+  font: inherit;
+}
+.faField input::placeholder {
+  color: var(--color-dim);
+}
+.faField input:focus-visible {
+  border-color: var(--color-line2);
+}
+/* The tabs' segmented look, at chip size: one position at a time, or all of them. */
+.faPositions {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+}
+.faPos {
+  --pos: var(--color-dst);
+  min-width: 34px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.faPos:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+.faPos[aria-checked="true"] {
+  background: var(--color-seg-on);
+  color: var(--color-text);
+}
+/* A chosen position wears its hue, as the draft room's open-position pips do; All stays neutral. */
+.faPos[data-pos][aria-checked="true"] {
+  background: color-mix(in srgb, var(--pos) 12%, transparent);
+  border-color: color-mix(in srgb, var(--pos) 55%, transparent);
+  color: var(--pos);
+}
+.faPos[data-pos="QB"] {
+  --pos: var(--color-qb);
+}
+.faPos[data-pos="RB"] {
+  --pos: var(--color-rb);
+}
+.faPos[data-pos="WR"] {
+  --pos: var(--color-wr);
+}
+.faPos[data-pos="TE"] {
+  --pos: var(--color-te);
+}
+.faPos[data-pos="K"] {
+  --pos: var(--color-k);
+}
+.faSearch .bench[data-busy] {
+  opacity: 0.55;
+  transition: opacity 120ms ease-out 150ms;
+}
+.faMore {
+  display: flex;
+  justify-content: center;
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--color-row-line);
+}
+.faMore .button {
+  min-width: 140px;
+}
+@media (max-width: 767px) {
+  /* 16px, or iOS zooms the page when the field takes focus. */
+  .faField {
+    flex-basis: 100%;
+  }
+  .faField input {
+    font-size: 16px;
+  }
+  /* Seven positions share the width, each a thumb's target. */
+  .faPositions {
+    flex: 1 1 100%;
+  }
+  .faPos {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 36px;
+    padding-inline: 2px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .faSearch .bench[data-busy] {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------------ footer */
