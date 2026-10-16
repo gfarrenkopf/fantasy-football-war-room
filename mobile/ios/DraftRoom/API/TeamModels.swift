@@ -42,6 +42,15 @@ struct Pickup: Codable, Equatable, Sendable, Identifiable {
     var id: Int { player.playerId }
 }
 
+/// GET team/players (APE-409): a page of the league's available players matching a search, most
+/// rostered first, each valued like a pickup.
+struct PlayersResponse: Codable, Equatable, Sendable {
+    let players: [Pickup]
+    /// Another page follows: ask again with `offset` moved on by the players shown.
+    let more: Bool
+    let fetchedAt: Date
+}
+
 /// Next week's hole (the web's NextWeek, APE-353): a slot nobody can play that week, and who'd fill it.
 struct Ahead: Codable, Equatable, Sendable, Identifiable {
     struct Hole: Codable, Equatable, Sendable {

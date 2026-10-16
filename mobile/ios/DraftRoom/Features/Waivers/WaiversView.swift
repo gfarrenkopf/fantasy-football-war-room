@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The Waivers tab, after the web's WaiverPanel: the user's pending claims (APE-389), next week's
 /// holes with who'd fill them, then the pickups ranked by what they add to the user's best lineup for
-/// the rest of the season, each with who to drop (APE-388). Add on a free agent, or Claim on a player
+/// the rest of the season, each with who to drop (APE-388), then every other available player to
+/// search (APE-411). Add on a free agent, or Claim on a player
 /// on waivers, opens the confirm; nothing is written before it.
 struct WaiversView: View {
     let model: WaiversModel
@@ -29,11 +30,12 @@ struct WaiversView: View {
                 case let .ready(wire):
                     ForEach(wire.ahead) { ahead in AheadCard(model: model, ahead: ahead) }
                     PickupsCard(model: model, wire: wire)
-                    Text("Ranked by what each adds to your best lineup for the rest of the season, from ESPN's projections.")
+                    Text("Ranked by what each adds to your best lineup for the rest of the season, from ESPN's projections. Find anyone else under Free agents.")
                         .typeStyle(TypeScale.label).fontWeight(.regular).foregroundStyle(.dim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                FreeAgentsCard(model: model)
             }
             .padding(.horizontal, Spacing.xl + Spacing.xs)
             .padding(.vertical, Spacing.xl)
@@ -43,6 +45,7 @@ struct WaiversView: View {
         .refreshable {
             await model.store.refresh(force: true)
             await model.refresh(force: true)
+            await model.freeAgents.reload()
         }
         .background(.bg)
         .accessibilityElement(children: .contain)
@@ -206,16 +209,11 @@ private struct PickupsCard: View {
                         model: model, player: pickup.player, drop: pickup.drop,
                         gain: SeasonFormat.signed(pickup.perWeek), unit: "a week",
                         detail: "\(SeasonFormat.signed(pickup.delta)) rest of season",
-                        waivers: waiversLine(pickup.player)
+                        waivers: WireRow.waiversLine(pickup.player)
                     ) { Task { await model.acquire(pickup) } }
                 }
             }
         }
-    }
-
-    private func waiversLine(_ player: ViewPlayer) -> String {
-        guard let clears = player.waiverClears else { return "On waivers" }
-        return "On waivers · clears \(clears.formatted(.dateTime.weekday(.abbreviated).hour().minute()))"
     }
 }
 
@@ -262,8 +260,9 @@ private struct AheadCard: View {
 }
 
 /// A player on the wire: who he is and what he adds, then who goes and the Add, or the Claim for a
-/// player still on waivers, with when he clears. A league that bids FAAB claims on ESPN for now.
-private struct WireRow: View {
+/// player still on waivers, with when he clears. A league that bids FAAB claims on ESPN for now. The
+/// pickups, next week's fills and the free-agent search all list players this way.
+struct WireRow: View {
     let model: WaiversModel
     let player: ViewPlayer
     let drop: Int?
@@ -271,7 +270,15 @@ private struct WireRow: View {
     let unit: String
     let detail: String?
     let waivers: String
+    /// He'd add nothing to the lineup: the gain steps back to muted.
+    var flat = false
     let onAct: () -> Void
+
+    /// "On waivers · clears Wed 3:00 AM", for a player still on waivers.
+    static func waiversLine(_ player: ViewPlayer) -> String {
+        guard let clears = player.waiverClears else { return "On waivers" }
+        return "On waivers · clears \(clears.formatted(.dateTime.weekday(.abbreviated).hour().minute()))"
+    }
 
     var body: some View {
         let free = player.status != "WAIVERS"
@@ -282,7 +289,7 @@ private struct WireRow: View {
                 PlayerLine(player: player)
                 Spacer(minLength: Spacing.md)
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(gain).typeStyle(TypeScale.title).monospacedDigit().foregroundStyle(.valueInk)
+                    Text(gain).typeStyle(TypeScale.title).monospacedDigit().foregroundStyle(flat ? Color.muted : Color.valueInk)
                     Text(unit).typeStyle(TypeScale.label).foregroundStyle(.dim)
                 }
             }
@@ -313,7 +320,7 @@ private struct WireRow: View {
 }
 
 /// The row's Add or Claim: small, outlined in sky like the app's primary, sized for a thumb.
-private struct AddButtonStyle: ButtonStyle {
+struct AddButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .typeStyle(TypeScale.label)

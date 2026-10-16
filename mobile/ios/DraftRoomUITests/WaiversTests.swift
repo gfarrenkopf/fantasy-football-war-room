@@ -38,6 +38,51 @@ final class WaiversTests: XCTestCase {
         XCTAssertEqual(notice.label, "Done. Rico Dowdle is on your team, and Tank Bigsby is gone.")
     }
 
+    /// Free agents (APE-411): Tyler Bass found by name, past the pickups, and added like one.
+    @MainActor
+    func testSearchAndAddAFreeAgent() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestStub"]
+        app.launch()
+
+        let tab = app.tabBars.buttons["Waivers"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        tab.tap()
+
+        let field = app.textFields["free-agents-search"]
+        for _ in 0 ..< 6 where !field.isHittable { app.swipeUp() }
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("bass")
+
+        // Only Bass matches; he'd add nothing, and the row says so.
+        let add = app.buttons["add-26"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Wouldn't start"].exists)
+
+        // Nobody's name starts "ass".
+        app.buttons["Clear search"].tap()
+        field.tap()
+        field.typeText("ass")
+        XCTAssertTrue(app.staticTexts["free-agents-empty"].waitForExistence(timeout: 5))
+
+        app.buttons["Clear search"].tap()
+        field.tap()
+        field.typeText("tyler")
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        app.swipeUp()
+        add.tap()
+        let consent = app.switches["consent-toggle"]
+        XCTAssertTrue(consent.waitForExistence(timeout: 5))
+        consent.switches.firstMatch.tap()
+        app.buttons["consent-agree"].tap()
+        XCTAssertTrue(app.staticTexts["Add Tyler Bass and drop Josh Downs."].waitForExistence(timeout: 5))
+        app.buttons["acquire-send"].tap()
+        let notice = app.staticTexts["waivers-notice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Done. Tyler Bass is on your team, and Josh Downs is gone.")
+    }
+
     /// Claims (APE-389): Jennings claimed off waivers, then Coleman's pending claim cancelled.
     @MainActor
     func testPlaceAndCancelAClaim() {

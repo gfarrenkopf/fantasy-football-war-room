@@ -188,6 +188,27 @@ enum SeasonSample {
         claims: .init(allowed: true, reason: nil),
         drops: .init(needed: true, candidates: [7, 6, 8, 5, 4, 3, 2, 1]))
 
+    // MARK: Free agents (APE-411)
+
+    /// The league's pool, most-rostered first: the wire's two pickups, then Tyler Bass, who adds nothing.
+    static let pool: [Pickup] = wire.pickups + [
+        Pickup(player: wirePlayer(26, "Tyler Bass", "K", points: 6.2, ros: 86.8), delta: 0, perWeek: 0, drop: 7),
+    ]
+
+    /// team/players: the pool narrowed by `pos` and by a name ESPN would match, a word's start.
+    static func playersJSON(query: String) -> String {
+        let items = URLComponents(string: "x?\(query)")?.queryItems ?? []
+        let q = items.first { $0.name == "q" }?.value?.lowercased()
+        let pos = items.first { $0.name == "pos" }?.value
+        let players = pool.filter { pickup in
+            (pos == nil || pickup.player.pos == pos)
+                && (q.map { q in pickup.player.name.lowercased().split(separator: " ").contains { $0.hasPrefix(q) } || pickup.player.name.lowercased().hasPrefix(q) } ?? true)
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return String(decoding: (try? encoder.encode(PlayersResponse(players: players, more: false, fetchedAt: kickoff))) ?? Data(), as: UTF8.self)
+    }
+
     // MARK: Trades (APE-405)
 
     /// Gridiron Gang offers Bijan Robinson for Tank Bigsby; the user's own offer for McBride waits on them.

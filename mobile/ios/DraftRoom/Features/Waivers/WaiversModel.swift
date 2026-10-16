@@ -46,6 +46,8 @@ final class WaiversModel {
     }
 
     let store: SeasonStore
+    /// Every other available player, searched and browsed below the pickups (APE-411).
+    let freeAgents: FreeAgentsModel
     private(set) var load: Load = .loading
     /// The change being confirmed; the sheet is up while it's set.
     private(set) var action: Action?
@@ -60,9 +62,10 @@ final class WaiversModel {
     private var agreed: Bool?
     private var reading = false
 
-    init(api: APIClient, store: SeasonStore) {
+    init(api: APIClient, store: SeasonStore, freeAgents: FreeAgentsModel? = nil) {
         self.api = api
         self.store = store
+        self.freeAgents = freeAgents ?? FreeAgentsModel(api: api, leagueId: store.leagueId)
     }
 
     /// The player being added or claimed.
@@ -100,7 +103,9 @@ final class WaiversModel {
     /// Reads the wire the first time the tab opens.
     func start() async {
         guard wire == nil else { return }
+        async let search: Void = freeAgents.start()
         await refresh()
+        await search
     }
 
     /// Reads the wire; `force` makes the server read ESPN again, for pull-to-refresh.
@@ -199,6 +204,7 @@ final class WaiversModel {
             // The wire, the roster and the claims all changed: read them again, skipping the server's caches.
             await store.refresh(force: true)
             await refresh(force: true)
+            await freeAgents.reload()
         } catch {
             fail(error)
         }
