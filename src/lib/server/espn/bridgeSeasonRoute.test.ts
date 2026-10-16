@@ -35,7 +35,7 @@ const ESPN = "https://fantasy.espn.com";
 const LOGIN = { espnS2: "AEB-not-a-real-espn-s2-cookie-%2F%3D", swid: "{154E132F-8C13-4AC0-9DAC-20C2C5625594}" };
 
 async function route(env: Record<string, string> = {}) {
-  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: KEY.toString("base64"), ESPN_SYNC_ALLOWLIST: "", ...env };
+  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: KEY.toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "", ...env };
   for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
   vi.spyOn(console, "warn").mockImplementation(() => {});
   return import("@/app/api/espn/bridge/season/route");
@@ -87,7 +87,7 @@ describe("POST /api/espn/bridge/season (APE-332)", () => {
     expect(await (await POST(post(token))).json()).toEqual({ connected: false });
 
     vi.resetModules();
-    ({ POST } = await route({ ESPN_SYNC_ALLOWLIST: "someone-else@example.test" }));
+    ({ POST } = await route({ SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone-else@example.test" }));
     expect(await (await POST(post(token))).json()).toEqual({ connected: false });
 
     vi.resetModules();

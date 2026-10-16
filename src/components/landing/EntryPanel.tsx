@@ -149,7 +149,7 @@ export function EntryPanel({
           onNewDraft={() => flip("draft")}
         />
       ) : face === "draft" && season ? (
-        <SeasonFace key="season" ref={heading} />
+        <SeasonFace key="season" ref={heading} open={flags.espnSeasonOpen} />
       ) : face === "draft" ? (
         <div key="draft" className={s.face}>
           <h1 className={s.thesis} ref={heading} tabIndex={-1}>

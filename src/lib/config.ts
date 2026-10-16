@@ -74,8 +74,20 @@ const sportsDataApiKey = readEnv("SPORTSDATA_API_KEY");
 /**
  * Comma-separated emails. When set, only these accounts get ESPN live draft sync (the beta),
  * season pass or not. Empty: payments decide (season pass), or everyone when payments are off.
+ * In-season help has its own switch, SEASON_ACCESS.
  */
 const espnSyncAllowlist = (readEnv("ESPN_SYNC_ALLOWLIST") ?? "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+/**
+ * Who may use in-season help (APE-341): `open` (the default) is every signed-in account; `closed` is
+ * SEASON_ALLOWLIST plus the accounts that joined while it was open, or were invited by hand.
+ */
+const seasonAccessRaw = readEnv("SEASON_ACCESS")?.toLowerCase();
+const seasonAccess: "open" | "closed" = seasonAccessRaw === "closed" ? "closed" : "open";
+/** Comma-separated emails let into in-season help while SEASON_ACCESS is closed. */
+const seasonAllowlist = (readEnv("SEASON_ALLOWLIST") ?? "")
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
@@ -144,6 +156,8 @@ export const config = Object.freeze({
   stripePriceId,
   sportsDataApiKey,
   espnSyncAllowlist,
+  seasonAccess,
+  seasonAllowlist,
   espnCodeKey,
   landingMode,
 
@@ -198,8 +212,8 @@ export const publicFlags = Object.freeze({
   espnSyncEnabled: config.espnSyncEnabled,
   espnServerClientEnabled: config.espnServerClientEnabled,
   espnSeasonEnabled: config.espnSeasonEnabled,
-  /** In-season help is open to everyone, not just the ESPN_SYNC_ALLOWLIST beta: the landing page may advertise it. */
-  espnSeasonOpen: config.espnSeasonEnabled && config.espnSyncAllowlist.length === 0,
+  /** In-season help is open to every account (SEASON_ACCESS), not invite-only: the landing page may advertise it. */
+  espnSeasonOpen: config.espnSeasonEnabled && config.seasonAccess === "open",
 });
 
 export type PublicFlags = typeof publicFlags;
@@ -256,6 +270,12 @@ if (espnCodeKeyRaw && !espnCodeKey) {
   warnings.push("ESPN_CODE_KEY isn't 32 bytes of base64 (try `openssl rand -base64 32`), so drafting without an ESPN tab open and in-season features are off.");
 } else if (espnCodeKey && !cloudEnabled) {
   warnings.push("ESPN_CODE_KEY is set but cloud features are disabled, so drafting without an ESPN tab open and in-season features are off.");
+}
+if (seasonAccessRaw && seasonAccessRaw !== seasonAccess) {
+  warnings.push(`SEASON_ACCESS "${seasonAccessRaw}" isn't open or closed, so in-season help is open to everyone.`);
+}
+if (seasonAllowlist.length && seasonAccess === "open") {
+  warnings.push("SEASON_ALLOWLIST is set but SEASON_ACCESS is open, so the list does nothing: in-season help is open to everyone.");
 }
 if (landingModeRaw && landingModeRaw !== landingMode) {
   warnings.push(`LANDING_MODE "${landingModeRaw}" isn't one of auto, draft or season, so the landing page follows the season.`);

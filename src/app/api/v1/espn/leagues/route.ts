@@ -9,8 +9,8 @@ import { error, json } from "@/lib/server/http";
  * The ESPN fantasy football leagues the login the app just captured can see, so the user picks one
  * instead of typing an id. Nothing is stored: connecting is POST /api/v1/espn/connect.
  */
-export const POST = withUser<unknown>(async (request, _ctx, { email }) => {
-  const gated = seasonGate(email);
+export const POST = withUser<unknown>(async (request, _ctx, { db, userId, email }) => {
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const read = await readLoginBody(request);
   if (!read.ok) return read.response;

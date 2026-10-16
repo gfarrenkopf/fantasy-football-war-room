@@ -2,7 +2,7 @@ import { config } from "@/lib/config";
 import { withUser } from "@/lib/server/api";
 import { formatServerError } from "@/lib/server/errorLog";
 import { parseAcquire, writeAcquire } from "@/lib/server/espn/acquireWrite";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { consentGate, writeResponse } from "@/lib/server/espn/writeRoute";
 import { error, json, readJson } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
@@ -26,7 +26,7 @@ const ROUTE = "/api/leagues/[id]/season/acquire";
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const { id } = await ctx.params;
   if (!config.espnSeasonEnabled || !config.espnCodeKey) return error(404, "Not found");
-  if (!mayUseSeason(config.espnSyncAllowlist, email)) return error(403, "In-season help isn't available on this account yet");
+  if (!(await mayUseSeason(db, userId, email))) return error(403, "In-season help isn't available on this account yet");
   const read = await readJson(request);
   if (!read.ok) return read.response;
   const body = parseAcquire(read.body);

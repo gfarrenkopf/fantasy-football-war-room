@@ -27,7 +27,7 @@ const espnLeague = { settings: league.settings, teams: [{ id: 1, owners: ["{AAAA
 
 beforeEach(() => {
   vi.resetModules();
-  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "" };
+  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "" };
   for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -98,7 +98,8 @@ describe("POST /api/v1/espn/connect", () => {
   });
 
   it("keeps the allowlist gate", async () => {
-    vi.stubEnv("ESPN_SYNC_ALLOWLIST", "someone-else@example.test");
+    vi.stubEnv("SEASON_ACCESS", "closed");
+    vi.stubEnv("SEASON_ALLOWLIST", "someone-else@example.test");
     const { POST } = await import("@/app/api/v1/espn/connect/route");
     const { auth } = await bearer();
     expect((await POST(post("/api/v1/espn/connect", body, auth), undefined)).status).toBe(403);
@@ -145,7 +146,8 @@ describe("GET /api/v1/leagues", () => {
   });
 
   it("is empty, not an error, when in-season help isn't open to the account", async () => {
-    vi.stubEnv("ESPN_SYNC_ALLOWLIST", "someone-else@example.test");
+    vi.stubEnv("SEASON_ACCESS", "closed");
+    vi.stubEnv("SEASON_ALLOWLIST", "someone-else@example.test");
     const { GET } = await import("@/app/api/v1/leagues/route");
     const { auth } = await bearer();
     const res = await GET(new Request("http://localhost/api/v1/leagues", { headers: auth }), undefined);

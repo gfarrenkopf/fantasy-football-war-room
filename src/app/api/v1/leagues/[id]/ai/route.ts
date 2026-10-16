@@ -22,7 +22,7 @@ const ROUTE = "/api/v1/leagues/[id]/ai";
  * (the app shows no AI then, as the web shows none), 409 `{ problem }` when ESPN can't be read.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   if (!getPlanModel()) return error(404, "Not found");
   const { id } = await ctx.params;

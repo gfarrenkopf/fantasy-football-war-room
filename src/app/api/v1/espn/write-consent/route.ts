@@ -14,7 +14,7 @@ import { error, json, readJson } from "@/lib/server/http";
  * the current text when `version` is out of date.
  */
 export const POST = withUser(async (request, _ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const read = await readJson(request);
   if (!read.ok) return read.response;

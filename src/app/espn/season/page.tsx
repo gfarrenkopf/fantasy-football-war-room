@@ -8,7 +8,7 @@ import { getDb } from "@/lib/db";
 import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import { hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
 import { peekClaim } from "@/lib/server/espn/loginClaims";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 
 export const metadata: Metadata = { title: "Connect your season · Draft Room" };
 
@@ -31,7 +31,7 @@ export default async function SeasonConnect({ searchParams }: PageProps<"/espn/s
     <EspnSeasonConnect
       flags={publicFlags}
       signedIn={!!user}
-      allowed={!user || mayUseSeason(config.espnSyncAllowlist, user.email)}
+      allowed={!user || (await mayUseSeason(getDb(), user.userId, user.email))}
       acknowledged={acknowledged}
       claim={claim}
     />

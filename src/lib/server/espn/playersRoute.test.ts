@@ -29,7 +29,7 @@ afterAll(() => close());
 
 async function route(env: Record<string, string> = {}) {
   vi.resetModules();
-  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "", ...env };
+  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "", ...env };
   for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
   vi.spyOn(console, "warn").mockImplementation(() => {});
   return (await import("@/app/api/leagues/[id]/season/players/route")).GET;
@@ -64,7 +64,7 @@ describe("GET /api/leagues/:id/season/players", () => {
 
   it("404s with in-season help off and for someone else's league, 403s off the allowlist, 400s a bad search", async () => {
     expect((await (await route({ ESPN_CODE_KEY: "" }))(get(leagueId), ctx(leagueId))).status).toBe(404);
-    expect((await (await route({ ESPN_SYNC_ALLOWLIST: "someone@else.test" }))(get(leagueId), ctx(leagueId))).status).toBe(403);
+    expect((await (await route({ SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone@else.test" }))(get(leagueId), ctx(leagueId))).status).toBe(403);
     const other = await createTestLeague(db, await createTestUser(db));
     expect((await (await route())(get(other), ctx(other))).status).toBe(404);
     expect((await (await route())(get(leagueId, "?pos=FLEX"), ctx(leagueId))).status).toBe(400);

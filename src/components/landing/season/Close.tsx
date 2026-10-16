@@ -12,7 +12,7 @@ import { useStage } from "./stage";
  * and a glint of gold runs across it whenever the visitor reaches for "Connect your ESPN league".
  * Gold is the door's winners' color (the "Exclusive" tag); the button itself stays Signal Green.
  */
-export function Close({ season }: { season: number }) {
+export function Close({ season, open }: { season: number; open: boolean }) {
   const ref = useStage<HTMLElement>();
   return (
     <section ref={ref} className={cx("close")} aria-labelledby="close-title">
@@ -21,7 +21,7 @@ export function Close({ season }: { season: number }) {
           Sunday&apos;s coming. Start the team that <span className={cx("titleGold")}>wins it</span>.
         </h2>
         <p className={door.closeSub}>Connect your ESPN league once, and Draft Room has your lineup ready every week.</p>
-        <ConnectEspn className={cx("closeCta")} />
+        <ConnectEspn className={cx("closeCta")} open={open} />
         <p className={cx("late")}>
           Drafting late? <a href="/draft">Open the Draft Room</a>
         </p>

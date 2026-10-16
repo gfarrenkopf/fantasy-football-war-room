@@ -20,7 +20,7 @@ const ROUTE = "/api/v1/leagues/[id]/team/players";
  * through team/acquire as a pickup's do. 409 `{ problem }` when ESPN can't be read.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   const search = parsePlayerSearch(new URL(request.url));

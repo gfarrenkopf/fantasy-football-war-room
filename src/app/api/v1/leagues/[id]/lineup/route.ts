@@ -65,7 +65,7 @@ function parse(body: unknown): Body | null {
  * 400 when the lineup doesn't fit the league's seats or a change id isn't one of this lineup's.
  */
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   const read = await readJson(request);

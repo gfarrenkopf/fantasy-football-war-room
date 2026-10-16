@@ -1,7 +1,7 @@
 import { config } from "@/lib/config";
 import { withUser } from "@/lib/server/api";
 import { formatServerError } from "@/lib/server/errorLog";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { loadSeason } from "@/lib/server/espn/seasonData";
 import { error, json } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
@@ -18,7 +18,7 @@ const ROUTE = "/api/leagues/[id]/season/draft-teams";
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const { id } = await ctx.params;
   if (!config.espnSeasonEnabled || !config.espnCodeKey) return error(404, "Not found");
-  if (!mayUseSeason(config.espnSyncAllowlist, email)) return error(403, "In-season help isn't available on this account yet");
+  if (!(await mayUseSeason(db, userId, email))) return error(403, "In-season help isn't available on this account yet");
   if (!(await findLeague(db, userId, id))) return error(404, "League not found");
   try {
     const load = await loadSeason(db, config.espnCodeKey, userId, id);

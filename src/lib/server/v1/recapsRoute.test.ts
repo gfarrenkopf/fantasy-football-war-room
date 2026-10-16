@@ -21,7 +21,7 @@ beforeAll(async () => {
 });
 afterAll(() => close());
 
-const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "" };
+const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "" };
 
 async function routes(env: Partial<typeof ENV> = {}) {
   for (const [name, value] of Object.entries({ ...ENV, ...env })) vi.stubEnv(name, value);
@@ -139,7 +139,7 @@ describe("GET /api/v1/leagues/:id/recaps", () => {
     };
     await check({ DATABASE_URL: "" }, 404);
     await check({ ESPN_CODE_KEY: "" }, 404);
-    await check({ ESPN_SYNC_ALLOWLIST: "someone@else.test" }, 403);
+    await check({ SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone@else.test" }, 403);
 
     vi.unstubAllEnvs();
     vi.resetModules();

@@ -5,7 +5,6 @@ import { espnLogins, users } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { deleteLogin, loadLogin, loginExpiry, loginStatus, markDisconnected, markVerified, purgeExpiredLogins, storeLogin } from "./logins";
-import { mayUseSeason } from "./seasonAccess";
 
 let db: Db;
 let close: () => Promise<void>;
@@ -76,14 +75,5 @@ describe("ESPN logins", () => {
 
   it("expires after the fantasy season: February 1 of the next year", () => {
     expect(loginExpiry(2026).toISOString()).toBe("2027-02-01T00:00:00.000Z");
-  });
-});
-
-describe("mayUseSeason", () => {
-  it("lets everyone in with no allowlist, and only the listed accounts with one", () => {
-    expect(mayUseSeason([], null)).toBe(true);
-    expect(mayUseSeason(["greg@apeman.tech"], "Greg@Apeman.tech")).toBe(true);
-    expect(mayUseSeason(["greg@apeman.tech"], "someone@example.test")).toBe(false);
-    expect(mayUseSeason(["greg@apeman.tech"], null)).toBe(false);
   });
 });

@@ -16,7 +16,7 @@ type Ctx = RouteContext<"/api/v1/leagues/[id]/live-activity">;
  * iOS hands it a new token. Only the app can register, because the token belongs to its session.
  */
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const session = bearerToken(request);
   if (!session) return error(400, "Live Activities are registered by the app");

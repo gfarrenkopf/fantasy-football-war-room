@@ -10,6 +10,7 @@ import { importEspnDraft, type DraftImportDeps } from "./draftImport";
 import { followEspnSettings } from "./followSettings";
 import { readEspnLeague } from "./leagueReader";
 import { markVerified, purgeExpiredLogins, storeLogin, type EspnLogin } from "./logins";
+import { stampSeasonAccess } from "./seasonAccess";
 import { findSeasonLinkByEspn, linkSeason } from "./seasonLinks";
 
 /**
@@ -37,7 +38,17 @@ export async function connectSeason(
   key: Buffer,
   userId: string,
   req: ConnectRequest,
-  { fetchImpl, now = new Date(), crosswalkFor }: { fetchImpl?: typeof fetch; now?: Date } & DraftImportDeps = {},
+  {
+    fetchImpl,
+    now = new Date(),
+    crosswalkFor,
+    seasonOpen = false,
+  }: {
+    fetchImpl?: typeof fetch;
+    now?: Date;
+    /** SEASON_ACCESS is open: the account is stamped, so it keeps in-season help once the beta closes. */
+    seasonOpen?: boolean;
+  } & DraftImportDeps = {},
 ): Promise<ConnectResult> {
   if (req.consentVersion !== ESPN_DISCLOSURE_VERSION) {
     return { ok: false, status: 409, error: "What Draft Room asks for has changed. Read it again.", seasonVersion: ESPN_DISCLOSURE_VERSION };
@@ -56,6 +67,7 @@ export async function connectSeason(
   await purgeExpiredLogins(db, now);
   await storeLogin(db, key, userId, login, { season: req.season, consentVersion: req.consentVersion }, now);
   await markVerified(db, userId, now);
+  if (seasonOpen) await stampSeasonAccess(db, userId, now);
 
   const link = { espnLeagueId: req.espnLeagueId, espnTeamId, season: req.season };
   const existing = await findSeasonLinkByEspn(db, userId, req.espnLeagueId, req.season);

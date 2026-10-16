@@ -4,7 +4,7 @@ import { ESPN_DISCLOSURE_VERSION } from "@/lib/espn/disclosure";
 import { withUser } from "@/lib/server/api";
 import { acknowledgeDisclosure, hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
 import { dropClaim, openClaim } from "@/lib/server/espn/loginClaims";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { connectSeason } from "@/lib/server/espn/seasonConnect";
 import { empty, error, isSameOrigin, json, readJson } from "@/lib/server/http";
 
@@ -23,7 +23,7 @@ const CLAIM_CODE = /^[A-Za-z0-9_-]{20,100}$/;
  */
 export const POST = withUser<unknown>(async (request, _ctx, { db, userId, email }) => {
   if (!config.espnSeasonEnabled || !config.espnCodeKey) return error(404, "Not found");
-  if (!mayUseSeason(config.espnSyncAllowlist, email)) return error(403, "In-season help isn't available on this account yet");
+  if (!(await mayUseSeason(db, userId, email))) return error(403, "In-season help isn't available on this account yet");
   const read = await readJson(request);
   if (!read.ok) return read.response;
   const body = (read.body ?? {}) as { claim?: unknown; acknowledged?: unknown };
@@ -35,12 +35,13 @@ export const POST = withUser<unknown>(async (request, _ctx, { db, userId, email 
   const claim = await openClaim(db, config.espnCodeKey, code);
   if (!claim) return error(410, "That link has expired. Tap the Draft Room bookmark on your ESPN league page again.");
   if (body.acknowledged === ESPN_DISCLOSURE_VERSION) await acknowledgeDisclosure(db, userId, ESPN_DISCLOSURE_VERSION);
-  const result = await connectSeason(db, config.espnCodeKey, userId, {
-    espnLeagueId: claim.espnLeagueId,
-    season: claim.season,
-    consentVersion: ESPN_DISCLOSURE_VERSION,
-    ...claim.login,
-  });
+  const result = await connectSeason(
+    db,
+    config.espnCodeKey,
+    userId,
+    { espnLeagueId: claim.espnLeagueId, season: claim.season, consentVersion: ESPN_DISCLOSURE_VERSION, ...claim.login },
+    { seasonOpen: config.seasonAccess === "open" },
+  );
   if (result.ok || result.status !== 503) await dropClaim(db, code);
   if (!result.ok) return json(result.status, { error: result.error, ...(result.seasonVersion ? { seasonVersion: result.seasonVersion } : {}) });
   return json(200, { leagueId: result.leagueId, created: result.created });

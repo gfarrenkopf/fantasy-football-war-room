@@ -6,7 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { config, publicFlags } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { espnDraftPage, espnLeaguePage } from "@/lib/espn/pages";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
 import { findLeague } from "@/lib/server/leagues";
 
@@ -26,7 +26,7 @@ export default async function EspnSetup({ searchParams }: PageProps<"/espn">) {
   if (!config.espnSyncEnabled) notFound();
   const params = await searchParams;
   const user = await getSessionUser();
-  const season = config.espnSeasonEnabled && (!user || mayUseSeason(config.espnSyncAllowlist, user.email));
+  const season = config.espnSeasonEnabled && (!user || (await mayUseSeason(getDb(), user.userId, user.email)));
   const intent = one(params.for) === "draft" || !season ? "draft" : "season";
   const links = user && season ? await listSeasonLinks(getDb(), user.userId) : [];
   const leagueId = one(params.league);

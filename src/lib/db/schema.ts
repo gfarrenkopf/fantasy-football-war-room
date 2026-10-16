@@ -30,6 +30,8 @@ const timestamps = {
 /** Auth.js's AdapterAccountType, restated so the schema doesn't depend on the auth packages. */
 type AdapterAccountType = "oauth" | "oidc" | "email" | "webauthn";
 
+export type SeasonAccessVia = "open" | "invite";
+
 export const users = pgTable("users", {
   id: text("id")
     .primaryKey()
@@ -38,6 +40,13 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   emailVerified: timestamp("email_verified", { withTimezone: true, mode: "date" }),
   image: text("image"),
+  /**
+   * When this account was let into in-season help for good (APE-341): the first time it connected
+   * ESPN while SEASON_ACCESS was open, or by hand to invite it. Null: it gets in only while open.
+   */
+  seasonAccessAt: timestamp("season_access_at", { withTimezone: true, mode: "date" }),
+  /** How it was let in: `open`, a beta tester, who gets the 2026 season's AI free; `invite`, by hand. */
+  seasonAccessVia: text("season_access_via").$type<SeasonAccessVia>(),
 });
 
 export const accounts = pgTable(

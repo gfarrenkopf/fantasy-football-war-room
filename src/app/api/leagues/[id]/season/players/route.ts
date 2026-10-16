@@ -2,7 +2,7 @@ import { config } from "@/lib/config";
 import { withUser } from "@/lib/server/api";
 import { formatServerError } from "@/lib/server/errorLog";
 import { parsePlayerSearch, playerSearchLimiter } from "@/lib/server/espn/playerSearch";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { searchPlayers } from "@/lib/server/espn/waivers";
 import { error, json } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
@@ -20,7 +20,7 @@ const ROUTE = "/api/leagues/[id]/season/players";
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const { id } = await ctx.params;
   if (!config.espnSeasonEnabled || !config.espnCodeKey) return error(404, "Not found");
-  if (!mayUseSeason(config.espnSyncAllowlist, email)) return error(403, "In-season help isn't available on this account yet");
+  if (!(await mayUseSeason(db, userId, email))) return error(403, "In-season help isn't available on this account yet");
   const search = parsePlayerSearch(new URL(request.url));
   if (!search) return error(400, "Invalid search");
   if (!playerSearchLimiter.allow(userId)) return error(429, "Too many searches. Wait a minute and try again.");

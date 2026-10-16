@@ -23,7 +23,7 @@ function wholeNumber(raw: string | null, max: number): number | null {
  * isn't a number. Gated like the season route.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id, week: rawWeek } = await ctx.params;
   const week = wholeNumber(rawWeek, 30);

@@ -8,7 +8,7 @@ import { config, publicFlags } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { seasonSample } from "@/lib/landing/sample";
 import { landingMode } from "@/lib/landing/seasonSample";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
 
 const DRAFT_METADATA: Metadata = {
@@ -50,7 +50,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     const qs = query.toString();
     // In season, a league following ESPN opens on its season page (10.7), unless the link was
     // meant for the draft room (anything with a query string).
-    if (user && !qs && config.espnSeasonEnabled && mayUseSeason(config.espnSyncAllowlist, user.email)) {
+    if (user && !qs && config.espnSeasonEnabled && (await mayUseSeason(getDb(), user.userId, user.email))) {
       const [latest] = await listSeasonLinks(getDb(), user.userId);
       if (latest) redirect(`/season/${latest.leagueId}`);
     }

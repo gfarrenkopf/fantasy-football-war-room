@@ -8,6 +8,7 @@ import { deleteLeague, findLeague } from "../leagues";
 import { createTestLeague } from "../testLeagues";
 import { mintBridgeToken } from "./bridgeTokens";
 import { loadLogin, loginStatus } from "./logins";
+import { seasonAccessStamp } from "./seasonAccess";
 import { findSeasonLink, linkSeason, listSeasonLinks } from "./seasonLinks";
 
 vi.mock("server-only", () => ({}));
@@ -78,6 +79,22 @@ describe("connectSeason", () => {
     expect(await connectSeason(db, KEY, userId, request, { fetchImpl: espn(404, {}) })).toMatchObject({ ok: false, status: 404 });
     expect(await connectSeason(db, KEY, userId, request, { fetchImpl: espn(200, { ...espnLeague, teams: [] }) })).toMatchObject({ ok: false, status: 403 });
     expect(await loginStatus(db, userId)).toBeNull();
+  });
+
+  it("stamps the account while the beta is open, so it stays in once it closes, and never moves the stamp (APE-341)", async () => {
+    const userId = await createTestUser(db);
+    const first = new Date("2026-10-01T12:00:00Z");
+    expect(await connectSeason(db, KEY, userId, request, { fetchImpl: espn(), seasonOpen: true, now: first })).toMatchObject({ ok: true });
+    expect(await seasonAccessStamp(db, userId)).toEqual({ at: first, via: "open" });
+    await connectSeason(db, KEY, userId, request, { fetchImpl: espn(), seasonOpen: true, now: new Date("2026-10-08T12:00:00Z") });
+    expect(await seasonAccessStamp(db, userId)).toEqual({ at: first, via: "open" });
+
+    const closed = await createTestUser(db);
+    expect(await connectSeason(db, KEY, closed, request, { fetchImpl: espn() })).toMatchObject({ ok: true });
+    expect(await seasonAccessStamp(db, closed)).toBeNull();
+    const refused = await createTestUser(db);
+    await connectSeason(db, KEY, refused, request, { fetchImpl: espn(401, {}), seasonOpen: true });
+    expect(await seasonAccessStamp(db, refused)).toBeNull();
   });
 
   it("asks for consent again when the version the user saw is out of date", async () => {

@@ -56,7 +56,7 @@ beforeAll(async () => {
 });
 afterAll(() => close());
 
-const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "" };
+const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "" };
 
 async function stub(env: Partial<typeof ENV> = {}) {
   for (const [name, value] of Object.entries({ ...ENV, ...env })) vi.stubEnv(name, value);
@@ -247,7 +247,7 @@ describe("POST /api/v1/leagues/:id/lineup", () => {
     expect((await (await route({ ESPN_CODE_KEY: "" }))(post(leagueId), ctx(leagueId))).status).toBe(404);
     vi.unstubAllEnvs();
     vi.resetModules();
-    expect((await (await route({ ESPN_SYNC_ALLOWLIST: "someone@else.test" }))(post(leagueId), ctx(leagueId))).status).toBe(403);
+    expect((await (await route({ SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone@else.test" }))(post(leagueId), ctx(leagueId))).status).toBe(403);
     vi.unstubAllEnvs();
     vi.resetModules();
     const POST = await route();
@@ -289,7 +289,7 @@ describe("POST /api/v1/espn/write-consent", () => {
   });
 
   it("is gated", async () => {
-    expect((await (await consentRoute({ ESPN_SYNC_ALLOWLIST: "someone@else.test" }))(consent(ESPN_WRITE_VERSION), {})).status).toBe(403);
+    expect((await (await consentRoute({ SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone@else.test" }))(consent(ESPN_WRITE_VERSION), {})).status).toBe(403);
     vi.unstubAllEnvs();
     vi.resetModules();
     const POST = await consentRoute();

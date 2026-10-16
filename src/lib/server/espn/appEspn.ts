@@ -1,16 +1,17 @@
 import "server-only";
 import { config } from "@/lib/config";
+import type { Db } from "@/lib/db/types";
 import { error, readJson } from "../http";
+import { mayUseSeason } from "./access";
 import { parseEspnLogin, type EspnLogin } from "./logins";
-import { mayUseSeason } from "./seasonAccess";
 
 /**
  * The gates and body parsing shared by the iPhone app's ESPN routes (/api/v1/espn, APE-377), the
  * same as the web's season routes: in-season features on, and the account allowed in.
  */
-export function seasonGate(email: string | null): Response | null {
+export async function seasonGate(db: Db, userId: string, email: string | null): Promise<Response | null> {
   if (!config.espnSeasonEnabled || !config.espnCodeKey) return error(404, "Not found");
-  if (!mayUseSeason(config.espnSyncAllowlist, email)) return error(403, "In-season help isn't available on this account yet");
+  if (!(await mayUseSeason(db, userId, email))) return error(403, "In-season help isn't available on this account yet");
   return null;
 }
 
