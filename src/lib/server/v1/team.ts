@@ -34,6 +34,14 @@ export interface WaiversResponse {
   drops: { needed: boolean; candidates: number[] };
 }
 
+/** GET team/players (APE-409): a page of the league's available players matching a search, each valued like a pickup. */
+export interface PlayersResponse {
+  players: Pickup[];
+  /** Whether another page follows: ask again with `offset` moved on by the page's length. */
+  more: boolean;
+  fetchedAt: string;
+}
+
 /** GET team/fills: this week's holes and how to fill them, as the web's hole card reads them. */
 export interface FillsResponse {
   holes: Hole[];

@@ -23,15 +23,24 @@ const MIN_PER_WEEK = 0.05;
 /** A team id no ESPN team has, standing in for the waiver pool. */
 const POOL = -1;
 
-export function rankPickups(view: SeasonView, pool: readonly Pickup["player"][], limit = 10): Pickup[] {
+/**
+ * What one available player is worth to the user's best lineup, whatever it comes to: a player found
+ * by search (APE-409) shows his value even when it's nothing. Null when the view has no team of the user's.
+ */
+export function valuePickup(view: SeasonView, player: Pickup["player"]): Pickup | null {
   const mine = view.teams.find((t) => t.id === view.myTeamId);
-  if (!mine) return [];
+  if (!mine) return null;
   const league: TradeLeague = view;
+  const verdict = evaluateTrade([mine, { id: POOL, roster: [player] }], league, { teamA: mine.id, gives: [], teamB: POOL, gets: [player.playerId] });
+  if (!verdict) return null;
+  return { player, delta: verdict.a.delta, perWeek: verdict.a.perWeek, drop: verdict.a.drops[0] ?? null };
+}
+
+export function rankPickups(view: SeasonView, pool: readonly Pickup["player"][], limit = 10): Pickup[] {
   return pool
     .flatMap((player): Pickup[] => {
-      const verdict = evaluateTrade([mine, { id: POOL, roster: [player] }], league, { teamA: mine.id, gives: [], teamB: POOL, gets: [player.playerId] });
-      if (!verdict || verdict.a.perWeek < MIN_PER_WEEK) return [];
-      return [{ player, delta: verdict.a.delta, perWeek: verdict.a.perWeek, drop: verdict.a.drops[0] ?? null }];
+      const pickup = valuePickup(view, player);
+      return pickup && pickup.perWeek >= MIN_PER_WEEK ? [pickup] : [];
     })
     .sort((a, b) => b.delta - a.delta || b.player.ros - a.player.ros)
     .slice(0, limit);

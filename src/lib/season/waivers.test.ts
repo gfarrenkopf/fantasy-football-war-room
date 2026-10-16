@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
-import { rankPickups, waiverNote } from "./waivers";
+import { rankPickups, valuePickup, waiverNote } from "./waivers";
 
 // Starters: QB, RB×2, WR×2, TE, FLEX, D/ST, K (testView's STARTERS); bench of three.
 const mine = [
@@ -38,6 +38,22 @@ describe("rankPickups", () => {
 
   it("keeps only the top few", () => {
     expect(rankPickups(view, [rb, te, bye], 1)).toHaveLength(1);
+  });
+});
+
+describe("valuePickup", () => {
+  it("values a player who'd only sit on the bench at nothing, rather than leaving him out", () => {
+    const bench = free("Depth Wideout", "WR", 3);
+    expect(valuePickup(view, bench)).toMatchObject({ player: bench, delta: 0, perWeek: 0 });
+  });
+
+  it("matches what the ranked list says for the same player", () => {
+    const rb = free("Waiver Back", "RB", 10);
+    expect(valuePickup(view, rb)).toEqual(rankPickups(view, [rb])[0]);
+  });
+
+  it("has nothing to say without a team of the user's", () => {
+    expect(valuePickup({ ...view, myTeamId: -99 }, free("Anyone", "RB", 10))).toBeNull();
   });
 });
 
