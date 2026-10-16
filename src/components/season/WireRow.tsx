@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { SeasonView } from "@/lib/season/view";
-import type { Pickup } from "@/lib/season/waivers";
+import type { Pickup, Rostered } from "@/lib/season/waivers";
 import { AcquireReview } from "./AcquireReview";
 import { LocalTime } from "./LocalTime";
 import { PlayerLine, signed } from "./parts";
@@ -94,5 +94,30 @@ export function WeeklyGain({ pickup }: { pickup: Pickup }) {
         <span className="tabular-nums">{signed(pickup.delta)}</span> rest of season
       </span>
     </>
+  );
+}
+
+/**
+ * A player already on a team in the league, found by a name search (APE-413): whose team he's on,
+ * and a trade with that team, opened in the Trades tab's builder. The user's own players just say so.
+ */
+export function RosteredRow({ rostered, onTrade }: { rostered: Rostered; onTrade: (partnerId: number, playerId: number) => void }) {
+  const { player, team, teamId, mine } = rostered;
+  return (
+    <li className={s.benchRow}>
+      <span className={s.pickupWho}>
+        <PlayerLine player={player} value="none" ownership live />
+        <span className={s.pickupStatus} data-status="ONTEAM">
+          {mine ? "On your team" : `On ${team}`}
+        </span>
+      </span>
+      {!mine && (
+        <span className={s.wireSide}>
+          <button type="button" className={`${s.button} ${s.pickupAct}`} onClick={() => onTrade(teamId, player.playerId)} aria-label={`Propose a trade to ${team} for ${player.name}`}>
+            Propose a trade
+          </button>
+        </span>
+      )}
+    </li>
   );
 }

@@ -62,6 +62,21 @@ describe("searchPlayers", () => {
     for (const p of load.players) expect(p).toEqual(expect.objectContaining({ delta: expect.any(Number), perWeek: expect.any(Number) }));
   });
 
+  it("names the league's rostered players a name matches, with their teams, on the first page only", async () => {
+    const { searchPlayers } = await import("./waivers");
+    const rostered = view.teams.flatMap((t) => t.roster.map((p) => ({ name: p.name, team: t.name })));
+    const target = rostered[0];
+    const word = target.name.split(" ").at(-1)!.slice(0, 3);
+    const first = await searchPlayers({} as never, KEY, `u${user}`, "l1", { name: word });
+    if (first.kind !== "ok") throw new Error(first.kind);
+    expect(first.rostered.map((r) => r.player.name)).toContain(target.name);
+    expect(first.rostered.find((r) => r.player.name === target.name)?.team).toBe(target.team);
+    const later = await searchPlayers({} as never, KEY, `u${user}`, "l1", { name: word, offset: 10 });
+    const browse = await searchPlayers({} as never, KEY, `u${user}`, "l1", {});
+    expect(later.kind === "ok" && later.rostered).toEqual([]);
+    expect(browse.kind === "ok" && browse.rostered).toEqual([]);
+  });
+
   it("pages with ESPN's offset, and says another page follows when ESPN has more than a page", async () => {
     const { SEARCH_PAGE, searchPlayers } = await import("./waivers");
     const tail = await searchPlayers({} as never, KEY, `u${user}`, "l1", { offset: 7 });

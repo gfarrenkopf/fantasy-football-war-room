@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { POSITIONS, type Position } from "@/lib/draft/types";
 import type { SeasonView } from "@/lib/season/view";
-import type { Pickup } from "@/lib/season/waivers";
+import type { Pickup, Rostered } from "@/lib/season/waivers";
 import { Search } from "./Icons";
-import { WeeklyGain, WireRow } from "./WireRow";
+import { RosteredRow, WeeklyGain, WireRow } from "./WireRow";
 import s from "./season.module.css";
 
 /** How long typing pauses before the search goes to ESPN. */
 const DEBOUNCE_MS = 300;
 
-type Page = { players: Pickup[]; more: boolean };
+type Page = { players: Pickup[]; rostered: Rostered[]; more: boolean };
 /** What a search read: its players so far, or why it couldn't. */
-type Load = { kind: "ok"; players: Pickup[]; more: boolean; adding: boolean } | { kind: "failed"; error: string };
+type Load = { kind: "ok"; players: Pickup[]; rostered: Rostered[]; more: boolean; adding: boolean } | { kind: "failed"; error: string };
 
 async function fetchPage(leagueId: string, { q, pos, offset }: { q: string; pos: Position | null; offset: number }, signal: AbortSignal): Promise<Page | { error: string }> {
   const params = new URLSearchParams();
@@ -22,17 +22,21 @@ async function fetchPage(leagueId: string, { q, pos, offset }: { q: string; pos:
   if (offset) params.set("offset", String(offset));
   const query = params.size ? `?${params}` : "";
   const res = await fetch(`/api/leagues/${encodeURIComponent(leagueId)}/season/players${query}`, { signal }).catch((err: unknown) => (signal.aborted ? Promise.reject(err) : null));
-  const body = (await res?.json().catch(() => null)) as { players?: Pickup[]; more?: boolean; error?: string } | null;
-  if (res?.ok && body?.players) return { players: body.players, more: body.more ?? false };
+  const body = (await res?.json().catch(() => null)) as { players?: Pickup[]; rostered?: Rostered[]; more?: boolean; error?: string } | null;
+  if (res?.ok && body?.players) return { players: body.players, rostered: body.rostered ?? [], more: body.more ?? false };
   return { error: body?.error ?? "Can't reach Draft Room right now. Try again in a moment." };
 }
+
+/** How widely a row's player is rostered across ESPN, for the list's order; unknown sorts last. */
+const owned = (row: { kind: "free"; pickup: Pickup } | { kind: "team"; rostered: Rostered }) => (row.kind === "free" ? row.pickup.player : row.rostered.player).ownership?.owned ?? -1;
 
 const LABEL: Record<Position, string> = { QB: "QB", RB: "RB", WR: "WR", TE: "TE", K: "K", DST: "D/ST" };
 
 /**
  * Every available player in the league, not just the pickups worth a claim (APE-410): searched by
  * name and narrowed to a position, most-rostered first, a page at a time. Each is valued for the
- * user's best lineup and added or claimed in place, as a pickup is.
+ * user's best lineup and added or claimed in place, as a pickup is. A name search also shows the
+ * league's rostered players it matches, with whose team they're on and a trade (APE-413).
  */
 export function FreeAgentSearch({
   view,
@@ -43,6 +47,7 @@ export function FreeAgentSearch({
   reread,
   onAct,
   onDone,
+  onTrade,
 }: {
   view: SeasonView;
   leagueId: string;
@@ -53,6 +58,7 @@ export function FreeAgentSearch({
   reread: number;
   onAct: (playerId: number | null) => void;
   onDone: (message: string) => void;
+  onTrade: (partnerId: number, playerId: number) => void;
 }) {
   const [q, setQ] = useState("");
   const [pos, setPos] = useState<Position | null>(null);
@@ -69,6 +75,11 @@ export function FreeAgentSearch({
   const loading = !answers.has(key);
   const load = answers.get(key) ?? (shown ? answers.get(shown) : undefined);
   const players = load?.kind === "ok" ? load.players : [];
+  /** Free agents and rostered players in one list, most-rostered across ESPN first, as ESPN sorts the pool. */
+  const rows: ({ kind: "free"; pickup: Pickup } | { kind: "team"; rostered: Rostered })[] = [
+    ...players.map((pickup) => ({ kind: "free" as const, pickup })),
+    ...(load?.kind === "ok" ? load.rostered : []).map((rostered) => ({ kind: "team" as const, rostered })),
+  ].sort((a, b) => owned(b) - owned(a));
   const searching = q.trim().length >= 2;
   const paging = useRef<AbortController | null>(null);
 
@@ -145,22 +156,26 @@ export function FreeAgentSearch({
             Try again
           </button>
         </div>
-      ) : players.length ? (
+      ) : rows.length ? (
         <ol className={s.bench} aria-busy={loading} data-busy={loading || undefined}>
-          {players.map((pickup) => (
-            <WireRow
-              key={pickup.player.playerId}
-              view={view}
-              leagueId={leagueId}
-              pickup={pickup}
-              names={names}
-              writeConsented={writeConsented}
-              acting={acting}
-              gain={<WeeklyGain pickup={pickup} />}
-              onAct={onAct}
-              onDone={onDone}
-            />
-          ))}
+          {rows.map((row) =>
+            row.kind === "team" ? (
+              <RosteredRow key={`team-${row.rostered.player.playerId}`} rostered={row.rostered} onTrade={onTrade} />
+            ) : (
+              <WireRow
+                key={row.pickup.player.playerId}
+                view={view}
+                leagueId={leagueId}
+                pickup={row.pickup}
+                names={names}
+                writeConsented={writeConsented}
+                acting={acting}
+                gain={<WeeklyGain pickup={row.pickup} />}
+                onAct={onAct}
+                onDone={onDone}
+              />
+            ),
+          )}
         </ol>
       ) : loading ? (
         <p className={`${s.note} ${s.fine}`} role="status">

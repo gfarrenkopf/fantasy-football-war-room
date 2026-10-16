@@ -7,7 +7,7 @@ import { findHoles, rankFills, type Hole, type HoleFills, type PoolPlayer } from
 import { nextWeekHoles, rankAhead, type AheadFill, type WeekHole } from "@/lib/season/holesAhead";
 import type { FreeAgent } from "@/lib/season/types";
 import { scorePlayer, type SeasonView } from "@/lib/season/view";
-import { rankPickups, valuePickup, type Pickup } from "@/lib/season/waivers";
+import { rankPickups, rosteredMatching, valuePickup, type Pickup, type Rostered } from "@/lib/season/waivers";
 import { readEspnLeague } from "./leagueReader";
 import { loadLogin } from "./logins";
 import { getEspnProjections } from "./projections";
@@ -172,12 +172,14 @@ export async function loadWaivers(db: Db, key: Buffer, userId: string, leagueId:
   return { kind: "ok", view, pickups: rankPickups(view, pool), ahead: rankAhead(view, nextWeekHoles(view), pool), considered: pool.length, fetchedAt: read.fetchedAt };
 }
 
-export type SearchLoad = { kind: "ok"; view: SeasonView; players: Pickup[]; more: boolean; fetchedAt: Date } | { kind: "problem"; problem: Problem };
+export type SearchLoad = { kind: "ok"; view: SeasonView; players: Pickup[]; rostered: Rostered[]; more: boolean; fetchedAt: Date } | { kind: "problem"; problem: Problem };
 
 /**
  * Search and browse (APE-409): a page of the available players at `position` (all of them without
  * one) whose names match `name`, most-rostered first, each valued for the user's lineup however
  * little he adds. Searched players stay in the pool cache, so the acquire routes know who they are.
+ * A name search's first page also names the league's rostered players it matches, with their teams
+ * (APE-413), from the season view: no ESPN read.
  */
 export async function searchPlayers(
   db: Db,
@@ -190,7 +192,8 @@ export async function searchPlayers(
   const read = await readPool(db, key, userId, leagueId, { positions: position ? [POSITION_SLOT[position]] : POSITIONS, limit: SEARCH_PAGE + 1, refresh, name, offset });
   if (read.kind !== "ok") return read;
   const players = read.pool.slice(0, SEARCH_PAGE).flatMap((p) => valuePickup(read.view, p) ?? []);
-  return { kind: "ok", view: read.view, players, more: read.pool.length > SEARCH_PAGE, fetchedAt: read.fetchedAt };
+  const rostered = name && offset === 0 ? rosteredMatching(read.view, name, position) : [];
+  return { kind: "ok", view: read.view, players, rostered, more: read.pool.length > SEARCH_PAGE, fetchedAt: read.fetchedAt };
 }
 
 /**

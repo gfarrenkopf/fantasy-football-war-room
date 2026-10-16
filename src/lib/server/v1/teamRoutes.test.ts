@@ -129,7 +129,7 @@ beforeEach(async () => {
   state.waivers = { kind: "ok", view, pickups: [], ahead: [], considered: 100, fetchedAt: new Date("2026-09-20T16:00:00Z") };
   state.fills = { kind: "ok", holes: [], fills: [] };
   state.pooled = AGENT;
-  state.search = { kind: "ok", view, players: [], more: false, fetchedAt: new Date("2026-09-20T16:00:00Z") };
+  state.search = { kind: "ok", view, players: [], rostered: [], more: false, fetchedAt: new Date("2026-09-20T16:00:00Z") };
   state.searched = [];
   state.outcome = null;
   userId = await createTestUser(db);
@@ -185,10 +185,11 @@ describe("GET /api/v1/leagues/:id/team/players", () => {
   const pickup = { player: { ...AGENT, ros: 40, weekly: {} }, delta: 6, perWeek: 2, drop: id("Broncos D/ST") };
 
   it("searches the pool by name, position and page, and answers a page of valued players", async () => {
-    state.search = { ...(state.search as object), players: [pickup], more: true };
+    const rostered = [{ player: partner.roster[0], teamId: partner.id, team: partner.name, mine: false }];
+    state.search = { ...(state.search as object), players: [pickup], rostered, more: true };
     const res = await (await load<Get>("players")).GET(get(leagueId, "players?q=%20wire%20%20guy&pos=WR&offset=25"), ctx(leagueId));
     expect(res.status).toBe(200);
-    expect((await res.json()) as PlayersResponse).toEqual({ players: [pickup], more: true, fetchedAt: "2026-09-20T16:00:00.000Z" });
+    expect((await res.json()) as PlayersResponse).toEqual(JSON.parse(JSON.stringify({ players: [pickup], rostered, more: true, fetchedAt: "2026-09-20T16:00:00.000Z" })));
     expect(state.searched).toEqual([{ name: "wire guy", position: "WR", offset: 25, refresh: false }]);
   });
 

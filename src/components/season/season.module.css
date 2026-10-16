@@ -3715,6 +3715,10 @@ li + li > .pickerOption {
 .pickupStatus[data-status="FREEAGENT"] {
   color: var(--color-value-ink);
 }
+/* Whose team a rostered player is on (APE-413): the fact the row is for, so it reads at text weight. */
+.pickupStatus[data-status="ONTEAM"] {
+  color: var(--color-text);
+}
 .pickupGain {
   color: var(--color-value-ink);
   font-size: 15px;

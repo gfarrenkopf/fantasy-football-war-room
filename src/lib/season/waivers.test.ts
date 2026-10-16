@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { at, player, seasonView } from "@/lib/ai/season/testView";
-import { rankPickups, valuePickup, waiverNote } from "./waivers";
+import { nameMatches, rankPickups, rosteredMatching, valuePickup, waiverNote } from "./waivers";
 
 // Starters: QB, RB×2, WR×2, TE, FLEX, D/ST, K (testView's STARTERS); bench of three.
 const mine = [
@@ -54,6 +54,35 @@ describe("valuePickup", () => {
 
   it("has nothing to say without a team of the user's", () => {
     expect(valuePickup({ ...view, myTeamId: -99 }, free("Anyone", "RB", 10))).toBeNull();
+  });
+});
+
+describe("nameMatches", () => {
+  it("matches the start of any word, or of the whole name, ignoring case, as ESPN's filterName does", () => {
+    expect(nameMatches("Tyler Bass", "bass")).toBe(true);
+    expect(nameMatches("Tyler Bass", "Tyler B")).toBe(true);
+    expect(nameMatches("Amon-Ra St. Brown", "st")).toBe(true);
+    expect(nameMatches("Tyler Bass", "ass")).toBe(false);
+    expect(nameMatches("Tyler Bass", "  ")).toBe(false);
+  });
+});
+
+describe("rosteredMatching", () => {
+  const theirs = { ...player("Bench Brown", "WR", 9), ownership: { owned: 99, started: 80 } };
+  const league = { ...view, teams: [...view.teams.map((t) => (t.id === view.myTeamId ? t : { ...t, name: "Gridiron Gang", roster: [...t.roster, theirs] }))] };
+
+  it("names whose team each match is on, the user's own marked, most-rostered first", () => {
+    const found = rosteredMatching(league, "ben");
+    expect(found[0]).toMatchObject({ player: { name: "Bench Brown" }, team: "Gridiron Gang", mine: false });
+    expect(found.slice(1).map((r) => [r.player.name, r.mine])).toEqual([
+      ["Bench RB", true],
+      ["Bench WR", true],
+      ["Bench TE", true],
+    ]);
+  });
+
+  it("keeps to the position searched", () => {
+    expect(rosteredMatching(league, "ben", "TE").map((r) => r.player.name)).toEqual(["Bench TE"]);
   });
 });
 

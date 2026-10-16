@@ -9,6 +9,8 @@ struct WaiversView: View {
     let model: WaiversModel
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
+    /// Opens the Trades tab's builder on a trade for a rostered player the search found (APE-413).
+    var onTrade: (Int, Int) -> Void = { _, _ in }
 
     var body: some View {
         ScrollView {
@@ -35,7 +37,7 @@ struct WaiversView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                FreeAgentsCard(model: model)
+                FreeAgentsCard(model: model, onTrade: onTrade)
             }
             .padding(.horizontal, Spacing.xl + Spacing.xs)
             .padding(.vertical, Spacing.xl)

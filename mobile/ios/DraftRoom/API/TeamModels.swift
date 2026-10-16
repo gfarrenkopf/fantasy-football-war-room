@@ -46,9 +46,22 @@ struct Pickup: Codable, Equatable, Sendable, Identifiable {
 /// rostered first, each valued like a pickup.
 struct PlayersResponse: Codable, Equatable, Sendable {
     let players: [Pickup]
+    /// On a name search's first page, the league's rostered players it matches, with their teams (APE-413).
+    let rostered: [RosteredPlayer]
     /// Another page follows: ask again with `offset` moved on by the players shown.
     let more: Bool
     let fetchedAt: Date
+}
+
+/// A player already on a team in the league, found by a name search (APE-413): whose team, to trade with.
+struct RosteredPlayer: Codable, Equatable, Sendable, Identifiable {
+    let player: ViewPlayer
+    let teamId: Int
+    let team: String
+    /// On the user's own team: nothing to trade for.
+    let mine: Bool
+
+    var id: Int { player.playerId }
 }
 
 /// Next week's hole (the web's NextWeek, APE-353): a slot nobody can play that week, and who'd fill it.

@@ -20,6 +20,8 @@ final class FreeAgentsModel {
     private(set) var query = ""
     private(set) var position: String?
     private(set) var players: [Pickup] = []
+    /// The league's rostered players the name matches, with their teams (APE-413).
+    private(set) var rostered: [RosteredPlayer] = []
     /// Another page follows the ones shown.
     private(set) var more = false
     private(set) var load: Load = .loading
@@ -35,7 +37,33 @@ final class FreeAgentsModel {
     /// Counts searches, so a slow answer to an old one is dropped.
     private var generation = 0
     /// Every search answered since the last reload, so going back to one shows it at once.
-    private var answers: [String: (players: [Pickup], more: Bool)] = [:]
+    private var answers: [String: (players: [Pickup], rostered: [RosteredPlayer], more: Bool)] = [:]
+
+    /// A row of the list: a free agent to add or claim, or a rostered player to trade for.
+    enum Row: Identifiable, Equatable {
+        case free(Pickup)
+        case team(RosteredPlayer)
+
+        var id: String {
+            switch self {
+            case let .free(pickup): "free-\(pickup.id)"
+            case let .team(rostered): "team-\(rostered.id)"
+            }
+        }
+
+        var owned: Int {
+            switch self {
+            case let .free(pickup): pickup.player.ownership?.owned ?? -1
+            case let .team(rostered): rostered.player.ownership?.owned ?? -1
+            }
+        }
+    }
+
+    /// Free agents and rostered players in one list, most-rostered across ESPN first, as ESPN sorts the pool.
+    var rows: [Row] {
+        let all = players.map(Row.free) + rostered.map(Row.team)
+        return all.enumerated().sorted { a, b in a.element.owned != b.element.owned ? a.element.owned > b.element.owned : a.offset < b.offset }.map(\.element)
+    }
 
     /// The search the list is for: the name ESPN would match, and the position.
     private var key: String {
@@ -93,7 +121,7 @@ final class FreeAgentsModel {
             let shown = Set(players.map(\.id))
             players += page.players.filter { !shown.contains($0.id) }
             more = page.more
-            answers[key] = (players, more)
+            answers[key] = (players, rostered, more)
         } catch {
             // The list shown is still right; Show more stays to try again.
         }
@@ -104,6 +132,7 @@ final class FreeAgentsModel {
         if let answer = answers[key] {
             generation += 1
             players = answer.players
+            rostered = answer.rostered
             more = answer.more
             load = .ready
             return
@@ -123,14 +152,16 @@ final class FreeAgentsModel {
             let page: PlayersResponse = try await api.get(path(offset: 0))
             guard mark == generation else { return }
             players = page.players
+            rostered = page.rostered
             more = page.more
             load = .ready
-            answers[key] = (page.players, page.more)
+            answers[key] = (page.players, page.rostered, page.more)
         } catch .signedOut {
             // The session handles this: the app is already back at sign-in.
         } catch {
             guard mark == generation else { return }
             players = []
+            rostered = []
             more = false
             load = .failed(error.message)
         }

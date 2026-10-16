@@ -195,18 +195,22 @@ enum SeasonSample {
         Pickup(player: wirePlayer(26, "Tyler Bass", "K", points: 6.2, ros: 86.8), delta: 0, perWeek: 0, drop: 7),
     ]
 
-    /// team/players: the pool narrowed by `pos` and by a name ESPN would match, a word's start.
+    /// team/players: the pool narrowed by `pos` and by a name ESPN would match, a word's start, and on
+    /// a name search the league's rostered players it matches, with their teams (APE-413).
     static func playersJSON(query: String) -> String {
         let items = URLComponents(string: "x?\(query)")?.queryItems ?? []
         let q = items.first { $0.name == "q" }?.value?.lowercased()
         let pos = items.first { $0.name == "pos" }?.value
-        let players = pool.filter { pickup in
-            (pos == nil || pickup.player.pos == pos)
-                && (q.map { q in pickup.player.name.lowercased().split(separator: " ").contains { $0.hasPrefix(q) } || pickup.player.name.lowercased().hasPrefix(q) } ?? true)
+        let matches = { (p: ViewPlayer) in
+            (pos == nil || p.pos == pos) && (q.map { q in p.name.lowercased().split(separator: " ").contains { $0.hasPrefix(q) } || p.name.lowercased().hasPrefix(q) } ?? true)
+        }
+        let players = pool.filter { matches($0.player) }
+        let rostered = q == nil ? [] : view.teams.flatMap { team in
+            team.roster.filter(matches).map { RosteredPlayer(player: $0, teamId: team.id, team: team.name, mine: team.id == view.myTeamId) }
         }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        return String(decoding: (try? encoder.encode(PlayersResponse(players: players, more: false, fetchedAt: kickoff))) ?? Data(), as: UTF8.self)
+        return String(decoding: (try? encoder.encode(PlayersResponse(players: players, rostered: rostered, more: false, fetchedAt: kickoff))) ?? Data(), as: UTF8.self)
     }
 
     // MARK: Trades (APE-405)

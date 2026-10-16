@@ -73,7 +73,10 @@ struct ShellView: View {
                         case .trade:
                             TradesView(model: model.trades(for: league), ai: model.ai(for: league), onReconnect: { connecting = true })
                         case .waivers:
-                            WaiversView(model: model.waivers(for: league), onReconnect: { connecting = true })
+                            WaiversView(model: model.waivers(for: league), onReconnect: { connecting = true }) { partner, player in
+                                tab = .trade
+                                Task { await model.trades(for: league).load(partner: partner, gives: [], gets: [player]) }
+                            }
                         }
                     }
                 }

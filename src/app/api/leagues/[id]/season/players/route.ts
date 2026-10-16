@@ -12,9 +12,10 @@ type Ctx = RouteContext<"/api/leagues/[id]/season/players">;
 const ROUTE = "/api/leagues/[id]/season/players";
 
 /**
- * GET /api/leagues/:id/season/players[?q=&pos=&offset=&refresh=1] → { players, more, fetchedAt }:
+ * GET /api/leagues/:id/season/players[?q=&pos=&offset=&refresh=1] → { players, rostered, more, fetchedAt }:
  * search and browse the league's available players (APE-409), most-rostered first, a page at a time,
- * each valued for the user's best lineup like a pickup. 409 `{ problem }` when ESPN can't be read.
+ * each valued for the user's best lineup like a pickup, and on a name search's first page the
+ * league's rostered players it matches, with their teams (APE-413). 409 `{ problem }` when ESPN can't be read.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const { id } = await ctx.params;
@@ -27,7 +28,7 @@ export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => 
   try {
     const load = await searchPlayers(db, config.espnCodeKey, userId, id, search);
     if (load.kind !== "ok") return json(409, { error: "ESPN couldn't be read for this league", problem: load.problem });
-    return json(200, { players: load.players, more: load.more, fetchedAt: load.fetchedAt.toISOString() });
+    return json(200, { players: load.players, rostered: load.rostered, more: load.more, fetchedAt: load.fetchedAt.toISOString() });
   } catch (err) {
     console.error(formatServerError(err, { method: request.method, path: new URL(request.url).pathname }, { routePath: ROUTE, routeType: "route" }));
     return error(503, "ESPN's player pool couldn't be read just now");

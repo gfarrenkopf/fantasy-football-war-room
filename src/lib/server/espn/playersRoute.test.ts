@@ -38,12 +38,13 @@ async function route(env: Record<string, string> = {}) {
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 const get = (id: string, query = "") => new Request(`http://localhost/api/leagues/${id}/season/players${query}`);
 const PICKUP = { player: { playerId: 7, name: "Tyler Bass" }, delta: 3, perWeek: 1, drop: null };
+const ROSTERED = { player: { playerId: 8, name: "Brandon Aubrey" }, teamId: 3, team: "Gridiron Gang", mine: false };
 
 describe("GET /api/leagues/:id/season/players", () => {
   let userId: string;
   let leagueId: string;
   beforeEach(async () => {
-    state.load = { kind: "ok", players: [PICKUP], more: true, fetchedAt: new Date("2026-10-16T15:00:00Z") };
+    state.load = { kind: "ok", players: [PICKUP], rostered: [ROSTERED], more: true, fetchedAt: new Date("2026-10-16T15:00:00Z") };
     state.searched = [];
     userId = await createTestUser(db);
     state.user = { userId, email: "fan@example.test" };
@@ -57,7 +58,7 @@ describe("GET /api/leagues/:id/season/players", () => {
   it("answers a page of the pool for the search", async () => {
     const res = await (await route())(get(leagueId, "?q=bass&pos=K&refresh=1"), ctx(leagueId));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ players: [PICKUP], more: true, fetchedAt: "2026-10-16T15:00:00.000Z" });
+    expect(await res.json()).toEqual({ players: [PICKUP], rostered: [ROSTERED], more: true, fetchedAt: "2026-10-16T15:00:00.000Z" });
     expect(state.searched).toEqual([{ name: "bass", position: "K", offset: 0, refresh: true }]);
   });
 

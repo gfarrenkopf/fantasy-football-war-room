@@ -30,7 +30,18 @@ async function fetchWaivers(leagueId: string, refresh: boolean): Promise<Load> {
  * waivers claimed, with the user's pending claims listed to cancel (13.4). FAAB leagues claim on ESPN.
  * Below the pickups, every other available player can be searched and added the same way (APE-410).
  */
-export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonView; leagueId: string; writeConsented: boolean }) {
+export function WaiverPanel({
+  view,
+  leagueId,
+  writeConsented,
+  onTrade,
+}: {
+  view: SeasonView;
+  leagueId: string;
+  writeConsented: boolean;
+  /** Opens the Trades tab on a trade for a rostered player the search found (APE-413). */
+  onTrade: (partnerId: number, playerId: number) => void;
+}) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   /** The pickup being reviewed, by player id. */
   const [acting, setActing] = useState<number | null>(null);
@@ -138,7 +149,7 @@ export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonVi
         </p>
       </section>
 
-      <FreeAgentSearch view={view} leagueId={leagueId} names={names} writeConsented={writeConsented} acting={acting} reread={landed} onAct={act} onDone={done} />
+      <FreeAgentSearch view={view} leagueId={leagueId} names={names} writeConsented={writeConsented} acting={acting} reread={landed} onAct={act} onDone={done} onTrade={onTrade} />
     </div>
   );
 }

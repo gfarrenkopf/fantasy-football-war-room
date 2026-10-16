@@ -30,7 +30,7 @@ export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => 
   try {
     const load = await searchPlayers(db, config.espnCodeKey!, userId, id, search);
     if (load.kind !== "ok") return json(409, { error: "ESPN couldn't be read for this league", problem: load.problem });
-    const body: PlayersResponse = { players: load.players, more: load.more, fetchedAt: load.fetchedAt.toISOString() };
+    const body: PlayersResponse = { players: load.players, rostered: load.rostered, more: load.more, fetchedAt: load.fetchedAt.toISOString() };
     return json(200, body);
   } catch (err) {
     console.error(formatServerError(err, { method: request.method, path: new URL(request.url).pathname }, { routePath: ROUTE, routeType: "route" }));

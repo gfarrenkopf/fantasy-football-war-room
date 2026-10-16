@@ -83,6 +83,32 @@ final class WaiversTests: XCTestCase {
         XCTAssertEqual(notice.label, "Done. Tyler Bass is on your team, and Josh Downs is gone.")
     }
 
+    /// Rostered players (APE-413): Bijan Robinson found on Gridiron Gang, and a trade for him opened in Trades.
+    @MainActor
+    func testTradeForARosteredPlayerFromTheSearch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestStub"]
+        app.launch()
+
+        let tab = app.tabBars.buttons["Waivers"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        tab.tap()
+
+        let field = app.textFields["free-agents-search"]
+        for _ in 0 ..< 6 where !field.isHittable { app.swipeUp() }
+        field.tap()
+        field.typeText("bijan")
+
+        XCTAssertTrue(app.staticTexts["On Gridiron Gang"].waitForExistence(timeout: 5))
+        let trade = app.buttons["trade-for-12"]
+        if !trade.isHittable { app.swipeUp() }
+        trade.tap()
+
+        XCTAssertTrue(app.buttons["trade-partner"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["trade-partner"].label.contains("Gridiron Gang"))
+        XCTAssertTrue(app.descendants(matching: .any)["trade-grade"].waitForExistence(timeout: 5))
+    }
+
     /// Claims (APE-389): Jennings claimed off waivers, then Coleman's pending claim cancelled.
     @MainActor
     func testPlaceAndCancelAClaim() {

@@ -2,9 +2,13 @@ import SwiftUI
 
 /// Every available player, below the pickups (APE-411), after the web's FreeAgentSearch: a name
 /// search and a position switch over the league's pool, most-rostered first. A row's Add or Claim
-/// opens the same confirm as a pickup's; the next page reads as the list reaches its end.
+/// opens the same confirm as a pickup's; the next page reads as the list reaches its end. A name
+/// search also lists the league's rostered players it matches, with whose team they're on and a
+/// trade with that team (APE-413).
 struct FreeAgentsCard: View {
     let model: WaiversModel
+    /// Opens the Trades tab's builder on a trade for a rostered player: the team, then the player.
+    let onTrade: (Int, Int) -> Void
     @FocusState private var typing: Bool
 
     private var search: FreeAgentsModel { model.freeAgents }
@@ -77,12 +81,12 @@ struct FreeAgentsCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Spacing.xl)
             .padding(.bottom, Spacing.xl)
-        case .loading where search.players.isEmpty:
+        case .loading where search.rows.isEmpty:
             ProgressView().tint(.muted)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.xl * 2)
                 .accessibilityLabel("Reading ESPN's player pool")
-        case .ready where search.players.isEmpty:
+        case .ready where search.rows.isEmpty:
             Text(empty)
                 .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -92,9 +96,12 @@ struct FreeAgentsCard: View {
                 .accessibilityIdentifier("free-agents-empty")
         default:
             LazyVStack(spacing: 0) {
-                ForEach(search.players) { pickup in
+                ForEach(search.rows) { row in
                     Divider().overlay(.rowLine)
-                    row(pickup)
+                    switch row {
+                    case let .free(pickup): self.row(pickup)
+                    case let .team(rostered): RosteredRow(rostered: rostered) { onTrade(rostered.teamId, rostered.player.playerId) }
+                    }
                 }
                 if search.more {
                     Divider().overlay(.rowLine)
@@ -129,5 +136,37 @@ struct FreeAgentsCard: View {
         return search.searching
             ? "No available \(who) matching “\(name)”. ESPN matches the start of a first or last name."
             : "No available \(who). Every one is on a roster."
+    }
+}
+
+/// A player already on a team in the league (APE-413): whose team, and a trade with it. The user's
+/// own players just say so.
+private struct RosteredRow: View {
+    let rostered: RosteredPlayer
+    let onTrade: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            PlayerLine(player: rostered.player)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(rostered.player.name)
+            HStack(alignment: .center, spacing: Spacing.md) {
+                Text(rostered.mine ? "On your team" : "On \(rostered.team)")
+                    .typeStyle(TypeScale.label).foregroundStyle(.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: Spacing.md)
+                if !rostered.mine {
+                    Button(action: onTrade) {
+                        Label("Propose a trade", systemImage: "arrow.left.arrow.right").labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(AddButtonStyle())
+                    .accessibilityLabel("Propose a trade to \(rostered.team) for \(rostered.player.name)")
+                    .accessibilityIdentifier("trade-for-\(rostered.player.playerId)")
+                }
+            }
+        }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.lg)
+        .accessibilityElement(children: .contain)
     }
 }

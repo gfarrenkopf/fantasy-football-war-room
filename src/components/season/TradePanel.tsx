@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { tradeEmphasis } from "@/lib/season/emphasis";
 import { canPlay, label, snapshotOf } from "@/lib/season/apply";
@@ -27,15 +27,32 @@ const byRos = (a: ViewPlayer, b: ViewPlayer) => b.ros - a.ros;
  * or a counter. Every verdict compares both starting lineups for the rest of the season; nothing
  * here is sent to ESPN.
  */
-export function TradePanel({ view, leagueId, ai, writeConsented }: { view: SeasonView; leagueId: string; ai: SeasonAiState | null; writeConsented: boolean }) {
+export function TradePanel({
+  view,
+  leagueId,
+  ai,
+  writeConsented,
+  seed = null,
+}: {
+  view: SeasonView;
+  leagueId: string;
+  ai: SeasonAiState | null;
+  writeConsented: boolean;
+  /** A trade to open the builder on, from the Waivers tab's search (APE-413): the team, and who to get. */
+  seed?: { partnerId: number; gets: number[] } | null;
+}) {
   const others = view.teams.filter((t) => t.id !== view.myTeamId);
-  const [partnerId, setPartnerId] = useState(others[0]?.id ?? 0);
+  const [partnerId, setPartnerId] = useState(seed && others.some((t) => t.id === seed.partnerId) ? seed.partnerId : (others[0]?.id ?? 0));
   const [gives, setGives] = useState<number[]>([]);
-  const [gets, setGets] = useState<number[]>([]);
+  const [gets, setGets] = useState<number[]>(seed?.gets ?? []);
   const [loaded, setLoaded] = useState<string | null>(null);
   const [side, setSide] = useState<"send" | "get">("send");
   const [proposing, setProposing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Opened from a search: start at the builder, where the user picks what to send.
+  useEffect(() => {
+    if (seed) document.getElementById("builder-title")?.scrollIntoView({ block: "start" });
+  }, [seed]);
   const mine = view.teams.find((t) => t.id === view.myTeamId);
   const partner = others.find((t) => t.id === partnerId);
 

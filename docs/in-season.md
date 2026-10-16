@@ -110,6 +110,7 @@ The Waivers tab ranks available players the way trades are scored. It adds each 
     - Browsing without a name is served from the pickups' cached top-100 pool, filtered by position. ESPN is only read when the page reaches past that pool, so switching positions costs no ESPN read.
     - Both routes are rate-limited to 60 searches a minute per user.
   - **Values:** each player is valued by `valuePickup()`, the pickups' scoring without its cutoff. A player who adds nothing shows "Wouldn't start".
+  - **Rostered players (APE-413):** a name search's first page also lists the league's rostered players it matches, in the same most-rostered order. They come from the season view's rosters (`rosteredMatching()`), so no extra ESPN read. Each says whose team he's on. Another team's player has **Propose a trade**, which opens the Trades builder with that team picked and him in "You get". The builder grades the trade once the user picks what to send.
   - **Add and Claim:** they work as on a pickup. Searched players stay in the pool cache for the acquire routes. The iPhone route reads a player by id when the cache has expired (`availablePlayer()`).
 
 ## 6. Free and paid

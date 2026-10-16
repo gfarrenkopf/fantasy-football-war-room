@@ -75,6 +75,29 @@ extension StubbedNetwork {
             #expect(queries() == ["", "pos=RB", "pos=RB"])
         }
 
+        @Test func listsRosteredPlayersAmongTheFreeAgentsByHowWidelyTheyreRostered() async throws {
+            var page = try #require(JSONSerialization.jsonObject(with: Fixture.data("team-players")) as? [String: Any])
+            var players = try #require(page["players"] as? [[String: Any]])
+            for (i, owned) in [90, 40, 10].enumerated() {
+                var player = try #require(players[i]["player"] as? [String: Any])
+                player["ownership"] = ["owned": owned, "started": 1]
+                players[i]["player"] = player
+            }
+            var star = try #require(players[0]["player"] as? [String: Any])
+            star["playerId"] = 77
+            star["name"] = "Rostered Star"
+            star["ownership"] = ["owned": 60, "started": 50]
+            page["players"] = players
+            page["rostered"] = [["player": star, "teamId": 2, "team": "Gridiron Gang", "mine": false]]
+            let body = try JSONSerialization.data(withJSONObject: page)
+            StubURLProtocol.reply = { _ in .init(status: 200, body: body) }
+            let model = FreeAgentsModel(api: api, leagueId: "lg-1", debounce: .zero)
+            await model.start()
+            #expect(model.rows.map(\.id) == ["free-4430807", "team-77", "free-\(model.players[1].id)", "free-\(model.players[2].id)"])
+            guard case let .team(rostered) = model.rows[1] else { Issue.record("expected a rostered row"); return }
+            #expect(rostered.team == "Gridiron Gang")
+        }
+
         @Test func pagesOnPastThePlayersShownWithoutRepeatingThem() async {
             let model = model()
             await model.start()

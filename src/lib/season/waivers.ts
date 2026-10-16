@@ -1,3 +1,4 @@
+import type { Position } from "@/lib/draft/types";
 import { evaluateTrade, type TradeLeague } from "./trade";
 import type { FreeAgent } from "./types";
 import type { SeasonView, ViewPlayer } from "./view";
@@ -44,6 +45,33 @@ export function rankPickups(view: SeasonView, pool: readonly Pickup["player"][],
     })
     .sort((a, b) => b.delta - a.delta || b.player.ros - a.player.ros)
     .slice(0, limit);
+}
+
+/** A player already on a team in the league, found by a name search (APE-413): whose team, to trade with. */
+export interface Rostered {
+  player: ViewPlayer;
+  teamId: number;
+  team: string;
+  /** On the user's own team: nothing to trade for. */
+  mine: boolean;
+}
+
+/**
+ * Whether a name matches a search the way ESPN's `filterName` does (docs/espn-protocol.md §8): the
+ * start of any word in the name, or of the whole name, ignoring case.
+ */
+export function nameMatches(name: string, search: string): boolean {
+  const q = search.trim().toLowerCase();
+  if (!q) return false;
+  const full = name.toLowerCase();
+  return full.startsWith(q) || full.split(/\s+/).some((word) => word.startsWith(q));
+}
+
+/** The league's rostered players whose names match a search, at `position` when given, most-rostered across ESPN first. */
+export function rosteredMatching(view: Pick<SeasonView, "teams" | "myTeamId">, search: string, position?: Position): Rostered[] {
+  return view.teams
+    .flatMap((t) => t.roster.filter((p) => nameMatches(p.name, search) && (!position || p.pos === position)).map((player) => ({ player, teamId: t.id, team: t.name, mine: t.id === view.myTeamId })))
+    .sort((a, b) => (b.player.ownership?.owned ?? -1) - (a.player.ownership?.owned ?? -1));
 }
 
 /** "Waiver priority 4 of 12", or FAAB left in a league that bids; null when ESPN gave neither. */
