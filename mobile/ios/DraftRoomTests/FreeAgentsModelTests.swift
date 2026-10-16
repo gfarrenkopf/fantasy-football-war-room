@@ -61,6 +61,20 @@ extension StubbedNetwork {
             #expect(queries() == ["", "pos=RB", "q=Bijan%20R&pos=RB"])
         }
 
+        @Test func showsASearchAlreadyAnsweredWithoutAskingAgainUntilAReload() async {
+            let model = model()
+            await model.start()
+            model.choose(position: "RB")
+            await settle(model, queries: 2)
+            model.choose(position: nil)
+            #expect(model.load == .ready)
+            #expect(model.players.count == 3)
+            model.choose(position: "RB")
+            #expect(queries() == ["", "pos=RB"])
+            await model.reload()
+            #expect(queries() == ["", "pos=RB", "pos=RB"])
+        }
+
         @Test func pagesOnPastThePlayersShownWithoutRepeatingThem() async {
             let model = model()
             await model.start()

@@ -26,7 +26,7 @@ vi.mock("./leagueReader", () => ({
     if (state.fail) return { ok: false, reason: "unavailable", detail: "503" };
     const { limit, offset = 0, filterIds } = filter.players;
     // `deep`: the capture repeated under new ids, for a pool longer than a page.
-    const all = state.deep ? Array.from({ length: 40 }, (_, i) => ({ ...freeAgents.players[i % 8], id: 100 + i })) : freeAgents.players;
+    const all = state.deep ? Array.from({ length: 120 }, (_, i) => ({ ...freeAgents.players[i % 8], id: 100 + i })) : freeAgents.players;
     const pool = filterIds ? all.filter((p) => filterIds.value.includes(p.id)) : all;
     return { ok: true, data: { players: pool.slice(offset, offset + limit) } };
   },
@@ -84,6 +84,28 @@ describe("searchPlayers", () => {
     expect(state.filters).toHaveLength(1);
     state.fail = true;
     expect(await searchPlayers({} as never, KEY, `u${user}`, "l1", { name: "Purdy" })).toEqual({ kind: "problem", problem: "unavailable" });
+  });
+});
+
+describe("browsing from the wire's pool", () => {
+  it("serves a position without a name from the pool the tab read, with no ESPN read", async () => {
+    const { loadWaivers, searchPlayers } = await import("./waivers");
+    await loadWaivers({} as never, KEY, `u${user}`, "l1");
+    expect(state.filters).toHaveLength(1);
+    const load = await searchPlayers({} as never, KEY, `u${user}`, "l1", { position: "QB" });
+    if (load.kind !== "ok") throw new Error(load.kind);
+    expect(state.filters).toHaveLength(1);
+    expect(load.players.map((p) => p.player.name)).toEqual(freeAgents.players.filter((p) => p.player.defaultPositionId === 1).map((p) => p.player.fullName));
+    expect(load.more).toBe(false);
+  });
+
+  it("reads ESPN for a name, and past a pool that runs out before the page does", async () => {
+    const { loadWaivers, searchPlayers } = await import("./waivers");
+    state.deep = true;
+    await loadWaivers({} as never, KEY, `u${user}`, "l1");
+    await searchPlayers({} as never, KEY, `u${user}`, "l1", { name: "Joe" });
+    await searchPlayers({} as never, KEY, `u${user}`, "l1", { offset: 95 });
+    expect(state.filters).toHaveLength(3);
   });
 });
 

@@ -34,6 +34,13 @@ final class FreeAgentsModel {
     private var reading: Task<Void, Never>?
     /// Counts searches, so a slow answer to an old one is dropped.
     private var generation = 0
+    /// Every search answered since the last reload, so going back to one shows it at once.
+    private var answers: [String: (players: [Pickup], more: Bool)] = [:]
+
+    /// The search the list is for: the name ESPN would match, and the position.
+    private var key: String {
+        "\(searching ? query.trimmingCharacters(in: .whitespaces).lowercased() : "")|\(position ?? "")"
+    }
 
     init(api: APIClient, leagueId: String, debounce: Duration = .milliseconds(300)) {
         self.api = api
@@ -70,6 +77,7 @@ final class FreeAgentsModel {
     /// Reads the first page again: after a failure, or once an add has changed the pool.
     func reload() async {
         reading?.cancel()
+        answers = [:]
         await read()
     }
 
@@ -85,6 +93,7 @@ final class FreeAgentsModel {
             let shown = Set(players.map(\.id))
             players += page.players.filter { !shown.contains($0.id) }
             more = page.more
+            answers[key] = (players, more)
         } catch {
             // The list shown is still right; Show more stays to try again.
         }
@@ -92,6 +101,13 @@ final class FreeAgentsModel {
 
     private func schedule(after delay: Duration) {
         reading?.cancel()
+        if let answer = answers[key] {
+            generation += 1
+            players = answer.players
+            more = answer.more
+            load = .ready
+            return
+        }
         reading = Task { [weak self] in
             if delay > .zero { try? await Task.sleep(for: delay) }
             guard !Task.isCancelled else { return }
@@ -109,6 +125,7 @@ final class FreeAgentsModel {
             players = page.players
             more = page.more
             load = .ready
+            answers[key] = (page.players, page.more)
         } catch .signedOut {
             // The session handles this: the app is already back at sign-in.
         } catch {

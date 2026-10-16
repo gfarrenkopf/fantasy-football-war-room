@@ -12,8 +12,8 @@ import s from "./season.module.css";
 const DEBOUNCE_MS = 300;
 
 type Page = { players: Pickup[]; more: boolean };
-/** What the list last read, and for which search: while the search has moved on, it's loading. */
-type Load = { key: string } & ({ kind: "ok"; players: Pickup[]; more: boolean; adding: boolean } | { kind: "failed"; error: string });
+/** What a search read: its players so far, or why it couldn't. */
+type Load = { kind: "ok"; players: Pickup[]; more: boolean; adding: boolean } | { kind: "failed"; error: string };
 
 async function fetchPage(leagueId: string, { q, pos, offset }: { q: string; pos: Position | null; offset: number }, signal: AbortSignal): Promise<Page | { error: string }> {
   const params = new URLSearchParams();
@@ -56,24 +56,39 @@ export function FreeAgentSearch({
 }) {
   const [q, setQ] = useState("");
   const [pos, setPos] = useState<Position | null>(null);
-  const [load, setLoad] = useState<Load | null>(null);
   const [retry, setRetry] = useState(0);
   const key = JSON.stringify([leagueId, q.trim().length >= 2 ? q.trim().toLowerCase() : "", pos, reread, retry]);
-  const loading = load?.key !== key;
-  /** The last list read stays up, dimmed, while the next search reads. */
+  /**
+   * Every search's answer this visit, so going back to one shows it at once. An add changes `reread`,
+   * and with it every key, so nothing read before the add is shown after it.
+   */
+  const [answers, setAnswers] = useState<ReadonlyMap<string, Load>>(new Map());
+  /** The search whose answer is on screen: while the next one reads, the last stays up, dimmed. */
+  const [shown, setShown] = useState<string | null>(null);
+  const known = useRef(new Set<string>());
+  const loading = !answers.has(key);
+  const load = answers.get(key) ?? (shown ? answers.get(shown) : undefined);
   const players = load?.kind === "ok" ? load.players : [];
   const searching = q.trim().length >= 2;
   const paging = useRef<AbortController | null>(null);
 
-  // The first page, whenever the search changes: after a pause while typing, at once otherwise.
+  const answer = (at: string, next: Load) => {
+    if (next.kind === "ok") known.current.add(at);
+    setAnswers((was) => new Map(was).set(at, next));
+    setShown(at);
+  };
+
+  // The first page, whenever the search changes: after a pause while typing, at once otherwise, and
+  // not at all for a search already answered.
   useEffect(() => {
     paging.current?.abort();
+    if (known.current.has(key)) return;
     const controller = new AbortController();
     const [, name, position] = JSON.parse(key) as [string, string, Position | null];
     const timer = setTimeout(
       () => {
         void fetchPage(leagueId, { q: name, pos: position, offset: 0 }, controller.signal)
-          .then((page) => !controller.signal.aborted && setLoad("error" in page ? { key, kind: "failed", error: page.error } : { key, kind: "ok", ...page, adding: false }))
+          .then((page) => !controller.signal.aborted && answer(key, "error" in page ? { kind: "failed", error: page.error } : { kind: "ok", ...page, adding: false }))
           .catch(() => {});
       },
       name ? DEBOUNCE_MS : 0,
@@ -85,14 +100,16 @@ export function FreeAgentSearch({
   }, [key, leagueId]);
 
   async function more() {
-    if (load?.kind !== "ok" || loading) return;
+    const at = key;
+    const now = answers.get(at);
+    if (now?.kind !== "ok") return;
     const controller = new AbortController();
     paging.current = controller;
-    setLoad({ ...load, adding: true });
-    const page = await fetchPage(leagueId, { q, pos, offset: load.players.length }, controller.signal).catch(() => null);
-    if (!page || controller.signal.aborted) return;
-    const had = new Set(load.players.map((p) => p.player.playerId));
-    setLoad("error" in page ? { ...load, adding: false } : { ...load, players: [...load.players, ...page.players.filter((p) => !had.has(p.player.playerId))], more: page.more, adding: false });
+    answer(at, { ...now, adding: true });
+    const page = await fetchPage(leagueId, { q, pos, offset: now.players.length }, controller.signal).catch(() => null);
+    if (controller.signal.aborted) return;
+    const had = new Set(now.players.map((p) => p.player.playerId));
+    answer(at, !page || "error" in page ? { ...now, adding: false } : { ...now, players: [...now.players, ...page.players.filter((p) => !had.has(p.player.playerId))], more: page.more, adding: false });
   }
 
   const where = `${pos ? LABEL[pos] : "player"}${searching ? ` matching “${q.trim()}”` : ""}`;

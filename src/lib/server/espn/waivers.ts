@@ -32,8 +32,8 @@ const FILL_POOL_SIZE = 50;
 const POSITION_SLOT: Record<Position, number> = { QB: 0, RB: 2, WR: 4, TE: 6, DST: 16, K: 17 };
 const POSITIONS = Object.values(POSITION_SLOT);
 
-/** A page of search or browse results (APE-409). */
-export const SEARCH_PAGE = 25;
+/** A page of search or browse results (APE-409): ten, as many as the pickups show. */
+export const SEARCH_PAGE = 10;
 
 /** What a search narrows the pool by: a name ESPN matches by prefix on any word, and how far down the pool to start. */
 type Narrow = { name?: string; offset?: number };
@@ -81,6 +81,19 @@ export function pooledPlayer(userId: string, leagueId: string, playerId: number)
   return null;
 }
 
+/**
+ * A page of the wire's pool (every position, the POOL_SIZE most-rostered) at `positions`, while it's
+ * cached: it holds the page whole, or ESPN has no more players than it. Null otherwise, for a read.
+ */
+function fromWirePool(cache: Cache, prefix: string, positions: readonly number[], limit: number, offset: number): { agents: FreeAgent[]; fetchedAt: number } | null {
+  const pool = cache.get(`${prefix}:${POSITIONS.join(",")}:${POOL_SIZE}:0:`);
+  if (!pool || Date.now() - pool.fetchedAt >= TTL_MS) return null;
+  const wanted = new Set(positions);
+  const matching = pool.agents.filter((a) => wanted.has(POSITION_SLOT[a.pos]));
+  const page = matching.slice(offset, offset + limit);
+  return page.length === limit || pool.agents.length < POOL_SIZE ? { agents: page, fetchedAt: pool.fetchedAt } : null;
+}
+
 type PoolRead = { kind: "ok"; view: SeasonView; pool: PoolPlayer[]; fetchedAt: Date } | { kind: "problem"; problem: Problem };
 
 /**
@@ -94,17 +107,20 @@ async function readPool(
   leagueId: string,
   { positions, limit, refresh, name, offset }: { positions: readonly number[]; limit: number; refresh: boolean } & Narrow,
 ): Promise<PoolRead> {
-  // The view first: it reads ESPN when the cache is cold, and the league read after it is then a hit.
-  const viewLoad = await loadSeasonView(db, key, userId, leagueId);
-  if (viewLoad.kind !== "ok") return { kind: "problem", problem: viewLoad.kind };
+  // The league first: it reads ESPN when the cache is cold. The view, built from the same read, is
+  // put together while the pool is read, rather than before it.
   const season = await loadSeason(db, key, userId, leagueId);
   if (season.kind !== "ok") return { kind: "problem", problem: season.kind };
   const { league } = season;
-  const { view } = viewLoad;
+  const viewing = loadSeasonView(db, key, userId, leagueId);
+  viewing.catch(() => {});
 
   const cache: Cache = (g.__espnWaiverCache ??= new Map());
-  const cacheKey = `${userId}:${leagueId}:${league.espnLeagueId}:${league.season}:${league.currentWeek}:${positions.join(",")}:${limit}:${offset ?? 0}:${name?.toLowerCase() ?? ""}`;
-  let hit = cache.get(cacheKey);
+  const prefix = `${userId}:${leagueId}:${league.espnLeagueId}:${league.season}:${league.currentWeek}`;
+  const cacheKey = `${prefix}:${positions.join(",")}:${limit}:${offset ?? 0}:${name?.toLowerCase() ?? ""}`;
+  // Browsing without a name is served from the wire's pool when that's deep enough (APE-407): the
+  // tab read it when it opened, so a position switch costs no ESPN read.
+  let hit = (!name && !refresh && fromWirePool(cache, prefix, positions, limit, offset ?? 0)) || cache.get(cacheKey);
   if (!hit || refresh || Date.now() - hit.fetchedAt >= TTL_MS) {
     const login = await loadLogin(db, key, userId);
     if (!login) return { kind: "problem", problem: "no-login" };
@@ -128,10 +144,13 @@ async function readPool(
   }
 
   const agents = hit.agents;
-  const [projections, games] = await Promise.all([
+  const [projections, games, viewLoad] = await Promise.all([
     getEspnProjections({ season: league.season, playerIds: agents.map((a) => a.playerId), fromWeek: league.currentWeek, toWeek: league.finalWeek }),
     getEspnScoreboard({ season: league.season, week: league.currentWeek }),
+    viewing,
   ]);
+  if (viewLoad.kind !== "ok") return { kind: "problem", problem: viewLoad.kind };
+  const { view } = viewLoad;
   const pool = agents.map((a) => ({
     ...scorePlayer(
       league,
