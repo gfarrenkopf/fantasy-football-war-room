@@ -9,7 +9,7 @@ import { evaluateTrade, tradeFromPending, type Trade } from "@/lib/season/trade"
 import { tradeHeadline } from "@/lib/season/tradeWords";
 import { checkProposal, checkResponse } from "@/lib/season/tradeWrite";
 import type { SeasonView } from "@/lib/season/view";
-import { waiverNote, type Pickup } from "@/lib/season/waivers";
+import { waiverNote, type Pickup, type Rostered } from "@/lib/season/waivers";
 import type { AcquireBody, AcquireResult } from "../espn/acquireWrite";
 import type { TradeBody, TradeResult } from "../espn/tradesWrite";
 
@@ -32,6 +32,16 @@ export interface WaiversResponse {
   claims: { allowed: boolean; reason: string | null };
   /** Who the user could drop to make room, weakest first, and whether an add needs one. */
   drops: { needed: boolean; candidates: number[] };
+}
+
+/** GET team/players (APE-409): a page of the league's available players matching a search, each valued like a pickup. */
+export interface PlayersResponse {
+  players: Pickup[];
+  /** On a name search's first page, the league's rostered players it matches, with their teams (APE-413). */
+  rostered: Rostered[];
+  /** Whether another page follows: ask again with `offset` moved on by the page's length. */
+  more: boolean;
+  fetchedAt: string;
 }
 
 /** GET team/fills: this week's holes and how to fill them, as the web's hole card reads them. */

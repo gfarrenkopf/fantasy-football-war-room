@@ -7,7 +7,7 @@ import { findHoles, rankFills, type Hole, type HoleFills, type PoolPlayer } from
 import { nextWeekHoles, rankAhead, type AheadFill, type WeekHole } from "@/lib/season/holesAhead";
 import type { FreeAgent } from "@/lib/season/types";
 import { scorePlayer, type SeasonView } from "@/lib/season/view";
-import { rankPickups, type Pickup } from "@/lib/season/waivers";
+import { rankPickups, rosteredMatching, valuePickup, type Pickup, type Rostered } from "@/lib/season/waivers";
 import { readEspnLeague } from "./leagueReader";
 import { loadLogin } from "./logins";
 import { getEspnProjections } from "./projections";
@@ -32,12 +32,23 @@ const FILL_POOL_SIZE = 50;
 const POSITION_SLOT: Record<Position, number> = { QB: 0, RB: 2, WR: 4, TE: 6, DST: 16, K: 17 };
 const POSITIONS = Object.values(POSITION_SLOT);
 
-/** ESPN's filter for the pool; only this week's projection row, since projections come from the public view. */
-export const freeAgentFilter = (season: number, week: number, positions: readonly number[] = POSITIONS, limit = POOL_SIZE) => ({
+/** A page of search or browse results (APE-409): ten, as many as the pickups show. */
+export const SEARCH_PAGE = 10;
+
+/** What a search narrows the pool by: a name ESPN matches by prefix on any word, and how far down the pool to start. */
+type Narrow = { name?: string; offset?: number };
+
+/**
+ * ESPN's filter for the pool; only this week's projection row, since projections come from the
+ * public view. `name` and `offset` search and page it (docs/espn-protocol.md §8, APE-408).
+ */
+export const freeAgentFilter = (season: number, week: number, positions: readonly number[] = POSITIONS, limit = POOL_SIZE, { name, offset }: Narrow = {}) => ({
   players: {
     filterStatus: { value: ["FREEAGENT", "WAIVERS"] },
     filterSlotIds: { value: positions },
+    ...(name ? { filterName: { value: name } } : {}),
     limit,
+    ...(offset ? { offset } : {}),
     sortPercOwned: { sortAsc: false, sortPriority: 1 },
     filterStatsForTopScoringPeriodIds: { value: 1, additionalValue: [`11${season}${week}`] },
   },
@@ -70,24 +81,46 @@ export function pooledPlayer(userId: string, leagueId: string, playerId: number)
   return null;
 }
 
+/**
+ * A page of the wire's pool (every position, the POOL_SIZE most-rostered) at `positions`, while it's
+ * cached: it holds the page whole, or ESPN has no more players than it. Null otherwise, for a read.
+ */
+function fromWirePool(cache: Cache, prefix: string, positions: readonly number[], limit: number, offset: number): { agents: FreeAgent[]; fetchedAt: number } | null {
+  const pool = cache.get(`${prefix}:${POSITIONS.join(",")}:${POOL_SIZE}:0:`);
+  if (!pool || Date.now() - pool.fetchedAt >= TTL_MS) return null;
+  const wanted = new Set(positions);
+  const matching = pool.agents.filter((a) => wanted.has(POSITION_SLOT[a.pos]));
+  const page = matching.slice(offset, offset + limit);
+  return page.length === limit || pool.agents.length < POOL_SIZE ? { agents: page, fetchedAt: pool.fetchedAt } : null;
+}
+
 type PoolRead = { kind: "ok"; view: SeasonView; pool: PoolPlayer[]; fetchedAt: Date } | { kind: "problem"; problem: Problem };
 
 /**
  * The available players at `positions` (ESPN slot ids), most-rostered first, scored for the league
  * like a roster is. Cached per league, week and filter.
  */
-async function readPool(db: Db, key: Buffer, userId: string, leagueId: string, { positions, limit, refresh }: { positions: readonly number[]; limit: number; refresh: boolean }): Promise<PoolRead> {
-  // The view first: it reads ESPN when the cache is cold, and the league read after it is then a hit.
-  const viewLoad = await loadSeasonView(db, key, userId, leagueId);
-  if (viewLoad.kind !== "ok") return { kind: "problem", problem: viewLoad.kind };
+async function readPool(
+  db: Db,
+  key: Buffer,
+  userId: string,
+  leagueId: string,
+  { positions, limit, refresh, name, offset }: { positions: readonly number[]; limit: number; refresh: boolean } & Narrow,
+): Promise<PoolRead> {
+  // The league first: it reads ESPN when the cache is cold. The view, built from the same read, is
+  // put together while the pool is read, rather than before it.
   const season = await loadSeason(db, key, userId, leagueId);
   if (season.kind !== "ok") return { kind: "problem", problem: season.kind };
   const { league } = season;
-  const { view } = viewLoad;
+  const viewing = loadSeasonView(db, key, userId, leagueId);
+  viewing.catch(() => {});
 
   const cache: Cache = (g.__espnWaiverCache ??= new Map());
-  const cacheKey = `${userId}:${leagueId}:${league.espnLeagueId}:${league.season}:${league.currentWeek}:${positions.join(",")}:${limit}`;
-  let hit = cache.get(cacheKey);
+  const prefix = `${userId}:${leagueId}:${league.espnLeagueId}:${league.season}:${league.currentWeek}`;
+  const cacheKey = `${prefix}:${positions.join(",")}:${limit}:${offset ?? 0}:${name?.toLowerCase() ?? ""}`;
+  // Browsing without a name is served from the wire's pool when that's deep enough (APE-407): the
+  // tab read it when it opened, so a position switch costs no ESPN read.
+  let hit = (!name && !refresh && fromWirePool(cache, prefix, positions, limit, offset ?? 0)) || cache.get(cacheKey);
   if (!hit || refresh || Date.now() - hit.fetchedAt >= TTL_MS) {
     const login = await loadLogin(db, key, userId);
     if (!login) return { kind: "problem", problem: "no-login" };
@@ -96,7 +129,7 @@ async function readPool(db: Db, key: Buffer, userId: string, leagueId: string, {
       espnLeagueId: league.espnLeagueId,
       views: ["kona_player_info"],
       scoringPeriodId: league.currentWeek,
-      filter: freeAgentFilter(league.season, league.currentWeek, positions, limit),
+      filter: freeAgentFilter(league.season, league.currentWeek, positions, limit, { name, offset }),
     });
     if (!read.ok) {
       if (read.reason === "auth" && (await confirmSignedOut(db, userId, login, league))) return { kind: "problem", problem: "disconnected" };
@@ -104,15 +137,20 @@ async function readPool(db: Db, key: Buffer, userId: string, leagueId: string, {
       if (!hit) return { kind: "problem", problem: "unavailable" };
     } else {
       hit = { agents: parseFreeAgents(read.data), fetchedAt: Date.now() };
+      // Every search is its own entry, so drop the expired ones as new ones arrive.
+      for (const [k, v] of cache) if (Date.now() - v.fetchedAt >= TTL_MS) cache.delete(k);
       cache.set(cacheKey, hit);
     }
   }
 
   const agents = hit.agents;
-  const [projections, games] = await Promise.all([
+  const [projections, games, viewLoad] = await Promise.all([
     getEspnProjections({ season: league.season, playerIds: agents.map((a) => a.playerId), fromWeek: league.currentWeek, toWeek: league.finalWeek }),
     getEspnScoreboard({ season: league.season, week: league.currentWeek }),
+    viewing,
   ]);
+  if (viewLoad.kind !== "ok") return { kind: "problem", problem: viewLoad.kind };
+  const { view } = viewLoad;
   const pool = agents.map((a) => ({
     ...scorePlayer(
       league,
@@ -132,6 +170,52 @@ export async function loadWaivers(db: Db, key: Buffer, userId: string, leagueId:
   const { view, pool } = read;
   // Next week's holes (APE-353), filled from the same pool: a claim placed now clears in time.
   return { kind: "ok", view, pickups: rankPickups(view, pool), ahead: rankAhead(view, nextWeekHoles(view), pool), considered: pool.length, fetchedAt: read.fetchedAt };
+}
+
+export type SearchLoad = { kind: "ok"; view: SeasonView; players: Pickup[]; rostered: Rostered[]; more: boolean; fetchedAt: Date } | { kind: "problem"; problem: Problem };
+
+/**
+ * Search and browse (APE-409): a page of the available players at `position` (all of them without
+ * one) whose names match `name`, most-rostered first, each valued for the user's lineup however
+ * little he adds. Searched players stay in the pool cache, so the acquire routes know who they are.
+ * A name search's first page also names the league's rostered players it matches, with their teams
+ * (APE-413), from the season view: no ESPN read.
+ */
+export async function searchPlayers(
+  db: Db,
+  key: Buffer,
+  userId: string,
+  leagueId: string,
+  { name, position, offset = 0, refresh = false }: { name?: string; position?: Position; offset?: number; refresh?: boolean },
+): Promise<SearchLoad> {
+  // One more than a page, to know whether there's another.
+  const read = await readPool(db, key, userId, leagueId, { positions: position ? [POSITION_SLOT[position]] : POSITIONS, limit: SEARCH_PAGE + 1, refresh, name, offset });
+  if (read.kind !== "ok") return read;
+  const players = read.pool.slice(0, SEARCH_PAGE).flatMap((p) => valuePickup(read.view, p) ?? []);
+  const rostered = name && offset === 0 ? rosteredMatching(read.view, name, position) : [];
+  return { kind: "ok", view: read.view, players, rostered, more: read.pool.length > SEARCH_PAGE, fetchedAt: read.fetchedAt };
+}
+
+/**
+ * The available player the app is adding (APE-409): from the pool cache, or read from ESPN by id
+ * when the cache has expired since the user found him. Null when ESPN says he isn't available.
+ */
+export async function availablePlayer(db: Db, key: Buffer, userId: string, leagueId: string, playerId: number): Promise<FreeAgent | null> {
+  const pooled = pooledPlayer(userId, leagueId, playerId);
+  if (pooled) return pooled;
+  const season = await loadSeason(db, key, userId, leagueId);
+  const login = season.kind === "ok" ? await loadLogin(db, key, userId) : null;
+  if (season.kind !== "ok" || !login) return null;
+  const { league } = season;
+  const filter = freeAgentFilter(league.season, league.currentWeek, POSITIONS, 1);
+  const read = await readEspnLeague(login, {
+    season: league.season,
+    espnLeagueId: league.espnLeagueId,
+    views: ["kona_player_info"],
+    scoringPeriodId: league.currentWeek,
+    filter: { players: { ...filter.players, filterIds: { value: [playerId] } } },
+  });
+  return read.ok ? (parseFreeAgents(read.data).find((a) => a.playerId === playerId) ?? null) : null;
 }
 
 /**

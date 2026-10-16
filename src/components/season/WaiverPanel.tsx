@@ -5,11 +5,11 @@ import { label } from "@/lib/season/apply";
 import type { AheadFill, WeekHole } from "@/lib/season/holesAhead";
 import type { SeasonView } from "@/lib/season/view";
 import { waiverNote, type Pickup } from "@/lib/season/waivers";
-import { AcquireReview } from "./AcquireReview";
 import { ClaimList } from "./ClaimList";
-import { External, Refresh, Warning } from "./Icons";
-import { PlayerLine, pts, signed } from "./parts";
-import { LocalTime } from "./LocalTime";
+import { FreeAgentSearch } from "./FreeAgentSearch";
+import { Refresh, Warning } from "./Icons";
+import { pts } from "./parts";
+import { WeeklyGain, WireRow } from "./WireRow";
 import s from "./season.module.css";
 
 type Ahead = { hole: WeekHole; fills: AheadFill[] }[];
@@ -28,12 +28,26 @@ async function fetchWaivers(leagueId: string, refresh: boolean): Promise<Load> {
  * the season, each with who to drop. Read from ESPN when the tab opens, since the page's own read
  * doesn't carry the pool. A free agent can be added from here, with a drop (13.3), and a player on
  * waivers claimed, with the user's pending claims listed to cancel (13.4). FAAB leagues claim on ESPN.
+ * Below the pickups, every other available player can be searched and added the same way (APE-410).
  */
-export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonView; leagueId: string; writeConsented: boolean }) {
+export function WaiverPanel({
+  view,
+  leagueId,
+  writeConsented,
+  onTrade,
+}: {
+  view: SeasonView;
+  leagueId: string;
+  writeConsented: boolean;
+  /** Opens the Trades tab on a trade for a rostered player the search found (APE-413). */
+  onTrade: (partnerId: number, playerId: number) => void;
+}) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   /** The pickup being reviewed, by player id. */
   const [acting, setActing] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Counts the adds that landed, so the free-agent list reads ESPN again after each. */
+  const [landed, setLanded] = useState(0);
   const names = new Map(view.teams.flatMap((t) => t.roster.map((p) => [p.playerId, p.name] as const)));
   const note = waiverNote(view);
 
@@ -50,143 +64,93 @@ export function WaiverPanel({ view, leagueId, writeConsented }: { view: SeasonVi
     setLoad(await fetchWaivers(leagueId, refresh));
   };
 
-  const espn = `https://fantasy.espn.com/football/players/add?leagueId=${view.espnLeagueId}`;
+  const act = (id: number | null) => {
+    setActing(id);
+    if (id !== null) setNotice(null);
+  };
+  const done = (message: string) => {
+    setActing(null);
+    setNotice(message);
+    setLanded((n) => n + 1);
+    void read(true);
+  };
 
   return (
-    <section className={`${s.panel} ${s.waivers}`} aria-labelledby="waivers-title">
-      <div className={s.panelHead}>
-        <h2 id="waivers-title" className={s.panelTitle}>
-          Pickups worth a claim
-        </h2>
-        {note && <span className={s.panelNote}>{note}</span>}
-      </div>
-
-      <ClaimList view={view} leagueId={leagueId} agreed={writeConsented} onNotice={setNotice} />
-
-      {notice && (
-        <p className={`${s.note} ${s.fine}`} role="status">
-          {notice}
-        </p>
-      )}
-
-      {load.kind === "loading" && (
-        <p className={`${s.note} ${s.fine}`} role="status">
-          Reading ESPN&apos;s waiver wire…
-        </p>
-      )}
-
-      {load.kind === "failed" && (
-        <div className={`${s.note} ${s.waiverProblem}`} role="alert">
-          <p className={s.fine}>{load.error}</p>
-          <button type="button" className={s.button} onClick={() => read(true)}>
-            Try again
-          </button>
+    <div className={s.wire}>
+      <section className={s.panel} aria-labelledby="waivers-title">
+        <div className={s.panelHead}>
+          <h2 id="waivers-title" className={s.panelTitle}>
+            Pickups worth a claim
+          </h2>
+          {note && <span className={s.panelNote}>{note}</span>}
         </div>
-      )}
 
-      {load.kind === "ok" && load.ahead.length > 0 && (
-        <NextWeek
-          view={view}
-          leagueId={leagueId}
-          ahead={load.ahead}
-          names={names}
-          writeConsented={writeConsented}
-          acting={acting}
-          onAct={(id) => {
-            setActing(id);
-            setNotice(null);
-          }}
-          onDone={(message) => {
-            setActing(null);
-            setNotice(message);
-            void read(true);
-          }}
-        />
-      )}
+        <ClaimList view={view} leagueId={leagueId} agreed={writeConsented} onNotice={setNotice} />
 
-      {load.kind === "ok" &&
-        (load.pickups.length ? (
-          <ol className={s.bench}>
-            {load.pickups.map(({ player, perWeek, delta, drop }, i) => (
-              <li key={player.playerId} className={s.benchRow}>
-                <span className={s.pickupWho}>
-                  <PlayerLine player={player} value="none" ownership live />
-                  <span className={s.pickupStatus} data-status={player.status}>
-                    {player.status === "WAIVERS" ? (
-                      <>
-                        On waivers
-                        {player.waiverClears && (
-                          <>
-                            {" "}
-                            · clears <LocalTime iso={player.waiverClears} />
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      "Free agent: add now"
-                    )}
-                  </span>
-                </span>
-                <span className="text-right">
-                  <span className={`${s.pickupGain} tabular-nums`}>
-                    {signed(perWeek)}
-                    <span className={s.gainUnit}> a week</span>
-                  </span>
-                  <span className={`${s.benchStatus} block`}>
-                    <span className="tabular-nums">{signed(delta)}</span> rest of season
-                  </span>
-                  {drop !== null && <span className={`${s.benchNote} block`}>Drop {names.get(drop) ?? "your weakest player"}</span>}
-                  {acting !== player.playerId && (player.status === "FREEAGENT" || view.waiver.budget === null) && (
-                    <button
-                      type="button"
-                      className={`${s.button} ${s.pickupAct}`}
-                      onClick={() => {
-                        setActing(player.playerId);
-                        setNotice(null);
-                      }}
-                    >
-                      {player.status === "WAIVERS" ? "Claim" : "Add"}
-                    </button>
-                  )}
-                </span>
-                {acting === player.playerId && (
-                  <AcquireReview
-                    view={view}
-                    leagueId={leagueId}
-                    pickup={load.pickups[i]}
-                    agreed={writeConsented}
-                    onCancel={() => setActing(null)}
-                    onDone={(message) => {
-                      setActing(null);
-                      setNotice(message);
-                      void read(true);
-                    }}
-                  />
-                )}
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className={`${s.note} ${s.fine}`}>
-            None of the {load.considered} most-rostered players on the wire would improve your lineup. Check back after waivers clear.
+        {notice && (
+          <p className={`${s.note} ${s.fine}`} role="status">
+            {notice}
           </p>
-        ))}
-
-      <p className={`${s.fine} ${s.waiverFoot}`}>
-        Ranked by what each adds to your best lineup for the rest of the season, from ESPN&apos;s projections. Add a free agent or claim a player on waivers from here.
-        {load.kind === "ok" && (
-          <>
-            {" "}
-            <button type="button" className={s.textButton} onClick={() => read(true)}>
-              <Refresh /> Re-read
-            </button>
-          </>
         )}
-      </p>
-      <a className={s.espnLink} href={espn} target="_blank" rel="noreferrer">
-        Open free agents on ESPN <External />
-      </a>
-    </section>
+
+        {load.kind === "loading" && (
+          <p className={`${s.note} ${s.fine}`} role="status">
+            Reading ESPN&apos;s waiver wire…
+          </p>
+        )}
+
+        {load.kind === "failed" && (
+          <div className={`${s.note} ${s.waiverProblem}`} role="alert">
+            <p className={s.fine}>{load.error}</p>
+            <button type="button" className={s.button} onClick={() => read(true)}>
+              Try again
+            </button>
+          </div>
+        )}
+
+        {load.kind === "ok" && load.ahead.length > 0 && (
+          <NextWeek view={view} leagueId={leagueId} ahead={load.ahead} names={names} writeConsented={writeConsented} acting={acting} onAct={act} onDone={done} />
+        )}
+
+        {load.kind === "ok" &&
+          (load.pickups.length ? (
+            <ol className={s.bench}>
+              {load.pickups.map((pickup) => (
+                <WireRow
+                  key={pickup.player.playerId}
+                  view={view}
+                  leagueId={leagueId}
+                  pickup={pickup}
+                  names={names}
+                  writeConsented={writeConsented}
+                  acting={acting}
+                  gain={<WeeklyGain pickup={pickup} />}
+                  onAct={act}
+                  onDone={done}
+                />
+              ))}
+            </ol>
+          ) : (
+            <p className={`${s.note} ${s.fine}`}>
+              None of the {load.considered} most-rostered players on the wire would improve your lineup. Check back after waivers clear.
+            </p>
+          ))}
+
+        <p className={`${s.fine} ${s.waiverFoot}`}>
+          Ranked by what each adds to your best lineup for the rest of the season, from ESPN&apos;s projections. Find anyone else under Free agents.
+          {load.kind === "ok" && (
+            <>
+              {" "}
+              <button type="button" className={s.textButton} onClick={() => read(true)}>
+                <Refresh /> Re-read
+              </button>
+            </>
+          )}
+        </p>
+      </section>
+
+      <FreeAgentSearch view={view} leagueId={leagueId} names={names} writeConsented={writeConsented} acting={acting} reread={landed} onAct={act} onDone={done} onTrade={onTrade} />
+    </div>
   );
 }
 
@@ -239,27 +203,24 @@ function NextWeek({
               {a.fills.map((f) => {
                 const pickup: Pickup = { player: f.player, delta: 0, perWeek: 0, drop: f.drop };
                 return (
-                  <li key={f.player.playerId} className={s.benchRow}>
-                    <span className={s.pickupWho}>
-                      <PlayerLine player={f.player} value="none" ownership />
-                      <span className={s.pickupStatus} data-status={f.player.status}>
-                        {f.player.status === "WAIVERS" ? "On waivers: claim now to have him in time" : "Free agent: add now"}
-                      </span>
-                    </span>
-                    <span className="text-right">
+                  <WireRow
+                    key={f.player.playerId}
+                    view={view}
+                    leagueId={leagueId}
+                    pickup={pickup}
+                    names={names}
+                    writeConsented={writeConsented}
+                    acting={acting}
+                    status={f.player.status === "WAIVERS" ? "On waivers: claim now to have him in time" : "Free agent: add now"}
+                    gain={
                       <span className={`${s.pickupGain} tabular-nums`}>
                         {pts(f.player.weekly[a.hole.week] ?? 0)}
                         <span className={s.gainUnit}> in week {a.hole.week}</span>
                       </span>
-                      {f.drop !== null && <span className={`${s.benchNote} block`}>Drop {names.get(f.drop) ?? "your weakest player"}</span>}
-                      {acting !== f.player.playerId && (f.player.status === "FREEAGENT" || view.waiver.budget === null) && (
-                        <button type="button" className={`${s.button} ${s.pickupAct}`} onClick={() => onAct(f.player.playerId)}>
-                          {f.player.status === "WAIVERS" ? "Claim" : "Add"}
-                        </button>
-                      )}
-                    </span>
-                    {acting === f.player.playerId && <AcquireReview view={view} leagueId={leagueId} pickup={pickup} agreed={writeConsented} onCancel={() => onAct(null)} onDone={onDone} />}
-                  </li>
+                    }
+                    onAct={onAct}
+                    onDone={onDone}
+                  />
                 );
               })}
             </ol>

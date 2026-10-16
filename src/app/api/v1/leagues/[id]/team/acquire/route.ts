@@ -4,7 +4,7 @@ import { parseAcquire, writeAcquire } from "@/lib/server/espn/acquireWrite";
 import { seasonGate } from "@/lib/server/espn/appEspn";
 import type { GuardedOutcome } from "@/lib/server/espn/guardedWrite";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
-import { pooledPlayer } from "@/lib/server/espn/waivers";
+import { availablePlayer } from "@/lib/server/espn/waivers";
 import { consentGate, writeResponse } from "@/lib/server/espn/writeRoute";
 import { formatServerError } from "@/lib/server/errorLog";
 import { error, json, readJson } from "@/lib/server/http";
@@ -53,7 +53,7 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
     const load = await loadSeasonView(db, key, userId, id);
     if (load.kind !== "ok") return refuse({ kind: "problem", problem: load.kind });
     const { view } = load;
-    const pooled = body.kind === "cancel" ? null : pooledPlayer(userId, id, body.add);
+    const pooled = body.kind === "cancel" ? null : await availablePlayer(db, key, userId, id, body.add);
     if (dryRun) {
       const stale = staleAgainst(view, body.week, body.kind === "cancel" ? null : body.snapshot);
       return stale ? refuse(stale) : json(200, acquireDryRun(view, body, pooled));

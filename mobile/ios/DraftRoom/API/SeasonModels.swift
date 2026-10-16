@@ -135,6 +135,13 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     var status: String? = nil
     /// When a player on waivers clears.
     var waiverClears: Date? = nil
+    /// How widely he's rostered and started across ESPN, in percent; orders the free-agent search (APE-413).
+    var ownership: Ownership? = nil
+
+    struct Ownership: Codable, Equatable, Sendable {
+        let owned: Int
+        let started: Int
+    }
 
     var id: Int { playerId }
 }

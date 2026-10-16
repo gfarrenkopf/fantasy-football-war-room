@@ -90,6 +90,12 @@ export function SeasonRoom(props: Props) {
   // Game day leads while games are on or the week's result is up; between weeks the lineup does.
   // A shared recap opens on Game day, where the archive is.
   const [tab, setTab] = useState<Tab>(phase === "lineup" && !("view" in props && props.openRecap) ? "lineup" : "gameday");
+  /** A trade the Waivers tab's search started (APE-413): the team, and the player to get from it. */
+  const [tradeSeed, setTradeSeed] = useState<{ partnerId: number; gets: number[] } | null>(null);
+  const select = (next: Tab) => {
+    if (next !== "trade") setTradeSeed(null);
+    setTab(next);
+  };
   const title = "view" in props ? props.view.name : (props.leagueName ?? "Your season");
   const view = "view" in props ? props.view : null;
   const ai = "view" in props ? props.ai : null;
@@ -141,13 +147,13 @@ export function SeasonRoom(props: Props) {
               <Freshness view={view} />
             </div>
             <div className={s.tabs} role="tablist" aria-label="Season tools">
-              <TabButton id="gameday" tab={tab} onSelect={setTab}>
+              <TabButton id="gameday" tab={tab} onSelect={select}>
                 Game day
               </TabButton>
-              <TabButton id="lineup" tab={tab} onSelect={setTab}>
+              <TabButton id="lineup" tab={tab} onSelect={select}>
                 Lineup
               </TabButton>
-              <TabButton id="trade" tab={tab} onSelect={setTab}>
+              <TabButton id="trade" tab={tab} onSelect={select}>
                 Trades
                 {offers > 0 && (
                   <span className={s.badge} aria-label={`${offers} waiting on you`}>
@@ -155,7 +161,7 @@ export function SeasonRoom(props: Props) {
                   </span>
                 )}
               </TabButton>
-              <TabButton id="waivers" tab={tab} onSelect={setTab}>
+              <TabButton id="waivers" tab={tab} onSelect={select}>
                 Waivers
               </TabButton>
             </div>
@@ -182,9 +188,17 @@ export function SeasonRoom(props: Props) {
               ) : tab === "lineup" ? (
                 <LineupPanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} onWaivers={() => setTab("waivers")} />
               ) : tab === "trade" ? (
-                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} />
+                <TradePanel view={props.view} leagueId={props.leagueId} ai={props.ai} writeConsented={props.writeConsented} seed={tradeSeed} />
               ) : (
-                <WaiverPanel view={props.view} leagueId={props.leagueId} writeConsented={props.writeConsented} />
+                <WaiverPanel
+                  view={props.view}
+                  leagueId={props.leagueId}
+                  writeConsented={props.writeConsented}
+                  onTrade={(partnerId, playerId) => {
+                    setTradeSeed({ partnerId, gets: [playerId] });
+                    setTab("trade");
+                  }}
+                />
               )}
             </div>
           </>

@@ -12,7 +12,7 @@ import type { FreeAgent } from "@/lib/season/types";
 import { buildSeasonView, type SeasonView } from "@/lib/season/view";
 import { agreeToWrites, writeConsent } from "../seasonPrefs";
 import { createTestLeague } from "../testLeagues";
-import type { TeamApplied, TeamDryRun, TradesResponse, WaiversResponse } from "./team";
+import type { PlayersResponse, TeamApplied, TeamDryRun, TradesResponse, WaiversResponse } from "./team";
 
 vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({
@@ -22,6 +22,8 @@ const state = vi.hoisted(() => ({
   waivers: null as unknown,
   fills: null as unknown,
   pooled: null as unknown,
+  search: null as unknown,
+  searched: [] as unknown[],
   outcome: null as unknown,
   sent: [] as { kind: string; request: unknown }[],
 }));
@@ -31,7 +33,11 @@ vi.mock("@/lib/server/espn/seasonView", () => ({ loadSeasonView: async () => sta
 vi.mock("@/lib/server/espn/waivers", () => ({
   loadWaivers: async () => state.waivers,
   loadFills: async () => state.fills,
-  pooledPlayer: () => state.pooled,
+  availablePlayer: async () => state.pooled,
+  searchPlayers: async (_db: unknown, _key: unknown, _userId: unknown, _leagueId: unknown, search: unknown) => {
+    state.searched.push(search);
+    return state.search;
+  },
   forgetWaivers: () => {},
 }));
 vi.mock("@/lib/server/espn/acquire", () => {
@@ -88,6 +94,7 @@ const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "sec
 const ROUTES = {
   waivers: () => import("@/app/api/v1/leagues/[id]/team/waivers/route"),
   fills: () => import("@/app/api/v1/leagues/[id]/team/fills/route"),
+  players: () => import("@/app/api/v1/leagues/[id]/team/players/route"),
   acquire: () => import("@/app/api/v1/leagues/[id]/team/acquire/route"),
   trades: () => import("@/app/api/v1/leagues/[id]/team/trades/route"),
 };
@@ -122,6 +129,8 @@ beforeEach(async () => {
   state.waivers = { kind: "ok", view, pickups: [], ahead: [], considered: 100, fetchedAt: new Date("2026-09-20T16:00:00Z") };
   state.fills = { kind: "ok", holes: [], fills: [] };
   state.pooled = AGENT;
+  state.search = { kind: "ok", view, players: [], rostered: [], more: false, fetchedAt: new Date("2026-09-20T16:00:00Z") };
+  state.searched = [];
   state.outcome = null;
   userId = await createTestUser(db);
   state.user = { userId, email: "fan@example.test" };
@@ -169,6 +178,43 @@ describe("GET /api/v1/leagues/:id/team/waivers", () => {
     const res = await (await load<Get>("waivers")).GET(get(leagueId, "waivers"), ctx(leagueId));
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ problem: "no-login" });
+  });
+});
+
+describe("GET /api/v1/leagues/:id/team/players", () => {
+  const pickup = { player: { ...AGENT, ros: 40, weekly: {} }, delta: 6, perWeek: 2, drop: id("Broncos D/ST") };
+
+  it("searches the pool by name, position and page, and answers a page of valued players", async () => {
+    const rostered = [{ player: partner.roster[0], teamId: partner.id, team: partner.name, mine: false }];
+    state.search = { ...(state.search as object), players: [pickup], rostered, more: true };
+    const res = await (await load<Get>("players")).GET(get(leagueId, "players?q=%20wire%20%20guy&pos=WR&offset=25"), ctx(leagueId));
+    expect(res.status).toBe(200);
+    expect((await res.json()) as PlayersResponse).toEqual(JSON.parse(JSON.stringify({ players: [pickup], rostered, more: true, fetchedAt: "2026-09-20T16:00:00.000Z" })));
+    expect(state.searched).toEqual([{ name: "wire guy", position: "WR", offset: 25, refresh: false }]);
+  });
+
+  it("browses without a name, and treats a single letter as no name", async () => {
+    await (await load<Get>("players")).GET(get(leagueId, "players?q=w"), ctx(leagueId));
+    expect(state.searched).toEqual([{ offset: 0, refresh: false }]);
+  });
+
+  it("400s a malformed search before reading ESPN", async () => {
+    const { GET } = await load<Get>("players");
+    for (const query of ["pos=LB", "offset=-1", "offset=1.5", `q=${"x".repeat(41)}`]) expect((await GET(get(leagueId, `players?${query}`), ctx(leagueId))).status).toBe(400);
+    expect(state.searched).toEqual([]);
+  });
+
+  it("429s a user searching faster than a minute's worth", async () => {
+    const { GET } = await load<Get>("players");
+    for (let i = 0; i < 60; i++) expect((await GET(get(leagueId, "players"), ctx(leagueId))).status).toBe(200);
+    expect((await GET(get(leagueId, "players"), ctx(leagueId))).status).toBe(429);
+  });
+
+  it("answers 409 with the problem when ESPN can't be read", async () => {
+    state.search = { kind: "problem", problem: "disconnected" };
+    const res = await (await load<Get>("players")).GET(get(leagueId, "players"), ctx(leagueId));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ problem: "disconnected" });
   });
 });
 

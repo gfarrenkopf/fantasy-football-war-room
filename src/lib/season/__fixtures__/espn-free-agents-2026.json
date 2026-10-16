@@ -1,0 +1,124 @@
+{
+  "players": [
+    {
+      "id": 3915511,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 3915511,
+        "fullName": "Joe Burrow",
+        "defaultPositionId": 1,
+        "proTeamId": 4,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 97.91,
+          "percentStarted": 20.5
+        }
+      }
+    },
+    {
+      "id": 3040151,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 3040151,
+        "fullName": "George Kittle",
+        "defaultPositionId": 4,
+        "proTeamId": 25,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 97.88,
+          "percentStarted": 89.75
+        }
+      }
+    },
+    {
+      "id": 4361741,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 4361741,
+        "fullName": "Brock Purdy",
+        "defaultPositionId": 1,
+        "proTeamId": 25,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 97.85,
+          "percentStarted": 79.9
+        }
+      }
+    },
+    {
+      "id": 4248528,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 4248528,
+        "fullName": "Christian Watson",
+        "defaultPositionId": 3,
+        "proTeamId": 9,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 96.2,
+          "percentStarted": 84.1
+        }
+      }
+    },
+    {
+      "id": 4430027,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 4430027,
+        "fullName": "Sam LaPorta",
+        "defaultPositionId": 4,
+        "proTeamId": 8,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 96.19,
+          "percentStarted": 20.15
+        }
+      }
+    },
+    {
+      "id": 4432620,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 4432620,
+        "fullName": "Parker Washington",
+        "defaultPositionId": 3,
+        "proTeamId": 30,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 95.26,
+          "percentStarted": 79.08
+        }
+      }
+    },
+    {
+      "id": 4567750,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 4567750,
+        "fullName": "Emeka Egbuka",
+        "defaultPositionId": 3,
+        "proTeamId": 27,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 94.93,
+          "percentStarted": 58.5
+        }
+      }
+    },
+    {
+      "id": 3139477,
+      "status": "FREEAGENT",
+      "player": {
+        "id": 3139477,
+        "fullName": "Patrick Mahomes",
+        "defaultPositionId": 1,
+        "proTeamId": 12,
+        "injuryStatus": "ACTIVE",
+        "ownership": {
+          "percentOwned": 94.91,
+          "percentStarted": 53.86
+        }
+      }
+    }
+  ]
+}

@@ -100,7 +100,7 @@ enum UITestStub {
         private static func acquire(dryRun: Bool, body: Data?) -> (Int, String) {
             struct Sent: Decodable { let kind: String; let add: Int?; let drop: Int?; let claimId: String? }
             guard let sent = body.flatMap({ try? JSONDecoder().decode(Sent.self, from: $0) }) else { return (400, #"{"error":"Invalid request"}"#) }
-            let all = SeasonSample.mine + SeasonSample.wire.pickups.map(\.player) + SeasonSample.wire.ahead.flatMap { $0.fills.map(\.player) }
+            let all = SeasonSample.mine + SeasonSample.pool.map(\.player) + SeasonSample.wire.ahead.flatMap { $0.fills.map(\.player) }
             let name = { (id: Int) in all.first { $0.playerId == id }?.name ?? "Player \(id)" }
             switch (sent.kind, dryRun) {
             case ("cancel", true):
@@ -182,6 +182,8 @@ enum UITestStub {
                 fill(dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/team/waivers", "/api/v1/leagues/lg-2/team/waivers":
                 (200, SeasonSample.wireJSON)
+            case "/api/v1/leagues/lg-1/team/players", "/api/v1/leagues/lg-2/team/players":
+                (200, SeasonSample.playersJSON(query: query))
             case "/api/v1/leagues/lg-1/team/acquire", "/api/v1/leagues/lg-2/team/acquire":
                 acquire(dryRun: query.contains("dryRun=1"), body: body)
             case "/api/v1/leagues/lg-1/lineup", "/api/v1/leagues/lg-2/lineup":

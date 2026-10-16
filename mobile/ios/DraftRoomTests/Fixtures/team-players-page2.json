@@ -1,0 +1,58 @@
+{
+  "players": [
+    {
+      "player": {
+        "playerId": 4432665,
+        "name": "Brock Bowers",
+        "pos": "TE",
+        "team": "LV",
+        "slot": "BN",
+        "espnSlotId": 6,
+        "locked": false,
+        "injuryStatus": "QUESTIONABLE",
+        "actual": null,
+        "statLine": null,
+        "ownership": null,
+        "news": null,
+        "weekly": {
+          "3": 14,
+          "4": 14,
+          "5": 14,
+          "6": 14,
+          "7": 14,
+          "8": 14,
+          "9": 14,
+          "10": 14,
+          "11": 14,
+          "12": 14,
+          "13": 14,
+          "14": 14,
+          "15": 14,
+          "16": 14,
+          "17": 14
+        },
+        "points": 14,
+        "ros": 210,
+        "projected": true,
+        "game": {
+          "state": "pre",
+          "detail": "",
+          "opponent": "NYJ",
+          "home": false,
+          "kickoff": "2026-09-20T17:00:00.000Z",
+          "period": 0,
+          "clockSeconds": 0,
+          "score": null
+        },
+        "status": "FREEAGENT",
+        "waiverClears": null
+      },
+      "delta": 41.34999999999991,
+      "perWeek": 2.7566666666666606,
+      "drop": 4882093
+    }
+  ],
+  "more": false,
+  "fetchedAt": "2026-09-20T16:00:00.000Z",
+  "rostered": []
+}
