@@ -4,7 +4,7 @@ import { SEASON_NEEDS_PURCHASE, type SeasonAiAccessView, type SeasonAiState } fr
 import { config } from "@/lib/config";
 import type { Db } from "@/lib/db/types";
 import type { SeasonView } from "@/lib/season/view";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { loadSeasonView } from "@/lib/server/espn/seasonView";
 import { error, json } from "@/lib/server/http";
 import { findLeague } from "@/lib/server/leagues";
@@ -55,7 +55,7 @@ export interface SeasonAiRequest {
 export async function seasonAiRequest(db: Db, who: Who, leagueId: string): Promise<SeasonAiRequest | Response> {
   const model = getPlanModel();
   if (!config.espnSeasonEnabled || !config.espnCodeKey || !model) return error(404, "Not found");
-  if (!mayUseSeason(config.espnSyncAllowlist, who.email)) return error(403, "In-season help isn't available on this account yet");
+  if (!(await mayUseSeason(db, who.userId, who.email))) return error(403, "In-season help isn't available on this account yet");
   const league = await findLeague(db, who.userId, leagueId);
   if (!league) return error(404, "League not found");
   const load = await loadSeasonView(db, config.espnCodeKey, who.userId, leagueId);

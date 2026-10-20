@@ -62,7 +62,7 @@ export function SeasonLanding({ flags, sample, farewell = false }: { flags: Publ
         </div>
       </section>
 
-      <Close season={sample.season} />
+      <Close season={sample.season} open={flags.espnSeasonOpen} />
 
       <footer className={door.footer}>
         <div className={door.footerMain}>

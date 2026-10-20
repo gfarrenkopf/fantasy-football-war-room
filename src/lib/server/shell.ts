@@ -4,7 +4,7 @@ import type { Db } from "@/lib/db/types";
 import { espnSettingsPage } from "@/lib/espn/pages";
 import { leagueHome } from "@/lib/season/home";
 import { loginStatus } from "./espn/logins";
-import { mayUseSeason } from "./espn/seasonAccess";
+import { mayUseSeason } from "./espn/access";
 import { listSeasonLinks } from "./espn/seasonLinks";
 import { getDraft, listLeagues } from "./leagues";
 
@@ -41,7 +41,7 @@ export interface ShellData {
  * in-season features are on for this user.
  */
 export async function loadShell(db: Db, user: { userId: string; email?: string | null }): Promise<ShellData> {
-  const season = config.espnSeasonEnabled && mayUseSeason(config.espnSyncAllowlist, user.email ?? null);
+  const season = config.espnSeasonEnabled && (await mayUseSeason(db, user.userId, user.email ?? null));
   const [records, links, login] = await Promise.all([
     listLeagues(db, user.userId),
     season ? listSeasonLinks(db, user.userId) : [],

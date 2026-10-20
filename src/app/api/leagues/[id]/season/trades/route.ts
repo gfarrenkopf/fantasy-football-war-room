@@ -1,7 +1,7 @@
 import { config } from "@/lib/config";
 import { withUser } from "@/lib/server/api";
 import { formatServerError } from "@/lib/server/errorLog";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { parseTrade, writeTrade } from "@/lib/server/espn/tradesWrite";
 import { consentGate, writeResponse } from "@/lib/server/espn/writeRoute";
 import { error, json, readJson } from "@/lib/server/http";
@@ -25,7 +25,7 @@ const ROUTE = "/api/leagues/[id]/season/trades";
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
   const { id } = await ctx.params;
   if (!config.espnSeasonEnabled || !config.espnCodeKey) return error(404, "Not found");
-  if (!mayUseSeason(config.espnSyncAllowlist, email)) return error(403, "In-season help isn't available on this account yet");
+  if (!(await mayUseSeason(db, userId, email))) return error(403, "In-season help isn't available on this account yet");
   const read = await readJson(request);
   if (!read.ok) return read.response;
   const body = parseTrade(read.body);

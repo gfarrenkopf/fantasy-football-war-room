@@ -89,6 +89,7 @@ The AI lineup, the AI trade write-up and trade ideas on the season page ([in-sea
 - **Trial:** every account gets 5 NFL weeks (`TRIAL_WEEKS`) free, counted from the week of its first in-season AI use, in any league. A week is ESPN's `scoringPeriodId`. The start week is stored per account and season in `season_ai_trials`, so linking another league doesn't restart it.
 - **After the trial,** in-season AI needs a pass on that league for the season being played. A second league without one shows the paywall, even if the first is paid for.
 - **Allowances per league and week:** one mid-week AI lineup, one Sunday AI lineup and one set of trade ideas (APE-222), recorded in `season_ai_uses`. A new `scoringPeriodId` starts with all unused. A trade-ideas search that finds nothing, or whose AI call fails, uses nothing. AI trade write-ups are unlimited.
+- **Beta testers:** accounts that joined while the in-season beta was open (`users.season_access_via = 'open'`, APE-341) get in-season AI free for the 2026 season (`BETA_FREE_SEASON`), with no trial, as a thank-you. From 2027 they get the trial and pass like everyone else. Accounts invited by hand after it closed don't.
 - Payments off and `AI_ALLOWLIST` work as for the game plan: with payments off the allowlist decides and there's no trial, and with payments on an allowlisted account skips the paywall.
 
 Checkout from the season page uses `POST /api/leagues/:id/checkout?from=season`, which sends the buyer back to `/season/:id?checkout=…` instead of the war room.

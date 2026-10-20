@@ -20,7 +20,7 @@ const KEY = randomBytes(32);
 const LOGIN = { espnS2: "AEB-not-a-real-espn-s2-cookie-%2F%3D", swid: "{154E132F-8C13-4AC0-9DAC-20C2C5625594}" };
 
 async function load(env: Record<string, string> = {}) {
-  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: KEY.toString("base64"), ESPN_SYNC_ALLOWLIST: "", ...env };
+  const vars = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: KEY.toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "", ...env };
   for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
   const [{ loadShell }, logins] = await Promise.all([import("./shell"), import("./espn/logins")]);
   return { loadShell, logins };
@@ -39,7 +39,7 @@ describe("the account menu's ESPN connection (APE-335)", () => {
   });
 
   it("offers nothing where in-season help isn't on for the user", async () => {
-    const { loadShell } = await load({ ESPN_SYNC_ALLOWLIST: "someone-else@example.test" });
+    const { loadShell } = await load({ SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone-else@example.test" });
     const userId = await createTestUser(db);
     expect((await loadShell(db, { userId, email: "fan@example.test" })).espn).toBeNull();
   });

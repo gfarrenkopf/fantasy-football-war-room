@@ -22,7 +22,7 @@ const ROUTE = "/api/v1/leagues/[id]/team/trades";
  * user can do with it, and the trade deadline. 409 `{ problem }` when ESPN can't be read.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   if (!(await findLeague(db, userId, id))) return error(404, "League not found");
@@ -51,7 +51,7 @@ export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => 
  * Every refusal answers as the web's ESPN writes do (src/lib/server/espn/writeRoute.ts).
  */
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   const read = await readJson(request);

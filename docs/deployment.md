@@ -223,6 +223,19 @@ sudo systemctl start warroom
 | Change a secret | edit `/etc/warroom/.env`, then restart. No rebuild needed. |
 | AI plan costs (see [database §6](database.md#6-ai-plan-costs)) | `sudo -iu warroom bash -c 'set -a; . /etc/warroom/.env; set +a; cd current && npm run ai:costs -- --from 2026-09-01'` |
 
+**Closing the in-season beta** (APE-341). `SEASON_ACCESS` (default `open`) lets every signed-in account use in-season help, and stamps each account that connects ESPN while it's open (`users.season_access_at`, with `season_access_via = 'open'`). Set `SEASON_ACCESS=closed` in `/etc/warroom/.env` and restart to make it invite-only: then only stamped accounts and the comma-separated emails in `SEASON_ALLOWLIST` get in, and the season landing page says "Invite-only beta. Ask a member for an invite." Live draft sync keeps its own `ESPN_SYNC_ALLOWLIST`. To invite someone by hand once they've signed in:
+
+```sh
+sudo -iu warroom bash -c 'set -a; . /etc/warroom/.env; set +a; psql "$DATABASE_URL"'
+```
+
+```sql
+UPDATE users SET season_access_at = now(), season_access_via = 'invite'
+WHERE lower(email) = lower('someone@example.com') AND season_access_at IS NULL;
+```
+
+An `invite` stamp opens in-season help, but only `open` stamps (the beta's testers) get the 2026 season's in-season AI free once payments are on ([payments.md](payments.md#in-season-ai)).
+
 **Deploys wait for live ESPN drafts.** When War Room holds a user's ESPN draft connection (drafting with no ESPN tab open), a restart drops it. The app rejoins on boot and recovers any picks made in the gap, but the user's pick clock keeps running meanwhile. So `deploy.sh` refuses to switch releases while any such draft is live, and a CI deploy fails with that message. Re-run it after the draft, or use `FORCE=1` for an urgent fix. `npm run db:live-drafts` prints the count.
 
 **Rollback only swaps code.** Migrations stay applied, so write schema changes to work with both the old and new code (add a column in one release, start relying on it in the next). To undo a bad migration, restore the dump that `deploy.sh` took just before it (§8).

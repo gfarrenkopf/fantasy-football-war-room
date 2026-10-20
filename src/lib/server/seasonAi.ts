@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { seasonAiTrials, seasonAiUses, type SeasonAiUseKind } from "@/lib/db/schema";
 import type { Db } from "@/lib/db/types";
 import { hasEntitlement, SEASON_PASS } from "./entitlements";
+import { isSeasonBetaTester } from "./espn/seasonAccess";
 
 /**
  * Who gets in-season AI (Epic 11, 11.1): the AI lineup, the AI trade write-up, and trade ideas
@@ -9,6 +10,7 @@ import { hasEntitlement, SEASON_PASS } from "./entitlements";
  *
  * - Every account gets TRIAL_WEEKS NFL weeks free, counted from the week of its first AI use that
  *   season (not from week 1, so late arrivals get a trial too). A week is ESPN's `scoringPeriodId`.
+ * - The open beta's testers (APE-341) get BETA_FREE_SEASON free, as a thank-you, and no trial.
  * - After that, a league needs a season pass: the same pass as the draft plan, for that season.
  * - Each league gets one mid-week AI lineup, one Sunday AI lineup and one set of trade ideas per
  *   week (SeasonAiUseKind). Trade write-ups are unlimited.
@@ -16,9 +18,14 @@ import { hasEntitlement, SEASON_PASS } from "./entitlements";
 
 export const TRIAL_WEEKS = 5;
 
+/** The season the open beta ran: its testers get that season's AI free. They pay from the next one. */
+export const BETA_FREE_SEASON = 2026;
+
 export type SeasonAiAccess =
   /** Payments are off (AI_ALLOWLIST decided), the account is on AI_ALLOWLIST, or the league has a pass. */
   | { kind: "allowed"; via: "open" | "allowlist" | "pass" }
+  /** The account joined while the in-season beta was open, and it's BETA_FREE_SEASON. */
+  | { kind: "allowed"; via: "beta" }
   /**
    * In the account's free trial. `trialWeek` is 1 to TRIAL_WEEKS. `started` is false until the first AI
    * use, which must call startTrial() so the count begins.
@@ -34,25 +41,32 @@ export async function decideSeasonAiAccess({
   paymentsEnabled,
   allowlist,
   email,
+  season,
   week,
   trialStartWeek,
   isEntitled,
+  isBetaTester,
 }: {
   paymentsEnabled: boolean;
   allowlist: readonly string[];
   email: string | null;
+  /** The ESPN season being played. */
+  season: number;
   /** This week's `scoringPeriodId`. */
   week: number;
   /** The account's first AI week this season, or null before its first use. */
   trialStartWeek: number | null;
   /** Looked up only when the trial doesn't decide the answer. */
   isEntitled: () => Promise<boolean>;
+  /** Joined the open in-season beta. Looked up only when a pass doesn't decide, in BETA_FREE_SEASON. */
+  isBetaTester: () => Promise<boolean>;
 }): Promise<SeasonAiAccess> {
   const listed = email !== null && allowlist.includes(email.toLowerCase());
   if (!paymentsEnabled) return allowlist.length === 0 ? { kind: "allowed", via: "open" } : listed ? { kind: "allowed", via: "allowlist" } : { kind: "not-allowed" };
   if (listed) return { kind: "allowed", via: "allowlist" };
   // A pass is checked first, so a paid league never shows trial wording.
   if (await isEntitled()) return { kind: "allowed", via: "pass" };
+  if (season === BETA_FREE_SEASON && (await isBetaTester())) return { kind: "allowed", via: "beta" };
   // A week before the recorded start can only be a league that runs behind; count it as the first.
   const trialWeek = trialStartWeek === null ? 1 : Math.max(1, week - trialStartWeek + 1);
   if (trialWeek <= TRIAL_WEEKS) return { kind: "allowed", via: "trial", trialWeek, started: trialStartWeek !== null };
@@ -88,9 +102,11 @@ export async function seasonAiAccess(
     paymentsEnabled,
     allowlist,
     email,
+    season,
     week,
     trialStartWeek: await trialStartWeek(db, userId, season),
     isEntitled: async () => leagueSeason === season && (await hasEntitlement(db, leagueId, SEASON_PASS)),
+    isBetaTester: () => isSeasonBetaTester(db, userId),
   });
 }
 

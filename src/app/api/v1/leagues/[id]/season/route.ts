@@ -31,7 +31,7 @@ const PROBLEM: Record<string, string> = {
  * `{ problem }` when ESPN can't be read; `refresh=1` skips the cache, for pull-to-refresh.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   const league = await findLeague(db, userId, id);

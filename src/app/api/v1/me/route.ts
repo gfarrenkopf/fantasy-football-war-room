@@ -3,7 +3,7 @@ import { config } from "@/lib/config";
 import { users } from "@/lib/db/schema";
 import { withUser } from "@/lib/server/api";
 import { MIN_APP_VERSION } from "@/lib/server/appLinks";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { json } from "@/lib/server/http";
 
 /**
@@ -17,7 +17,7 @@ export const GET = withUser(async (_request, _ctx, { db, userId, email }) => {
   return json(200, {
     user,
     flags: {
-      season: config.espnSeasonEnabled && mayUseSeason(config.espnSyncAllowlist, email),
+      season: config.espnSeasonEnabled && (await mayUseSeason(db, userId, email)),
       ai: config.aiEnabled,
       payments: config.paymentsEnabled,
     },

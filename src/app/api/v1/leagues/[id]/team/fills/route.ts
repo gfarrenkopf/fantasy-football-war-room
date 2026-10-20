@@ -19,7 +19,7 @@ const ROUTE = "/api/v1/leagues/[id]/team/fills";
  * when ESPN can't be read.
  */
 export const GET = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   if (!(await findLeague(db, userId, id))) return error(404, "League not found");

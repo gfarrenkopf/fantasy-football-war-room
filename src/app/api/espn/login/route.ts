@@ -1,7 +1,7 @@
 import { config } from "@/lib/config";
 import { withUser } from "@/lib/server/api";
 import { deleteLogin, loginStatus } from "@/lib/server/espn/logins";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { empty, error, json } from "@/lib/server/http";
 
 /**
@@ -13,12 +13,12 @@ import { empty, error, json } from "@/lib/server/http";
  * in-season features are off.
  */
 export const GET = withUser<unknown>(async (_request, _ctx, { db, userId, email }) => {
-  if (!config.espnSeasonEnabled || !mayUseSeason(config.espnSyncAllowlist, email)) return error(404, "Not found");
+  if (!config.espnSeasonEnabled || !(await mayUseSeason(db, userId, email))) return error(404, "Not found");
   return json(200, { login: await loginStatus(db, userId) });
 });
 
 export const DELETE = withUser<unknown>(async (_request, _ctx, { db, userId, email }) => {
-  if (!config.espnSeasonEnabled || !mayUseSeason(config.espnSyncAllowlist, email)) return error(404, "Not found");
+  if (!config.espnSeasonEnabled || !(await mayUseSeason(db, userId, email))) return error(404, "Not found");
   await deleteLogin(db, userId);
   return empty(204);
 });

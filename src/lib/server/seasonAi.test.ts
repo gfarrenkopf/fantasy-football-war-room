@@ -1,13 +1,16 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { users } from "@/lib/db/schema";
 import { createTestDb, createTestUser } from "@/lib/db/testing";
 import type { Db } from "@/lib/db/types";
 import { grantEntitlement, SEASON_PASS } from "./entitlements";
-import { claimSeasonAiUse, decideSeasonAiAccess, releaseSeasonAiUse, seasonAiAccess, startTrial, TRIAL_WEEKS, usedSeasonAi } from "./seasonAi";
+import { stampSeasonAccess } from "./espn/seasonAccess";
+import { BETA_FREE_SEASON, claimSeasonAiUse, decideSeasonAiAccess, releaseSeasonAiUse, seasonAiAccess, startTrial, TRIAL_WEEKS, usedSeasonAi } from "./seasonAi";
 import { createTestLeague } from "./testLeagues";
 
 describe("decideSeasonAiAccess", () => {
   const decide = (over: Partial<Parameters<typeof decideSeasonAiAccess>[0]> = {}) =>
-    decideSeasonAiAccess({ paymentsEnabled: true, allowlist: [], email: "fan@example.test", week: 4, trialStartWeek: null, isEntitled: async () => false, ...over });
+    decideSeasonAiAccess({ paymentsEnabled: true, allowlist: [], email: "fan@example.test", season: 2026, week: 4, trialStartWeek: null, isEntitled: async () => false, isBetaTester: async () => false, ...over });
 
   it("with payments off, lets AI_ALLOWLIST decide and never counts a trial", async () => {
     expect(await decide({ paymentsEnabled: false })).toEqual({ kind: "allowed", via: "open" });
@@ -32,6 +35,15 @@ describe("decideSeasonAiAccess", () => {
   it("allows a league with a pass after the trial, without trial wording during it", async () => {
     expect(await decide({ trialStartWeek: 1, week: 10, isEntitled: async () => true })).toEqual({ kind: "allowed", via: "pass" });
     expect(await decide({ isEntitled: async () => true })).toEqual({ kind: "allowed", via: "pass" });
+  });
+
+  it("gives the open beta's testers that season free, and the normal trial from the next (APE-341)", async () => {
+    const tester = { isBetaTester: async () => true, trialStartWeek: 1, week: 12 };
+    expect(await decide({ ...tester, season: BETA_FREE_SEASON })).toEqual({ kind: "allowed", via: "beta" });
+    expect(await decide({ ...tester, season: BETA_FREE_SEASON + 1 })).toEqual({ kind: "needs-purchase" });
+    expect(await decide({ isBetaTester: async () => true, season: BETA_FREE_SEASON + 1 })).toEqual({ kind: "allowed", via: "trial", trialWeek: 1, started: false });
+    // Payments off decide as before.
+    expect(await decide({ ...tester, paymentsEnabled: false, allowlist: ["other@example.test"] })).toEqual({ kind: "not-allowed" });
   });
 });
 
@@ -74,6 +86,21 @@ describe("season AI in the database", () => {
     await grantEntitlement(db, { leagueId: lastYear, userId, kind: SEASON_PASS, source: "cs_test", amountTotal: 999, currency: "usd" });
     await startTrial(db, userId, 2026, 1);
     expect(await access(lastYear, 9, { leagueSeason: 2025 })).toEqual({ kind: "needs-purchase" });
+  });
+
+  it("lets a beta tester in past the trial, but not a hand invite (APE-341)", async () => {
+    const leagueId = await createTestLeague(db, userId);
+    await startTrial(db, userId, 2026, 1);
+    expect(await access(leagueId, 12)).toEqual({ kind: "needs-purchase" });
+    await stampSeasonAccess(db, userId);
+    expect(await access(leagueId, 12)).toEqual({ kind: "allowed", via: "beta" });
+
+    const invited = await createTestUser(db);
+    await db.update(users).set({ seasonAccessAt: new Date(), seasonAccessVia: "invite" }).where(eq(users.id, invited));
+    const theirs = await createTestLeague(db, invited);
+    await startTrial(db, invited, 2026, 1);
+    const invitedAccess = await seasonAiAccess(db, { paymentsEnabled: true, allowlist: [], userId: invited, email: null, leagueId: theirs, leagueSeason: 2026, season: 2026, week: 12 });
+    expect(invitedAccess).toEqual({ kind: "needs-purchase" });
   });
 
   it("gives each league one mid-week and one Sunday lineup per week, reset at the next week", async () => {

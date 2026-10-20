@@ -15,7 +15,7 @@ import { error, json } from "@/lib/server/http";
  * the version to show instead. Errors are connectSeason()'s, written for the user.
  */
 export const POST = withUser<unknown>(async (request, _ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const read = await readLoginBody(request);
   if (!read.ok) return read.response;
@@ -24,7 +24,7 @@ export const POST = withUser<unknown>(async (request, _ctx, { db, userId, email 
   if (typeof season !== "number" || !Number.isInteger(season) || season < 2000 || season > 2100) return error(400, "Pick an ESPN league");
   if (typeof consentVersion !== "number") return error(400, "consentVersion is required");
 
-  const result = await connectSeason(db, config.espnCodeKey!, userId, { ...read.login, espnLeagueId, season, consentVersion });
+  const result = await connectSeason(db, config.espnCodeKey!, userId, { ...read.login, espnLeagueId, season, consentVersion }, { seasonOpen: config.seasonAccess === "open" });
   if (!result.ok) return json(result.status, { error: result.error, ...(result.seasonVersion ? { seasonVersion: result.seasonVersion } : {}) });
   if (consentVersion === ESPN_DISCLOSURE_VERSION) await acknowledgeDisclosure(db, userId, ESPN_DISCLOSURE_VERSION);
   return json(200, { leagueId: result.leagueId, created: result.created });

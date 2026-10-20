@@ -7,7 +7,7 @@ import { preflight, withCors } from "@/lib/server/espn/bridgeCors";
 import { hasAcknowledgedDisclosure } from "@/lib/server/espn/disclosure";
 import { verifyBridge } from "@/lib/server/espn/live";
 import { parseEspnLogin } from "@/lib/server/espn/logins";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { connectSeason } from "@/lib/server/espn/seasonConnect";
 import { error, json, readJson } from "@/lib/server/http";
 
@@ -42,11 +42,11 @@ export async function POST(request: Request) {
 
   const { userId, espnLeagueId, season } = bridge;
   const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId));
-  if (!mayUseSeason(config.espnSyncAllowlist, user?.email ?? null)) return withCors(json(200, { connected: false }), request);
+  if (!(await mayUseSeason(db, userId, user?.email ?? null))) return withCors(json(200, { connected: false }), request);
   // Pairing asks for it, so this only fails for a token minted before the disclosure changed.
   if (!(await hasAcknowledgedDisclosure(db, userId, ESPN_DISCLOSURE_VERSION))) return withCors(json(200, { connected: false }), request);
 
-  const result = await connectSeason(db, config.espnCodeKey!, userId, { espnLeagueId, season, consentVersion: ESPN_DISCLOSURE_VERSION, ...login });
+  const result = await connectSeason(db, config.espnCodeKey!, userId, { espnLeagueId, season, consentVersion: ESPN_DISCLOSURE_VERSION, ...login }, { seasonOpen: config.seasonAccess === "open" });
   if (!result.ok && result.status === 503) return withCors(error(503, result.error), request);
   if (!result.ok) console.warn(`[espn-season] connect from draft skipped: ${result.status}`);
   return withCors(json(200, { connected: result.ok }), request);

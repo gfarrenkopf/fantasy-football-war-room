@@ -89,7 +89,7 @@ beforeAll(async () => {
 });
 afterAll(() => close());
 
-const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "" };
+const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "" };
 
 const ROUTES = {
   waivers: () => import("@/app/api/v1/leagues/[id]/team/waivers/route"),
@@ -146,7 +146,7 @@ afterEach(() => {
 describe("the gates every team route shares", () => {
   it("404s with in-season help off, 403s off the allowlist, and 404s someone else's league", async () => {
     expect((await (await load<Get>("waivers", { ESPN_CODE_KEY: "" })).GET(get(leagueId, "waivers"), ctx(leagueId))).status).toBe(404);
-    expect((await (await load<Post>("acquire", { ESPN_SYNC_ALLOWLIST: "someone@else.test" })).POST(post(leagueId, "acquire", ADD), ctx(leagueId))).status).toBe(403);
+    expect((await (await load<Post>("acquire", { SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone@else.test" })).POST(post(leagueId, "acquire", ADD), ctx(leagueId))).status).toBe(403);
     const other = await createTestLeague(db, await createTestUser(db));
     expect((await (await load<Post>("trades")).POST(post(other, "trades", ACCEPT, "?dryRun=1"), ctx(other))).status).toBe(404);
     state.user = null;

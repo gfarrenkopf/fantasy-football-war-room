@@ -13,7 +13,7 @@ import { loadSeasonView } from "@/lib/server/espn/seasonView";
 import { afterSeasonRead, seasonExtras } from "@/lib/server/espn/seasonVisit";
 import { archiveWeek } from "@/lib/season/leagueRecap";
 import { loadShell } from "@/lib/server/shell";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { findLeague } from "@/lib/server/leagues";
 
 export const metadata: Metadata = { title: "Your season · Draft Room" };
@@ -41,7 +41,7 @@ export default async function Season({ params, searchParams }: PageProps<"/seaso
 
   const user = await getSessionUser();
   if (!user) return <SeasonRoom flags={publicFlags} leagueId={leagueId} problem={{ kind: "signed-out" }} />;
-  if (!mayUseSeason(config.espnSyncAllowlist, user.email)) notFound();
+  if (!(await mayUseSeason(getDb(), user.userId, user.email))) notFound();
   const db = getDb();
   const [league, links, shell] = await Promise.all([findLeague(db, user.userId, leagueId), listSeasonLinks(db, user.userId), loadShell(db, user)]);
   if (!league) notFound();

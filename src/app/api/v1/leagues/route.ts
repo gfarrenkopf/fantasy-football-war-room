@@ -1,7 +1,7 @@
 import { config } from "@/lib/config";
 import { withUser } from "@/lib/server/api";
 import { listSeasonLinks } from "@/lib/server/espn/seasonLinks";
-import { mayUseSeason } from "@/lib/server/espn/seasonAccess";
+import { mayUseSeason } from "@/lib/server/espn/access";
 import { json } from "@/lib/server/http";
 
 /**
@@ -13,7 +13,7 @@ import { json } from "@/lib/server/http";
  * the app shows its empty state rather than a failure.
  */
 export const GET = withUser<unknown>(async (_request, _ctx, { db, userId, email }) => {
-  if (!config.espnSeasonEnabled || !mayUseSeason(config.espnSyncAllowlist, email)) return json(200, { leagues: [] });
+  if (!config.espnSeasonEnabled || !(await mayUseSeason(db, userId, email))) return json(200, { leagues: [] });
   const links = await listSeasonLinks(db, userId);
   return json(200, {
     leagues: links.map((l) => ({ id: l.leagueId, name: l.name, espnLeagueId: l.espnLeagueId, espnTeamId: l.espnTeamId, season: l.season })),

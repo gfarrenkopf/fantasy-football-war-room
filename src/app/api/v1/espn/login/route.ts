@@ -11,13 +11,13 @@ import { empty, json } from "@/lib/server/http";
  * disconnecting, which deletes it. The v1 copy of /api/espn/login.
  */
 export const GET = withUser<unknown>(async (_request, _ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   return json(200, { login: await loginStatus(db, userId) });
 });
 
 export const DELETE = withUser<unknown>(async (_request, _ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   await deleteLogin(db, userId);
   return empty(204);

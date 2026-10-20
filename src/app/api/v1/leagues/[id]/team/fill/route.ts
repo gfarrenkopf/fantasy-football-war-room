@@ -46,7 +46,7 @@ const guarded = (run: FillStepRun): GuardedOutcome<unknown> => (run.step !== "ad
  * 409 `{ changed }` when the way to fill it is no longer on offer: the app reads team/fills again.
  */
 export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   const read = await readJson(request);

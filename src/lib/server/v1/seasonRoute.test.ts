@@ -7,6 +7,7 @@ import { ESPN_WRITE_VERSION } from "@/lib/espn/disclosure";
 import { parseSeasonLeague } from "@/lib/season/espnLeague";
 import { parseProjections } from "@/lib/season/projections";
 import { buildSeasonView } from "@/lib/season/view";
+import { stampSeasonAccess } from "../espn/seasonAccess";
 import { agreeToWrites } from "../seasonPrefs";
 import { createTestLeague } from "../testLeagues";
 import type { SeasonResponse } from "./season";
@@ -44,7 +45,7 @@ beforeAll(async () => {
 });
 afterAll(() => close());
 
-const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "" };
+const ENV = { DATABASE_URL: "postgres://localhost/unused", NEXTAUTH_SECRET: "secret", ESPN_CODE_KEY: Buffer.alloc(32, 7).toString("base64"), ESPN_SYNC_ALLOWLIST: "", SEASON_ACCESS: "", SEASON_ALLOWLIST: "" };
 
 async function route(env: Partial<typeof ENV> = {}) {
   for (const [name, value] of Object.entries({ ...ENV, ...env })) vi.stubEnv(name, value);
@@ -114,6 +115,15 @@ describe("GET /api/v1/leagues/:id/season", () => {
     expect(state.after).toBe(1);
   });
 
+  it("keeps an account that joined while the beta was open, once it closes (APE-341)", async () => {
+    const closed = { SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone@else.test" };
+    expect((await (await route(closed))(get(leagueId), ctx(leagueId))).status).toBe(403);
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    await stampSeasonAccess(db, userId);
+    expect((await (await route(closed))(get(leagueId), ctx(leagueId))).status).toBe(200);
+  });
+
   it("is gated like the season page", async () => {
     expect((await (await route({ DATABASE_URL: "" }))(get(leagueId), ctx(leagueId))).status).toBe(404);
     vi.unstubAllEnvs();
@@ -121,7 +131,12 @@ describe("GET /api/v1/leagues/:id/season", () => {
     expect((await (await route({ ESPN_CODE_KEY: "" }))(get(leagueId), ctx(leagueId))).status).toBe(404);
     vi.unstubAllEnvs();
     vi.resetModules();
-    expect((await (await route({ ESPN_SYNC_ALLOWLIST: "someone@else.test" }))(get(leagueId), ctx(leagueId))).status).toBe(403);
+    expect((await (await route({ SEASON_ACCESS: "closed", SEASON_ALLOWLIST: "someone@else.test" }))(get(leagueId), ctx(leagueId))).status).toBe(403);
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    // Draft sync's beta list no longer gates in-season help (APE-341).
+    expect((await (await route({ ESPN_SYNC_ALLOWLIST: "someone@else.test" }))(get(leagueId), ctx(leagueId))).status).toBe(200);
+    state.loads = [];
     vi.unstubAllEnvs();
     vi.resetModules();
     const GET = await route();

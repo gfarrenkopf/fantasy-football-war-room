@@ -15,7 +15,7 @@ type Ctx = RouteContext<"/api/v1/leagues/[id]/recaps">;
  * season route's visits and the Wednesday job keep the weeks. Gated like the season route.
  */
 export const GET = withUser<Ctx>(async (_request, ctx, { db, userId, email }) => {
-  const gated = seasonGate(email);
+  const gated = await seasonGate(db, userId, email);
   if (gated) return gated;
   const { id } = await ctx.params;
   const league = await findLeague(db, userId, id);
