@@ -457,6 +457,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DraftRoom/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Draft Room";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
@@ -492,6 +493,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DraftRoom/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Draft Room";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
