@@ -452,6 +452,7 @@
 				CODE_SIGN_ENTITLEMENTS = DraftRoom/DraftRoom.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2PFUP9SZ76;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DraftRoom/Info.plist;
@@ -486,6 +487,7 @@
 				CODE_SIGN_ENTITLEMENTS = DraftRoom/DraftRoom.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2PFUP9SZ76;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DraftRoom/Info.plist;
@@ -583,6 +585,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2PFUP9SZ76;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DraftRoomWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Draft Room";
@@ -607,6 +610,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2PFUP9SZ76;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = DraftRoomWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Draft Room";

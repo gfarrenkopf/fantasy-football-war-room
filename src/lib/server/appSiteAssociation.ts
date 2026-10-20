@@ -16,13 +16,16 @@ export const APP_BUNDLE_ID = "tech.apeman.draftroom";
  */
 export function appSiteAssociation(teamId: string) {
   const appId = `${teamId}.${APP_BUNDLE_ID}`;
+  // Only the path's last segment: the link carries callbackUrl percent-encoded (`%2Fapp%2Fsigned-in`),
+  // and a pattern with a slash in it didn't match on a real iPhone (APE-406).
+  const signedIn = APP_SIGNED_IN_PATH.split("/").at(-1);
   return {
     applinks: {
       details: [
         {
           appIDs: [appId],
           components: [
-            { "/": "/api/auth/callback/resend", "?": { callbackUrl: `*${APP_SIGNED_IN_PATH}*` }, comment: "Magic links asked for in the app" },
+            { "/": "/api/auth/callback/resend", "?": { callbackUrl: `*${signedIn}*` }, comment: "Magic links asked for in the app" },
             { "/": APP_CALLBACK_PATH, "?": { code: "?*" }, comment: "Google sign-in handing back to the app" },
             { "/": "/season/*", comment: "Season pages, from the season emails" },
           ],

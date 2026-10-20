@@ -30,7 +30,7 @@ describe("GET /.well-known/apple-app-site-association", () => {
     const [details] = body.applinks.details;
     expect(details.appIDs).toEqual(["ABCDE12345.tech.apeman.draftroom"]);
     expect(details.components.map((c: { "/": string }) => c["/"])).toEqual(["/api/auth/callback/resend", "/app/callback", "/season/*"]);
-    expect(details.components[0]["?"]).toEqual({ callbackUrl: "*/app/signed-in*" });
+    expect(details.components[0]["?"]).toEqual({ callbackUrl: "*signed-in*" });
   });
 
   it("is 404 with cloud features off", async () => {
