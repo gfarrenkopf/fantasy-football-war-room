@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The app's shared feel: every screen moves and buzzes the same way. Use these rather than
+/// The app's shared feel: every screen moves and buzzes the same way. Use these, rather than
 /// one-off springs and haptics, as the web uses its shared easing tokens.
 enum Motion {
     /// Things arriving: a screen's content settling into place.
