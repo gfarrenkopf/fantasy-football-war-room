@@ -40,20 +40,20 @@ struct ShellView: View {
     @ViewBuilder
     private func content(_ model: ShellModel) -> some View {
         if session.me?.flags.season != true {
-            framed(model, title: "Draft Room") { SeasonClosedView() }
+            framed(model) { SeasonClosedView() }
         } else {
             switch model.load {
             case .loading:
                 ProgressView().tint(.muted).frame(maxWidth: .infinity, maxHeight: .infinity).background(.bg)
             case let .offline(message):
-                framed(model, title: "Draft Room") {
+                framed(model) {
                     OfflineView(message: message) { Task { await model.refresh() } }
                 }
             case .ready:
                 if let league = model.selected {
                     tabs(model, league: league)
                 } else {
-                    framed(model, title: "Draft Room") { ConnectPitchView { connecting = true } }
+                    framed(model) { ConnectPitchView { connecting = true } }
                 }
             }
         }
@@ -64,7 +64,7 @@ struct ShellView: View {
         return TabView(selection: $tab) {
             ForEach(SeasonTab.allCases) { section in
                 Tab(section.title, systemImage: section.symbol, value: section) {
-                    framed(model, title: league.name, path: section == .gameDay ? $gameDayPath : nil) {
+                    framed(model, league: league, path: section == .gameDay ? $gameDayPath : nil) {
                         switch section {
                         case .gameDay:
                             GameDayView(store: store, recaps: model.recaps(for: league), onLineup: { tab = .lineup }, onReconnect: { connecting = true })
@@ -81,6 +81,14 @@ struct ShellView: View {
                     }
                 }
                 .accessibilityIdentifier("tab-\(section.rawValue)")
+            }
+        }
+        .tabBarMinimizeBehavior(.onScrollDown)
+        // Unsaved lineup changes follow the user to every tab, one tap from the review.
+        .tabViewBottomAccessory(isEnabled: model.lineup(for: league).hasChanges) {
+            ReviewAccessory(model: model.lineup(for: league)) {
+                tab = .lineup
+                Task { await model.lineup(for: league).review() }
             }
         }
         .sensoryFeedback(Haptic.choice, trigger: tab)
@@ -153,8 +161,9 @@ struct ShellView: View {
         }
     }
 
-    /// A tab's navigation bar: the league switcher as the title, the account on the right.
-    private func framed(_ model: ShellModel, title: String, path: Binding<[RecapKey]>? = nil, @ViewBuilder content: () -> some View) -> some View {
+    /// A tab's navigation bar: the league switcher as the title, the account on the right. A tab
+    /// with sections adds its jump menu on the left (`sectionJump()`).
+    private func framed(_ model: ShellModel, league: League? = nil, path: Binding<[RecapKey]>? = nil, @ViewBuilder content: () -> some View) -> some View {
         NavigationStack(path: path ?? .constant([])) {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -162,8 +171,9 @@ struct ShellView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        LeagueSwitcher(model: model, title: title, onSelect: { leave(to: .league($0), model) }) { leave(to: .connect, model) }
+                        LeagueSwitcher(model: model, league: league, onSelect: { leave(to: .league($0), model) }) { leave(to: .connect, model) }
                     }
+                    .sharedBackgroundVisibility(.hidden)
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { showingSettings = true } label: {
                             AccountMark(email: session.me?.user.email)
@@ -176,15 +186,17 @@ struct ShellView: View {
     }
 }
 
-/// The league name, opening the user's leagues and "+ Connect a league". Uncluttered, like the web's league menu.
+/// What the user was leaving for when the unsaved-lineup prompt stopped them.
 private enum PendingSwitch: Equatable {
     case league(String)
     case connect
 }
 
+/// The open league as a glass pill, like Messages' contact pill (APE-416): its mark, its name, the
+/// menu chevron. Before a league is open it reads "Draft Room".
 private struct LeagueSwitcher: View {
     let model: ShellModel
-    let title: String
+    let league: League?
     let onSelect: (String) -> Void
     let onConnect: () -> Void
 
@@ -207,27 +219,62 @@ private struct LeagueSwitcher: View {
             }
             Button("Connect a league", systemImage: "plus", action: onConnect)
         } label: {
-            HStack(spacing: Spacing.xs) {
-                Text(title).typeStyle(TypeScale.title).foregroundStyle(.text).lineLimit(1)
+            HStack(spacing: Spacing.sm) {
+                if let league { LeagueMark(league: league) }
+                Text(league?.name ?? "Draft Room").typeStyle(TypeScale.title).foregroundStyle(.text).lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(.muted)
             }
+            .padding(.leading, league == nil ? Spacing.xl : Spacing.sm)
+            .padding(.trailing, Spacing.xl)
+            .frame(height: 38)
+            .frame(maxWidth: 260)
+            .glassEffect(.regular.interactive(), in: Capsule())
             .contentTransition(.opacity)
         }
         .accessibilityIdentifier("league-switcher")
     }
 }
 
-/// The user's initial in a ring, like the web's app bar.
+/// A league's initials on a color of its own, the same on every launch.
+private struct LeagueMark: View {
+    let league: League
+    private static let palette: [Color] = [.qb, .rb, .wr, .te, .k, .flex]
+
+    var body: some View {
+        Text(league.monogram)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.bg)
+            .frame(width: 24, height: 24)
+            .background(Self.palette[league.markIndex(of: Self.palette.count)], in: Circle())
+            .accessibilityHidden(true)
+    }
+}
+
+extension League {
+    /// The league's initials: the first letters of its first two words, or a one-word name's first two.
+    var monogram: String {
+        let words = name.split { !$0.isLetter && !$0.isNumber }
+        guard let first = words.first else { return "?" }
+        let letters = words.count > 1 ? first.prefix(1) + words[1].prefix(1) : first.prefix(2)
+        return letters.uppercased()
+    }
+
+    /// A steady pick among `count` colors: from the league's id, so it holds across launches
+    /// (`hashValue` is seeded per launch).
+    func markIndex(of count: Int) -> Int {
+        let hash = id.unicodeScalars.reduce(UInt(5381)) { $0 &* 33 &+ UInt($1.value) }
+        return Int(hash % UInt(count))
+    }
+}
+
+/// The user's initial, on the toolbar's own glass circle.
 private struct AccountMark: View {
     let email: String?
 
     var body: some View {
         Text(String((email ?? "?").prefix(1)).uppercased())
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(.text)
-            .frame(width: 30, height: 30)
-            .background(.panel2, in: Circle())
-            .overlay(Circle().stroke(.line2))
     }
 }
 

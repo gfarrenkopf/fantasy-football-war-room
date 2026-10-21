@@ -461,4 +461,9 @@ extension Color {
         default: .muted
         }
     }
+
+    /// A lineup slot's hue: its position's, or the flex gold for FLEX and OP (the web's data-slot tints).
+    static func slot(_ key: String) -> Color {
+        key == "FLEX" || key == "SUPERFLEX" ? .flex : position(key)
+    }
 }

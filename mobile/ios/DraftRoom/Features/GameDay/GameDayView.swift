@@ -30,11 +30,13 @@ struct GameDayView: View {
                         if season.gameDay.showArchive {
                             RecapArchiveView(store: recaps, hiding: season.gameDay.result == nil ? nil : RecapKey(season: season.gameDayView.season, week: season.gameDayView.currentWeek), firstWeek: season.gameDay.week)
                                 .task(id: recaps.leagueId) { await recaps.start() }
+                                .jumpSection("Recaps")
                         }
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
                 }
+                .sectionJump()
                 .refreshable {
                     async let season: Void = store.refresh(force: true)
                     async let archive: Void = recaps.refresh()
@@ -80,12 +82,14 @@ private struct GameDayContent: View {
             if let result = day.result {
                 // The week is decided (APE-402): the result leads, both lineups as they finished below it.
                 ResultMoment(leagueId: season.league.id, view: view, result: result)
+                    .jumpSection("Result")
                 SeasonCard(title: "Head to head", note: "As set on ESPN") {
                     VStack(spacing: 0) {
                         HStack {
                             Text("You").foregroundStyle(.mine)
                             Spacer(minLength: Spacing.md)
-                            Text(result.recap.opponent).foregroundStyle(.muted).lineLimit(1)
+                            // The opponent's team name, as the web's head-to-head names it.
+                            Text(view.matchup.flatMap { view.team($0.them.teamId)?.name } ?? "Your opponent").foregroundStyle(.muted).lineLimit(1)
                         }
                         .typeStyle(TypeScale.label)
                         .padding(.horizontal, Spacing.xl).padding(.bottom, Spacing.md)
@@ -93,20 +97,24 @@ private struct GameDayContent: View {
                         HeadToHead(view: view, day: day)
                     }
                 }
+                .jumpSection("Head to head")
             } else if let live = season.live {
                 Scoreboard(live: live) {
                     HeadToHead(view: view, day: day)
                 }
+                .jumpSection("Scoreboard")
                 if !live.decided { FollowLive(league: season.league, live: live) }
             } else {
                 ByeStarters(view: view, day: day)
+                    .jumpSection("Starters")
             }
-            if let call = day.espnCall { EspnCallCard(call: call, view: view, live: season.live) }
+            if let call = day.espnCall { EspnCallCard(call: call, view: view, live: season.live).jumpSection("ESPN's call") }
             // Between weeks: ESPN's season on the user's team, and last week until the archive keeps it.
-            if let record = day.trackRecord { TrackRecordCard(record: record, view: view) }
-            if let lastWeek = day.lastWeek { LastWeekCard(recap: lastWeek) }
-            if !day.around.isEmpty { AroundTheLeague(view: view, around: day.around) }
+            if let record = day.trackRecord { TrackRecordCard(record: record, view: view).jumpSection("ESPN on your team") }
+            if let lastWeek = day.lastWeek { LastWeekCard(recap: lastWeek).jumpSection("Week \(lastWeek.week)") }
+            if !day.around.isEmpty { AroundTheLeague(view: view, around: day.around).jumpSection("Around the league") }
             BenchCard(view: view, day: day)
+                .jumpSection("Your bench")
         }
     }
 }
@@ -250,22 +258,16 @@ private struct WinOdds: View {
     }
 }
 
-/// The scoreboard's panel: Liquid Glass where the OS has it, the panel tone before.
+/// The scoreboard's panel: Liquid Glass over the panel tone.
 private struct GlassPanel: ViewModifier {
     let tint: Color?
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Radius.dialog)
-        if #available(iOS 26, *) {
-            content
-                .background(Color.panel.opacity(0.6), in: shape)
-                .glassEffect(.regular, in: shape)
-                .overlay(shape.stroke(tint ?? Color.line))
-        } else {
-            content
-                .background(.panel, in: shape)
-                .overlay(shape.stroke(tint ?? Color.line))
-        }
+        content
+            .background(Color.panel.opacity(0.6), in: shape)
+            .glassEffect(.regular, in: shape)
+            .overlay(shape.stroke(tint ?? Color.line))
     }
 }
 
@@ -283,10 +285,14 @@ private struct HeadToHead: View {
                 Divider().overlay(.rowLine)
                 HStack(spacing: 0) {
                     H2HSide(player: row.me.flatMap(view.player), pace: row.me.flatMap(day.pace(of:)), theirs: false)
+                    // The spine takes the slot's hue, as on the web: a wash over the tier tone, the label in the hue.
+                    let hue = Color.slot(row.key)
                     Text(SlotLabel.of(row.key))
-                        .typeStyle(TypeScale.micro).foregroundStyle(.muted)
-                        .frame(width: 40)
+                        .typeStyle(TypeScale.micro).foregroundStyle(hue.mix(with: .text, by: 0.2))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(width: 44)
                         .frame(maxHeight: .infinity)
+                        .background(hue.opacity(0.14))
                         .background(.tier)
                     H2HSide(player: row.them.flatMap(view.player), pace: row.them.flatMap(day.pace(of:)), theirs: true)
                 }
@@ -321,10 +327,10 @@ private struct H2HSide: View {
     var body: some View {
         HStack(spacing: Spacing.sm) {
             if let player {
-                if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading) }
+                if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading, brief: true) }
                 PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
-                if !theirs { ScoreCell(player: player, pace: pace) }
+                if !theirs { ScoreCell(player: player, pace: pace, brief: true) }
             } else {
                 Text("Empty").typeStyle(TypeScale.label).foregroundStyle(.dim)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
@@ -549,8 +555,13 @@ struct SlotBadge: View {
     let key: String
 
     var body: some View {
-        Text(SlotLabel.of(key)).typeStyle(TypeScale.micro).foregroundStyle(.muted)
-            .frame(width: 40, alignment: .leading)
+        // A chip hued by the slot, as the head-to-head spine is; opaque, so a row's wash can't thin the ink.
+        let hue = Color.slot(key)
+        Text(SlotLabel.of(key)).typeStyle(TypeScale.micro).foregroundStyle(hue.mix(with: .text, by: 0.2))
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .frame(width: 38, height: 24)
+            .background(hue.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.md))
+            .background(.panel, in: RoundedRectangle(cornerRadius: Radius.md))
     }
 }
 

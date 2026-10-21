@@ -16,7 +16,7 @@ struct WaiversView: View {
         ScrollView {
             VStack(spacing: Spacing.xl) {
                 if let notice = model.notice { NoticeLine(notice: notice) }
-                if !model.claims.isEmpty { ClaimsCard(model: model) }
+                if !model.claims.isEmpty { ClaimsCard(model: model).jumpSection("Your claims") }
                 switch model.load {
                 case .loading:
                     VStack(spacing: Spacing.lg) {
@@ -30,20 +30,23 @@ struct WaiversView: View {
                 case let .failed(message):
                     FailedView(message: message) { Task { await model.refresh(force: true) } }
                 case let .ready(wire):
-                    ForEach(wire.ahead) { ahead in AheadCard(model: model, ahead: ahead) }
+                    ForEach(wire.ahead) { ahead in AheadCard(model: model, ahead: ahead).jumpSection(AheadCard.title(ahead.hole)) }
                     PickupsCard(model: model, wire: wire)
+                        .jumpSection("Pickups worth a claim")
                     Text("Ranked by what each adds to your best lineup for the rest of the season, from ESPN's projections. Find anyone else under Free agents.")
                         .typeStyle(TypeScale.label).fontWeight(.regular).foregroundStyle(.dim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 FreeAgentsCard(model: model, onTrade: onTrade)
+                    .jumpSection("Free agents")
             }
             .padding(.horizontal, Spacing.xl + Spacing.xs)
             .padding(.vertical, Spacing.xl)
             .animation(Motion.respond, value: model.notice)
             .animation(Motion.respond, value: model.claims)
         }
+        .sectionJump()
         .refreshable {
             await model.store.refresh(force: true)
             await model.refresh(force: true)
@@ -224,9 +227,11 @@ private struct AheadCard: View {
     let model: WaiversModel
     let ahead: Ahead
 
+    static func title(_ hole: Ahead.Hole) -> String { "Week \(hole.week): hole at \(SlotLabel.of(hole.key))" }
+
     var body: some View {
         let hole = ahead.hole
-        SeasonCard(title: "Week \(hole.week): hole at \(SlotLabel.of(hole.key))", tint: Color.warn.opacity(0.45)) {
+        SeasonCard(title: Self.title(hole), tint: Color.warn.opacity(0.45)) {
             VStack(alignment: .leading, spacing: 0) {
                 Label(why, systemImage: "exclamationmark.triangle.fill")
                     .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.warnInk)
