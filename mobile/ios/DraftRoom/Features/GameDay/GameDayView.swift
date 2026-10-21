@@ -30,11 +30,13 @@ struct GameDayView: View {
                         if season.gameDay.showArchive {
                             RecapArchiveView(store: recaps, hiding: season.gameDay.result == nil ? nil : RecapKey(season: season.gameDayView.season, week: season.gameDayView.currentWeek), firstWeek: season.gameDay.week)
                                 .task(id: recaps.leagueId) { await recaps.start() }
+                                .jumpSection("Recaps")
                         }
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
                 }
+                .sectionJump()
                 .refreshable {
                     async let season: Void = store.refresh(force: true)
                     async let archive: Void = recaps.refresh()
@@ -80,6 +82,7 @@ private struct GameDayContent: View {
             if let result = day.result {
                 // The week is decided (APE-402): the result leads, both lineups as they finished below it.
                 ResultMoment(leagueId: season.league.id, view: view, result: result)
+                    .jumpSection("Result")
                 SeasonCard(title: "Head to head", note: "As set on ESPN") {
                     VStack(spacing: 0) {
                         HStack {
@@ -93,20 +96,24 @@ private struct GameDayContent: View {
                         HeadToHead(view: view, day: day)
                     }
                 }
+                .jumpSection("Head to head")
             } else if let live = season.live {
                 Scoreboard(live: live) {
                     HeadToHead(view: view, day: day)
                 }
+                .jumpSection("Scoreboard")
                 if !live.decided { FollowLive(league: season.league, live: live) }
             } else {
                 ByeStarters(view: view, day: day)
+                    .jumpSection("Starters")
             }
-            if let call = day.espnCall { EspnCallCard(call: call, view: view, live: season.live) }
+            if let call = day.espnCall { EspnCallCard(call: call, view: view, live: season.live).jumpSection("ESPN's call") }
             // Between weeks: ESPN's season on the user's team, and last week until the archive keeps it.
-            if let record = day.trackRecord { TrackRecordCard(record: record, view: view) }
-            if let lastWeek = day.lastWeek { LastWeekCard(recap: lastWeek) }
-            if !day.around.isEmpty { AroundTheLeague(view: view, around: day.around) }
+            if let record = day.trackRecord { TrackRecordCard(record: record, view: view).jumpSection("ESPN on your team") }
+            if let lastWeek = day.lastWeek { LastWeekCard(recap: lastWeek).jumpSection("Week \(lastWeek.week)") }
+            if !day.around.isEmpty { AroundTheLeague(view: view, around: day.around).jumpSection("Around the league") }
             BenchCard(view: view, day: day)
+                .jumpSection("Your bench")
         }
     }
 }
@@ -250,22 +257,16 @@ private struct WinOdds: View {
     }
 }
 
-/// The scoreboard's panel: Liquid Glass where the OS has it, the panel tone before.
+/// The scoreboard's panel: Liquid Glass over the panel tone.
 private struct GlassPanel: ViewModifier {
     let tint: Color?
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Radius.dialog)
-        if #available(iOS 26, *) {
-            content
-                .background(Color.panel.opacity(0.6), in: shape)
-                .glassEffect(.regular, in: shape)
-                .overlay(shape.stroke(tint ?? Color.line))
-        } else {
-            content
-                .background(.panel, in: shape)
-                .overlay(shape.stroke(tint ?? Color.line))
-        }
+        content
+            .background(Color.panel.opacity(0.6), in: shape)
+            .glassEffect(.regular, in: shape)
+            .overlay(shape.stroke(tint ?? Color.line))
     }
 }
 

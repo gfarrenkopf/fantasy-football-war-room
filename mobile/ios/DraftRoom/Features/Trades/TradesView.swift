@@ -35,8 +35,11 @@ struct TradesView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         TradeIdeasCard(ai: ai, trades: model)
+                            .jumpSection("Trade ideas")
                         PendingCard(model: model, trades: trades)
+                            .jumpSection("Pending on ESPN")
                         BuilderCard(model: model, ai: ai).id("builder")
+                            .jumpSection("Check a trade")
                     }
                 }
                 .padding(.horizontal, Spacing.xl + Spacing.xs)
@@ -44,6 +47,7 @@ struct TradesView: View {
                 .animation(Motion.respond, value: model.notice)
                 .animation(Motion.respond, value: model.grade)
             }
+            .sectionJump()
             .refreshable {
                 await model.store.refresh(force: true)
                 await model.refresh()

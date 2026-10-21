@@ -33,23 +33,26 @@ struct LineupView: View {
                             SaveResults(save: save)
                         }
                         hero(week: season.view.currentWeek)
+                            .jumpSection("This week")
                         HoleNotes(model: model, onWaivers: onWaivers)
                         StartersCard(model: model) { pickingSeat = SeatPick(seat: $0) }
+                            .jumpSection("Starters")
                         BenchCard(model: model) { pickingBench = $0 }
+                            .jumpSection("Bench")
                         MatchupCard(view: season.view)
+                            .jumpSection("Week \(season.view.currentWeek) matchup")
                         AiLineupCard(ai: ai, lineup: model)
+                            .jumpSection("AI lineup")
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
                     .animation(Motion.respond, value: model.staged)
                     .animation(Motion.respond, value: model.ir)
                 }
+                .sectionJump()
                 .refreshable {
                     await store.refresh(force: true)
                     await ai.refresh()
-                }
-                .safeAreaInset(edge: .bottom) {
-                    if model.hasChanges { ReviewBar(model: model) }
                 }
             } else {
                 switch store.load {
@@ -502,24 +505,32 @@ private struct RowButtonStyle: ButtonStyle {
     }
 }
 
-/// The save's call to action, under the thumb.
-private struct ReviewBar: View {
+/// The save's call to action, riding above the tab bar on every tab while changes wait (APE-416),
+/// and shrinking beside it when the tab bar minimizes.
+struct ReviewAccessory: View {
     let model: LineupModel
+    let onReview: () -> Void
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
     var body: some View {
         let swaps = model.changedSeats.count
-        Button {
-            Task { await model.review() }
-        } label: {
-            // An IR move and the seat it frees are one change on the server, so only seats get counted.
-            Text(model.irChanges > 0 ? "Review changes" : swaps == 1 ? "Review 1 swap" : "Review \(swaps) swaps")
+        // An IR move and the seat it frees are one change on the server, so only seats get counted.
+        let count = model.irChanges > 0 ? "changes" : swaps == 1 ? "1 swap" : "\(swaps) swaps"
+        Button(action: onReview) {
+            HStack(spacing: Spacing.sm) {
+                Text(placement == .inline ? count.prefix(1).uppercased() + count.dropFirst() : "Review \(count)")
+                    .typeStyle(TypeScale.body)
+                    .foregroundStyle(.text)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.mine)
+                    .accessibilityHidden(true)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(ProviderButtonStyle(prominent: true))
+        .accessibilityLabel("Review \(count)")
         .accessibilityIdentifier("review-lineup")
-        .padding(.horizontal, Spacing.xl + Spacing.xs)
-        .padding(.vertical, Spacing.lg)
-        .background(.bar)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
 
