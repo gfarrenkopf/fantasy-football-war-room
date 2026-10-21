@@ -88,7 +88,8 @@ private struct GameDayContent: View {
                         HStack {
                             Text("You").foregroundStyle(.mine)
                             Spacer(minLength: Spacing.md)
-                            Text(result.recap.opponent).foregroundStyle(.muted).lineLimit(1)
+                            // The opponent's team name, as the web's head-to-head names it.
+                            Text(view.matchup.flatMap { view.team($0.them.teamId)?.name } ?? "Your opponent").foregroundStyle(.muted).lineLimit(1)
                         }
                         .typeStyle(TypeScale.label)
                         .padding(.horizontal, Spacing.xl).padding(.bottom, Spacing.md)
@@ -284,10 +285,14 @@ private struct HeadToHead: View {
                 Divider().overlay(.rowLine)
                 HStack(spacing: 0) {
                     H2HSide(player: row.me.flatMap(view.player), pace: row.me.flatMap(day.pace(of:)), theirs: false)
+                    // The spine takes the slot's hue, as on the web: a wash over the tier tone, the label in the hue.
+                    let hue = Color.slot(row.key)
                     Text(SlotLabel.of(row.key))
-                        .typeStyle(TypeScale.micro).foregroundStyle(.muted)
-                        .frame(width: 40)
+                        .typeStyle(TypeScale.micro).foregroundStyle(hue.mix(with: .text, by: 0.2))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(width: 44)
                         .frame(maxHeight: .infinity)
+                        .background(hue.opacity(0.14))
                         .background(.tier)
                     H2HSide(player: row.them.flatMap(view.player), pace: row.them.flatMap(day.pace(of:)), theirs: true)
                 }
@@ -322,10 +327,10 @@ private struct H2HSide: View {
     var body: some View {
         HStack(spacing: Spacing.sm) {
             if let player {
-                if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading) }
+                if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading, brief: true) }
                 PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
-                if !theirs { ScoreCell(player: player, pace: pace) }
+                if !theirs { ScoreCell(player: player, pace: pace, brief: true) }
             } else {
                 Text("Empty").typeStyle(TypeScale.label).foregroundStyle(.dim)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
@@ -550,8 +555,13 @@ struct SlotBadge: View {
     let key: String
 
     var body: some View {
-        Text(SlotLabel.of(key)).typeStyle(TypeScale.micro).foregroundStyle(.muted)
-            .frame(width: 40, alignment: .leading)
+        // A chip hued by the slot, as the head-to-head spine is; opaque, so a row's wash can't thin the ink.
+        let hue = Color.slot(key)
+        Text(SlotLabel.of(key)).typeStyle(TypeScale.micro).foregroundStyle(hue.mix(with: .text, by: 0.2))
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .frame(width: 38, height: 24)
+            .background(hue.opacity(0.14), in: RoundedRectangle(cornerRadius: Radius.md))
+            .background(.panel, in: RoundedRectangle(cornerRadius: Radius.md))
     }
 }
 

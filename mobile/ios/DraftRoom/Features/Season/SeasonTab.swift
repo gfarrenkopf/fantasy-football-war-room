@@ -22,7 +22,7 @@ enum SeasonTab: String, CaseIterable, Identifiable, Hashable {
 
     var symbol: String {
         switch self {
-        case .gameDay: "sportscourt"
+        case .gameDay: "american.football"
         case .lineup: "list.bullet.rectangle"
         case .trade: "arrow.left.arrow.right"
         case .waivers: "person.badge.plus"

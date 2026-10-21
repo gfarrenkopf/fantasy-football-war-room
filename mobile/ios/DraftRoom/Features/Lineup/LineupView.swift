@@ -243,7 +243,7 @@ private struct StarterRow: View {
         let made = model.madeMove(at: seat)
         Button(action: onTap) {
             RowLayout {
-                SlotText(text: SlotLabel.of(key))
+                SlotBadge(key: key)
             } player: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     if let now {

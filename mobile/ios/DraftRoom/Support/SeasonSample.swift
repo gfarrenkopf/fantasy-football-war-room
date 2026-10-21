@@ -10,14 +10,14 @@ enum SeasonSample {
         GameState(state: state, detail: detail, opponent: opponent, home: true, kickoff: kickoff, score: state == "pre" ? nil : .init(team: 17, opponent: 10))
     }
 
-    static func player(_ id: Int, _ name: String, _ pos: String, slot: String, actual: Double?, points: Double, game: GameState?, injury: String = "ACTIVE") -> ViewPlayer {
-        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, locked: game.map { $0.state != "pre" } ?? false, actual: actual, points: points, game: game)
+    static func player(_ id: Int, _ name: String, _ pos: String, slot: String, actual: Double?, points: Double, game: GameState?, injury: String = "ACTIVE", stats: String? = nil) -> ViewPlayer {
+        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, locked: game.map { $0.state != "pre" } ?? false, actual: actual, points: points, statLine: stats, game: game)
     }
 
     static let mine: [ViewPlayer] = [
-        player(1, "Jalen Hurts", "QB", slot: "QB", actual: 18.4, points: 21.2, game: game("in", detail: "8:12 - 3rd")),
-        player(2, "Jahmyr Gibbs", "RB", slot: "RB", actual: 22.1, points: 16.3, game: game("in", detail: "8:12 - 3rd")),
-        player(3, "Puka Nacua", "WR", slot: "WR", actual: 9.6, points: 15.1, game: game("post")),
+        player(1, "Jalen Hurts", "QB", slot: "QB", actual: 18.4, points: 21.2, game: game("in", detail: "8:12 - 3rd"), stats: "187 YDS, 1 TD, 34 RUSH YDS"),
+        player(2, "Jahmyr Gibbs", "RB", slot: "RB", actual: 22.1, points: 16.3, game: game("in", detail: "8:12 - 3rd"), stats: "14 CAR, 91 YDS, 1 TD"),
+        player(3, "Puka Nacua", "WR", slot: "WR", actual: 9.6, points: 15.1, game: game("post"), stats: "6 REC, 66 YDS"),
         player(4, "Sam LaPorta", "TE", slot: "TE", actual: nil, points: 10.2, game: game("pre", opponent: "GB")),
         player(5, "Jake Elliott", "K", slot: "K", actual: nil, points: 8.0, game: game("pre", opponent: "DAL")),
         player(6, "Tank Bigsby", "RB", slot: "BN", actual: nil, points: 7.4, game: game("pre", opponent: "GB")),
@@ -26,9 +26,9 @@ enum SeasonSample {
     ]
 
     static let theirs: [ViewPlayer] = [
-        player(11, "Joe Burrow", "QB", slot: "QB", actual: 14.0, points: 19.8, game: game("in", detail: "2:40 - 2nd")),
-        player(12, "Bijan Robinson", "RB", slot: "RB", actual: 24.5, points: 17.9, game: game("post")),
-        player(13, "CeeDee Lamb", "WR", slot: "WR", actual: 6.3, points: 16.0, game: game("in", detail: "2:40 - 2nd")),
+        player(11, "Joe Burrow", "QB", slot: "QB", actual: 14.0, points: 19.8, game: game("in", detail: "2:40 - 2nd"), stats: "201 YDS, 1 INT"),
+        player(12, "Bijan Robinson", "RB", slot: "RB", actual: 24.5, points: 17.9, game: game("post"), stats: "19 CAR, 112 YDS, 2 TD"),
+        player(13, "CeeDee Lamb", "WR", slot: "WR", actual: 6.3, points: 16.0, game: game("in", detail: "2:40 - 2nd"), injury: "QUESTIONABLE", stats: "3 REC, 43 YDS"),
         player(14, "Trey McBride", "TE", slot: "TE", actual: nil, points: 11.4, game: game("pre", opponent: "SF")),
         player(15, "Brandon Aubrey", "K", slot: "K", actual: 7.0, points: 9.0, game: game("post")),
     ]

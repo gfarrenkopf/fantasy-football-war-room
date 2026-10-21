@@ -126,6 +126,8 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     let actual: Double?
     /// Projected points this week.
     let points: Double
+    /// The stats behind `actual`, ESPN-style ("329 YDS, 2 TD"); null until his game starts.
+    var statLine: String? = nil
     let game: GameState?
     /// Projected points for the rest of the season.
     var ros: Double? = nil

@@ -70,17 +70,32 @@ enum SeasonFormat {
 
     /// His NFL game, as the web's GameStatus: "vs NYJ · Sun 1:00 PM", "@ NYJ · 17–10 · 8:12 - 2nd", "vs NYJ · W 17–10 · Final".
     static func game(_ game: GameState) -> String {
+        gameParts(game).joined(separator: " · ")
+    }
+
+    /// The pieces of `game(_:)`, in order.
+    static func gameParts(_ game: GameState) -> [String] {
         let opponent = game.opponent.isEmpty ? nil : "\(game.home ? "vs" : "@") \(game.opponent)"
         let score = game.score.map { "\($0.team)–\($0.opponent)" }
         switch game.state {
         case "in":
-            return [opponent, score, game.detail.isEmpty ? "Live" : game.detail].compactMap(\.self).joined(separator: " · ")
+            return [opponent, score, game.detail.isEmpty ? "Live" : game.detail].compactMap(\.self)
         case "post":
             let result = game.score.map { s in "\(s.team > s.opponent ? "W" : s.team < s.opponent ? "L" : "T") \(score ?? "")" }
-            return [opponent, result, "Final"].compactMap(\.self).joined(separator: " · ")
+            return [opponent, result, "Final"].compactMap(\.self)
         default:
-            return [opponent, game.kickoff.map(kickoff)].compactMap(\.self).joined(separator: " · ")
+            return [opponent, game.kickoff.map(kickoff)].compactMap(\.self)
         }
+    }
+
+    /// His game in two short lines, for the head-to-head's narrow column: the opponent, then where the
+    /// game stands ("W 17–10" once it's over, the clock while it's on, the kickoff before).
+    static func gameLines(_ game: GameState) -> (opponent: String?, when: String) {
+        let opponent = game.opponent.isEmpty ? nil : "\(game.home ? "vs" : "@") \(game.opponent)"
+        if game.state == "post", let s = game.score {
+            return (opponent, "\(s.team > s.opponent ? "W" : s.team < s.opponent ? "L" : "T") \(s.team)–\(s.opponent)")
+        }
+        return (opponent, game.state == "pre" && game.kickoff == nil ? "" : gameWhen(game))
     }
 
     /// Just where the game stands, for a narrow column: the clock, "Final", or the kickoff.
@@ -122,20 +137,47 @@ struct PlayerLine: View {
             HStack(spacing: Spacing.xs) {
                 Text(compact ? SeasonFormat.shortName(player) : player.name)
                     .typeStyle(TypeScale.body).foregroundStyle(.text).lineLimit(1)
-                if let tag = SeasonFormat.injuryTag(player.injuryStatus) {
-                    Text(tag).typeStyle(TypeScale.micro)
-                        .foregroundStyle(tag == "Q" ? Color.warnInk : Color.reachInk)
-                }
+                if let tag = SeasonFormat.injuryTag(player.injuryStatus) { InjuryChip(tag: tag) }
             }
-            Text(detail).typeStyle(TypeScale.label).foregroundStyle(player.game?.state == "in" ? Color.sky : Color.muted).lineLimit(1)
+            if compact, let game = player.game {
+                // A narrow column, as the web's phone head-to-head: the opponent on one line, where the
+                // game stands on the next, then the stats behind his points.
+                let lines = SeasonFormat.gameLines(game)
+                let tone = game.state == "in" ? Color.sky : Color.muted
+                if let opponent = lines.opponent { Text(opponent).typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1) }
+                if !lines.when.isEmpty { Text(lines.when).typeStyle(TypeScale.label).foregroundStyle(tone).lineLimit(1) }
+                if game.state != "pre", let stats = player.statLine, !stats.isEmpty {
+                    Text(stats).typeStyle(TypeScale.label).foregroundStyle(.dim).monospacedDigit()
+                        .multilineTextAlignment(alignment == .trailing ? .trailing : .leading)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text(detail).typeStyle(TypeScale.label).foregroundStyle(player.game?.state == "in" ? Color.sky : Color.muted).lineLimit(1)
+            }
         }
     }
 
     private var detail: String {
         guard let game = player.game else { return showPosition ? [SlotLabel.of(player.pos), player.team].compactMap(\.self).joined(separator: " · ") : (player.team ?? "") }
-        if compact { return SeasonFormat.gameWhen(game) }
         let who = showPosition ? "\(SlotLabel.of(player.pos)) · " : ""
         return who + SeasonFormat.game(game)
+    }
+}
+
+/// An injury designation as the web's tag: Q and D in warning ink, the rest (out, IR, suspended) in red,
+/// each on a faint wash of its color.
+struct InjuryChip: View {
+    let tag: String
+
+    var body: some View {
+        let warn = tag == "Q" || tag == "D"
+        Text(tag)
+            .typeStyle(TypeScale.micro)
+            .foregroundStyle(warn ? Color.warnInk : Color.reachInk)
+            .padding(.horizontal, 5)
+            .background((warn ? Color.warn : Color.reach).opacity(0.16), in: RoundedRectangle(cornerRadius: Radius.sm))
+            .fixedSize()
     }
 }
 
@@ -147,6 +189,8 @@ struct ScoreCell: View {
     let pace: PlayerPace?
     var theirs = false
     var alignment: HorizontalAlignment = .trailing
+    /// A narrow column (the head-to-head): past his projection reads "+4.6", the "over" left to the green.
+    var brief = false
 
     var body: some View {
         let level = pace?.pace ?? .pre
@@ -178,7 +222,7 @@ struct ScoreCell: View {
     private func sub(_ level: Pace, actual: Double) -> String {
         switch level {
         case .pre: "proj"
-        case .boom where player.points > 0: "\(SeasonFormat.signed(actual - player.points)) over"
+        case .boom where player.points > 0: SeasonFormat.signed(actual - player.points) + (brief ? "" : " over")
         default: "of \(SeasonFormat.points(player.points))"
         }
     }
