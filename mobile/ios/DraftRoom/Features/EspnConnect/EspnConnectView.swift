@@ -6,6 +6,8 @@ struct EspnConnectView: View {
     @Environment(Session.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var model: EspnConnectModel?
+    /// MyDisney is on screen, so ESPN's page underneath can show.
+    @State private var signInReady = false
     /// Called with the connected Draft Room league's id after the success moment.
     var onConnected: (String) -> Void = { _ in }
 
@@ -78,8 +80,28 @@ struct EspnConnectView: View {
 
         case .signingIn:
             VStack(spacing: 0) {
-                EspnSignInView { login in
-                    Task { await model.signedIn(login) }
+                EspnSignInView(
+                    onLogin: { login in Task { await model.signedIn(login) } },
+                    onClose: { withAnimation(Motion.respond) { model.cancelSignIn() } },
+                    onReady: { withAnimation(Motion.respond) { signInReady = true } }
+                )
+                // ESPN's page loads before MyDisney opens over it; cover it until MyDisney is up.
+                .overlay {
+                    if !signInReady {
+                        VStack(spacing: Spacing.lg) {
+                            ProgressView().controlSize(.large).tint(.muted)
+                            Text("Opening ESPN sign-in…").typeStyle(TypeScale.label).foregroundStyle(.muted)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.bg)
+                        .transition(.opacity)
+                    }
+                }
+                .task {
+                    signInReady = false
+                    // Never leave the user behind the cover if MyDisney is slow or doesn't say so.
+                    try? await Task.sleep(for: .seconds(15))
+                    withAnimation(Motion.respond) { signInReady = true }
                 }
                 Text("Sign in with your ESPN account. Draft Room never sees your password.")
                     .typeStyle(TypeScale.label)
