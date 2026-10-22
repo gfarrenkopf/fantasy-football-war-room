@@ -14,8 +14,8 @@ import { guardedWrite, type GuardedOutcome, type WriteDeps } from "./guardedWrit
  * - A player on waivers is claimed (13.4): the claim waits for waivers to process, and its drop only
  *   happens if it succeeds. It has landed when the re-read shows it pending. A pending claim can be
  *   cancelled. Leagues that bid FAAB aren't supported yet: their claims happen on ESPN.
- * - A player can be dropped with nobody added (APE-425): a `FREEAGENT` transaction with only the
- *   `DROP` item. He goes on waivers.
+ * - A player can be dropped with nobody added (APE-425): a `ROSTER` transaction with only the
+ *   `DROP` item, since ESPN wants exactly one `ADD` in a `FREEAGENT`. He goes on waivers.
  */
 
 export interface AcquireRequest extends Acquire {
@@ -63,7 +63,7 @@ export function dropPlayer(db: Db, key: Buffer, userId: string, leagueId: string
       week,
       snapshot,
       check: ({ roster }) => checkDrop(roster, drop),
-      transaction: ({ teamId }) => ({ type: "FREEAGENT", items: dropItems(teamId, drop) }),
+      transaction: ({ teamId }) => ({ type: "ROSTER", items: dropItems(teamId, drop) }),
       landed: ({ roster }) => dropLanded(roster, drop),
       anyLanded: (l) => l.dropped,
     },
