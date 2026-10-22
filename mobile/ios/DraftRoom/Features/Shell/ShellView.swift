@@ -227,7 +227,7 @@ private struct LeagueSwitcher: View {
         } label: {
             HStack(spacing: Spacing.sm) {
                 if let league { LeagueMark(league: league) }
-                Text(league?.name ?? "Draft Room").typeStyle(TypeScale.title).foregroundStyle(.text).lineLimit(1)
+                Text(league?.shortName ?? "Draft Room").typeStyle(TypeScale.title).foregroundStyle(.text).lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(.muted)
             }
             .padding(.leading, league == nil ? Spacing.xl : Spacing.sm)
@@ -257,6 +257,14 @@ private struct LeagueMark: View {
 }
 
 extension League {
+    /// The name as the switcher pill shows it: 12 characters at most, cut with an ellipsis (APE-431).
+    /// The menu lists each league's full name.
+    var shortName: String {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard name.count > 12 else { return name }
+        return name.prefix(12).trimmingCharacters(in: .whitespaces) + "…"
+    }
+
     /// The league's initials: the first letters of its first two words, or a one-word name's first two.
     var monogram: String {
         let words = name.split { !$0.isLetter && !$0.isNumber }

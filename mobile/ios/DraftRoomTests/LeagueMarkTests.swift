@@ -21,6 +21,18 @@ struct LeagueMarkTests {
         #expect(league(name).monogram == expected)
     }
 
+    @Test(arguments: [
+        ("Tampa Bros", "Tampa Bros"),
+        ("App Tester 2", "App Tester 2"),
+        ("Another 2026 League", "Another 2026…"),
+        ("Fantasy Professionals", "Fantasy Prof…"),
+        ("Hail Marys & Co.", "Hail Marys &…"),
+        ("The Big One League", "The Big One…"),
+    ])
+    func shortName(name: String, expected: String) {
+        #expect(league(name).shortName == expected)
+    }
+
     @Test func colorIsSteadyAndInRange() {
         let ids = ["lg-1", "lg-2", "0b6c1f0e-4a5d-4c1e-9d3e-7f1a2b3c4d5e", ""]
         for id in ids {
