@@ -532,6 +532,10 @@ The headline follows the most pressing line: "Your seat is saved." if anything i
 
 The magic link arrives as the room, not as Auth.js's template: a Room Black ground, a letter-spaced "FANTASY WAR ROOM" wordmark with a mine dot, a panel card with a six-segment position-hue stripe across its top, a 26px headline, and a **filled Signal Green button with near-black ink**. Email clients ignore stylesheets and variables, so every color is a literal copy of a token, named in `src/lib/auth/email.ts`. The filled button is the email's exception to "no filled primary": it's an off-app surface, and the link has to win in a crowded inbox. A new account's subject is "Your seat in the war room is ready"; a returning one's is "Back to the war room".
 
+### Share Card (off-app, APE-414)
+
+The link preview is most visitors' first sight of the product, seen about 360 points wide in a group chat, so it is a poster rather than a page: nothing on it is set under 17px, and it follows the door's mode (`src/app/opengraph-image.tsx`). The left half is the headline in **Big Shoulders 900 caps**, three or four lines at 106–130px, with one word lit in the card's color (Signal Green in season, Terminal Sky out of it) by a soft glow of the same hue, then one supporting line in Geist. The right half is a product card dealt onto the table at −3°: in season, the door's **win card** (YOU WON, the final, Draft Room's calls, the points they were worth); out of season, a **turn plan** for the landing's default league, computed by the war room's own 100 seeded mocks so the odds are real. The ground is Room Black with faint yard lines toward the card and one pool of the card's light behind it. Satori has no tokens or variable fonts, so colors are token literals and the faces are static instances in `assets/og/` (SIL OFL 1.1).
+
 ### Pick Track
 
 A wrapped row of 14px squares at 3px radius representing every pick in the draft: chip-grey for future, `#4a5566` for completed, pure white for the current pick, green for the user's picks, and green at 55% opacity once one has been used. The single most information-dense element per pixel in the product.
