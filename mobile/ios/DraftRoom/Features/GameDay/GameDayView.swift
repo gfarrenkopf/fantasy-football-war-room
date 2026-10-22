@@ -27,6 +27,7 @@ struct GameDayView: View {
                             ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
                         }
                         GameDayContent(season: season, offline: store.offline, onLineup: onLineup)
+                            .newsSheet()
                         if season.gameDay.showArchive {
                             RecapArchiveView(store: recaps, hiding: season.gameDay.result == nil ? nil : RecapKey(season: season.gameDayView.season, week: season.gameDayView.currentWeek), firstWeek: season.gameDay.week)
                                 .task(id: recaps.leagueId) { await recaps.start() }
@@ -279,8 +280,6 @@ private struct GlassPanel: ViewModifier {
 struct HeadToHead: View {
     let view: SeasonView
     let day: GameDay
-    /// The player whose ESPN news is open.
-    @State private var reading: ViewPlayer?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -288,7 +287,7 @@ struct HeadToHead: View {
                 let mine = row.me.flatMap(view.player)
                 Divider().overlay(.rowLine)
                 HStack(spacing: 0) {
-                    H2HSide(player: mine, pace: row.me.flatMap(day.pace(of:)), theirs: false) { reading = $0 }
+                    H2HSide(player: mine, pace: row.me.flatMap(day.pace(of:)), theirs: false)
                     // The spine takes the slot's hue, as on the web: a wash over the tier tone, the label in the hue.
                     let hue = Color.slot(row.key)
                     Text(SlotLabel.of(row.key))
@@ -303,15 +302,9 @@ struct HeadToHead: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Self.spoken(row, view: view, day: day))
-                // The row is one sentence, so its News tag can't be reached inside it; offer it here.
-                .accessibilityActions {
-                    if let mine, mine.news != nil {
-                        Button("ESPN's news on \(mine.name)") { reading = mine }
-                    }
-                }
+                .newsAction(mine)
             }
         }
-        .sheet(item: $reading) { NewsSheet(player: $0) }
     }
 }
 
@@ -335,15 +328,13 @@ private struct H2HSide: View {
     let player: ViewPlayer?
     let pace: PlayerPace?
     let theirs: Bool
-    /// Opens ESPN's news on the user's player; the opponent's side offers none, as on the web.
-    var onNews: ((ViewPlayer) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
             if let player {
                 if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading, brief: true) }
-                PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading,
-                           onNews: theirs ? nil : onNews.map { open in { open(player) } })
+                // ESPN's news on the user's players only, as on the web.
+                PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading, news: !theirs)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
                 if !theirs { ScoreCell(player: player, pace: pace, brief: true) }
             } else {

@@ -22,7 +22,8 @@ enum SeasonSample {
         player(3, "Puka Nacua", "WR", slot: "WR", actual: 9.6, points: 15.1, game: game("post"), stats: "6 REC, 66 YDS"),
         player(4, "Sam LaPorta", "TE", slot: "TE", actual: nil, points: 10.2, game: game("pre", opponent: "GB")),
         player(5, "Jake Elliott", "K", slot: "K", actual: nil, points: 8.0, game: game("pre", opponent: "DAL")),
-        player(6, "Tank Bigsby", "RB", slot: "BN", actual: nil, points: 7.4, game: game("pre", opponent: "GB")),
+        player(6, "Tank Bigsby", "RB", slot: "BN", actual: nil, points: 7.4, game: game("pre", opponent: "GB"),
+               news: "Bigsby should see more early-down work with the starter limited in practice this week."),
         player(7, "Josh Downs", "WR", slot: "BN", actual: nil, points: 9.1, game: nil, injury: "OUT"),
         player(8, "Tucker Kraft", "TE", slot: "BN", actual: nil, points: 11.6, game: game("pre", opponent: "CHI")),
     ]

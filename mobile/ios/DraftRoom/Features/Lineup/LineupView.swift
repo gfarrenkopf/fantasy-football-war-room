@@ -82,6 +82,7 @@ struct LineupView: View {
         // A tapped "is out" push names a starter: open his slot's swaps.
         .onChange(of: model.focus, initial: true) { openFocus() }
         .onChange(of: model.isReady) { openFocus() }
+        .newsSheet()
         .sheet(item: $pickingSeat) { pick in SeatPicker(model: model, seat: pick.seat) }
         .sheet(item: $pickingBench) { player in BenchPicker(model: model, player: player) }
         .sheet(isPresented: saving) { SaveSheet(model: model) }
@@ -247,7 +248,7 @@ private struct StarterRow: View {
             } player: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     if let now {
-                        PlayerLine(player: now)
+                        PlayerLine(player: now, news: true)
                         if let made { MadeMark(move: made) }
                     } else {
                         Text("Empty on ESPN").typeStyle(TypeScale.body).foregroundStyle(.dim)
@@ -277,6 +278,7 @@ private struct StarterRow: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(spoken(key: key, now: now, next: next, changed: changed, locked: locked, made: made))
         .accessibilityHint(locked ? "" : "Shows who can play \(SlotLabel.of(key))")
+        .newsAction(now)
         .accessibilityIdentifier("seat-\(seat)")
     }
 
@@ -285,6 +287,7 @@ private struct StarterRow: View {
         if let now {
             parts.append(now.name)
             parts.append("projected \(SeasonFormat.points(now.points))")
+            if now.news != nil { parts.append("ESPN news") }
         } else {
             parts.append("empty on ESPN")
         }
@@ -368,13 +371,14 @@ private struct BenchCard: View {
                         RowLayout {
                             SlotText(text: "IR")
                         } player: {
-                            PlayerLine(player: player)
+                            PlayerLine(player: player, news: true)
                         } points: {
                             RowPoints(player: player, locked: false)
                         }
                         .padding(.horizontal, Spacing.xl)
                         .padding(.vertical, Spacing.lg)
                         .accessibilityElement(children: .combine)
+                        .newsAction(player)
                     }
                 } else {
                     IrList(model: model, candidates: candidates)
@@ -425,7 +429,7 @@ private struct IrRow: View {
             } player: {
                 // PlayerLine carries ESPN's injury tag; the bench row says "Going on IR".
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    PlayerLine(player: player)
+                    PlayerLine(player: player, news: true)
                     if moving && !on {
                         Label("Coming off IR, to the bench", systemImage: "arrow.uturn.left")
                             .typeStyle(TypeScale.label).foregroundStyle(.sky)
@@ -442,8 +446,9 @@ private struct IrRow: View {
         .padding(.vertical, Spacing.lg)
         .background(moving ? Color.sky.opacity(0.06) : .clear)
         .accessibilityLabel(
-            ([player.name, status, player.locked ? "locked" : nil, moving ? (on ? "going on IR" : "coming off IR") : nil] as [String?])
+            ([player.name, status, player.locked ? "locked" : nil, moving ? (on ? "going on IR" : "coming off IR") : nil, player.news != nil ? "ESPN news" : nil] as [String?])
                 .compactMap(\.self).joined(separator: ", "))
+        .newsAction(player)
         .accessibilityIdentifier("ir-\(player.playerId)")
     }
 
@@ -466,7 +471,7 @@ private struct BenchRow: View {
                 SlotText(text: "BN")
             } player: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    PlayerLine(player: player)
+                    PlayerLine(player: player, news: true)
                     if toIr {
                         Label("Going on IR", systemImage: "cross.case")
                             .typeStyle(TypeScale.label).foregroundStyle(.sky)
@@ -490,9 +495,10 @@ private struct BenchRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(
-            ["Bench", player.name, "projected \(SeasonFormat.points(player.points))", player.locked ? "locked" : nil, toIr ? "going on IR" as String? : seat.map { "starting at \(SlotLabel.of(model.seats[$0]))" }]
+            ["Bench", player.name, "projected \(SeasonFormat.points(player.points))", player.news != nil ? "ESPN news" : nil, player.locked ? "locked" : nil, toIr ? "going on IR" as String? : seat.map { "starting at \(SlotLabel.of(model.seats[$0]))" }]
                 .compactMap(\.self).joined(separator: ", "))
         .accessibilityHint(player.locked || toIr ? "" : "Shows where he can start")
+        .newsAction(player)
         .accessibilityIdentifier("bench-\(player.playerId)")
     }
 }

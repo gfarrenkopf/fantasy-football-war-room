@@ -134,8 +134,11 @@ struct PlayerLine: View {
     /// phone-layout type sizes.
     var compact = false
     var alignment: HorizontalAlignment = .leading
-    /// Offer ESPN's outlook for him, when there is one: a "News" tag beside his name that calls this.
-    var onNews: (() -> Void)? = nil
+    /// Offer ESPN's outlook for him, when there is one: a "News" tag beside his name that opens it
+    /// in the sheet an ancestor's `newsSheet()` hosts.
+    var news = false
+
+    @Environment(\.openNews) private var openNews
 
     var body: some View {
         VStack(alignment: alignment, spacing: 1) {
@@ -143,7 +146,11 @@ struct PlayerLine: View {
                 Text(compact ? SeasonFormat.shortName(player) : player.name)
                     .typeStyle(TypeScale.body, dense: compact).foregroundStyle(.text).lineLimit(1)
                 if let tag = SeasonFormat.injuryTag(player.injuryStatus) { InjuryChip(tag: tag, dense: compact) }
-                if let onNews, player.news != nil { NewsTag(name: player.name, dense: compact, action: onNews) }
+                if news, let openNews, player.news != nil {
+                    // A row that is itself a button may be disabled (a locked seat); the note still opens.
+                    NewsTag(name: player.name, dense: compact) { openNews(player) }
+                        .environment(\.isEnabled, true)
+                }
             }
             if compact, let game = player.game {
                 // A narrow column, as the web's phone head-to-head: the opponent and score on one line,
@@ -222,6 +229,47 @@ struct NewsTag: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("ESPN's news on \(name)")
+    }
+}
+
+extension EnvironmentValues {
+    /// Opens ESPN's news on a player, set by `newsSheet()`; without it, no News tag shows.
+    @Entry var openNews: ((ViewPlayer) -> Void)? = nil
+}
+
+extension View {
+    /// Hosts the sheet that every News tag below opens (APE-423).
+    func newsSheet() -> some View {
+        modifier(NewsHost())
+    }
+
+    /// Offers ESPN's news on him as a named VoiceOver action, for a row read as one sentence, where
+    /// the News tag inside can't be reached.
+    func newsAction(_ player: ViewPlayer?) -> some View {
+        modifier(NewsAction(player: player))
+    }
+}
+
+private struct NewsHost: ViewModifier {
+    @State private var reading: ViewPlayer?
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.openNews) { reading = $0 }
+            .sheet(item: $reading) { NewsSheet(player: $0) }
+    }
+}
+
+private struct NewsAction: ViewModifier {
+    let player: ViewPlayer?
+    @Environment(\.openNews) private var openNews
+
+    func body(content: Content) -> some View {
+        content.accessibilityActions {
+            if let player, player.news != nil, let openNews {
+                Button("ESPN's news on \(player.name)") { openNews(player) }
+            }
+        }
     }
 }
 
