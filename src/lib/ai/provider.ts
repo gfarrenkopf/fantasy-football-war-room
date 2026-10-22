@@ -54,16 +54,29 @@ export type PlanModelErrorKind =
   /** The output wasn't parseable JSON. */
   | "invalid_output";
 
+/**
+ * What the provider said when a call failed (APE-427): its HTTP status, its error type
+ * (`authentication_error`, `overloaded_error`) and its message. Never the key or the prompt.
+ */
+export interface ModelErrorDetail {
+  status?: number;
+  type?: string;
+  message: string;
+}
+
 export class PlanModelError extends Error {
   readonly kind: PlanModelErrorKind;
   /** Tokens spent before the failure, when the provider reported them. */
   readonly usage?: ModelUsage;
+  /** The provider's own account of the failure, when it gave one. */
+  readonly detail?: ModelErrorDetail;
 
   // No parameter properties: the CLIs run this file under Node's strip-only TypeScript.
-  constructor(kind: PlanModelErrorKind, message: string, usage?: ModelUsage, options?: { cause?: unknown }) {
+  constructor(kind: PlanModelErrorKind, message: string, usage?: ModelUsage, options?: { cause?: unknown; detail?: ModelErrorDetail }) {
     super(message, options);
     this.name = "PlanModelError";
     this.kind = kind;
     this.usage = usage;
+    this.detail = options?.detail;
   }
 }

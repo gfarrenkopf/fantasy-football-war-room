@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { PlanModelError, type ModelUsage, type PlanModel } from "../provider";
+import { PlanModelError, type ModelErrorDetail, type ModelUsage, type PlanModel } from "../provider";
 
 /** Chosen over Haiku 4.5 on plan quality (APE-99 evals): about $0.15 a plan, but it thinks, so allow minutes. */
 export const ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-5";
@@ -7,6 +7,16 @@ export const ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-5";
 /** Models that reject `output_config.effort`. Everything newer accepts low / medium / high. */
 const NO_EFFORT = ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-1", "claude-opus-4-0", "claude-sonnet-4-0", "claude-3"];
 const supportsEffort = (model: string) => !NO_EFFORT.some((prefix) => model.startsWith(prefix));
+
+const MAX_DETAIL = 200;
+
+/** The status, type and message of a failed call, from the API's error body when it sent one. */
+function errorDetail(err: unknown): ModelErrorDetail {
+  if (!(err instanceof Anthropic.APIError)) return { message: String(err).slice(0, MAX_DETAIL) };
+  const body = (err.error as { error?: { message?: unknown } } | undefined)?.error;
+  const message = typeof body?.message === "string" ? body.message : err.message;
+  return { status: err.status, type: err.type ?? undefined, message: message.slice(0, MAX_DETAIL) };
+}
 
 /** Claude, through the official SDK's structured outputs. The key is passed in; this module never reads env. */
 export function createAnthropicPlanModel({ apiKey, model = ANTHROPIC_DEFAULT_MODEL }: { apiKey: string; model?: string }): PlanModel {
@@ -36,10 +46,10 @@ export function createAnthropicPlanModel({ apiKey, model = ANTHROPIC_DEFAULT_MOD
           .finalMessage();
       } catch (err) {
         if (err instanceof Anthropic.APIUserAbortError || err instanceof Anthropic.APIConnectionTimeoutError) {
-          throw new PlanModelError("timeout", "Claude request timed out", undefined, { cause: err });
+          throw new PlanModelError("timeout", "Claude request timed out", undefined, { cause: err, detail: { type: "timeout", message: "Claude request timed out" } });
         }
-        const detail = err instanceof Anthropic.APIError ? `${err.status ?? "network"} ${err.message}` : String(err);
-        throw new PlanModelError("unavailable", `Claude request failed: ${detail}`, undefined, { cause: err });
+        const detail = errorDetail(err);
+        throw new PlanModelError("unavailable", `Claude request failed: ${detail.status ?? "network"} ${detail.message}`, undefined, { cause: err, detail });
       }
 
       const usage: ModelUsage = {

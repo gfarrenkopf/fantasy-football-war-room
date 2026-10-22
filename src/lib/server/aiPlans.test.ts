@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlanModelError, type ModelRequest } from "@/lib/ai/provider";
 import { createFakePlanModel } from "@/lib/ai/providers/fake";
 import { DATASET_ID, standardRoster } from "@/lib/data";
@@ -199,9 +199,17 @@ describe("AI plan jobs", () => {
 
     const retry = result(await requestPlan(db, alice, league.id));
     const failing = createFakePlanModel(() => {
-      throw new PlanModelError("timeout", "slow");
+      throw new PlanModelError("timeout", "slow", undefined, { detail: { type: "timeout", message: "Claude request timed out" } });
     });
-    await runPlanJob(db, league.id, retry.claimedJobId!, { model: failing });
+    const logs = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await runPlanJob(db, league.id, retry.claimedJobId!, { model: failing });
+      expect(logs.mock.calls).toEqual([['[ai-error] purpose=plan provider=fake model=fake-1 kind=timeout type=timeout message="Claude request timed out"']]);
+    } finally {
+      logs.mockRestore();
+    }
+    const [logged] = await db.select().from(aiGenerations).where(eq(aiGenerations.jobId, retry.claimedJobId!));
+    expect(logged).toMatchObject({ outcome: "timeout", error: { type: "timeout", message: "Claude request timed out" } });
     const failed = result(await getPlanStatus(db, alice, league.id));
     expect(failed.view).toMatchObject({
       status: "failed",

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlanModelError } from "@/lib/ai/provider";
 import { createFakePlanModel } from "@/lib/ai/providers/fake";
 import { LINEUP_PROMPT_VERSION } from "@/lib/ai/season/lineup";
@@ -64,19 +64,35 @@ describe("writeAiLineup", () => {
   });
 
   it("gives the allowance back when the model fails, and logs the failure", async () => {
+    const detail = { status: 401, type: "authentication_error", message: "invalid x-api-key" };
     const model = createFakePlanModel(() => {
-      throw new PlanModelError("unavailable", "down");
+      throw new PlanModelError("unavailable", "Claude request failed: 401 invalid x-api-key", undefined, { detail });
     });
-    expect(await writeAiLineup(db, model, { userId, leagueId, view, kind: "lineup-midweek" })).toEqual({ status: "failed", kind: "unavailable" });
+    const logs = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await writeAiLineup(db, model, { userId, leagueId, view, kind: "lineup-midweek" })).toEqual({ status: "failed", kind: "unavailable" });
+      expect(logs.mock.calls).toEqual([
+        ['[ai-error] purpose=season-lineup provider=fake model=fake-1 kind=unavailable status=401 type=authentication_error message="invalid x-api-key"'],
+      ]);
+      expect(logs.mock.calls[0][0]).not.toContain(model.calls[0].user);
+    } finally {
+      logs.mockRestore();
+    }
     expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual([]);
     expect(await findAiLineups(db, leagueId, 2026, 5)).toEqual({});
-    expect(await generations()).toEqual([expect.objectContaining({ purpose: "season-lineup", outcome: "unavailable", inputTokens: null })]);
+    expect(await generations()).toEqual([expect.objectContaining({ purpose: "season-lineup", outcome: "unavailable", inputTokens: null, error: detail })]);
+  });
+
+  it("logs no error on a call that worked", async () => {
+    const model = createFakePlanModel(() => ({ json: lineupJson, usage }));
+    await writeAiLineup(db, model, { userId, leagueId, view, kind: "lineup-midweek" });
+    expect(await generations()).toEqual([expect.objectContaining({ outcome: "ready", error: null })]);
   });
 
   it("rejects an output naming a player not in the input, and stores nothing", async () => {
     const model = createFakePlanModel(() => ({ json: { intro: "", calls: [{ slot: "s1", ref: "p99", reason: "" }] }, usage }));
     expect(await writeAiLineup(db, model, { userId, leagueId, view, kind: "lineup-midweek" })).toEqual({ status: "failed", kind: "invalid_output" });
-    expect(await generations()).toEqual([expect.objectContaining({ outcome: "invalid_output", outputTokens: 200 })]);
+    expect(await generations()).toEqual([expect.objectContaining({ outcome: "invalid_output", outputTokens: 200, error: { message: expect.any(String) } })]);
   });
 });
 
