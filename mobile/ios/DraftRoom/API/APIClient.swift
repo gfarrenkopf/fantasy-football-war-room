@@ -89,6 +89,12 @@ final class APIClient {
         _ = try await perform(method, path, body: encode(body))
     }
 
+    /// For routes that answer 204 with no body, or 200 with one.
+    func sendReading<Response: Decodable>(_ method: String, _ path: String, body: some Encodable, as _: Response.Type = Response.self) async throws(APIError) -> Response? {
+        let data = try await perform(method, path, body: encode(body))
+        return data.isEmpty ? nil : try decode(data)
+    }
+
     func send(_ method: String, _ path: String) async throws(APIError) {
         _ = try await perform(method, path, body: nil)
     }

@@ -11,10 +11,13 @@ final class SignInModel {
         case choose
         /// The magic link is on its way to this address.
         case checkInbox(String)
+        /// App Review's account: it signs in with a fixed code, not a link (APE-398).
+        case enterCode(String)
     }
 
     var step: Step = .choose
     var email = ""
+    var code = ""
     var busy = false
     var errorMessage: String?
 
@@ -99,12 +102,20 @@ final class SignInModel {
         busy = true
         defer { busy = false }
         do {
-            try await api.send("POST", "api/v1/auth/email/start", body: ["email": address])
+            let start: EmailStart? = try await api.sendReading("POST", "api/v1/auth/email/start", body: ["email": address])
             errorMessage = nil
-            step = .checkInbox(address)
+            step = start?.step == "code" ? .enterCode(address) : .checkInbox(address)
         } catch {
             errorMessage = error.message
         }
+    }
+
+    var codeLooksValid: Bool {
+        !code.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    func submitCode(for address: String) async {
+        await exchange("api/v1/auth/email/code", ["email": address, "code": code.trimmingCharacters(in: .whitespaces)])
     }
 
     /// A sign-in link opened in the app: a magic link (a Universal Link to Auth.js's callback, or the

@@ -191,7 +191,12 @@ enum UITestStub {
             case "/api/v1/espn/write-consent":
                 (200, #"{"version":2,"agreed":true}"#)
             case "/api/v1/me":
-                (200, #"{"user":{"id":"u1","email":"tester@example.test","name":"Test User"},"flags":{"season":true,"ai":true,"payments":false},"minAppVersion":"1.0"}"#)
+                // `-uiTestReview` signs in as App Review's account, with its Settings rows (APE-398).
+                (200, ProcessInfo.processInfo.arguments.contains("-uiTestReview")
+                    ? #"{"user":{"id":"u1","email":"review@example.test","name":null},"flags":{"season":true,"ai":true,"payments":false},"minAppVersion":"1.0","review":true}"#
+                    : #"{"user":{"id":"u1","email":"tester@example.test","name":"Test User"},"flags":{"season":true,"ai":true,"payments":false},"minAppVersion":"1.0"}"#)
+            case "/api/v1/review/sample":
+                (200, #"{"sent":1}"#)
             case "/api/v1/leagues":
                 (200, #"{"leagues":[{"id":"lg-1","name":"App Tester","espnLeagueId":"704343562","espnTeamId":1,"season":2026},{"id":"lg-2","name":"Sunday Regulars","espnLeagueId":"111","espnTeamId":4,"season":2026}]}"#)
             case "/api/v1/leagues/lg-1/season", "/api/v1/leagues/lg-2/season":

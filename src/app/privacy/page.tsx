@@ -30,10 +30,6 @@ export default function Privacy() {
           It&apos;s written for <strong>draftroom.online</strong> and the Draft Room iPhone app, run by <strong>Apeman Tech</strong>. Questions go to{" "}
           <a href="mailto:greg@apeman.tech">greg@apeman.tech</a>.
         </p>
-        <p className="text-muted">
-          Draft Room is open source, and anyone can run their own copy. A copy on another address is run by whoever runs it, not by Apeman Tech, and this page
-          doesn&apos;t cover it.
-        </p>
 
         <h2>Without an account</h2>
         <p>

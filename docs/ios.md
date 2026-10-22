@@ -95,8 +95,9 @@ Every exchange ends the same way: a row in Auth.js's `sessions` table and `{ tok
 | `POST /api/v1/auth/code` | `{ code }`. Trades the hand-off code for a session. |
 | `POST /api/v1/auth/email/start` | `{ email }`. Sends the magic link, with `/app/signed-in` as its destination. That destination is what the Universal Link rule matches, so links asked for on the web keep opening the web. |
 | `POST /api/v1/auth/email` | `{ email, token }`, taken from the opened link. Uses it up exactly as Auth.js would. |
+| `POST /api/v1/auth/email/code` | `{ email, code }`. App Review's account only (22.1): `email/start` answers `{ step: "code" }` for `REVIEW_ACCOUNT_EMAIL` instead of sending a link, and this takes `REVIEW_ACCOUNT_CODE`. Five tries per email per 15 minutes. |
 | `POST /api/v1/auth/signout` | Deletes the Bearer token's session. |
-| `GET /api/v1/me` | The user, feature flags (`season`, `ai`, `payments`) and `minAppVersion`. |
+| `GET /api/v1/me` | The user, feature flags (`season`, `ai`, `payments`) and `minAppVersion`; `review: true` for App Review's account. |
 
 ## 5. Connecting ESPN
 
@@ -166,7 +167,7 @@ The steps a person has to do, in order. Each is its own `human` ticket in Epic 1
 | 5.1.1(v) Account deletion | No way to delete an account in the app | `DELETE /api/v1/account` and a button in settings |
 | 5.1.1 Privacy policy | None exists yet | A `/privacy` page on the web, disclosing that the ESPN login is stored sealed and deleted after the season (`loginExpiry()`) |
 | 5.2 Intellectual property | ESPN names and marks | Text only, "Works with ESPN Fantasy"; no logos or colors |
-| 2.1 App completeness | The reviewer can't get past sign-in without an ESPN league | A reviewer account that signs in with a fixed code and sees seeded season data from the test league, with ESPN writes stubbed. Credentials go in the review notes |
+| 2.1 App completeness | The reviewer can't get past sign-in without an ESPN league | A reviewer account (22.1) that signs in with a fixed code and lands in our real ESPN test leagues, read and written live through a dedicated ESPN test account. Settings shows it a sample alert and Live Activity. Credentials go in the review notes |
 | 3.1.1 In-app purchase | Selling digital features through Stripe in the app | No purchase UI in v1 |
 | 4.2 Minimum functionality | "It's just a website" | Native SwiftUI, push, Live Activity; no web content except ESPN's own sign-in page |
 
@@ -182,7 +183,7 @@ All in the Fantasy War Room project in Linear, related to APE-312. Each epic is 
 | 19. iOS: Team management | IR, add/drop, waivers and FAAB, using the Epic 13 consent |
 | 20. iOS: AI | AI lineups and trade write-ups, gated by entitlement (full access in the beta) |
 | 21. iOS: Push and Live Activity | Device tokens, APNs sender, alert preferences, the two v1 alerts, Game day Live Activity |
-| 22. iOS: Beta release | Reviewer account and seeded data, privacy labels, review notes, external TestFlight |
+| 22. iOS: Beta release | Reviewer account on the ESPN test leagues, privacy labels, review notes, external TestFlight |
 
 ## 12. Later: v2 and in-app purchase
 

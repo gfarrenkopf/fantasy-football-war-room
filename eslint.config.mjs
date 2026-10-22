@@ -9,7 +9,7 @@ const eslintConfig = defineConfig([
   // and scripts/db/*.mts for the CLIs — config.ts imports "server-only" and can't be loaded by a node script.
   // src/instrumentation.ts reads only NEXT_RUNTIME, which Next sets, to skip the edge runtime.
   {
-    ignores: ["src/lib/config.ts", "scripts/ingest/env.mts", "scripts/ai/env.mts", "scripts/db/*.mts", "src/instrumentation.ts"],
+    ignores: ["src/lib/config.ts", "scripts/ingest/env.mts", "scripts/ai/env.mts", "scripts/db/*.mts", "scripts/review/*.mts", "src/instrumentation.ts"],
     rules: {
       "no-restricted-properties": [
         "error",

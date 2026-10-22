@@ -13,6 +13,8 @@ struct SettingsView: View {
     @State private var espn: EspnLoginStatus?
     @State private var connecting = false
     @State private var confirmingSignOut = false
+    /// What the last App Review sample did.
+    @State private var sampleNote: String?
 
     var body: some View {
         NavigationStack {
@@ -43,6 +45,23 @@ struct SettingsView: View {
                         NavigationLink("Notifications") { NotificationsView() }
                             .foregroundStyle(.text)
                             .accessibilityIdentifier("settings-notifications")
+                    }
+                }
+                if session.me?.review == true {
+                    Section {
+                        Button("Send a sample alert") { Task { await sample("alert") } }
+                            .foregroundStyle(.text)
+                            .accessibilityIdentifier("settings-review-alert")
+                        Button("Start a sample Live Activity") { Task { await sample("live") } }
+                            .foregroundStyle(.text)
+                            .accessibilityIdentifier("settings-review-live")
+                        if let sampleNote {
+                            Text(sampleNote).foregroundStyle(.muted)
+                        }
+                    } header: {
+                        Text("App Review")
+                    } footer: {
+                        Text("Only this account sees these. Lock the phone to see the Live Activity on the Lock Screen.")
                     }
                 }
                 Section {
@@ -123,6 +142,16 @@ struct SettingsView: View {
             espn = EspnLoginStatus(login: nil)
         } catch {
             errorMessage = error.message
+        }
+    }
+
+    private func sample(_ kind: String) async {
+        struct Sent: Decodable { let sent: Int }
+        do {
+            let _: Sent = try await session.api.post("api/v1/review/sample", body: ["kind": kind])
+            sampleNote = kind == "live" ? "Started. It's on the Lock Screen and in the Dynamic Island." : "Sent. It arrives in a few seconds."
+        } catch {
+            sampleNote = error.message
         }
     }
 
