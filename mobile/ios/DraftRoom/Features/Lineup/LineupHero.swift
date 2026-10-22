@@ -78,6 +78,25 @@ private struct HeroLead<Number: View, Detail: View>: View {
     }
 }
 
+/// What the opponent is projected for this week, under the user's own total, so the gain reads
+/// against the score it has to beat. ESPN's number, for the lineup they have set on ESPN.
+private struct OpponentLine: View {
+    let model: LineupModel
+
+    var body: some View {
+        if let view = model.store.season?.view, let them = view.matchup?.them {
+            HStack(spacing: Spacing.sm) {
+                Text("vs \(view.team(them.teamId)?.name ?? "Your opponent")").lineLimit(1).truncationMode(.tail)
+                Text(SeasonFormat.points(them.projected)).fontWeight(.bold).foregroundStyle(.text).monospacedDigit().fixedSize()
+                Text("projected").fixedSize()
+            }
+            .typeStyle(TypeScale.label).foregroundStyle(.muted)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("hero-opponent")
+        }
+    }
+}
+
 // MARK: - Start/sit
 
 /// War Room's verdict on ESPN's lineup (the web's Gain hero): the points a switch gains, a headline
@@ -119,6 +138,7 @@ struct StartSitHero: View {
                                 Text("\(SeasonFormat.signed(sit.banked)) already banked").typeStyle(TypeScale.label).monospacedDigit().foregroundStyle(.muted)
                             }
                         }
+                        OpponentLine(model: model)
                         Text(sit.headline).typeStyle(TypeScale.title).foregroundStyle(.text)
                             .accessibilityAddTraits(.isHeader)
                     }
@@ -219,6 +239,7 @@ struct BankedHero: View {
                             Text("\(none ? "projected" : "on ESPN") · week \(week)").foregroundStyle(.muted)
                         }
                         .typeStyle(TypeScale.label).monospacedDigit()
+                        OpponentLine(model: model)
                         Label {
                             Text("Your lineup is set").typeStyle(TypeScale.title).foregroundStyle(.text)
                         } icon: {
@@ -320,6 +341,7 @@ struct HoleHero: View {
                         Text(holes.count == 1 ? "0 from \(SlotLabel.of(holes[0].key))" : "0 from each hole").foregroundStyle(.warnInk)
                     }
                     .typeStyle(TypeScale.label)
+                    OpponentLine(model: model)
                     Label {
                         Text(HoleText.headline(holes)).typeStyle(TypeScale.title).foregroundStyle(.text)
                     } icon: {
