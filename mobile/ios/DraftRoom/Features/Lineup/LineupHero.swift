@@ -63,18 +63,18 @@ private struct HeroCard<Content: View>: View {
     }
 }
 
-/// The hero's number beside what it means; stacked at the accessibility text sizes so neither is squeezed.
+/// The hero's number over what it means, at full width, as the Lock In card lays it out: side by side,
+/// the detail column was squeezed into wrapping totals and a headline a word a line (APE-429).
 private struct HeroLead<Number: View, Detail: View>: View {
     @ViewBuilder var number: () -> Number
     @ViewBuilder var detail: () -> Detail
-    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        if size.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: Spacing.md) { number(); detail() }
-        } else {
-            HStack(alignment: .center, spacing: Spacing.xl + Spacing.md) { number(); detail() }
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            number()
+            detail()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -112,9 +112,9 @@ struct StartSitHero: View {
                                 Text(SeasonFormat.points(sit.currentTotal)).foregroundStyle(.dim)
                                 Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.dim)
                                 Text(SeasonFormat.points(sit.total)).fontWeight(.bold).foregroundStyle(.text)
+                                Text("projected · week \(week)").foregroundStyle(.muted)
                             }
-                            .typeStyle(TypeScale.body).monospacedDigit()
-                            Text("projected · week \(week)").typeStyle(TypeScale.label).foregroundStyle(.muted)
+                            .typeStyle(TypeScale.label).monospacedDigit()
                             if sit.banked >= 0.05 {
                                 Text("\(SeasonFormat.signed(sit.banked)) already banked").typeStyle(TypeScale.label).monospacedDigit().foregroundStyle(.muted)
                             }
@@ -315,8 +315,11 @@ struct HoleHero: View {
                 .fixedSize()
             } detail: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("projected · week \(week)").typeStyle(TypeScale.label).foregroundStyle(.muted)
-                    Text(holes.count == 1 ? "0 from \(SlotLabel.of(holes[0].key))" : "0 from each hole").typeStyle(TypeScale.label).foregroundStyle(.warnInk)
+                    HStack(spacing: Spacing.sm) {
+                        Text("projected · week \(week) ·").foregroundStyle(.muted)
+                        Text(holes.count == 1 ? "0 from \(SlotLabel.of(holes[0].key))" : "0 from each hole").foregroundStyle(.warnInk)
+                    }
+                    .typeStyle(TypeScale.label)
                     Label {
                         Text(HoleText.headline(holes)).typeStyle(TypeScale.title).foregroundStyle(.text)
                     } icon: {
