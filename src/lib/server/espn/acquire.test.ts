@@ -123,10 +123,10 @@ describe("addFreeAgent", () => {
 describe("dropPlayer (APE-425)", () => {
   const drop = { week: 4, snapshot: snapshotOf(ROSTER), drop: 3 };
 
-  it("writes a FREEAGENT transaction with only the DROP item, and confirms he's gone from a re-read", async () => {
+  it("writes a ROSTER transaction with only the DROP item, and confirms he's gone from a re-read", async () => {
     const { deps, writes } = fake([ok(league(ROSTER)), ok(league(ROSTER.slice(0, 2)))]);
     expect(await dropPlayer(db, key, "user", "league", drop, deps)).toEqual({ kind: "applied", landed: { dropped: true } });
-    expect(writes).toEqual([{ season: 2026, espnLeagueId: "704343562", teamId: 1, week: 4, type: "FREEAGENT", items: [{ playerId: 3, type: "DROP", fromTeamId: 1 }] }]);
+    expect(writes).toEqual([{ season: 2026, espnLeagueId: "704343562", teamId: 1, week: 4, type: "ROSTER", items: [{ playerId: 3, type: "DROP", fromTeamId: 1 }] }]);
   });
 
   it("refuses a locked player without writing", async () => {

@@ -71,7 +71,7 @@ export function acquireItems(teamId: number, { add, drop }: Acquire): EspnAcquir
   return [{ playerId: add, type: "ADD", toTeamId: teamId }, ...(drop === null ? [] : [{ playerId: drop, type: "DROP" as const, fromTeamId: teamId }])];
 }
 
-/** A drop with nothing added (APE-425): one `DROP` item of a `FREEAGENT` transaction. */
+/** A drop with nothing added (APE-425): one `DROP` item of a `ROSTER` transaction. */
 export const dropItems = (teamId: number, drop: number): EspnAcquireItem[] => [{ playerId: drop, type: "DROP", fromTeamId: teamId }];
 
 /** Whether a claim is pending for the team: by the id ESPN gave it, or failing that, by who it adds. */
