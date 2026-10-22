@@ -108,30 +108,38 @@ extension StubbedNetwork {
         }
 
         @Test func pollsOnlyWhileAGameIsOn() async throws {
+            // Its own league, counting only its reads: under a full run's load, a request an earlier
+            // test left in flight can land during this one.
+            let leagueId = "lg-poll-\(UUID().uuidString)"
+            func reads() -> Int { StubURLProtocol.requests.count { $0.url?.path.contains(leagueId) == true } }
+
             StubURLProtocol.reply = Self.reply("season-live")
-            let live = store()
+            let live = SeasonStore(api: api, leagueId: leagueId, cache: cache)
             await live.start()
-            let before = StubURLProtocol.requests.count
+            let before = reads()
             let polling = Task { await live.poll(every: .milliseconds(20)) }
-            try await Task.sleep(for: .milliseconds(150))
+            // Waits for a poll, up to 5 seconds, rather than a fixed time a slow simulator can miss.
+            for _ in 0 ..< 250 where reads() == before {
+                try await Task.sleep(for: .milliseconds(20))
+            }
             polling.cancel()
             await polling.value
-            #expect(StubURLProtocol.requests.count > before)
+            #expect(reads() > before)
 
             // Once it's cancelled (the screen went away, or the app went to the background), it stops.
-            let after = StubURLProtocol.requests.count
+            let after = reads()
             try await Task.sleep(for: .milliseconds(80))
-            #expect(StubURLProtocol.requests.count == after)
+            #expect(reads() == after)
 
             StubURLProtocol.reply = Self.reply("season-pregame")
-            let quiet = store()
+            let quiet = SeasonStore(api: api, leagueId: leagueId, cache: cache)
             await quiet.start()
-            let start = StubURLProtocol.requests.count
+            let start = reads()
             let idle = Task { await quiet.poll(every: .milliseconds(20)) }
             try await Task.sleep(for: .milliseconds(120))
             idle.cancel()
             await idle.value
-            #expect(StubURLProtocol.requests.count == start)
+            #expect(reads() == start)
         }
 
         @Test func clearingForgetsEveryKeptSeason() async {
