@@ -218,17 +218,23 @@ export async function redeemEmailToken(
       .where(and(eq(verificationTokens.identifier, identifier), eq(verificationTokens.token, sha256(`${token}${secret}`))))
       .returning();
     if (!invite || invite.expires <= now) return null;
-    const [existing] = await tx.select({ id: users.id, emailVerified: users.emailVerified }).from(users).where(eq(users.email, identifier)).limit(1);
-    if (existing) {
-      if (!existing.emailVerified) await tx.update(users).set({ emailVerified: now }).where(eq(users.id, existing.id));
-      return { userId: existing.id, isNew: false };
-    }
-    const [created] = await tx.insert(users).values({ email: identifier, emailVerified: now }).returning({ id: users.id });
-    return { userId: created.id, isNew: true };
+    return userForEmail(tx, identifier, now);
   });
 }
 
-function safeEqual(a: string, b: string): boolean {
+/** The account with this (lowercased) email, or a new one, with the email marked verified: its owner just proved it. */
+export async function userForEmail(db: Db, email: string, now = new Date()): Promise<{ userId: string; isNew: boolean }> {
+  const [existing] = await db.select({ id: users.id, emailVerified: users.emailVerified }).from(users).where(eq(users.email, email)).limit(1);
+  if (existing) {
+    if (!existing.emailVerified) await db.update(users).set({ emailVerified: now }).where(eq(users.id, existing.id));
+    return { userId: existing.id, isNew: false };
+  }
+  const [created] = await db.insert(users).values({ email, emailVerified: now }).returning({ id: users.id });
+  return { userId: created.id, isNew: true };
+}
+
+/** Compares two secrets in constant time. */
+export function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);

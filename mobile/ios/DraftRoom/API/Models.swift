@@ -28,6 +28,13 @@ struct Me: Codable, Equatable, Sendable {
     let user: User
     let flags: Flags
     let minAppVersion: String
+    /// App Review's account (APE-398): Settings shows it the sample alert and Live Activity.
+    let review: Bool?
+}
+
+/// POST /api/v1/auth/email/start: no body when a link went out, `{ step: "code" }` for App Review's account.
+struct EmailStart: Codable, Sendable {
+    let step: String?
 }
 
 /// The server's error body: `{ "error": "..." }`.

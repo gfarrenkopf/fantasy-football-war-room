@@ -19,6 +19,7 @@ Following this from a fresh droplet should take under an hour.
 11. [Monitoring](#11-monitoring)
 12. [Payments](#12-payments)
 13. [Season jobs: Sunday AI lineups, early-kickoff alerts, weekly recaps and draft-day reminders](#13-season-jobs-sunday-ai-lineups-early-kickoff-alerts-weekly-recaps-and-draft-day-reminders)
+14. [App Review account](#14-app-review-account)
 
 ---
 
@@ -371,3 +372,27 @@ The live timer is enabled on its own, once push works: `sudo cp deploy/warroom-s
 Real runs are safe to repeat. Stored lineups aren't rewritten, and nobody gets the same email twice: one Sunday email per day, one alert per kickoff, one reminder per draft. The draft job logs a summary as `[season-draft]` whenever a draft was due. The Sunday job logs a JSON summary (`journalctl -u warroom-season-sunday`), and the early job logs one as `[season-early]` in the app's journal whenever a kickoff was due. A league that fails is a `[server-error]` line in the app's journal, which the alert emails pick up (§11). A run that fails outright emails through `OnFailure=`.
 
 The Sunday, early and draft timers don't catch up after downtime (no `Persistent=`): anything that arrives after kickoff is worth nothing, so a missed run is skipped. The recap timer does (`Persistent=true`): a week is worth keeping whenever it's kept. Its runs are safe to repeat, since settled weeks aren't read again, and it logs a summary as `[season-recaps]` in the app's journal.
+
+## 14. App Review account
+
+Apple's reviewer can't receive a magic link and has no ESPN league, so the iPhone app has one account that signs in with a fixed code (APE-398). It lands in real ESPN test leagues, read and written live through a dedicated ESPN test account; anything the reviewer changes there is fine. Each sign-in connects the leagues again, so it still works after the reviewer tries Delete account.
+
+Add to `/etc/warroom/.env`, then `sudo systemctl restart warroom`:
+
+```sh
+REVIEW_ACCOUNT_EMAIL=appreview@draftroom.online   # any address; no mail is ever sent to it
+REVIEW_ACCOUNT_CODE=<openssl rand -hex 8>          # 8 characters or more
+REVIEW_ESPN_S2=<the test account's espn_s2 cookie>
+REVIEW_ESPN_SWID=<the test account's SWID cookie, with braces>
+REVIEW_ESPN_LEAGUES=704343562                      # optional: which of its leagues; empty = all of this season's
+```
+
+The account also joins `SEASON_ALLOWLIST`, and `AI_ALLOWLIST` when that list is in use, so it never sees a paywall.
+
+Before each submission, check it from a laptop with the same two `REVIEW_ACCOUNT_*` values in `.env.local`:
+
+```sh
+npm run review:seed -- https://draftroom.online
+```
+
+It signs in as the reviewer, connects the leagues and lists them. "ESPN refused the test account's login" means the cookies expired: sign in to ESPN as the test account in a browser, copy `espn_s2` and `SWID` again, and restart.

@@ -119,6 +119,11 @@ struct SignInView: View {
                     withAnimation(Motion.respond) { model.step = .choose }
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
+            case let .enterCode(address):
+                CodeView(address: address, model: model) {
+                    withAnimation(Motion.respond) { model.step = .choose }
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
             if let message = model.errorMessage {
@@ -492,6 +497,50 @@ private struct InboxView: View {
             withAnimation(.spring(duration: 0.6, bounce: 0.35).delay(0.15)) { landed = true }
         }
         .accessibilityIdentifier("signin-inbox")
+    }
+}
+
+/// App Review's way in (APE-398): its address takes a fixed code instead of a link.
+private struct CodeView: View {
+    let address: String
+    @Bindable var model: SignInModel
+    let onChangeAddress: () -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            Text("Enter your code.")
+                .typeStyle(TypeScale.title)
+                .foregroundStyle(.text)
+            Text("\(Text(address).foregroundStyle(.text).bold()) signs in with the code it was given.")
+                .typeStyle(TypeScale.body)
+                .fontWeight(.regular)
+                .foregroundStyle(.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            SecureField("Code", text: $model.code)
+                .textContentType(.oneTimeCode)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                .focused($focused)
+                .onSubmit { if model.codeLooksValid { Task { await model.submitCode(for: address) } } }
+                .padding(.horizontal, Spacing.xl)
+                .frame(height: 50)
+                .background(.bg, in: RoundedRectangle(cornerRadius: Radius.dialog))
+                .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(focused ? Color.focus : Color.line))
+                .foregroundStyle(.text)
+                .accessibilityIdentifier("signin-code")
+            Button("Sign in") {
+                Task { await model.submitCode(for: address) }
+            }
+            .buttonStyle(ProviderButtonStyle(prominent: true))
+            .disabled(!model.codeLooksValid)
+            .accessibilityIdentifier("signin-code-submit")
+            Button("Use a different address", action: onChangeAddress)
+                .typeStyle(TypeScale.label)
+                .foregroundStyle(.muted)
+        }
+        .onAppear { focused = true }
     }
 }
 

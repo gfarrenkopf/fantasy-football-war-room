@@ -17,6 +17,7 @@
     "ios:tokens": "node --import ./scripts/ingest/register.mjs scripts/ios-tokens.mts",
     "season-sample": "node --import ./scripts/ingest/register.mjs scripts/season-sample.mts",
     "capture-fixtures": "node --env-file-if-exists=.env.local --import ./scripts/ingest/register.mjs scripts/ingest/capture-fixtures.mts",
+    "review:seed": "node --env-file-if-exists=.env.local scripts/review/seed.mts",
     "db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/db/migrate.mts",

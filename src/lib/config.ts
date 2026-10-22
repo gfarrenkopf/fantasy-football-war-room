@@ -105,6 +105,25 @@ const espnCodeKeyRaw = readEnv("ESPN_CODE_KEY");
 const landingModeRaw = readEnv("LANDING_MODE")?.toLowerCase();
 const landingMode = landingModeRaw === "draft" || landingModeRaw === "season" ? landingModeRaw : "auto";
 const espnCodeKey = parseKey(espnCodeKeyRaw);
+/**
+ * App Review's account (APE-398): Apple's reviewer signs in with this email and this fixed code
+ * instead of a magic link, which they can't receive. Both set, or it's off.
+ */
+const reviewEmail = readEnv("REVIEW_ACCOUNT_EMAIL")?.toLowerCase();
+const reviewCode = readEnv("REVIEW_ACCOUNT_CODE");
+/**
+ * The ESPN test account the reviewer's leagues come from: its login cookies, and optionally which of
+ * its leagues to connect (comma-separated ESPN league ids; empty = all of this season's). Connected
+ * at each review sign-in, so the reviewer always lands in real leagues, even after deleting the account.
+ */
+const reviewEspnS2 = readEnv("REVIEW_ESPN_S2");
+const reviewEspnSwid = readEnv("REVIEW_ESPN_SWID");
+const reviewEspnLeagues = (readEnv("REVIEW_ESPN_LEAGUES") ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
+/** Shorter than this is too easy to guess, even rate-limited. */
+const REVIEW_CODE_MIN = 8;
 
 /** Accounts + server-backed persistence. Requires a database and auth. */
 const cloudEnabled = Boolean(databaseUrl && nextAuthSecret);
@@ -126,6 +145,24 @@ const aiApiKey = aiProviderKnown ? aiApiKeys[aiProvider].key : undefined;
 const stripeVars = { STRIPE_SECRET_KEY: stripeSecretKey, STRIPE_WEBHOOK_SECRET: stripeWebhookSecret, STRIPE_PRICE_ID: stripePriceId };
 const stripeMissing = Object.keys(stripeVars).filter((name) => !stripeVars[name as keyof typeof stripeVars]);
 const stripeAnySet = stripeMissing.length < Object.keys(stripeVars).length;
+const paymentsEnabled = cloudEnabled && stripeMissing.length === 0;
+const reviewEnabled = cloudEnabled && Boolean(reviewEmail && reviewCode && reviewCode.length >= REVIEW_CODE_MIN);
+const reviewEspnVars = { REVIEW_ESPN_S2: reviewEspnS2, REVIEW_ESPN_SWID: reviewEspnSwid };
+const reviewEspnMissing = Object.keys(reviewEspnVars).filter((name) => !reviewEspnVars[name as keyof typeof reviewEspnVars]);
+const reviewAccount =
+  reviewEnabled && reviewEmail && reviewCode
+    ? {
+        email: reviewEmail,
+        code: reviewCode,
+        espn: reviewEspnS2 && reviewEspnSwid ? { espnS2: reviewEspnS2, swid: reviewEspnSwid, leagueIds: reviewEspnLeagues } : null,
+      }
+    : null;
+/**
+ * The reviewer gets in-season help, AI and live sync without a season pass. An allowlist that's
+ * empty while payments are off already means everyone, so the email only joins one that's in use.
+ */
+const withReviewer = (list: string[], emptyMeansEveryone: boolean) =>
+  reviewAccount && !(emptyMeansEveryone && list.length === 0) && !list.includes(reviewAccount.email) ? [...list, reviewAccount.email] : list;
 
 export const config = Object.freeze({
   databaseUrl,
@@ -150,16 +187,18 @@ export const config = Object.freeze({
   aiModel,
   /** The configured AI provider's API key. */
   aiApiKey,
-  aiAllowlist,
+  aiAllowlist: withReviewer(aiAllowlist, !paymentsEnabled),
   stripeSecretKey,
   stripeWebhookSecret,
   stripePriceId,
   sportsDataApiKey,
-  espnSyncAllowlist,
+  espnSyncAllowlist: withReviewer(espnSyncAllowlist, true),
   seasonAccess,
-  seasonAllowlist,
+  seasonAllowlist: withReviewer(seasonAllowlist, false),
   espnCodeKey,
   landingMode,
+  /** App Review's sign-in (APE-398), or null when it's off. Never sent to clients. */
+  reviewAccount,
 
   cloudEnabled,
   googleAuthEnabled,
@@ -168,7 +207,7 @@ export const config = Object.freeze({
   /** AI-generated draft plan. A paid, hosted feature, so it needs accounts. */
   aiEnabled: cloudEnabled && Boolean(aiApiKey),
   /** Stripe checkout + entitlements. Needs accounts to attach purchases to. */
-  paymentsEnabled: cloudEnabled && stripeMissing.length === 0,
+  paymentsEnabled,
   /** Live ADP/projections ingestion. Without it the app uses the bundled sample data. */
   dataPipelineEnabled: Boolean(sportsDataApiKey),
   /**
@@ -276,6 +315,18 @@ if (seasonAccessRaw && seasonAccessRaw !== seasonAccess) {
 }
 if (seasonAllowlist.length && seasonAccess === "open") {
   warnings.push("SEASON_ALLOWLIST is set but SEASON_ACCESS is open, so the list does nothing: in-season help is open to everyone.");
+}
+if (Boolean(reviewEmail) !== Boolean(reviewCode)) {
+  warnings.push("Only one of REVIEW_ACCOUNT_EMAIL and REVIEW_ACCOUNT_CODE is set, so the App Review account is off.");
+} else if (reviewCode && reviewCode.length < REVIEW_CODE_MIN) {
+  warnings.push(`REVIEW_ACCOUNT_CODE is shorter than ${REVIEW_CODE_MIN} characters, so the App Review account is off.`);
+} else if (reviewEmail && !cloudEnabled) {
+  warnings.push("REVIEW_ACCOUNT_EMAIL is set but cloud features are disabled, so the App Review account is off.");
+}
+if (reviewEspnMissing.length === 1) {
+  warnings.push(`${reviewEspnMissing[0]} is not set, so the App Review account gets no ESPN leagues.`);
+} else if (reviewAccount && reviewEspnMissing.length === 2) {
+  warnings.push("REVIEW_ESPN_S2 and REVIEW_ESPN_SWID are not set, so the App Review account gets no ESPN leagues.");
 }
 if (landingModeRaw && landingModeRaw !== landingMode) {
   warnings.push(`LANDING_MODE "${landingModeRaw}" isn't one of auto, draft or season, so the landing page follows the season.`);
