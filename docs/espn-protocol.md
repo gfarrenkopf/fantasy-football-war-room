@@ -287,6 +287,9 @@ From probes on 2026-09-29 (NFL week 4) against test league 704343562: team 1 fro
 - A player still on waivers is refused with `TRAN_PLAYER_NOT_FREEAGENT` ("… is not a free agent").
 - In `WAIVERS_TRADITIONAL`, the whole pool sits on waivers until the league's process time after a week's games. On 2026-09-29 every available player showed `status: "WAIVERS"` with `waiverProcessDate` 2026-09-30 07:00 UTC. So an instant add is only possible between that time and the next week's lock.
 - Confirmed live on the test league (Epic 13 acceptance): a landed add, and dropping a player whose game had started.
+- **Drop only (APE-425):** `type: "ROSTER"`, with the one item `{ playerId, type: "DROP", fromTeamId }`. The answer is `status: "EXECUTED"`, and the item comes back with `toTeamId: 0` and `toLineupSlotId: -1`.
+  - A `FREEAGENT` with only a `DROP` is refused with `TRAN_INVALID_ITEM_TYPE_COUNT` ("TransactionType FREEAGENT may only contain one item for MoveType: ADD").
+  - Confirmed live on the test league on 2026-10-22: a bench player dropped, and the roster went from 16 to 15.
 
 **Waiver claim:** `type: "WAIVER"`, with the same `ADD` / `DROP` items and `bidAmount` (`null` without FAAB).
 

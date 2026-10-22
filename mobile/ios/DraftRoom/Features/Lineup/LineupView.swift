@@ -17,6 +17,8 @@ struct LineupView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var pickingSeat: SeatPick?
     @State private var pickingBench: ViewPlayer?
+    /// A player on IR whose Drop was tapped, asking before anything goes (APE-425).
+    @State private var dropping: ViewPlayer?
 
     private var store: SeasonStore { model.store }
 
@@ -41,7 +43,7 @@ struct LineupView: View {
                         HoleNotes(model: model, onWaivers: onWaivers)
                         StartersCard(model: model) { pickingSeat = SeatPick(seat: $0) }
                             .jumpSection("Starters")
-                        BenchCard(model: model) { pickingBench = $0 }
+                        BenchCard(model: model, onPick: { pickingBench = $0 }, onDrop: { dropping = $0 })
                             .jumpSection("Bench")
                         MatchupCard(view: season.view)
                             .jumpSection("Week \(season.view.currentWeek) matchup")
@@ -87,6 +89,34 @@ struct LineupView: View {
         .onChange(of: model.focus, initial: true) { openFocus() }
         .onChange(of: model.isReady) { openFocus() }
         .newsSheet()
+        .dropConfirm(model: model, player: $dropping)
+        // A drop on its way, then what ESPN shows after it: a toast over the tab, where the eye is.
+        .overlay(alignment: .bottom) {
+            Group {
+                if let player = model.droppingPlayer {
+                    DropProgressToast(player: player)
+                } else if let notice = model.dropNotice {
+                    DropToast(notice: notice) { model.dismissDropNotice() }
+                }
+            }
+            .padding(.horizontal, Spacing.xl)
+            .padding(.bottom, Spacing.lg)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .animation(Motion.respond, value: model.droppingPlayer)
+        .animation(Motion.respond, value: model.dropNotice)
+        .alert(
+            "The drop didn't go through",
+            isPresented: Binding { model.dropFailure != nil } set: { if !$0 { model.dropFailure = nil } },
+            presenting: model.dropFailure
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { failure in
+            Text(([failure.message] + failure.details).joined(separator: "\n\n"))
+        }
+        .sensoryFeedback(trigger: model.dropNotice) { _, notice in
+            notice.map { $0.landed ? Haptic.success : Haptic.failure }
+        }
         .sheet(item: $pickingSeat) { pick in SeatPicker(model: model, seat: pick.seat) }
         .sheet(item: $pickingBench) { player in BenchPicker(model: model, player: player) }
         .sheet(isPresented: saving) { SaveSheet(model: model) }
@@ -257,7 +287,8 @@ private struct StarterRow: View {
                     } else {
                         Text("Empty on ESPN").typeStyle(TypeScale.body).foregroundStyle(.dim)
                     }
-                    if changed, let tag = now.flatMap({ model.lineup?.tag(of: $0.playerId) }) {
+                    // His injury chip already shows by his name; a bye, or ESPN expecting him to sit, gets one here.
+                    if changed, let now, !SeasonFormat.isRuledOut(now.injuryStatus), let tag = model.lineup?.tag(of: now.playerId) {
                         TagPill(tag: tag)
                     }
                     if changed {
@@ -359,6 +390,8 @@ private struct RowPoints: View {
 private struct BenchCard: View {
     let model: LineupModel
     let onPick: (ViewPlayer) -> Void
+    /// Drop, on a player on IR (APE-425); bench players drop from their picker.
+    let onDrop: (ViewPlayer) -> Void
 
     var body: some View {
         let bench = model.bench
@@ -372,20 +405,23 @@ private struct BenchCard: View {
                 if candidates.isEmpty {
                     ForEach(model.injuredReserve) { player in
                         Divider().overlay(.rowLine)
-                        RowLayout {
-                            SlotText(text: "IR")
-                        } player: {
-                            PlayerLine(player: player, news: true)
-                        } points: {
-                            RowPoints(player: player, locked: false)
+                        HStack(spacing: Spacing.md) {
+                            RowLayout {
+                                SlotText(text: "IR")
+                            } player: {
+                                PlayerLine(player: player, news: true)
+                            } points: {
+                                RowPoints(player: player, locked: false)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .newsAction(player)
+                            if !player.locked { DropIconButton(player: player) { onDrop(player) } }
                         }
                         .padding(.horizontal, Spacing.xl)
                         .padding(.vertical, Spacing.lg)
-                        .accessibilityElement(children: .combine)
-                        .newsAction(player)
                     }
                 } else {
-                    IrList(model: model, candidates: candidates)
+                    IrList(model: model, candidates: candidates, onDrop: onDrop)
                 }
             }
         }
@@ -397,6 +433,7 @@ private struct BenchCard: View {
 private struct IrList: View {
     let model: LineupModel
     let candidates: [ViewPlayer]
+    let onDrop: (ViewPlayer) -> Void
 
     var body: some View {
         let over = model.ir.count > model.irSlots
@@ -414,7 +451,7 @@ private struct IrList: View {
         .accessibilityLabel("Injured reserve, \(model.ir.count) of \(model.irSlots) slots")
         .accessibilityAddTraits(.isHeader)
         ForEach(candidates) { player in
-            IrRow(model: model, player: player)
+            IrRow(model: model, player: player, onDrop: onDrop)
         }
     }
 }
@@ -422,11 +459,22 @@ private struct IrList: View {
 private struct IrRow: View {
     let model: LineupModel
     let player: ViewPlayer
+    let onDrop: (ViewPlayer) -> Void
 
     var body: some View {
         let on = model.ir.contains(player.playerId)
         let wasOn = player.slot == "IR"
         let moving = on != wasOn
+        HStack(spacing: Spacing.md) {
+            toggle(on: on, moving: moving)
+            if wasOn && !player.locked { DropIconButton(player: player) { onDrop(player) } }
+        }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.lg)
+        .background(moving ? Color.sky.opacity(0.06) : .clear)
+    }
+
+    private func toggle(on: Bool, moving: Bool) -> some View {
         Toggle(isOn: Binding(get: { on }, set: { model.toggleIr(player.playerId, on: $0) })) {
             RowLayout {
                 SlotText(text: player.slot == "BN" ? "BN" : SlotLabel.of(player.slot))
@@ -446,9 +494,6 @@ private struct IrRow: View {
         }
         .tint(.sky)
         .disabled(player.locked)
-        .padding(.horizontal, Spacing.xl)
-        .padding(.vertical, Spacing.lg)
-        .background(moving ? Color.sky.opacity(0.06) : .clear)
         .accessibilityLabel(
             ([player.name, status, player.locked ? "locked" : nil, moving ? (on ? "going on IR" : "coming off IR") : nil, player.news != nil ? "ESPN news" : nil] as [String?])
                 .compactMap(\.self).joined(separator: ", "))
@@ -551,6 +596,7 @@ private struct SeatPicker: View {
     let model: LineupModel
     let seat: Int
     @Environment(\.dismiss) private var dismiss
+    @State private var dropping: ViewPlayer?
 
     var body: some View {
         let label = SlotLabel.of(model.seats[seat])
@@ -573,6 +619,10 @@ private struct SeatPicker: View {
                     }
                     .foregroundStyle(.muted)
                 }
+                // The player the row names: ESPN's in the seat, or the one staged there when ESPN's is empty.
+                if let named = model.player(model.onEspn[seat] ?? current), !named.locked {
+                    Section { DropButton(player: named) { dropping = named } }
+                }
             }
             .listRowBackground(Color.panel)
             .scrollContentBackground(.hidden)
@@ -581,6 +631,7 @@ private struct SeatPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
         }
+        .dropConfirm(model: model, player: $dropping) { dismiss() }
         .presentationDetents([.medium, .large])
     }
 
@@ -603,6 +654,7 @@ private struct BenchPicker: View {
     let model: LineupModel
     let player: ViewPlayer
     @Environment(\.dismiss) private var dismiss
+    @State private var dropping: ViewPlayer?
 
     var body: some View {
         let at = model.staged.firstIndex(of: player.playerId)
@@ -639,6 +691,9 @@ private struct BenchPicker: View {
                 if seats.isEmpty && at == nil {
                     Text("No open slot he can play.").foregroundStyle(.muted)
                 }
+                if !player.locked {
+                    Section { DropButton(player: player) { dropping = player } }
+                }
             }
             .listRowBackground(Color.panel)
             .scrollContentBackground(.hidden)
@@ -647,7 +702,124 @@ private struct BenchPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
         }
+        .dropConfirm(model: model, player: $dropping) { dismiss() }
         .presentationDetents([.medium, .large])
+    }
+}
+
+// MARK: - Dropping (APE-425)
+
+/// The picker's last row: red and set apart, so it never reads as one more place to put him.
+private struct DropButton: View {
+    let player: ViewPlayer
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: .destructive, action: action) {
+            Label("Drop \(player.name)", systemImage: "person.fill.xmark")
+                .typeStyle(TypeScale.body).fontWeight(.semibold)
+                .foregroundStyle(.reachInk)
+        }
+        .listRowBackground(Color.reach.opacity(0.12))
+        .accessibilityIdentifier("drop-\(player.playerId)")
+    }
+}
+
+/// Drop on an IR row, beside the row rather than in a picker.
+private struct DropIconButton: View {
+    let player: ViewPlayer
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: .destructive, action: action) {
+            Image(systemName: "person.fill.xmark")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.reachInk)
+                .frame(width: 44, height: 44)
+                .background(Color.reach.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Drop \(player.name)")
+        .accessibilityIdentifier("drop-\(player.playerId)")
+    }
+}
+
+/// What ESPN shows after a drop, in the server's words: a floating capsule like the system's own
+/// confirmations. VoiceOver reads it out; a tap or a few seconds puts it away. One that didn't land stays longer.
+private struct DropToast: View {
+    let notice: LineupModel.DropNotice
+    let onDismiss: () -> Void
+
+    var body: some View {
+        Label {
+            Text(notice.text).foregroundStyle(notice.landed ? Color.text : Color.reachInk)
+        } icon: {
+            Image(systemName: notice.landed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(notice.landed ? Color.valueInk : Color.reachInk)
+        }
+            .typeStyle(TypeScale.body).fontWeight(.semibold)
+            .toastCapsule(border: notice.landed ? Color.line2 : Color.reach.opacity(0.6))
+            .onTapGesture(perform: onDismiss)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Dismisses")
+            .accessibilityIdentifier("drop-notice")
+            .task(id: notice) {
+                AccessibilityNotification.Announcement(notice.text).post()
+                try? await Task.sleep(for: .seconds(notice.landed ? 4 : 8))
+                if !Task.isCancelled { onDismiss() }
+            }
+    }
+}
+
+/// A drop on its way: ESPN re-reads the roster before and after, so it can take a few seconds.
+private struct DropProgressToast: View {
+    let player: ViewPlayer
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            ProgressView().controlSize(.small).tint(.reachInk)
+            Text("Dropping \(player.name) on ESPN…").foregroundStyle(.text)
+        }
+        .typeStyle(TypeScale.body).fontWeight(.semibold)
+        .toastCapsule(border: Color.line2)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("drop-progress")
+        .task { AccessibilityNotification.Announcement("Dropping \(player.name)").post() }
+    }
+}
+
+extension View {
+    /// The drop toasts' floating capsule, like the system's own confirmations.
+    fileprivate func toastCapsule(border: Color) -> some View {
+        fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, Spacing.lg)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(border))
+            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+            .contentShape(Capsule())
+    }
+
+    /// Asks before a drop goes to ESPN: a dropped player goes on waivers, so getting him back takes a
+    /// claim. Carries the write consent's lines the first time. `then` runs as the drop starts, to
+    /// close the picker it was asked from.
+    fileprivate func dropConfirm(model: LineupModel, player: Binding<ViewPlayer?>, then: @escaping () -> Void = {}) -> some View {
+        confirmationDialog(
+            player.wrappedValue.map { "Drop \($0.name)?" } ?? "",
+            isPresented: Binding { player.wrappedValue != nil } set: { if !$0 { player.wrappedValue = nil } },
+            titleVisibility: .visible,
+            presenting: player.wrappedValue
+        ) { dropped in
+            Button(model.dropNeedsConsent ? "Agree and drop on ESPN" : "Drop on ESPN", role: .destructive) {
+                then()
+                Task { await model.drop(dropped) }
+            }
+            .accessibilityIdentifier("drop-confirm")
+            Button("Keep them", role: .cancel) {}
+        } message: { dropped in
+            let waivers = "\(dropped.name) goes on waivers, and anyone in the league can claim them. Getting them back takes a claim of your own."
+            Text(([waivers] + (model.dropNeedsConsent ? model.consentLines : [])).joined(separator: "\n\n"))
+        }
     }
 }
 

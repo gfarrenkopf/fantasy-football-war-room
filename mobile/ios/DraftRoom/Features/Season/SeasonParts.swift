@@ -49,6 +49,9 @@ enum SeasonFormat {
     }
 
     /// ESPN's injury designations as its short tags (the web's INJURY_TAG).
+    /// ESPN says he won't play this week: the web's isRuledOut().
+    static func isRuledOut(_ status: String) -> Bool { ["OUT", "INJURY_RESERVE", "SUSPENSION"].contains(status) }
+
     static func injuryTag(_ status: String) -> String? {
         switch status {
         case "QUESTIONABLE": "Q"

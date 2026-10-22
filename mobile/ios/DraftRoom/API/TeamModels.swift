@@ -88,10 +88,11 @@ struct Ahead: Codable, Equatable, Sendable, Identifiable {
     var id: String { "\(hole.week)-\(hole.key)-\(hole.playerId.map(String.init) ?? "none")" }
 }
 
-/// An add, a claim or a claim's cancel, as the web's AcquireReview and ClaimList send them.
+/// An add, a claim, a drop with nobody added (APE-425) or a claim's cancel, as the web's
+/// AcquireReview, DropDialog and ClaimList send them.
 struct AcquireRequest: Encodable, Equatable, Sendable {
     enum Kind: String, Encodable, Sendable {
-        case add, claim, cancel
+        case add, claim, drop, cancel
     }
 
     let kind: Kind
@@ -116,6 +117,10 @@ struct AcquireRequest: Encodable, Equatable, Sendable {
             return
         }
         try c.encode(snapshot, forKey: .snapshot)
+        if kind == .drop {
+            try c.encode(drop, forKey: .drop)
+            return
+        }
         try c.encode(add, forKey: .add)
         try c.encode(drop, forKey: .drop) // the server wants the key, null or not
     }
