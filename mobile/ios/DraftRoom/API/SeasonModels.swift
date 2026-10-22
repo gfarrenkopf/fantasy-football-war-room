@@ -126,6 +126,8 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     let actual: Double?
     /// Projected points this week.
     let points: Double
+    /// Whether ESPN projected him at all; an unprojected player shows 0.
+    var projected: Bool? = nil
     /// The stats behind `actual`, ESPN-style ("329 YDS, 2 TD"); null until his game starts.
     var statLine: String? = nil
     let game: GameState?
@@ -156,6 +158,10 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     }
 
     var id: Int { playerId }
+
+    /// On a bye this week, as the web's `onBye()`: ESPN projects him for nothing and his team has no
+    /// game this week. A player ESPN expects to sit while his team plays has a game, so isn't on a bye.
+    var isOnBye: Bool { projected != false && points == 0 && team != nil && game == nil }
 }
 
 struct GameState: Codable, Equatable, Sendable {

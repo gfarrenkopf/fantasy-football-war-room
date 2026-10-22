@@ -152,7 +152,9 @@ struct PlayerLine: View {
                         .environment(\.isEnabled, true)
                 }
             }
-            if compact, let game = player.game {
+            if compact, player.isOnBye {
+                byeLine.typeStyle(TypeScale.label, dense: true).foregroundStyle(.muted).lineLimit(1)
+            } else if compact, let game = player.game {
                 // A narrow column, as the web's phone head-to-head: the opponent and score on one line,
                 // where the game stands on the next (in Terminal Sky behind a still dot while it's on),
                 // then the stats behind his points.
@@ -173,10 +175,19 @@ struct PlayerLine: View {
                         .multilineTextAlignment(alignment == .trailing ? .trailing : .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            } else if player.isOnBye {
+                byeLine.typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1)
             } else {
                 Text(detail).typeStyle(TypeScale.label).foregroundStyle(player.game?.state == "in" ? Color.sky : Color.muted).lineLimit(1)
             }
         }
+    }
+
+    /// His team and a BYE mark in warning ink, where his game would be (APE-430).
+    private var byeLine: Text {
+        let bye = Text("BYE").fontWeight(.bold).foregroundStyle(Color.warnInk)
+        let lead = compact ? (player.team ?? "") : detail
+        return lead.isEmpty ? bye : Text("\(lead) · \(bye)")
     }
 
     private var detail: String {

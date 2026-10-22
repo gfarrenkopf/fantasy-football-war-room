@@ -316,7 +316,7 @@ extension HeadToHead {
             let pace = day.pace(of: id)
             let started = (pace?.pace ?? .pre) != .pre
             let points = started ? "\(SeasonFormat.points(player.actual ?? 0)) points of \(SeasonFormat.points(player.points)) projected" : "projected \(SeasonFormat.points(player.points))"
-            let game = player.game.map { ", \(SeasonFormat.gameWhen($0))" } ?? ""
+            let game = player.isOnBye ? ", on a bye" : player.game.map { ", \(SeasonFormat.gameWhen($0))" } ?? ""
             let news = row.me == id && player.news != nil ? ", ESPN news" : ""
             return "\(player.name), \(points)\(game)\(news)"
         }
