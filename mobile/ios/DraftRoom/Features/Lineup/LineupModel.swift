@@ -347,6 +347,9 @@ final class LineupModel {
         }
     }
 
+    /// Puts the drop's toast away.
+    func dismissDropNotice() { dropNotice = nil }
+
     // MARK: Saving
 
     /// Opens the save: the consent the first time, then the server's list of changes.

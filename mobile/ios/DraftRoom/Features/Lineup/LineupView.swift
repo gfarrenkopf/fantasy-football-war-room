@@ -31,7 +31,6 @@ struct LineupView: View {
                             ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
                         }
                         FreshnessNote(season: season, offline: store.offline)
-                        if let notice = model.dropNotice { DropNoticeLine(notice: notice) }
                         if let save = model.lastSave, model.moment == nil || !save.allLanded {
                             SaveResults(save: save)
                         }
@@ -55,7 +54,6 @@ struct LineupView: View {
                     .padding(.vertical, Spacing.xl)
                     .animation(Motion.respond, value: model.staged)
                     .animation(Motion.respond, value: model.ir)
-                    .animation(Motion.respond, value: model.dropNotice)
                 }
                 .sectionJump()
                 .refreshable {
@@ -92,6 +90,16 @@ struct LineupView: View {
         .onChange(of: model.isReady) { openFocus() }
         .newsSheet()
         .dropConfirm(model: model, player: $dropping)
+        // What ESPN shows after a drop: a toast over the tab, where the eye is, gone after a few seconds.
+        .overlay(alignment: .bottom) {
+            if let notice = model.dropNotice {
+                DropToast(notice: notice) { model.dismissDropNotice() }
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.bottom, Spacing.lg)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.respond, value: model.dropNotice)
         .alert(
             "The drop didn't go through",
             isPresented: Binding { model.dropFailure != nil } set: { if !$0 { model.dropFailure = nil } },
@@ -729,18 +737,36 @@ private struct DropIconButton: View {
     }
 }
 
-/// What ESPN shows after a drop, in the server's words.
-private struct DropNoticeLine: View {
+/// What ESPN shows after a drop, in the server's words: a floating capsule like the system's own
+/// confirmations. VoiceOver reads it out; a tap or a few seconds puts it away. One that didn't land stays longer.
+private struct DropToast: View {
     let notice: LineupModel.DropNotice
+    let onDismiss: () -> Void
 
     var body: some View {
-        Label(notice.text, systemImage: notice.landed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-            .typeStyle(TypeScale.body)
-            .foregroundStyle(notice.landed ? Color.valueInk : Color.reachInk)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        Label {
+            Text(notice.text).foregroundStyle(notice.landed ? Color.text : Color.reachInk)
+        } icon: {
+            Image(systemName: notice.landed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(notice.landed ? Color.valueInk : Color.reachInk)
+        }
+            .typeStyle(TypeScale.body).fontWeight(.semibold)
             .fixedSize(horizontal: false, vertical: true)
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, Spacing.lg)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(notice.landed ? Color.line2 : Color.reach.opacity(0.6)))
+            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+            .contentShape(Capsule())
+            .onTapGesture(perform: onDismiss)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Dismisses")
             .accessibilityIdentifier("drop-notice")
+            .task(id: notice) {
+                AccessibilityNotification.Announcement(notice.text).post()
+                try? await Task.sleep(for: .seconds(notice.landed ? 4 : 8))
+                if !Task.isCancelled { onDismiss() }
+            }
     }
 }
 
