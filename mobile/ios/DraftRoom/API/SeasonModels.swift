@@ -108,6 +108,19 @@ struct ViewTeam: Codable, Equatable, Sendable, Identifiable {
     let name: String
     let abbrev: String
     let roster: [ViewPlayer]
+    /// Its record and seed (APE-432); nil when ESPN didn't send one.
+    var standing: Standing?
+}
+
+/// A team's place in the league: its overall record and ESPN's playoff seed (the web's `Standing`).
+struct Standing: Codable, Equatable, Sendable {
+    let wins: Int
+    let losses: Int
+    let ties: Int
+    let pointsFor: Double
+    let pointsAgainst: Double
+    /// 1 is first; nil when ESPN doesn't say.
+    let seed: Int?
 }
 
 struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {

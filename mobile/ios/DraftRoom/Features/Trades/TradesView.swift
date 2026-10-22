@@ -52,6 +52,7 @@ struct TradesView: View {
                 .animation(Motion.respond, value: model.grade)
             }
             .sectionJump()
+            .hidesStandingOnScroll()
             .refreshable {
                 await model.store.refresh(force: true)
                 await model.refresh()

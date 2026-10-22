@@ -18,6 +18,8 @@ struct ShellView: View {
     @State private var linkedLeague: String?
     /// The tab a season link asked for (a tapped push, 21.4), opened once its league is open.
     @State private var linkedTab: SeasonTab?
+    /// Whether the standing strip is out of the way, while the user scrolls down a tab.
+    @State private var standingBar = StandingBar()
 
     var body: some View {
         Group {
@@ -71,19 +73,24 @@ struct ShellView: View {
             ForEach(SeasonTab.allCases) { section in
                 Tab(section.title, systemImage: section.symbol, value: section) {
                     framed(model, league: league, path: section == .gameDay ? $gameDayPath : nil) {
-                        switch section {
-                        case .gameDay:
-                            GameDayView(store: store, recaps: model.recaps(for: league), onFill: fillHole, onReconnect: { connecting = true })
-                        case .lineup:
-                            LineupView(model: model.lineup(for: league), fill: model.fill(for: league), ai: model.ai(for: league), onReconnect: { connecting = true }, onWaivers: { tab = .waivers })
-                        case .trade:
-                            TradesView(model: model.trades(for: league), ai: model.ai(for: league), onReconnect: { connecting = true }, holes: holes, onFill: fillHole)
-                        case .waivers:
-                            WaiversView(model: model.waivers(for: league), onReconnect: { connecting = true }, onTrade: { partner, player in
-                                tab = .trade
-                                Task { await model.trades(for: league).load(partner: partner, gives: [], gets: [player]) }
-                            }, holes: holes, onFill: fillHole)
+                        Group {
+                            switch section {
+                            case .gameDay:
+                                GameDayView(store: store, recaps: model.recaps(for: league), onFill: fillHole, onReconnect: { connecting = true })
+                            case .lineup:
+                                LineupView(model: model.lineup(for: league), fill: model.fill(for: league), ai: model.ai(for: league), onReconnect: { connecting = true }, onWaivers: { tab = .waivers })
+                            case .trade:
+                                TradesView(model: model.trades(for: league), ai: model.ai(for: league), onReconnect: { connecting = true }, holes: holes, onFill: fillHole)
+                            case .waivers:
+                                WaiversView(model: model.waivers(for: league), onReconnect: { connecting = true }, onTrade: { partner, player in
+                                    tab = .trade
+                                    Task { await model.trades(for: league).load(partner: partner, gives: [], gets: [player]) }
+                                }, holes: holes, onFill: fillHole)
+                            }
                         }
+                        // Where the user stands, over every tab (APE-432); the page scrolls under it.
+                        .safeAreaBar(edge: .top) { StandingStrip(store: store, bar: standingBar) }
+                        .environment(standingBar)
                     }
                 }
                 .accessibilityIdentifier("tab-\(section.rawValue)")
@@ -98,10 +105,12 @@ struct ShellView: View {
             }
         }
         .sensoryFeedback(Haptic.choice, trigger: tab)
+        .onChange(of: tab) { standingBar.reset() }
         .sensoryFeedback(Haptic.choice, trigger: model.selectedId)
         // On a cold launch or a league switch, open the tab the week calls for (Lineup between
         // weeks, Game day otherwise); never while the user is moving around in a league.
         .task(id: league.id) {
+            standingBar.reset()
             if linkedLeague == league.id {
                 tab = linkedTab ?? .gameDay
                 if let key = linkedRecap { gameDayPath = [key] }

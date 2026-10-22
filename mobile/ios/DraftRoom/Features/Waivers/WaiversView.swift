@@ -51,6 +51,7 @@ struct WaiversView: View {
             .animation(Motion.respond, value: model.claims)
         }
         .sectionJump()
+        .hidesStandingOnScroll()
         .refreshable {
             await model.store.refresh(force: true)
             await model.refresh(force: true)

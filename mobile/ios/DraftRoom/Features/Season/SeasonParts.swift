@@ -35,7 +35,134 @@ extension SeasonCard where Accessory == EmptyView {
     }
 }
 
+/// Where the user stands (APE-432), the web's Freshness strip: the week, their record and seed, and
+/// points for and against. A bar under the navigation bar on every season tab, out of the way while
+/// the user scrolls down and back on the way up, like the tab bar; nothing until ESPN sends a standing.
+struct StandingStrip: View {
+    let store: SeasonStore
+    let bar: StandingBar
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if !bar.hidden, let view = store.season?.view, let standing = view.team(view.myTeamId)?.standing {
+            // One line: the week and record always whole, points for and against trailing off when
+            // the phone is narrow. At accessibility text sizes the line wraps instead.
+            line(view: view, standing: standing, wraps: typeSize.isAccessibilitySize)
+            .typeStyle(TypeScale.body)
+            .padding(.horizontal, Spacing.xl + Spacing.xs)
+            .padding(.vertical, Spacing.md)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Week \(view.currentWeek). \(SeasonFormat.spokenRecord(standing, teams: view.teams.count)). \(SeasonFormat.points(standing.pointsFor)) points for, \(SeasonFormat.points(standing.pointsAgainst)) against.")
+            .accessibilityIdentifier("standing")
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func line(view: SeasonView, standing: Standing, wraps: Bool) -> some View {
+        let record = SeasonFormat.record(standing, teams: view.teams.count)
+        let points = "\(SeasonFormat.points(standing.pointsFor)) for, \(SeasonFormat.points(standing.pointsAgainst)) against"
+        return HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+            Text("Week \(view.currentWeek)").fixedSize()
+            if wraps {
+                Text("\(Text(record).fontWeight(.bold).foregroundStyle(.text)) · \(points)")
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text(record).fontWeight(.bold).foregroundStyle(.text).fixedSize()
+                    Text(" · \(points)").lineLimit(1).truncationMode(.tail)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.muted)
+        .monospacedDigit()
+    }
+}
+
+/// Whether the standing strip is out of the way (APE-432). Each tab's scroll view reports to it
+/// (`hidesStandingOnScroll()`): a scroll down past `travel` hides the strip, one back up past it or
+/// a return to the top shows it again.
+@MainActor
+@Observable
+final class StandingBar {
+    private(set) var hidden = false
+
+    /// Where the scroll last turned around, and which way it's going since.
+    @ObservationIgnored private var turn: CGFloat = 0
+    @ObservationIgnored private var down = true
+
+    /// How far a scroll goes one way before the strip follows it: past a nudge, under a flick.
+    private static let travel: CGFloat = 32
+
+    func scrolled(from old: ScrollSpot, to new: ScrollSpot) {
+        // The strip's own coming and going moves the content's inset; that isn't the user scrolling.
+        guard old.inset == new.inset else {
+            turn = new.y
+            return
+        }
+        if new.y <= -new.inset + Spacing.xl { return show(true) }
+        // Past the end the scroll view bounces back, which reads as a scroll up.
+        guard new.y <= new.end else { return }
+        if (new.y > old.y) != down {
+            down = new.y > old.y
+            turn = old.y
+        }
+        if abs(new.y - turn) > Self.travel { show(!down) }
+    }
+
+    /// Back on screen, for a tab or league just opened.
+    func reset() {
+        show(true)
+    }
+
+    private func show(_ shown: Bool) {
+        guard hidden == shown else { return }
+        withAnimation(Motion.respond) { hidden = !shown }
+    }
+}
+
+/// A scroll view's offset, its top inset and the farthest it scrolls, for the standing strip.
+struct ScrollSpot: Equatable {
+    let y: CGFloat
+    let inset: CGFloat
+    let end: CGFloat
+}
+
+extension View {
+    /// Hides the standing strip while this scroll view scrolls down, and shows it on the way back up.
+    func hidesStandingOnScroll() -> some View {
+        modifier(HidesStandingOnScroll())
+    }
+}
+
+private struct HidesStandingOnScroll: ViewModifier {
+    @Environment(StandingBar.self) private var bar: StandingBar?
+
+    func body(content: Content) -> some View {
+        content.onScrollGeometryChange(for: ScrollSpot.self) { geometry in
+            ScrollSpot(
+                y: geometry.contentOffset.y,
+                inset: geometry.contentInsets.top,
+                end: geometry.contentSize.height + geometry.contentInsets.bottom - geometry.containerSize.height)
+        } action: { old, new in
+            bar?.scrolled(from: old, to: new)
+        }
+    }
+}
+
 enum SeasonFormat {
+    /// "4–2, 4th of 12", the web's recordText(): a tie only when there is one, the seed when ESPN gives it.
+    static func record(_ standing: Standing, teams: Int) -> String {
+        let record = "\(standing.wins)–\(standing.losses)" + (standing.ties > 0 ? "–\(standing.ties)" : "")
+        return standing.seed.map { "\(record), \(RecapWords.ordinal($0)) of \(teams)" } ?? record
+    }
+
+    /// The record as VoiceOver says it: "4 and 2, 4th of 12".
+    static func spokenRecord(_ standing: Standing, teams: Int) -> String {
+        let record = "\(standing.wins) and \(standing.losses)" + (standing.ties > 0 ? " and \(standing.ties)" : "")
+        return standing.seed.map { "\(record), \(RecapWords.ordinal($0)) of \(teams)" } ?? record
+    }
+
     /// Points as the web shows them: one decimal.
     static func points(_ value: Double) -> String { LiveFormat.points(value) }
 

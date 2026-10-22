@@ -38,6 +38,7 @@ struct GameDayView: View {
                     .padding(.vertical, Spacing.xl)
                 }
                 .sectionJump()
+                .hidesStandingOnScroll()
                 .refreshable {
                     async let season: Void = store.refresh(force: true)
                     async let archive: Void = recaps.refresh()
