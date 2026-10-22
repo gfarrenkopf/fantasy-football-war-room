@@ -90,15 +90,20 @@ struct LineupView: View {
         .onChange(of: model.isReady) { openFocus() }
         .newsSheet()
         .dropConfirm(model: model, player: $dropping)
-        // What ESPN shows after a drop: a toast over the tab, where the eye is, gone after a few seconds.
+        // A drop on its way, then what ESPN shows after it: a toast over the tab, where the eye is.
         .overlay(alignment: .bottom) {
-            if let notice = model.dropNotice {
-                DropToast(notice: notice) { model.dismissDropNotice() }
-                    .padding(.horizontal, Spacing.xl)
-                    .padding(.bottom, Spacing.lg)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            Group {
+                if let player = model.droppingPlayer {
+                    DropProgressToast(player: player)
+                } else if let notice = model.dropNotice {
+                    DropToast(notice: notice) { model.dismissDropNotice() }
+                }
             }
+            .padding(.horizontal, Spacing.xl)
+            .padding(.bottom, Spacing.lg)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+        .animation(Motion.respond, value: model.droppingPlayer)
         .animation(Motion.respond, value: model.dropNotice)
         .alert(
             "The drop didn't go through",
@@ -753,13 +758,7 @@ private struct DropToast: View {
                 .foregroundStyle(notice.landed ? Color.valueInk : Color.reachInk)
         }
             .typeStyle(TypeScale.body).fontWeight(.semibold)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, Spacing.xl)
-            .padding(.vertical, Spacing.lg)
-            .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(notice.landed ? Color.line2 : Color.reach.opacity(0.6)))
-            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
-            .contentShape(Capsule())
+            .toastCapsule(border: notice.landed ? Color.line2 : Color.reach.opacity(0.6))
             .onTapGesture(perform: onDismiss)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Dismisses")
@@ -772,7 +771,35 @@ private struct DropToast: View {
     }
 }
 
+/// A drop on its way: ESPN re-reads the roster before and after, so it can take a few seconds.
+private struct DropProgressToast: View {
+    let player: ViewPlayer
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            ProgressView().controlSize(.small).tint(.reachInk)
+            Text("Dropping \(player.name) on ESPN…").foregroundStyle(.text)
+        }
+        .typeStyle(TypeScale.body).fontWeight(.semibold)
+        .toastCapsule(border: Color.line2)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("drop-progress")
+        .task { AccessibilityNotification.Announcement("Dropping \(player.name)").post() }
+    }
+}
+
 extension View {
+    /// The drop toasts' floating capsule, like the system's own confirmations.
+    fileprivate func toastCapsule(border: Color) -> some View {
+        fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, Spacing.lg)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(border))
+            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+            .contentShape(Capsule())
+    }
+
     /// Asks before a drop goes to ESPN: a dropped player goes on waivers, so getting him back takes a
     /// claim. Carries the write consent's lines the first time. `then` runs as the drop starts, to
     /// close the picker it was asked from.

@@ -45,7 +45,8 @@ final class LineupModel {
     var focus: Int?
 
     /// Dropping a player from a picker (APE-425): the drop on its way, then what ESPN shows, or why it didn't go.
-    private(set) var droppingNow = false
+    /// The player whose drop is on its way to ESPN: the tab says so until the answer comes back.
+    private(set) var droppingPlayer: ViewPlayer?
     private(set) var dropNotice: DropNotice?
     var dropFailure: DropFailure?
 
@@ -310,10 +311,10 @@ final class LineupModel {
     /// first if it's never been given, then the write. He leaves the staged lineup and IR; the user's
     /// own edits survive the read that follows. Never queued: offline, nothing goes.
     func drop(_ player: ViewPlayer) async {
-        guard let season, !droppingNow else { return }
-        droppingNow = true
+        guard let season, droppingPlayer == nil else { return }
+        droppingPlayer = player
         dropNotice = nil
-        defer { droppingNow = false }
+        defer { droppingPlayer = nil }
         do {
             if !agreed {
                 let _: ConsentGrant = try await api.post("api/v1/espn/write-consent", body: ConsentRequest(version: season.consent.version))
