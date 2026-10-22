@@ -10,12 +10,14 @@ enum SeasonSample {
         GameState(state: state, detail: detail, opponent: opponent, home: true, kickoff: kickoff, score: state == "pre" ? nil : .init(team: 17, opponent: 10))
     }
 
-    static func player(_ id: Int, _ name: String, _ pos: String, slot: String, actual: Double?, points: Double, game: GameState?, injury: String = "ACTIVE", stats: String? = nil) -> ViewPlayer {
-        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, locked: game.map { $0.state != "pre" } ?? false, actual: actual, points: points, statLine: stats, game: game)
+    static func player(_ id: Int, _ name: String, _ pos: String, slot: String, actual: Double?, points: Double, game: GameState?, injury: String = "ACTIVE", stats: String? = nil, news: String? = nil) -> ViewPlayer {
+        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, locked: game.map { $0.state != "pre" } ?? false, actual: actual, points: points, statLine: stats, game: game,
+                   news: news.map { .init(note: $0, at: kickoff.addingTimeInterval(-3_600)) })
     }
 
     static let mine: [ViewPlayer] = [
-        player(1, "Jalen Hurts", "QB", slot: "QB", actual: 18.4, points: 21.2, game: game("in", detail: "8:12 - 3rd"), stats: "187 YDS, 1 TD, 34 RUSH YDS"),
+        player(1, "Jalen Hurts", "QB", slot: "QB", actual: 18.4, points: 21.2, game: game("in", detail: "8:12 - 3rd"), stats: "187 YDS, 1 TD, 34 RUSH YDS",
+               news: "Hurts was a full participant in practice all week and carries no injury designation into Sunday. Expect his usual heavy work near the goal line."),
         player(2, "Jahmyr Gibbs", "RB", slot: "RB", actual: 22.1, points: 16.3, game: game("in", detail: "8:12 - 3rd"), stats: "14 CAR, 91 YDS, 1 TD"),
         player(3, "Puka Nacua", "WR", slot: "WR", actual: 9.6, points: 15.1, game: game("post"), stats: "6 REC, 66 YDS"),
         player(4, "Sam LaPorta", "TE", slot: "TE", actual: nil, points: 10.2, game: game("pre", opponent: "GB")),
@@ -109,7 +111,7 @@ enum SeasonSample {
     static func finished(_ players: [ViewPlayer]) -> [ViewPlayer] {
         players.map { p in
             ViewPlayer(playerId: p.playerId, name: p.name, pos: p.pos, team: p.team, slot: p.slot, injuryStatus: p.injuryStatus, locked: true,
-                       actual: finalScores[p.playerId], points: p.points, game: p.game.map { _ in game("post") })
+                       actual: finalScores[p.playerId], points: p.points, game: p.game.map { _ in game("post") }, news: p.news)
         }
     }
 

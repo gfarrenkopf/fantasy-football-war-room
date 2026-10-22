@@ -145,6 +145,16 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
         let started: Int
     }
 
+    /// ESPN's outlook for him this week (APE-213, APE-423); only on the user's own players, and only
+    /// when ESPN had news on him in the last day.
+    var news: News? = nil
+
+    struct News: Codable, Equatable, Sendable {
+        let note: String
+        /// When ESPN last had news on him.
+        let at: Date?
+    }
+
     var id: Int { playerId }
 }
 

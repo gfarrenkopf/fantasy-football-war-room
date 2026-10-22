@@ -30,12 +30,36 @@ struct HeadToHeadTests {
         #expect(SeasonFormat.gameParts(game("pre")) == ["vs CIN"])
     }
 
-    @Test func givesTheNarrowColumnOneShortFactALine() {
+    @Test func splitsTheNarrowColumnAsTheWebDoes() {
         let final = SeasonFormat.gameLines(game("post", score: .init(team: 17, opponent: 10)))
-        #expect(final.opponent == "vs CIN" && final.when == "W 17–10")
+        #expect(final.lead == "vs CIN · W 17–10" && final.when == "Final")
         let live = SeasonFormat.gameLines(game("in", detail: "2:40 - 2nd", score: .init(team: 7, opponent: 3)))
-        #expect(live.when == "2:40 - 2nd")
-        #expect(SeasonFormat.gameLines(game("pre")).when.isEmpty)
+        #expect(live.lead == "vs CIN · 7–3" && live.when == "2:40 - 2nd")
+        let pre = SeasonFormat.gameLines(game("pre", kickoff: SeasonSample.kickoff))
+        #expect(pre.lead == "vs CIN" && pre.when == SeasonFormat.kickoff(SeasonSample.kickoff))
+        let unscheduled = SeasonFormat.gameLines(game("pre"))
+        #expect(unscheduled.lead == "vs CIN" && unscheduled.when.isEmpty)
+    }
+
+    @Test func decodesTheNews() throws {
+        let json = #"{"playerId":1,"name":"Lamar Jackson","pos":"QB","team":"BAL","slot":"QB","injuryStatus":"ACTIVE","locked":false,"actual":null,"points":19.9,"game":null,"news":{"note":"Expected to play.","at":"2026-10-18T15:04:05.000Z"}}"#
+        let player = try APIClient.decoder.decode(ViewPlayer.self, from: Data(json.utf8))
+        #expect(player.news?.note == "Expected to play.")
+        #expect(player.news?.at == Date(timeIntervalSince1970: 1_792_335_845))
+        let undated = json.replacingOccurrences(of: #""at":"2026-10-18T15:04:05.000Z""#, with: #""at":null"#)
+        #expect(try APIClient.decoder.decode(ViewPlayer.self, from: Data(undated.utf8)).news?.at == nil)
+        let none = json.replacingOccurrences(of: #""news":{"note":"Expected to play.","at":"2026-10-18T15:04:05.000Z"}"#, with: #""news":null"#)
+        #expect(try APIClient.decoder.decode(ViewPlayer.self, from: Data(none.utf8)).news == nil)
+    }
+
+    @Test func speaksOfTheNewsOnlyOnTheUsersSide() {
+        let qb = HeadToHead.spoken(.init(key: "QB", me: 1, them: 11), view: SeasonSample.view, day: SeasonSample.live.gameDay)
+        #expect(qb.contains("Jalen Hurts, 18.4 points of 21.2 projected, 8:12 - 3rd, ESPN news. Theirs"))
+        let rb = HeadToHead.spoken(.init(key: "RB", me: 2, them: 12), view: SeasonSample.view, day: SeasonSample.live.gameDay)
+        #expect(!rb.contains("ESPN news"))
+        // The same note on the opponent's side goes unsaid, as the tag goes unshown.
+        let swapped = HeadToHead.spoken(.init(key: "QB", me: 11, them: 1), view: SeasonSample.view, day: SeasonSample.live.gameDay)
+        #expect(!swapped.contains("ESPN news"))
     }
 
     @Test(arguments: [("FLEX", "flex"), ("SUPERFLEX", "flex"), ("QB", "qb"), ("DST", "dst")])

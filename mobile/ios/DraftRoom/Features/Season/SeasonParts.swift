@@ -88,14 +88,15 @@ enum SeasonFormat {
         }
     }
 
-    /// His game in two short lines, for the head-to-head's narrow column: the opponent, then where the
-    /// game stands ("W 17–10" once it's over, the clock while it's on, the kickoff before).
-    static func gameLines(_ game: GameState) -> (opponent: String?, when: String) {
-        let opponent = game.opponent.isEmpty ? nil : "\(game.home ? "vs" : "@") \(game.opponent)"
-        if game.state == "post", let s = game.score {
-            return (opponent, "\(s.team > s.opponent ? "W" : s.team < s.opponent ? "L" : "T") \(s.team)–\(s.opponent)")
-        }
-        return (opponent, game.state == "pre" && game.kickoff == nil ? "" : gameWhen(game))
+    /// His game in two short lines, for the head-to-head's narrow column, split as the web's phone
+    /// layout splits it: the opponent and score ("@ NYJ · W 17–10"), then where the game stands (the
+    /// clock, "Final", the kickoff) on a line of its own.
+    static func gameLines(_ game: GameState) -> (lead: String?, when: String) {
+        let parts = gameParts(game)
+        // Before a kickoff time is known, the opponent is all there is.
+        if game.state == "pre" && game.kickoff == nil { return (parts.first, "") }
+        let lead = parts.dropLast().joined(separator: " · ")
+        return (lead.isEmpty ? nil : lead, parts.last ?? "")
     }
 
     /// Just where the game stands, for a narrow column: the clock, "Final", or the kickoff.
@@ -129,27 +130,40 @@ enum SeasonFormat {
 struct PlayerLine: View {
     let player: ViewPlayer
     var showPosition = true
+    /// A narrow column (the head-to-head): the short name, the game in two lines, and the web's
+    /// phone-layout type sizes.
     var compact = false
     var alignment: HorizontalAlignment = .leading
+    /// Offer ESPN's outlook for him, when there is one: a "News" tag beside his name that calls this.
+    var onNews: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: alignment, spacing: 1) {
             HStack(spacing: Spacing.xs) {
                 Text(compact ? SeasonFormat.shortName(player) : player.name)
-                    .typeStyle(TypeScale.body).foregroundStyle(.text).lineLimit(1)
-                if let tag = SeasonFormat.injuryTag(player.injuryStatus) { InjuryChip(tag: tag) }
+                    .typeStyle(TypeScale.body, dense: compact).foregroundStyle(.text).lineLimit(1)
+                if let tag = SeasonFormat.injuryTag(player.injuryStatus) { InjuryChip(tag: tag, dense: compact) }
+                if let onNews, player.news != nil { NewsTag(name: player.name, dense: compact, action: onNews) }
             }
             if compact, let game = player.game {
-                // A narrow column, as the web's phone head-to-head: the opponent on one line, where the
-                // game stands on the next, then the stats behind his points.
+                // A narrow column, as the web's phone head-to-head: the opponent and score on one line,
+                // where the game stands on the next (in Terminal Sky behind a still dot while it's on),
+                // then the stats behind his points.
                 let lines = SeasonFormat.gameLines(game)
-                let tone = game.state == "in" ? Color.sky : Color.muted
-                if let opponent = lines.opponent { Text(opponent).typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1) }
-                if !lines.when.isEmpty { Text(lines.when).typeStyle(TypeScale.label).foregroundStyle(tone).lineLimit(1) }
+                let live = game.state == "in"
+                if let lead = lines.lead {
+                    HStack(spacing: Spacing.xs) {
+                        if live { Circle().fill(.sky).frame(width: 6, height: 6).accessibilityHidden(true) }
+                        Text(lead).lineLimit(1)
+                    }
+                    .typeStyle(TypeScale.label, dense: true).foregroundStyle(live ? Color.sky : Color.muted)
+                }
+                if !lines.when.isEmpty {
+                    Text(lines.when).typeStyle(TypeScale.label, dense: true).foregroundStyle(live ? Color.sky : Color.muted).lineLimit(1)
+                }
                 if game.state != "pre", let stats = player.statLine, !stats.isEmpty {
-                    Text(stats).typeStyle(TypeScale.label).foregroundStyle(.dim).monospacedDigit()
+                    Text(stats).typeStyle(TypeScale.label, dense: true).foregroundStyle(.muted).monospacedDigit()
                         .multilineTextAlignment(alignment == .trailing ? .trailing : .leading)
-                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
@@ -169,15 +183,75 @@ struct PlayerLine: View {
 /// each on a faint wash of its color.
 struct InjuryChip: View {
     let tag: String
+    var dense = false
 
     var body: some View {
         let warn = tag == "Q" || tag == "D"
         Text(tag)
-            .typeStyle(TypeScale.micro)
+            .typeStyle(TypeScale.micro, dense: dense)
             .foregroundStyle(warn ? Color.warnInk : Color.reachInk)
-            .padding(.horizontal, 5)
+            .padding(.horizontal, dense ? 4 : 5)
             .background((warn ? Color.warn : Color.reach).opacity(0.16), in: RoundedRectangle(cornerRadius: Radius.sm))
             .fixedSize()
+    }
+}
+
+/// ESPN's outlook for a player this week (APE-213, APE-423), as the web's NewsNote tag: a quiet
+/// Terminal Sky "News", outlined and never filled, that opens the note.
+struct NewsTag: View {
+    let name: String
+    var dense = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            // Dense, the name keeps the room, as on the web's phone: the tag drops its word.
+            HStack(spacing: 3) {
+                Image(systemName: "note.text").imageScale(dense ? .medium : .small)
+                if !dense { Text("News") }
+            }
+            .typeStyle(TypeScale.micro, dense: dense)
+            .foregroundStyle(.sky)
+            .padding(.horizontal, dense ? 0 : 6)
+            .frame(minWidth: dense ? 26 : nil, minHeight: dense ? 22 : 20)
+            .background(Color.sky.opacity(0.06), in: RoundedRectangle(cornerRadius: Radius.sm))
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm).stroke(.skyLine))
+            .fixedSize()
+            // A 44pt target around a small tag, without growing the row.
+            .padding(.vertical, Spacing.xl).contentShape(Rectangle()).padding(.vertical, -Spacing.xl)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("ESPN's news on \(name)")
+    }
+}
+
+/// The note behind a News tag, in a sheet: whose it is, when ESPN had it, and the outlook itself.
+struct NewsSheet: View {
+    let player: ViewPlayer
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    if let at = player.news?.at {
+                        Text("ESPN · \(SeasonFormat.kickoff(at))").typeStyle(TypeScale.label).foregroundStyle(.muted)
+                    }
+                    Text(player.news?.note ?? "").typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.xl + Spacing.xs)
+            }
+            .background(.bg)
+            .navigationTitle(player.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
@@ -189,7 +263,8 @@ struct ScoreCell: View {
     let pace: PlayerPace?
     var theirs = false
     var alignment: HorizontalAlignment = .trailing
-    /// A narrow column (the head-to-head): past his projection reads "+4.6", the "over" left to the green.
+    /// A narrow column (the head-to-head): the web's phone-layout sizes, and past his projection reads
+    /// "+4.6", the "over" left to the green.
     var brief = false
 
     var body: some View {
@@ -198,13 +273,13 @@ struct ScoreCell: View {
         let actual = player.actual ?? 0
         VStack(alignment: alignment, spacing: 2) {
             Text(SeasonFormat.points(started ? actual : player.points))
-                .typeStyle(TypeScale.title).monospacedDigit()
+                .typeStyle(TypeScale.title, dense: brief).monospacedDigit()
                 .foregroundStyle(tone(level))
                 .contentTransition(.numericText(value: started ? actual : player.points))
-            Text(sub(level, actual: actual)).typeStyle(TypeScale.label).foregroundStyle(.dim).monospacedDigit().lineLimit(1)
+            Text(sub(level, actual: actual)).typeStyle(TypeScale.label, dense: brief).foregroundStyle(.dim).monospacedDigit().lineLimit(1)
             if started && player.points > 0 {
                 PaceMeter(share: min(1, max(0, actual / player.points)), due: pace?.progress, tint: tone(level) == Color.text ? Color.muted : tone(level), fromTrailing: alignment == .trailing)
-                    .frame(width: 44, height: 3)
+                    .frame(width: brief ? 40 : 44, height: 3)
             }
         }
         .accessibilityElement(children: .ignore)
