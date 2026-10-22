@@ -219,6 +219,7 @@ private struct ConfirmBar: View {
             .buttonStyle(ProviderButtonStyle(prominent: true))
             .disabled(busy || model.dry?.problems.isEmpty != true)
             .accessibilityIdentifier("acquire-send")
+            if busy { EspnSlowNote() }
         }
         .padding(.horizontal, Spacing.xl + Spacing.xs)
         .padding(.vertical, Spacing.lg)

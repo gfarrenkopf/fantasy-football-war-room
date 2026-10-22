@@ -19,7 +19,7 @@ struct SaveSheet: View {
                         if let dry = model.dry {
                             ReviewStep(model: model, dry: dry)
                         } else {
-                            ProgressView().tint(.muted).frame(maxWidth: .infinity).padding(Spacing.xl * 2)
+                            EspnWait(label: "Checking your team on ESPN…").padding(.vertical, Spacing.xl * 2)
                         }
                     case .idle, .saved:
                         EmptyView()
@@ -88,6 +88,48 @@ struct ConsentStep: View {
     }
 }
 
+/// A wait on ESPN (APE-420): a spinner and what Draft Room is doing, and the slow-ESPN note under it.
+struct EspnWait: View {
+    let label: String
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            HStack(spacing: Spacing.md) {
+                ProgressView().tint(.muted)
+                Text(label).typeStyle(TypeScale.label).foregroundStyle(.muted)
+            }
+            EspnSlowNote()
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Said only once a wait on ESPN passes a few seconds (APE-420): ESPN can be slow to answer, most of
+/// all the first time Draft Room reads a team, so a long wait reads as expected rather than stuck.
+struct EspnSlowNote: View {
+    @State private var slow = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        // A stack, not a Group: an empty Group drops its modifiers, and the task with them.
+        VStack(spacing: 0) {
+            if slow {
+                Text("ESPN can take a little while, most of all the first time. Keep this open.")
+                    .typeStyle(TypeScale.label).foregroundStyle(.dim)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(4))
+            withAnimation(reduceMotion ? nil : Motion.respond) { slow = true }
+        }
+    }
+}
+
 /// Each change with its toggle; any toggle asks the server again, since one change can need another.
 private struct ReviewStep: View {
     let model: LineupModel
@@ -140,6 +182,7 @@ private struct ReviewStep: View {
             .buttonStyle(ProviderButtonStyle(prominent: true))
             .disabled(busy || picked.isEmpty || !dry.problems.isEmpty)
             .accessibilityIdentifier("apply-lineup")
+            if busy { EspnSlowNote() }
         }
     }
 

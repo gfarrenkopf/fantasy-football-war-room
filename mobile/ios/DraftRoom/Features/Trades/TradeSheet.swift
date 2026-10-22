@@ -24,8 +24,10 @@ struct TradeSheet: View {
                                 .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.warnInk)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                    case .checking, .sending:
-                        ProgressView().tint(.muted).frame(maxWidth: .infinity)
+                    case .checking:
+                        EspnWait(label: "Checking the trade on ESPN…")
+                    case .sending:
+                        EspnWait(label: "Sending to ESPN…")
                     case .idle:
                         EmptyView()
                     }

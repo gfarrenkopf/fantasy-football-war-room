@@ -199,7 +199,7 @@ private struct ConfirmStep: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
-                ProgressView().tint(.muted).frame(maxWidth: .infinity)
+                EspnWait(label: "Checking ESPN…")
             }
             Text("Each step goes to ESPN in turn. If one doesn't go through, Draft Room stops there and says which went.")
                 .typeStyle(TypeScale.label).fontWeight(.regular).foregroundStyle(.dim)
@@ -298,6 +298,7 @@ private struct SendBar: View {
             .buttonStyle(ProviderButtonStyle(prominent: true))
             .disabled(busy || !ready)
             .accessibilityIdentifier("fill-send")
+            if model.phase == .sending { EspnSlowNote() }
         }
         .padding(.horizontal, Spacing.xl + Spacing.xs)
         .padding(.vertical, Spacing.lg)
