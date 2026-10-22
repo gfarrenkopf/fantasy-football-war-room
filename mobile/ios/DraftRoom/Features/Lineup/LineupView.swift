@@ -56,6 +56,7 @@ struct LineupView: View {
                     .animation(Motion.respond, value: model.ir)
                 }
                 .sectionJump()
+                .hidesStandingOnScroll()
                 .refreshable {
                     await store.refresh(force: true)
                     await ai.refresh()

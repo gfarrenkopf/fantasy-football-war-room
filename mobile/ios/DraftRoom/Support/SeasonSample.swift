@@ -46,7 +46,7 @@ enum SeasonSample {
     static let view = SeasonView(
         name: "App Tester", season: 2026, currentWeek: 3, myTeamId: 1,
         teams: [
-            ViewTeam(id: 1, name: "Sunday Scaries", abbrev: "SUN", roster: mine),
+            ViewTeam(id: 1, name: "Sunday Scaries", abbrev: "SUN", roster: mine, standing: Standing(wins: 2, losses: 0, ties: 0, pointsFor: 231.4, pointsAgainst: 198.2, seed: 1)),
             ViewTeam(id: 2, name: "Gridiron Gang", abbrev: "GRD", roster: theirs),
             ViewTeam(id: 3, name: "Hail Marys", abbrev: "HAIL", roster: []),
             ViewTeam(id: 4, name: "Blitz Brigade", abbrev: "BLTZ", roster: []),
@@ -144,7 +144,7 @@ enum SeasonSample {
     static let final: SeasonResponse = {
         let decided = SeasonView(
             name: view.name, season: view.season, currentWeek: 3, myTeamId: 1,
-            teams: view.teams.map { ViewTeam(id: $0.id, name: $0.name, abbrev: $0.abbrev, roster: finished($0.roster)) },
+            teams: view.teams.map { ViewTeam(id: $0.id, name: $0.name, abbrev: $0.abbrev, roster: finished($0.roster), standing: $0.standing) },
             matchup: Matchup(me: MatchupSide(teamId: 1, points: 79.0, projected: 79.0, winProbability: nil), them: MatchupSide(teamId: 2, points: 59.9, projected: 59.9, winProbability: nil)),
             warRoomMoves: view.warRoomMoves)
         let players = finished(mine + theirs)
