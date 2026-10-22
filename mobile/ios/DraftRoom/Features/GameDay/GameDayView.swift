@@ -10,8 +10,8 @@ import SwiftUI
 struct GameDayView: View {
     let store: SeasonStore
     let recaps: RecapsStore
-    /// Opens the Lineup tab, where a hole is filled.
-    let onLineup: () -> Void
+    /// Opens the Lineup tab's fill sheet on a hole.
+    let onFill: (Hole) -> Void
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
 
@@ -26,7 +26,7 @@ struct GameDayView: View {
                         if case let .problem(message, reconnect) = store.load {
                             ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
                         }
-                        GameDayContent(season: season, offline: store.offline, onLineup: onLineup)
+                        GameDayContent(season: season, offline: store.offline, onFill: onFill)
                             .newsSheet()
                         if season.gameDay.showArchive {
                             RecapArchiveView(store: recaps, hiding: season.gameDay.result == nil ? nil : RecapKey(season: season.gameDayView.season, week: season.gameDayView.currentWeek), firstWeek: season.gameDay.week)
@@ -72,14 +72,14 @@ struct GameDayView: View {
 private struct GameDayContent: View {
     let season: SeasonResponse
     let offline: Bool
-    let onLineup: () -> Void
+    let onFill: (Hole) -> Void
 
     var body: some View {
         let view = season.gameDayView
         let day = season.gameDay
         VStack(spacing: Spacing.xl) {
             FreshnessNote(season: season, offline: offline)
-            if !day.holes.isEmpty { HoleBanner(holes: day.holes, onLineup: onLineup) }
+            if !day.holes.isEmpty { HoleBanner(holes: day.holes, onFill: onFill) }
             if let result = day.result {
                 // The week is decided (APE-402): the result leads, both lineups as they finished below it.
                 ResultMoment(leagueId: season.league.id, view: view, result: result)
@@ -375,35 +375,6 @@ private struct ByeStarters: View {
                 }
             }
         }
-    }
-}
-
-/// A slot nobody on the roster can play this week: the fix lives on Lineup.
-private struct HoleBanner: View {
-    let holes: [Hole]
-    let onLineup: () -> Void
-
-    var body: some View {
-        Button(action: onLineup) {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.warn)
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("\(holes.count == 1 ? "Hole at" : "Holes at") \(SeasonFormat.slots(holes.map(\.key)))")
-                        .typeStyle(TypeScale.body).foregroundStyle(.text)
-                    Text("Nobody on your team can play \(holes.count == 1 ? "it" : "them") this week.")
-                        .typeStyle(TypeScale.label).foregroundStyle(.muted)
-                }
-                Spacer(minLength: Spacing.md)
-                Text(holes.count == 1 ? "Fill it" : "Fill them").typeStyle(TypeScale.body).foregroundStyle(.sky)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.sky)
-            }
-            .padding(Spacing.xl)
-            .background(Color.warn.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.dialog))
-            .overlay(RoundedRectangle(cornerRadius: Radius.dialog).stroke(Color.warn.opacity(0.35)))
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens Lineup")
-        .accessibilityIdentifier("hole-banner")
     }
 }
 

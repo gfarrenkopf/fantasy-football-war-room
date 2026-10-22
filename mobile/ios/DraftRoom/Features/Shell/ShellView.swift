@@ -61,22 +61,28 @@ struct ShellView: View {
 
     private func tabs(_ model: ShellModel, league: League) -> some View {
         let store = model.season(for: league)
+        let holes = store.season?.gameDay.holes ?? []
+        // Fill it on any tab: Lineup, with the fill sheet open on the hole (APE-418).
+        let fillHole: (Hole) -> Void = { hole in
+            tab = .lineup
+            Task { await model.fill(for: league).open(hole) }
+        }
         return TabView(selection: $tab) {
             ForEach(SeasonTab.allCases) { section in
                 Tab(section.title, systemImage: section.symbol, value: section) {
                     framed(model, league: league, path: section == .gameDay ? $gameDayPath : nil) {
                         switch section {
                         case .gameDay:
-                            GameDayView(store: store, recaps: model.recaps(for: league), onLineup: { tab = .lineup }, onReconnect: { connecting = true })
+                            GameDayView(store: store, recaps: model.recaps(for: league), onFill: fillHole, onReconnect: { connecting = true })
                         case .lineup:
                             LineupView(model: model.lineup(for: league), fill: model.fill(for: league), ai: model.ai(for: league), onReconnect: { connecting = true }, onWaivers: { tab = .waivers })
                         case .trade:
-                            TradesView(model: model.trades(for: league), ai: model.ai(for: league), onReconnect: { connecting = true })
+                            TradesView(model: model.trades(for: league), ai: model.ai(for: league), onReconnect: { connecting = true }, holes: holes, onFill: fillHole)
                         case .waivers:
-                            WaiversView(model: model.waivers(for: league), onReconnect: { connecting = true }) { partner, player in
+                            WaiversView(model: model.waivers(for: league), onReconnect: { connecting = true }, onTrade: { partner, player in
                                 tab = .trade
                                 Task { await model.trades(for: league).load(partner: partner, gives: [], gets: [player]) }
-                            }
+                            }, holes: holes, onFill: fillHole)
                         }
                     }
                 }

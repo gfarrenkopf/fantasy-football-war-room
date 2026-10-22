@@ -9,11 +9,15 @@ struct TradesView: View {
     let ai: AiModel
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
+    /// Starting slots nobody can play this week, and the fill sheet for one (APE-418).
+    var holes: [Hole] = []
+    var onFill: (Hole) -> Void = { _ in }
 
     var body: some View {
         ScrollViewReader { scroll in
             ScrollView {
                 VStack(spacing: Spacing.xl) {
+                    if !holes.isEmpty { HoleBanner(holes: holes, onFill: onFill) }
                     if let notice = model.notice { TradeNotice(notice: notice) }
                     switch model.load {
                     case .loading:

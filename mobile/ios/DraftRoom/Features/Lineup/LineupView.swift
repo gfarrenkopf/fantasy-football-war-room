@@ -32,6 +32,10 @@ struct LineupView: View {
                         if let save = model.lastSave, model.moment == nil || !save.allLanded {
                             SaveResults(save: save)
                         }
+                        // The Lock In moment leads after a save, so a hole still open shows above it (APE-418).
+                        if case .lockIn = model.hero, !model.hardHoles.isEmpty {
+                            HoleBanner(holes: model.hardHoles) { hole in Task { await fill.open(hole) } }
+                        }
                         hero(week: season.view.currentWeek)
                             .jumpSection("This week")
                         HoleNotes(model: model, onWaivers: onWaivers)
