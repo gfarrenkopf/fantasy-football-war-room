@@ -38,13 +38,17 @@ export function checkAcquire(roster: readonly ApplyEntry[], teams: readonly { na
     const owner = teams.find((t) => t.roster.some((p) => p.playerId === add));
     if (owner) problems.push(`That player is on ${owner.name} now.`);
   }
-  if (drop !== null) {
-    const out = roster.find((p) => p.playerId === drop);
-    if (!out) problems.push("The player you're dropping isn't on your team any more.");
-    else if (out.locked) problems.push(`${out.name}'s game has started, so ESPN won't drop them this week.`);
-  }
+  if (drop !== null) problems.push(...checkDrop(roster, drop));
   if (counted(roster) + 1 - (drop === null ? 0 : 1) > limit) problems.push(`Your roster is full at ${limit} players. Pick someone to drop.`);
   return problems;
+}
+
+/** Why this player can't be dropped; empty when he can. Used alone for a drop from the lineup (APE-425), and for the drop half of an add. */
+export function checkDrop(roster: readonly ApplyEntry[], drop: number): string[] {
+  const out = roster.find((p) => p.playerId === drop);
+  if (!out) return ["The player you're dropping isn't on your team any more."];
+  if (out.locked) return [`${out.name}'s game has started, so ESPN won't drop them this week.`];
+  return [];
 }
 
 /** Why War Room won't claim in this league: ESPN wants a bid, and War Room doesn't place bids yet (13.4). */
@@ -67,6 +71,9 @@ export function acquireItems(teamId: number, { add, drop }: Acquire): EspnAcquir
   return [{ playerId: add, type: "ADD", toTeamId: teamId }, ...(drop === null ? [] : [{ playerId: drop, type: "DROP" as const, fromTeamId: teamId }])];
 }
 
+/** A drop with nothing added (APE-425): one `DROP` item of a `FREEAGENT` transaction. */
+export const dropItems = (teamId: number, drop: number): EspnAcquireItem[] => [{ playerId: drop, type: "DROP", fromTeamId: teamId }];
+
 /** Whether a claim is pending for the team: by the id ESPN gave it, or failing that, by who it adds. */
 export function claimPending(claims: readonly PendingClaim[], teamId: number, { id, add }: { id: string | null; add: number }): boolean {
   return claims.some((c) => c.teamId === teamId && (id ? c.id === id : c.add === add));
@@ -77,3 +84,6 @@ export function acquireLanded(after: readonly { playerId: number }[], { add, dro
   const ids = new Set(after.map((p) => p.playerId));
   return { added: ids.has(add), dropped: drop === null || !ids.has(drop) };
 }
+
+/** Whether the roster after a drop no longer has him. */
+export const dropLanded = (after: readonly { playerId: number }[], drop: number): { dropped: boolean } => ({ dropped: !after.some((p) => p.playerId === drop) });

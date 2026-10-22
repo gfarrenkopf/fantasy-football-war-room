@@ -18,6 +18,8 @@ const ROUTE = "/api/leagues/[id]/season/acquire";
  * - `{ kind: "add", week, snapshot, add, drop }` → `{ added, dropped }`: a free agent, at once (13.3).
  * - `{ kind: "claim", week, snapshot, add, drop }` → `{ pending }`: a waiver claim (13.4), in leagues
  *   that don't bid FAAB.
+ * - `{ kind: "drop", week, snapshot, drop }` → `{ dropped }`: a drop with nothing added, from the
+ *   lineup (APE-425). He goes on waivers.
  * - `{ kind: "cancel", week, claimId }` → `{ cancelled }`: withdraws a pending claim.
  *
  * Every kind takes `consentVersion?`. Consent, aborts and failures answer as every ESPN write does

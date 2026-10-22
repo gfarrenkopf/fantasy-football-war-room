@@ -16,10 +16,11 @@ type Ctx = RouteContext<"/api/v1/leagues/[id]/team/acquire">;
 const ROUTE = "/api/v1/leagues/[id]/team/acquire";
 
 /**
- * POST /api/v1/leagues/:id/team/acquire[?dryRun=1]: adds a free agent, claims a player on waivers, or
- * cancels a claim from the iPhone app (APE-386). The bodies are the web's season/acquire route's:
+ * POST /api/v1/leagues/:id/team/acquire[?dryRun=1]: adds a free agent, claims a player on waivers,
+ * drops a player (APE-425) or cancels a claim from the iPhone app (APE-386). The bodies are the web's season/acquire route's:
  *
  * - `{ kind: "add" | "claim", week, snapshot, add, drop, consentVersion? }`
+ * - `{ kind: "drop", week, snapshot, drop, consentVersion? }`
  * - `{ kind: "cancel", week, claimId, consentVersion? }`
  *
  * `?dryRun=1` → TeamDryRun (src/lib/server/v1/team.ts): the change in plain words and why it can't
@@ -53,7 +54,7 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
     const load = await loadSeasonView(db, key, userId, id);
     if (load.kind !== "ok") return refuse({ kind: "problem", problem: load.kind });
     const { view } = load;
-    const pooled = body.kind === "cancel" ? null : await availablePlayer(db, key, userId, id, body.add);
+    const pooled = body.kind === "cancel" || body.kind === "drop" ? null : await availablePlayer(db, key, userId, id, body.add);
     if (dryRun) {
       const stale = staleAgainst(view, body.week, body.kind === "cancel" ? null : body.snapshot);
       return stale ? refuse(stale) : json(200, acquireDryRun(view, body, pooled));

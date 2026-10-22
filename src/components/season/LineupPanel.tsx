@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type CSSProperties } from "react";
 import type { SeasonAiState } from "@/lib/ai/season/state";
 import { canPlay } from "@/lib/season/apply";
@@ -11,6 +12,7 @@ import type { LineupSlot } from "@/lib/season/types";
 import type { SeasonView, ViewPlayer, WarRoomMove } from "@/lib/season/view";
 import { AiLineupCard } from "./AiPanel";
 import { ApplyLineup, IrPicker } from "./ApplyLineup";
+import { DropDialog, DropOption } from "./DropPlayer";
 import { HoleHero, HoleNote } from "./HoleHero";
 import { ArrowLeft, ArrowRight, Check, External } from "./Icons";
 import { Gain, hasStarted, PlayerLine, pts, signed, SLOT_LABEL } from "./parts";
@@ -41,8 +43,13 @@ export function LineupPanel({
   /** Opens the Waivers tab, for a claim that would fill a hole. */
   onWaivers: () => void;
 }) {
+  const router = useRouter();
   const draft = useLineupDraft(view);
   const panelInView = useInView("apply-panel");
+  // Dropping a player from a picker (APE-425): who's being asked about, and what ESPN shows after.
+  const [dropping, setDropping] = useState<ViewPlayer | null>(null);
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(writeConsented);
   const mine = view.teams.find((t) => t.id === view.myTeamId);
   if (!mine) return <p className={`${s.panel} ${s.note}`}>ESPN didn&apos;t list your team in this league.</p>;
 
@@ -103,7 +110,7 @@ export function LineupPanel({
             leagueId={leagueId}
             holes={hard}
             swaps={suggestions}
-            agreed={writeConsented}
+            agreed={agreed}
             onWaivers={onWaivers}
           />
         ) : !suggested && (banked >= 0.05 || onWarRooms) ? (
@@ -187,7 +194,7 @@ export function LineupPanel({
           <LineupSources draft={draft} />
           <ul className={s.rows}>
             {draft.seats.map((key, i) => (
-              <StarterRow key={`${key}-${i}`} draft={draft} seat={i} made={view.warRoomMoves} fresh={fresh} />
+              <StarterRow key={`${key}-${i}`} draft={draft} seat={i} made={view.warRoomMoves} fresh={fresh} onDrop={setDropping} />
             ))}
           </ul>
         </section>
@@ -201,20 +208,23 @@ export function LineupPanel({
           </div>
           <ul className={s.rows}>
             {bench.map((p) => (
-              <BenchRow key={p.playerId} draft={draft} player={p} />
+              <BenchRow key={p.playerId} draft={draft} player={p} onDrop={setDropping} />
             ))}
             {ir.map((p) => (
               <li key={p.playerId} className={s.row}>
                 <span className={s.rowSlot}>
-                  <span className={s.slotPill} data-static>
-                    IR
-                  </span>
+                  <IrRowPicker player={p} onDrop={setDropping} />
                 </span>
                 <PlayerLine player={p} value="none" news ownership live stacked />
                 <Points player={p} />
               </li>
             ))}
           </ul>
+          {dropNotice && (
+            <p className={`${s.note} ${s.fine}`} role="status">
+              {dropNotice}
+            </p>
+          )}
           {view.irSlots > 0 && (
             <div className={s.panelTools}>
               <IrPicker roster={draft.roster} ir={draft.ir} irSlots={view.irSlots} onToggle={draft.toggleIr} />
@@ -231,7 +241,7 @@ export function LineupPanel({
               {draft.moves.length ? "Make these moves on ESPN" : onWarRooms ? "ESPN has Draft Room's lineup" : "Nothing to change on ESPN"}
             </h2>
           </div>
-          <ApplyLineup draft={draft} view={view} leagueId={leagueId} agreed={writeConsented} done={onWarRooms} banked={banked} />
+          <ApplyLineup draft={draft} view={view} leagueId={leagueId} agreed={agreed} done={onWarRooms} banked={banked} />
           <a className={s.applyEspn} href={espnTeam} target="_blank" rel="noreferrer">
             Open my team on ESPN <External />
           </a>
@@ -254,6 +264,22 @@ export function LineupPanel({
         >
           Review {draft.picked.length === 1 ? "1 change" : `${draft.picked.length} changes`}
         </button>
+      )}
+      {dropping && (
+        <DropDialog
+          view={view}
+          leagueId={leagueId}
+          player={dropping}
+          agreed={agreed}
+          onAgreed={() => setAgreed(true)}
+          onDropped={(message) => {
+            draft.dropped(dropping.playerId);
+            setDropping(null);
+            setDropNotice(message);
+            router.refresh();
+          }}
+          onClose={() => setDropping(null)}
+        />
       )}
     </div>
   );
@@ -310,7 +336,19 @@ function Points({ player, delta }: { player: ViewPlayer; delta?: number }) {
  * War Room got into this seat this week is marked with a tint and a bar (APE-256); what the move was
  * worth opens from the bar and his points, and is read out to screen readers.
  */
-function StarterRow({ draft, seat, made, fresh }: { draft: LineupDraft; seat: number; made: readonly WarRoomMove[]; fresh: ReadonlySet<number> }) {
+function StarterRow({
+  draft,
+  seat,
+  made,
+  fresh,
+  onDrop,
+}: {
+  draft: LineupDraft;
+  seat: number;
+  made: readonly WarRoomMove[];
+  fresh: ReadonlySet<number>;
+  onDrop: (player: ViewPlayer) => void;
+}) {
   const key = draft.seats[seat];
   const now = draft.onEspn[seat] === null ? undefined : draft.byId.get(draft.onEspn[seat]!);
   const next = draft.staged[seat] === null ? undefined : draft.byId.get(draft.staged[seat]!);
@@ -332,7 +370,7 @@ function StarterRow({ draft, seat, made, fresh }: { draft: LineupDraft; seat: nu
       style={{ "--seat": seat } as CSSProperties}
     >
       <span className={s.rowSlot}>
-        <SeatPicker draft={draft} seat={seat} label={SLOT_LABEL[key]} />
+        <SeatPicker draft={draft} seat={seat} label={SLOT_LABEL[key]} onDrop={onDrop} />
       </span>
       {/* Left: the player ESPN has in this seat, as set. */}
       <span className={s.rowPlayer}>
@@ -430,7 +468,7 @@ function MadeNote({ move, player, made }: { move: WarRoomMove; player: ViewPlaye
 }
 
 /** A bench player: tap his BN to move him into a slot. */
-function BenchRow({ draft, player }: { draft: LineupDraft; player: ViewPlayer }) {
+function BenchRow({ draft, player, onDrop }: { draft: LineupDraft; player: ViewPlayer; onDrop: (player: ViewPlayer) => void }) {
   const seat = draft.staged.indexOf(player.playerId);
   const group = draft.changeOf.get(player.playerId);
   const moving = seat >= 0 && (!group || draft.isPicked(group));
@@ -440,7 +478,7 @@ function BenchRow({ draft, player }: { draft: LineupDraft; player: ViewPlayer })
   return (
     <li className={s.row} data-moving={moving || toIr} data-swapping={!!down || undefined}>
       <span className={s.rowSlot}>
-        <BenchPicker draft={draft} player={player} />
+        <BenchPicker draft={draft} player={player} onDrop={onDrop} />
       </span>
       <span className={s.rowPlayer}>
         <PlayerLine player={player} locked={player.locked} value="none" news ownership live stacked />
@@ -501,7 +539,7 @@ function Picker({ label: text, disabled, title, children }: { label: string; dis
  * Who can play a starting seat: anyone eligible and not on IR. War Room's pick for the seat leads and
  * says so, then ESPN's player there; everyone else says where picking him takes him from.
  */
-function SeatPicker({ draft, seat, label: text }: { draft: LineupDraft; seat: number; label: string }) {
+function SeatPicker({ draft, seat, label: text, onDrop }: { draft: LineupDraft; seat: number; label: string; onDrop: (player: ViewPlayer) => void }) {
   const key = draft.seats[seat];
   const current = draft.staged[seat];
   const ours = draft.recommended[seat];
@@ -564,6 +602,15 @@ function SeatPicker({ draft, seat, label: text }: { draft: LineupDraft; seat: nu
               </button>
             </li>
           )}
+          {holder && (
+            <DropOption
+              player={holder}
+              onDrop={() => {
+                close();
+                onDrop(holder);
+              }}
+            />
+          )}
         </>
       )}
     </Picker>
@@ -571,7 +618,7 @@ function SeatPicker({ draft, seat, label: text }: { draft: LineupDraft; seat: nu
 }
 
 /** Where a bench player can go: the seats he's eligible for, with who's staged there now. */
-function BenchPicker({ draft, player }: { draft: LineupDraft; player: ViewPlayer }) {
+function BenchPicker({ draft, player, onDrop }: { draft: LineupDraft; player: ViewPlayer; onDrop: (player: ViewPlayer) => void }) {
   const at = draft.staged.indexOf(player.playerId);
   const seats = draft.seats.flatMap((key, i) => {
     const holder = draft.staged[i] === null ? undefined : draft.byId.get(draft.staged[i]!);
@@ -620,7 +667,31 @@ function BenchPicker({ draft, player }: { draft: LineupDraft; player: ViewPlayer
             </li>
           )}
           {!seats.length && at < 0 && <li className={s.fine}>No open slot he can play.</li>}
+          <DropOption
+            player={player}
+            onDrop={() => {
+              close();
+              onDrop(player);
+            }}
+          />
         </>
+      )}
+    </Picker>
+  );
+}
+
+/** A player on IR: his pill opens the one thing to do from here, dropping him (APE-425). IR moves are the IR picker's. */
+function IrRowPicker({ player, onDrop }: { player: ViewPlayer; onDrop: (player: ViewPlayer) => void }) {
+  return (
+    <Picker label="IR" disabled={player.locked} title={`${player.name} on IR`}>
+      {(close) => (
+        <DropOption
+          player={player}
+          onDrop={() => {
+            close();
+            onDrop(player);
+          }}
+        />
       )}
     </Picker>
   );

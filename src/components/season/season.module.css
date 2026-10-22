@@ -1298,6 +1298,70 @@ li + li > .pickerOption {
   display: block;
   color: var(--color-muted);
 }
+/* Dropping a player (APE-425): last in the list, red, and set apart so it never reads as one more seat. */
+li + li > .pickerDrop {
+  border-top: 1px solid color-mix(in srgb, var(--color-reach) 35%, var(--color-row-line));
+}
+.pickerDrop {
+  display: block;
+  color: var(--color-reach-ink);
+  font-weight: 600;
+}
+.pickerDrop:hover {
+  background: color-mix(in srgb, var(--color-reach) 12%, transparent);
+}
+
+.dropDialog {
+  width: min(400px, calc(100vw - 32px));
+  margin: auto;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-reach) 45%, var(--color-line2));
+  border-radius: 10px;
+  background: var(--color-panel);
+  color: var(--color-text);
+  font-size: 13.5px;
+  line-height: 1.45;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+}
+.dropDialog::backdrop {
+  background: rgb(10 12 16 / 0.6);
+}
+.dropBody {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+}
+.dropTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-reach-ink);
+}
+.dropText {
+  margin: 0;
+  color: var(--color-muted);
+}
+.dangerButton {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-reach);
+  background: color-mix(in srgb, var(--color-reach) 22%, transparent);
+  color: var(--color-pale-red);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dangerButton:hover {
+  background: color-mix(in srgb, var(--color-reach) 32%, transparent);
+}
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.dangerButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
 
 /* A player War Room got into his seat this week (APE-256): a tint and a bar, the words behind a tap. */
 .row[data-made] {

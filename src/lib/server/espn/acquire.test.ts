@@ -4,7 +4,7 @@ import type { Db } from "@/lib/db/types";
 import { snapshotOf } from "@/lib/season/apply";
 import { ESPN_SLOT_ID } from "@/lib/season/espnLeague";
 import type { LineupSlot, RosterEntry, SeasonLeague } from "@/lib/season/types";
-import { addFreeAgent, cancelClaim, claimWaiver } from "./acquire";
+import { addFreeAgent, cancelClaim, claimWaiver, dropPlayer } from "./acquire";
 import type { WriteDeps } from "./guardedWrite";
 import type { SeasonLoad } from "./seasonData";
 import type { EspnTransaction, EspnWrite } from "./transactionWriter";
@@ -117,6 +117,23 @@ describe("addFreeAgent", () => {
     const errors = [{ type: "TRAN_PLAYER_NOT_FREEAGENT", message: "X is not a free agent" }];
     const { deps } = fake([ok(league(ROSTER))], { ok: false, reason: "refused", detail: "HTTP 409 TRAN_PLAYER_NOT_FREEAGENT", errors });
     expect(await addFreeAgent(db, key, "user", "league", request, deps)).toEqual({ kind: "espn-refused", errors, detail: "HTTP 409 TRAN_PLAYER_NOT_FREEAGENT" });
+  });
+});
+
+describe("dropPlayer (APE-425)", () => {
+  const drop = { week: 4, snapshot: snapshotOf(ROSTER), drop: 3 };
+
+  it("writes a FREEAGENT transaction with only the DROP item, and confirms he's gone from a re-read", async () => {
+    const { deps, writes } = fake([ok(league(ROSTER)), ok(league(ROSTER.slice(0, 2)))]);
+    expect(await dropPlayer(db, key, "user", "league", drop, deps)).toEqual({ kind: "applied", landed: { dropped: true } });
+    expect(writes).toEqual([{ season: 2026, espnLeagueId: "704343562", teamId: 1, week: 4, type: "FREEAGENT", items: [{ playerId: 3, type: "DROP", fromTeamId: 1 }] }]);
+  });
+
+  it("refuses a locked player without writing", async () => {
+    const locked = ROSTER.map((p) => (p.playerId === 3 ? { ...p, locked: true } : p));
+    const { deps, writes } = fake([ok(league(locked))]);
+    expect(await dropPlayer(db, key, "user", "league", { ...drop, snapshot: snapshotOf(locked) }, deps)).toEqual({ kind: "refused", problems: ["Bench Two's game has started, so ESPN won't drop them this week."] });
+    expect(writes).toEqual([]);
   });
 });
 
