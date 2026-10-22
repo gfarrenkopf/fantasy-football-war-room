@@ -86,7 +86,11 @@ enum SeasonSample {
             espnCall: EspnCall(me: .init(projected: 98.6, actual: nil), them: .init(projected: 101.2, actual: nil), best: .init(playerId: 2, projected: 16.3, actual: 22.1), worst: nil, season: CallRecord(weeks: 2, meanMiss: 11.4, meanBias: -2.1)),
             showArchive: false),
         lineup: lineup,
-        consent: WriteConsent(version: 2, lines: ["Draft Room changes your team on ESPN only when you confirm a change.", "You can stop it any time by disconnecting ESPN."], agreed: false))
+        consent: WriteConsent(version: 2, lines: [
+            "Draft Room changes your team on ESPN only when you confirm, and only the changes you just reviewed: lineup, IR, adds and drops, waivers and trades. Never on its own.",
+            "It re-checks ESPN first and stops if anything changed or a game started.",
+            "It's unofficial and can break if ESPN changes things.",
+        ], agreed: false))
 
     /// War Room fills the empty FLEX with Bigsby; the games already on lock their players in. Downs
     /// is out, so he could go to IR.

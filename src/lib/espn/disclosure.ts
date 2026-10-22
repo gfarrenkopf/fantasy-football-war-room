@@ -35,13 +35,13 @@ export const ESPN_HANDOVER_DISCLOSURE: readonly string[] = [
  * The consent to change the user's team on ESPN: the lineup (12.1), then IR, adds and drops, waiver
  * claims and trades (Epic 13). Asked the first time they confirm a change on the season page.
  * Separate from the season login above, which only ever reads. Bump the version when the substance
- * changes: version 2 widened it from the lineup to the whole team.
+ * changes: version 2 widened it from the lineup to the whole team. APE-419 cut it to three lines
+ * without granting anything new, so it stayed at version 2.
  */
 export const ESPN_WRITE_VERSION = 2;
 
 export const ESPN_WRITE_DISCLOSURE: readonly string[] = [
-  "Draft Room may change your team on ESPN when you confirm a change: your lineup, IR, adds and drops, waiver claims, and trade offers and replies.",
-  "It only makes the changes you've just reviewed, only for your own team, and never on its own: not from the Sunday email, not from the AI.",
-  "Right before it writes, it re-reads ESPN and stops if anything has changed or a player's game has started. Afterwards it reads ESPN again and shows you what went through.",
-  "It's unofficial and can stop working if ESPN changes things. Your team on ESPN is always yours to check.",
+  "Draft Room changes your team on ESPN only when you confirm, and only the changes you just reviewed: lineup, IR, adds and drops, waivers and trades. Never on its own.",
+  "It re-checks ESPN first and stops if anything changed or a game started.",
+  "It's unofficial and can break if ESPN changes things.",
 ];

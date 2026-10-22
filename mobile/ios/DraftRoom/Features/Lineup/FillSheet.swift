@@ -77,7 +77,7 @@ struct FillSheet: View {
     private var isDone: Bool { if case .done = model.phase { true } else { false } }
 
     private var title: String {
-        if isConsent { return "Before Draft Room changes your team" }
+        if isConsent { return "Changes on ESPN" }
         return model.hole.map { "Fill your \(SlotLabel.of($0.key)) hole" } ?? "Fill the hole"
     }
 }

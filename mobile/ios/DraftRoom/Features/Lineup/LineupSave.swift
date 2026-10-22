@@ -43,28 +43,42 @@ struct SaveSheet: View {
     }
 
     private var title: String {
-        if case .consent = model.phase { return "Before Draft Room changes your team" }
+        if case .consent = model.phase { return "Changes on ESPN" }
         return "Save to ESPN"
     }
 }
 
 /// The write consent, in the server's words (never the app's): asked once, recorded on the server.
+/// The first line is the promise, in text ink; the rest are its terms, quieter, on one panel.
 struct ConsentStep: View {
     let lines: [String]
     let onAgree: () -> Void
     @State private var agreed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            ForEach(lines, id: \.self) { line in
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-                    Text("•").foregroundStyle(.dim)
-                    Text(line).typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.text)
-                        .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                    if i > 0 { Divider().overlay(.rowLine) }
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+                        Circle().fill(i == 0 ? Color.sky : Color.dim).frame(width: 5, height: 5)
+                            .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 3 }
+                        Text(line)
+                            .typeStyle(i == 0 ? TypeScale.body : TypeScale.label).fontWeight(i == 0 ? .semibold : .regular)
+                            .foregroundStyle(i == 0 ? Color.text : Color.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            Toggle("I agree to Draft Room changing my team on ESPN when I confirm a change", isOn: $agreed)
+            .background(.panel, in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(.line))
+            .accessibilityElement(children: .combine)
+            Toggle("I agree", isOn: $agreed)
                 .typeStyle(TypeScale.body).foregroundStyle(.text).tint(.sky)
+                .accessibilityLabel("I agree to Draft Room changing my team on ESPN when I confirm")
                 .accessibilityIdentifier("consent-toggle")
             Button("Agree and continue", action: onAgree)
                 .buttonStyle(ProviderButtonStyle(prominent: true))

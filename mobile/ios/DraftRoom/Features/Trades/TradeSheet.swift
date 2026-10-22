@@ -70,7 +70,7 @@ struct TradeSheet: View {
     }
 
     private var title: String {
-        if case .consent = model.phase { return "Before Draft Room changes your team" }
+        if case .consent = model.phase { return "Changes on ESPN" }
         switch model.action {
         case let .respond(offer, kind):
             switch kind {
