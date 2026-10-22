@@ -67,4 +67,20 @@ struct HeadToHeadTests {
         let tokens: [String: Color] = ["flex": .flex, "qb": .qb, "dst": .dst]
         #expect(Color.slot(key) == tokens[token])
     }
+
+    /// A bye, as the web's `onBye()` reads one (APE-430).
+    @Test func marksAByeOnlyWithoutAGame() throws {
+        func player(_ fields: String) throws -> ViewPlayer {
+            let json = #"{"playerId":1,"name":"Josh Allen","pos":"QB","slot":"QB","injuryStatus":"ACTIVE","locked":false,"actual":null,"#
+            return try APIClient.decoder.decode(ViewPlayer.self, from: Data((json + fields + "}").utf8))
+        }
+        #expect(try player(#""team":"BUF","points":0,"projected":true,"game":null"#).isOnBye)
+        // An older server without `projected`.
+        #expect(try player(#""team":"BUF","points":0,"game":null"#).isOnBye)
+        // ESPN didn't project him, his team plays, he's projected, or he has no team.
+        #expect(try !player(#""team":"BUF","points":0,"projected":false,"game":null"#).isOnBye)
+        #expect(try !player(#""team":"BUF","points":0,"projected":true,"game":{"state":"pre","detail":"","opponent":"MIA","home":true,"kickoff":null,"score":null}"#).isOnBye)
+        #expect(try !player(#""team":"BUF","points":21.3,"projected":true,"game":null"#).isOnBye)
+        #expect(try !player(#""team":null,"points":0,"projected":true,"game":null"#).isOnBye)
+    }
 }

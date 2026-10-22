@@ -152,7 +152,9 @@ struct PlayerLine: View {
                         .environment(\.isEnabled, true)
                 }
             }
-            if compact, let game = player.game {
+            if compact, player.isOnBye {
+                byeLine.typeStyle(TypeScale.label, dense: true).foregroundStyle(.muted).lineLimit(1)
+            } else if compact, let game = player.game {
                 // A narrow column, as the web's phone head-to-head: the opponent and score on one line,
                 // where the game stands on the next (in Terminal Sky behind a still dot while it's on),
                 // then the stats behind his points.
@@ -173,10 +175,19 @@ struct PlayerLine: View {
                         .multilineTextAlignment(alignment == .trailing ? .trailing : .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            } else if player.isOnBye {
+                byeLine.typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1)
             } else {
                 Text(detail).typeStyle(TypeScale.label).foregroundStyle(player.game?.state == "in" ? Color.sky : Color.muted).lineLimit(1)
             }
         }
+    }
+
+    /// His team and a BYE mark in warning ink, where his game would be (APE-430).
+    private var byeLine: Text {
+        let bye = Text("BYE").fontWeight(.bold).foregroundStyle(Color.warnInk)
+        let lead = compact ? (player.team ?? "") : detail
+        return lead.isEmpty ? bye : Text("\(lead) · \(bye)")
     }
 
     private var detail: String {
@@ -232,9 +243,20 @@ struct NewsTag: View {
     }
 }
 
+/// Opens ESPN's news on a player. Equal by the host that made it, so the environment can compare it
+/// where it couldn't a bare closure.
+struct OpenNewsAction: Equatable {
+    let host: UUID
+    let open: (ViewPlayer) -> Void
+
+    func callAsFunction(_ player: ViewPlayer) { open(player) }
+
+    static func == (a: Self, b: Self) -> Bool { a.host == b.host }
+}
+
 extension EnvironmentValues {
     /// Opens ESPN's news on a player, set by `newsSheet()`; without it, no News tag shows.
-    @Entry var openNews: ((ViewPlayer) -> Void)? = nil
+    @Entry var openNews: OpenNewsAction? = nil
 }
 
 extension View {
@@ -252,10 +274,12 @@ extension View {
 
 private struct NewsHost: ViewModifier {
     @State private var reading: ViewPlayer?
+    @State private var id = UUID()
 
     func body(content: Content) -> some View {
-        content
-            .environment(\.openNews) { reading = $0 }
+        let reading = $reading
+        return content
+            .environment(\.openNews, OpenNewsAction(host: id) { reading.wrappedValue = $0 })
             .sheet(item: $reading) { NewsSheet(player: $0) }
     }
 }

@@ -63,17 +63,36 @@ private struct HeroCard<Content: View>: View {
     }
 }
 
-/// The hero's number beside what it means; stacked at the accessibility text sizes so neither is squeezed.
+/// The hero's number over what it means, at full width, as the Lock In card lays it out: side by side,
+/// the detail column was squeezed into wrapping totals and a headline a word a line (APE-429).
 private struct HeroLead<Number: View, Detail: View>: View {
     @ViewBuilder var number: () -> Number
     @ViewBuilder var detail: () -> Detail
-    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        if size.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: Spacing.md) { number(); detail() }
-        } else {
-            HStack(alignment: .center, spacing: Spacing.xl + Spacing.md) { number(); detail() }
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            number()
+            detail()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// What the opponent is projected for this week, under the user's own total, so the gain reads
+/// against the score it has to beat. ESPN's number, for the lineup they have set on ESPN.
+private struct OpponentLine: View {
+    let model: LineupModel
+
+    var body: some View {
+        if let view = model.store.season?.view, let them = view.matchup?.them {
+            HStack(spacing: Spacing.sm) {
+                Text("vs \(view.team(them.teamId)?.name ?? "Your opponent")").lineLimit(1).truncationMode(.tail)
+                Text(SeasonFormat.points(them.projected)).fontWeight(.bold).foregroundStyle(.text).monospacedDigit().fixedSize()
+                Text("projected").fixedSize()
+            }
+            .typeStyle(TypeScale.label).foregroundStyle(.muted)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("hero-opponent")
         }
     }
 }
@@ -112,13 +131,14 @@ struct StartSitHero: View {
                                 Text(SeasonFormat.points(sit.currentTotal)).foregroundStyle(.dim)
                                 Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.dim)
                                 Text(SeasonFormat.points(sit.total)).fontWeight(.bold).foregroundStyle(.text)
+                                Text("projected · week \(week)").foregroundStyle(.muted)
                             }
-                            .typeStyle(TypeScale.body).monospacedDigit()
-                            Text("projected · week \(week)").typeStyle(TypeScale.label).foregroundStyle(.muted)
+                            .typeStyle(TypeScale.label).monospacedDigit()
                             if sit.banked >= 0.05 {
                                 Text("\(SeasonFormat.signed(sit.banked)) already banked").typeStyle(TypeScale.label).monospacedDigit().foregroundStyle(.muted)
                             }
                         }
+                        OpponentLine(model: model)
                         Text(sit.headline).typeStyle(TypeScale.title).foregroundStyle(.text)
                             .accessibilityAddTraits(.isHeader)
                     }
@@ -176,7 +196,7 @@ private struct SwapList: View {
             ForEach(swaps) { swap in
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
                     Circle().fill(Color.value).frame(width: 5, height: 5).alignmentGuide(.firstTextBaseline) { $0[.bottom] + 1 }
-                    (Text(swap.text) + Text(swap.tag.map { "  \($0.label)" } ?? "").foregroundStyle(swap.tag?.kind == "out" ? Color.reachInk : Color.warnInk).fontWeight(.bold))
+                    Text("\(swap.text)\(Text(swap.tag.map { "  \($0.label)" } ?? "").foregroundStyle(swap.tag?.kind == "out" ? Color.reachInk : Color.warnInk).fontWeight(.bold))")
                         .typeStyle(TypeScale.body).foregroundStyle(.text)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: Spacing.md)
@@ -219,6 +239,7 @@ struct BankedHero: View {
                             Text("\(none ? "projected" : "on ESPN") · week \(week)").foregroundStyle(.muted)
                         }
                         .typeStyle(TypeScale.label).monospacedDigit()
+                        OpponentLine(model: model)
                         Label {
                             Text("Your lineup is set").typeStyle(TypeScale.title).foregroundStyle(.text)
                         } icon: {
@@ -315,8 +336,12 @@ struct HoleHero: View {
                 .fixedSize()
             } detail: {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("projected · week \(week)").typeStyle(TypeScale.label).foregroundStyle(.muted)
-                    Text(holes.count == 1 ? "0 from \(SlotLabel.of(holes[0].key))" : "0 from each hole").typeStyle(TypeScale.label).foregroundStyle(.warnInk)
+                    HStack(spacing: Spacing.sm) {
+                        Text("projected · week \(week) ·").foregroundStyle(.muted)
+                        Text(holes.count == 1 ? "0 from \(SlotLabel.of(holes[0].key))" : "0 from each hole").foregroundStyle(.warnInk)
+                    }
+                    .typeStyle(TypeScale.label)
+                    OpponentLine(model: model)
                     Label {
                         Text(HoleText.headline(holes)).typeStyle(TypeScale.title).foregroundStyle(.text)
                     } icon: {
@@ -360,9 +385,9 @@ private struct HoleWhy: View {
             if let holder {
                 let slot = SlotLabel.of(hole.key)
                 let tag = hole.reason == "bye" ? nil : (SeasonFormat.injuryTag(holder.injuryStatus) ?? "OUT")
-                (Text(holder.name).fontWeight(.bold).foregroundStyle(Color.text)
-                    + Text(tag.map { "  \($0)" } ?? " is on a bye").fontWeight(.bold).foregroundStyle(tag == nil ? Color.muted : Color.reachInk)
-                    + Text(" · no one else on your team can play \(slot)").foregroundStyle(Color.muted))
+                let name = Text(holder.name).fontWeight(.bold).foregroundStyle(Color.text)
+                let why = Text(tag.map { "  \($0)" } ?? " is on a bye").fontWeight(.bold).foregroundStyle(tag == nil ? Color.muted : Color.reachInk)
+                Text("\(name)\(why)\(Text(" · no one else on your team can play \(slot)").foregroundStyle(Color.muted))")
             } else {
                 Text(HoleText.why(hole, holder: nil)).foregroundStyle(.muted)
             }
@@ -452,8 +477,7 @@ struct MatchupCard: View {
                     }
                     Group {
                         if let win = matchup.me.winProbability {
-                            Text("ESPN gives you a \(Int((win * 100).rounded()))% chance to win. ")
-                                + Text("Projections are for the lineups set on ESPN now.")
+                            Text("ESPN gives you a \(Int((win * 100).rounded()))% chance to win. Projections are for the lineups set on ESPN now.")
                         } else {
                             Text("Projections are for the lineups set on ESPN now.")
                         }

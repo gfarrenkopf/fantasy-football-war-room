@@ -138,12 +138,14 @@ final class LineupModel {
     var hero: Hero? {
         guard let lineup, isReady else { return nil }
         if let moment { return .lockIn(moment) }
-        let hard = lineup.holes.filter { $0.kind == "hard" }
-        if !hard.isEmpty { return .holes(hard) }
+        if !hardHoles.isEmpty { return .holes(hardHoles) }
         // ESPN has War Room's lineup and nothing is staged, or its moves banked something already.
         if !isSuggesting, lineup.startSit.banked >= 0.05 || !hasChanges { return .banked }
         return .startSit
     }
+
+    /// Starting slots nobody on the roster can play this week.
+    var hardHoles: [Hole] { lineup?.holes.filter { $0.kind == "hard" } ?? [] }
 
     /// War Room has changes to suggest against ESPN's lineup.
     var isSuggesting: Bool { !(lineup?.startSit.swaps.isEmpty ?? true) }

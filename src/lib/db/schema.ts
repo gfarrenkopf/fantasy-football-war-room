@@ -5,7 +5,7 @@ import type { SeasonAiUseKind } from "@/lib/ai/season/state";
 import type { AiTradeWriteup } from "@/lib/ai/season/trade";
 import type { AiTradeIdeas } from "@/lib/ai/season/tradeIdeas";
 import type { PlanJobStatus } from "@/lib/ai/planView";
-import type { PlanModelErrorKind } from "@/lib/ai/provider";
+import type { ModelErrorDetail, PlanModelErrorKind } from "@/lib/ai/provider";
 import type { DraftState, LeagueSettings } from "@/lib/draft/types";
 import type { StoredAlerts } from "@/lib/season/alerts";
 import type { EspnConnection } from "@/lib/storage/types";
@@ -237,6 +237,8 @@ export const aiGenerations = pgTable(
     /** Priced when logged (src/lib/ai/pricing.ts). Null for a model without a known price or without usage. */
     costUsd: numeric("cost_usd", { precision: 12, scale: 6, mode: "number" }),
     durationMs: integer("duration_ms").notNull(),
+    /** Why a failed call failed: the provider's status, type and message (APE-427). Null when it succeeded. */
+    error: jsonb("error").$type<ModelErrorDetail>(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("ai_generations_created_at_idx").on(t.createdAt), index("ai_generations_league_outcome_idx").on(t.leagueId, t.outcome)],

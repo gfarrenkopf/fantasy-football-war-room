@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { costUsd } from "@/lib/ai/pricing";
-import { PlanModelError, type ModelUsage, type PlanModel, type PlanModelErrorKind } from "@/lib/ai/provider";
+import { PlanModelError, type ModelErrorDetail, type ModelUsage, type PlanModel, type PlanModelErrorKind } from "@/lib/ai/provider";
 import { buildLineupInput, generateAiLineup, LINEUP_PROMPT_VERSION, type AiLineup } from "@/lib/ai/season/lineup";
 import { espnStartersOf } from "@/lib/ai/season/lineupStatus";
 import type { SeasonAiLineupKind, StoredAiOutput } from "@/lib/ai/season/state";
@@ -12,6 +12,7 @@ import type { Db } from "@/lib/db/types";
 import { evaluateTrade, type Trade } from "@/lib/season/trade";
 import { findTradeIdeas as searchTradeIdeas } from "@/lib/season/tradeIdeas";
 import type { SeasonView } from "@/lib/season/view";
+import { formatAiError } from "./errorLog";
 import { claimSeasonAiUse, releaseSeasonAiUse } from "./seasonAi";
 
 /**
@@ -96,27 +97,34 @@ interface Call {
 
 /**
  * Runs one model call and logs it, however it ends. Returns the result, or the failure kind for a
- * PlanModelError; anything else is rethrown for the route to log.
+ * PlanModelError, which also gets an `[ai-error]` line for the alerts to read (APE-427); anything
+ * else is rethrown for the route to log.
  */
 async function logged<T extends { usage: ModelUsage }>(c: Call, run: (signal: AbortSignal) => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; kind: PlanModelErrorKind }> {
   const startedAt = performance.now();
-  const log = (outcome: PlanModelErrorKind | "ready" | "internal", usage?: ModelUsage) => logGeneration(c, { startedAt, outcome, usage });
+  const log = (outcome: PlanModelErrorKind | "ready" | "internal", usage?: ModelUsage, error?: ModelErrorDetail) =>
+    logGeneration(c, { startedAt, outcome, usage, error });
   try {
     const value = await run(AbortSignal.timeout(SEASON_AI_TIMEOUT_MS));
     await log("ready", value.usage);
     return { ok: true, value };
   } catch (error) {
     if (!(error instanceof PlanModelError)) {
-      await log("internal");
+      await log("internal", undefined, { message: String(error).slice(0, 200) });
       throw error;
     }
-    await log(error.kind, error.usage);
+    const detail = error.detail ?? { message: error.message };
+    console.error(formatAiError({ purpose: c.purpose, provider: c.model.provider, model: c.model.model }, error.kind, detail));
+    await log(error.kind, error.usage, detail);
     return { ok: false, kind: error.kind };
   }
 }
 
 /** Records one model call in `ai_generations`. Never throws: losing a log line mustn't lose the output. */
-async function logGeneration(c: Call, entry: { startedAt: number; outcome: PlanModelErrorKind | "ready" | "internal"; usage?: ModelUsage }) {
+async function logGeneration(
+  c: Call,
+  entry: { startedAt: number; outcome: PlanModelErrorKind | "ready" | "internal"; usage?: ModelUsage; error?: ModelErrorDetail },
+) {
   const { usage } = entry;
   try {
     await c.db.insert(aiGenerations).values({
@@ -133,6 +141,7 @@ async function logGeneration(c: Call, entry: { startedAt: number; outcome: PlanM
       outputTokens: usage?.outputTokens ?? null,
       costUsd: usage ? costUsd(c.model.provider, c.model.model, usage) : null,
       durationMs: Math.round(performance.now() - entry.startedAt),
+      error: entry.error ?? null,
     });
   } catch (error) {
     console.warn(`[season-ai] couldn't log a generation: ${(error as Error).message}`);

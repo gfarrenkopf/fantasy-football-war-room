@@ -9,11 +9,15 @@ struct TradesView: View {
     let ai: AiModel
     /// Opens ESPN's sign-in again, when the league's ESPN login has lapsed.
     let onReconnect: () -> Void
+    /// Starting slots nobody can play this week, and the fill sheet for one (APE-418).
+    var holes: [Hole] = []
+    var onFill: (Hole) -> Void = { _ in }
 
     var body: some View {
         ScrollViewReader { scroll in
             ScrollView {
                 VStack(spacing: Spacing.xl) {
+                    if !holes.isEmpty { HoleBanner(holes: holes, onFill: onFill) }
                     if let notice = model.notice { TradeNotice(notice: notice) }
                     switch model.load {
                     case .loading:
@@ -101,7 +105,7 @@ private struct PendingCard: View {
         SeasonCard(title: "Pending on ESPN", note: "Answer here or on ESPN") {
             VStack(alignment: .leading, spacing: 0) {
                 if let at = trades.deadline.at, !trades.deadline.passed {
-                    (Text("Trade deadline ") + Text(at.formatted(.dateTime.weekday(.abbreviated).month().day().hour().minute())).fontWeight(.semibold))
+                    Text("Trade deadline \(Text(at.formatted(.dateTime.weekday(.abbreviated).month().day().hour().minute())).fontWeight(.semibold))")
                         .typeStyle(TypeScale.label).foregroundStyle(.muted)
                         .padding(.horizontal, Spacing.xl)
                         .padding(.bottom, Spacing.lg)
@@ -203,7 +207,7 @@ struct GradeLine: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                 if grade.level != "rest" {
-                    (Text(SeasonFormat.signed(grade.perWeek)).monospacedDigit() + Text(" a week").font(.footnote))
+                    Text("\(Text(SeasonFormat.signed(grade.perWeek)).monospacedDigit())\(Text(" a week").font(.footnote))")
                         .typeStyle(TypeScale.title)
                         .foregroundStyle(tone)
                 }

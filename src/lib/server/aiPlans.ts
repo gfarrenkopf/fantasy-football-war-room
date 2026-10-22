@@ -5,7 +5,7 @@ import { buildPlanInput } from "@/lib/ai/planInput";
 import { FREE_REGENERATIONS, NO_PLAN, type PlanView } from "@/lib/ai/planView";
 import { PLAN_PROMPT_VERSION } from "@/lib/ai/prompt";
 import { costUsd } from "@/lib/ai/pricing";
-import { PlanModelError, type ModelUsage, type PlanModel } from "@/lib/ai/provider";
+import { PlanModelError, type ModelErrorDetail, type ModelUsage, type PlanModel } from "@/lib/ai/provider";
 import { DATASET_ID, dataset } from "@/lib/data";
 import { aiGenerations, aiPlans, leagues, type AiPlanStatus, type GenerationOutcome } from "@/lib/db/schema";
 
@@ -13,7 +13,7 @@ export type { PlanView } from "@/lib/ai/planView";
 import type { Db } from "@/lib/db/types";
 import { validateLeague } from "@/lib/draft/league";
 import { mulberry32 } from "@/lib/draft/sim";
-import { formatServerError } from "./errorLog";
+import { formatAiError, formatServerError } from "./errorLog";
 import { findLeague } from "./leagues";
 
 /**
@@ -269,14 +269,17 @@ export async function runPlanJob(
     await logGeneration(db, model, { leagueId, jobId, ...call, outcome: saved.length ? "ready" : "superseded" });
   } catch (error) {
     const kind = error instanceof PlanModelError ? error.kind : "internal";
+    const detail = error instanceof PlanModelError ? (error.detail ?? { message: error.message }) : { message: String(error).slice(0, 200) };
     if (kind === "internal") {
       console.error(
         formatServerError(error, { method: "JOB", path: `/api/leagues/${leagueId}/plan` }, { routePath: "/api/leagues/[id]/plan", routeType: "after" }),
       );
+    } else {
+      console.error(formatAiError({ purpose: "plan", provider: model.provider, model: model.model }, kind, detail));
     }
     if (call) {
       const usage = error instanceof PlanModelError ? (error.usage ?? call.usage) : call.usage;
-      await logGeneration(db, model, { leagueId, jobId, ...call, usage, outcome: kind });
+      await logGeneration(db, model, { leagueId, jobId, ...call, usage, outcome: kind, error: detail });
     }
     await db
       .update(aiPlans)
@@ -295,7 +298,7 @@ export async function runPlanJob(
 async function logGeneration(
   db: Db,
   model: PlanModel,
-  entry: { leagueId: string; jobId: string; userId: string; startedAt: number; usage?: ModelUsage; outcome: GenerationOutcome },
+  entry: { leagueId: string; jobId: string; userId: string; startedAt: number; usage?: ModelUsage; outcome: GenerationOutcome; error?: ModelErrorDetail },
 ): Promise<void> {
   const { usage } = entry;
   try {
@@ -312,6 +315,7 @@ async function logGeneration(
       outputTokens: usage?.outputTokens ?? null,
       costUsd: usage ? costUsd(model.provider, model.model, usage) : null,
       durationMs: Math.round(performance.now() - entry.startedAt),
+      error: entry.error ?? null,
     });
   } catch (error) {
     console.error(

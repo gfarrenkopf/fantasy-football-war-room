@@ -291,6 +291,7 @@ To revoke the key, delete its line from `/srv/warroom/.ssh/authorized_keys`.
 Server errors and failures are emailed through Resend, using the same `AUTH_RESEND_KEY` and `EMAIL_FROM` as sign-in links. There's no separate error-tracking service; the details stay in the journal.
 
 - **Server errors.** `src/instrumentation.ts` logs each error Next captures as one `[server-error] {…}` line (method, path without the query string, route, message). Every 5 minutes, `warroom-alerts.timer` emails any new ones, plus any crash of the app process. You get one email per check, however many errors it finds.
+- **Failing AI calls.** Each failed model call logs one `[ai-error]` line (purpose, provider, model, kind, the provider's status, type and message; never the key or the prompt) and stores the same detail in `ai_generations.error`. The same check emails when a line shows a 401 or 403, which is how an expired `ANTHROPIC_API_KEY` looks, or when 5 calls in one check fail the same way. The subject names it, e.g. "AI calls failing: 401 authentication_error". A lone timeout or 529 doesn't email. To read back a streak: `select created_at, purpose, outcome, error from ai_generations where error is not null order by created_at desc limit 20;`
 - **Failed units.** If `warroom.service` crash-loops (5 starts in 5 minutes) or a nightly backup fails, `OnFailure=` emails right away.
 - **Failed deploys.** GitHub emails you when the Deploy workflow fails.
 

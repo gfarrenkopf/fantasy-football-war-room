@@ -89,12 +89,12 @@ struct ResultMoment: View {
     }
 
     private func starLine(_ star: WeekRecap.Star) -> Text {
-        let lead = Text(recap.result == .loss ? "Bright spot: " : "Star of the week: ")
+        let lead = recap.result == .loss ? "Bright spot: " : "Star of the week: "
         let name = Text(star.player.name).bold()
-        let scored = Text(" scored ") + Text(SeasonFormat.points(star.player.points)).bold().monospacedDigit()
-        guard star.beat else { return lead + name + scored + Text(".") }
+        let points = Text(SeasonFormat.points(star.player.points)).bold().monospacedDigit()
+        guard star.beat else { return Text("\(lead)\(name) scored \(points).") }
         let gain = Text(SeasonFormat.signed(star.player.points - star.player.projected)).foregroundColor(.valueInk).monospacedDigit()
-        return lead + name + scored + Text(", ") + gain + Text(" over ESPN's call.")
+        return Text("\(lead)\(name) scored \(points), \(gain) over ESPN's call.")
     }
 }
 
@@ -203,7 +203,7 @@ struct WeekSwingView: View {
                     mark("Final", sub: nil, value: ResultWords.final(swing.final, result), at: swing.final, scale: scale, filled: true)
                 }
                 if !swing.empty.isEmpty {
-                    (Text(ResultWords.list(swing.empty)).bold() + Text(" started but \(swing.empty.count == 1 ? "was" : "were") projected 0 and scored 0."))
+                    Text("\(Text(ResultWords.list(swing.empty)).bold()) started but \(swing.empty.count == 1 ? "was" : "were") projected 0 and scored 0.")
                         .typeStyle(TypeScale.label).foregroundStyle(.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 if let hindsight = swing.hindsight, let best = hindsight.best, hindsight.wouldHaveWon || hindsight.gain >= 5 {
@@ -241,9 +241,9 @@ struct WeekSwingView: View {
 
     private func hindsightLine(_ h: WeekSwing.Hindsight, best: WeekSwing.Hindsight.Best) -> Text {
         let lead = h.wouldHaveWon
-            ? Text("Your best possible lineup would have won, with ") + Text(SeasonFormat.points(h.total)).bold() + Text(".")
-            : Text("Your best possible lineup would have scored ") + Text(SeasonFormat.points(h.gain)).bold() + Text(" more.")
-        return lead + Text(" \(best.name) scored ") + Text(SeasonFormat.points(best.points)).bold() + Text(" on your bench.")
+            ? Text("Your best possible lineup would have won, with \(Text(SeasonFormat.points(h.total)).bold()).")
+            : Text("Your best possible lineup would have scored \(Text(SeasonFormat.points(h.gain)).bold()) more.")
+        return Text("\(lead) \(best.name) scored \(Text(SeasonFormat.points(best.points)).bold()) on your bench.")
     }
 
     private func row(_ step: Step, index: Int, scale: SwingScale) -> some View {
@@ -343,17 +343,17 @@ struct TrackRecordCard: View {
         SeasonCard(title: "ESPN on your team", note: weeks) {
             VStack(spacing: 0) {
                 CallRow(who: "Misses by") {
-                    Text(SeasonFormat.points(record.meanMiss)).bold() + Text(" a week")
-                        + (abs(record.meanBias) >= 0.5
-                            ? Text(" · ") + Text("calls you \(record.meanBias > 0 ? "low" : "high")").foregroundColor(record.meanBias > 0 ? .valueInk : .reachInk)
-                            : Text(""))
+                    let bias = abs(record.meanBias) >= 0.5
+                        ? Text(" · \(Text("calls you \(record.meanBias > 0 ? "low" : "high")").foregroundColor(record.meanBias > 0 ? .valueInk : .reachInk))")
+                        : Text("")
+                    Text("\(Text(SeasonFormat.points(record.meanMiss)).bold()) a week\(bias)")
                 }
-                CallRow(who: "Called high") { Text("\(record.overcalled)").bold() + Text(" of \(weeks)") }
+                CallRow(who: "Called high") { Text("\(Text("\(record.overcalled)").bold()) of \(weeks)") }
                 if let surest = view.player(record.surest.playerId) {
-                    CallRow(who: "Surest read") { Text("\(surest.name) · off ") + Text(SeasonFormat.points(record.surest.meanMiss)).bold() + Text(" a week") }
+                    CallRow(who: "Surest read") { Text("\(surest.name) · off \(Text(SeasonFormat.points(record.surest.meanMiss)).bold()) a week") }
                 }
                 if let shakiest = view.player(record.shakiest.playerId) {
-                    CallRow(who: "Shakiest") { Text("\(shakiest.name) · off ") + Text(SeasonFormat.points(record.shakiest.meanMiss)).bold() + Text(" a week") }
+                    CallRow(who: "Shakiest") { Text("\(shakiest.name) · off \(Text(SeasonFormat.points(record.shakiest.meanMiss)).bold()) a week") }
                 }
             }
         }
@@ -368,15 +368,14 @@ struct LastWeekCard: View {
     var body: some View {
         SeasonCard(title: "Week \(recap.week)", note: "Final") {
             VStack(alignment: .leading, spacing: 0) {
-                (Text(word).bold().foregroundColor(tone) + Text(" \(SeasonFormat.points(recap.me))–\(SeasonFormat.points(recap.them))").monospacedDigit()
-                    + Text(" vs \(recap.opponent)").foregroundColor(.muted))
+                Text("\(Text(word).bold().foregroundColor(tone)) \(Text("\(SeasonFormat.points(recap.me))–\(SeasonFormat.points(recap.them))").monospacedDigit())\(Text(" vs \(recap.opponent)").foregroundColor(.muted))")
                     .typeStyle(TypeScale.body).foregroundStyle(.text)
                     .padding(.horizontal, Spacing.xl).padding(.bottom, Spacing.lg)
                     .fixedSize(horizontal: false, vertical: true)
                 if let star = recap.star {
                     CallRow(who: "Star") {
-                        Text("\(star.player.name) ") + Text(SeasonFormat.points(star.player.points)).bold()
-                            + (star.beat ? Text(" " + SeasonFormat.signed(star.player.points - star.player.projected)).foregroundColor(.valueInk) : Text(""))
+                        let gain = star.beat ? Text(" " + SeasonFormat.signed(star.player.points - star.player.projected)).foregroundColor(.valueInk) : Text("")
+                        Text("\(star.player.name) \(Text(SeasonFormat.points(star.player.points)).bold())\(gain)")
                     }
                 }
             }

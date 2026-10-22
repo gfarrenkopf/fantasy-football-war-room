@@ -97,7 +97,7 @@ struct SignInView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            (Text("You play to win the game.\n") + Text("We make sure you start the team that does.").foregroundStyle(.mine))
+            Text("You play to win the game.\n\(Text("We make sure you start the team that does.").foregroundStyle(.mine))")
                 .font(.system(size: thesisSize, weight: .bold))
                 .tracking(-0.3)
                 .lineSpacing(2)
@@ -473,7 +473,7 @@ private struct InboxView: View {
             Text("Check your inbox.")
                 .typeStyle(TypeScale.title)
                 .foregroundStyle(.text)
-            (Text("A sign-in link is on its way to ") + Text(address).foregroundStyle(.text).bold() + Text(". Open it on this phone and the app signs you in."))
+            Text("A sign-in link is on its way to \(Text(address).foregroundStyle(.text).bold()). Open it on this phone and the app signs you in.")
                 .typeStyle(TypeScale.body)
                 .fontWeight(.regular)
                 .foregroundStyle(.muted)

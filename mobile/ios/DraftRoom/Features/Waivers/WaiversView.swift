@@ -11,10 +11,14 @@ struct WaiversView: View {
     let onReconnect: () -> Void
     /// Opens the Trades tab's builder on a trade for a rostered player the search found (APE-413).
     var onTrade: (Int, Int) -> Void = { _, _ in }
+    /// Starting slots nobody can play this week, and the fill sheet for one (APE-418).
+    var holes: [Hole] = []
+    var onFill: (Hole) -> Void = { _ in }
 
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.xl) {
+                if !holes.isEmpty { HoleBanner(holes: holes, onFill: onFill) }
                 if let notice = model.notice { NoticeLine(notice: notice) }
                 if !model.claims.isEmpty { ClaimsCard(model: model).jumpSection("Your claims") }
                 switch model.load {

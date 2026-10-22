@@ -88,7 +88,7 @@ private struct AlertRow: View {
     let choose: (AlertChannel) -> Void
 
     var body: some View {
-        Picker(selection: Binding(get: { alert.channel }, set: choose)) {
+        Picker(selection: Binding(get: { alert.channel }, set: { choose($0) })) {
             ForEach(choices, id: \.self) { Text($0.label).tag($0) }
         } label: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
