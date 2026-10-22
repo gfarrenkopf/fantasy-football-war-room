@@ -117,6 +117,9 @@ private struct ScrollEdge: Equatable {
 private struct JumpSection: ViewModifier {
     let title: String
     @Environment(SectionIndex.self) private var index: SectionIndex?
+    /// Where the card last sat. Leaving the tab withdraws it, and coming back doesn't move it, so
+    /// geometry reports nothing new: it's handed back on appear, or the menu stays away until a scroll.
+    @State private var top: CGFloat?
 
     func body(content: Content) -> some View {
         content
@@ -131,9 +134,11 @@ private struct JumpSection: ViewModifier {
             .onGeometryChange(for: CGFloat?.self) { proxy in
                 proxy.size.height > 0 ? proxy.frame(in: .scrollView).minY : nil
             } action: { top in
+                self.top = top
                 index?.report(title, top: top)
             }
             .onChange(of: title) { old, _ in index?.report(old, top: nil) }
+            .onAppear { if let top { index?.report(title, top: top) } }
             .onDisappear { index?.report(title, top: nil) }
     }
 }

@@ -99,4 +99,21 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(app.switches["consent-toggle"].waitForExistence(timeout: 5))
         XCTAssertTrue(lineup.isSelected)
     }
+
+    /// Leaving a tab and coming back keeps its section menu, without a scroll to bring it back.
+    @MainActor
+    func testSectionMenuSurvivesATabSwitch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestStub"]
+        app.launch()
+
+        let menu = app.buttons["section-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        app.tabBars.buttons["Lineup"].tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        app.tabBars.buttons["Game day"].tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        app.tabBars.buttons["Lineup"].tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+    }
 }

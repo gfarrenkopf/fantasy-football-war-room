@@ -74,7 +74,7 @@ describe("POST /api/leagues/:id/season/apply", () => {
     const POST = await route();
     const first = await POST(post(leagueId), ctx(leagueId));
     expect(first.status).toBe(409);
-    expect(await first.json()).toMatchObject({ consent: { version: ESPN_WRITE_VERSION, lines: expect.arrayContaining([expect.stringContaining("when you confirm a change")]) } });
+    expect(await first.json()).toMatchObject({ consent: { version: ESPN_WRITE_VERSION, lines: expect.arrayContaining([expect.stringContaining("only when you confirm")]) } });
     expect(state.calls).toBe(0);
 
     const agreed = await POST(post(leagueId, { consentVersion: ESPN_WRITE_VERSION }), ctx(leagueId));

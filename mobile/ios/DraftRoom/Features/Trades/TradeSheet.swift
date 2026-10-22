@@ -24,8 +24,10 @@ struct TradeSheet: View {
                                 .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.warnInk)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                    case .checking, .sending:
-                        ProgressView().tint(.muted).frame(maxWidth: .infinity)
+                    case .checking:
+                        EspnWait(label: "Checking the trade on ESPN…")
+                    case .sending:
+                        EspnWait(label: "Sending to ESPN…")
                     case .idle:
                         EmptyView()
                     }
@@ -70,7 +72,7 @@ struct TradeSheet: View {
     }
 
     private var title: String {
-        if case .consent = model.phase { return "Before Draft Room changes your team" }
+        if case .consent = model.phase { return "Changes on ESPN" }
         switch model.action {
         case let .respond(offer, kind):
             switch kind {

@@ -29,9 +29,9 @@ private struct TypeStyle: ViewModifier {
     let token: TypeToken
     @ScaledMetric private var size: CGFloat
 
-    init(_ token: TypeToken) {
+    init(_ token: TypeToken, dense: Bool = false) {
         self.token = token
-        _size = ScaledMetric(wrappedValue: token.size * Typography.phoneScale, relativeTo: Typography.textStyle(for: token))
+        _size = ScaledMetric(wrappedValue: token.size * (dense ? 1 : Typography.phoneScale), relativeTo: Typography.textStyle(for: token))
     }
 
     func body(content: Content) -> some View {
@@ -45,7 +45,10 @@ private struct TypeStyle: ViewModifier {
 
 extension View {
     /// Sets the font, tracking and line spacing of a web type role: `.typeStyle(TypeScale.body)`.
-    func typeStyle(_ token: TypeToken) -> some View {
-        modifier(TypeStyle(token))
+    ///
+    /// `dense` keeps the web's px as points, for a column as packed as the web's phone layout (the
+    /// head-to-head, APE-423); it still follows Dynamic Type.
+    func typeStyle(_ token: TypeToken, dense: Bool = false) -> some View {
+        modifier(TypeStyle(token, dense: dense))
     }
 }

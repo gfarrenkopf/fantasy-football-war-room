@@ -51,7 +51,7 @@ struct AcquireSheet: View {
     private var isFailed: Bool { if case .failed = model.phase { true } else { false } }
 
     private var title: String {
-        if isConsent { return "Before Draft Room changes your team" }
+        if isConsent { return "Changes on ESPN" }
         return switch model.action {
         case let .add(pickup): "Add \(SeasonFormat.shortName(pickup.player))"
         case let .claim(pickup): "Claim \(SeasonFormat.shortName(pickup.player))"
@@ -219,6 +219,7 @@ private struct ConfirmBar: View {
             .buttonStyle(ProviderButtonStyle(prominent: true))
             .disabled(busy || model.dry?.problems.isEmpty != true)
             .accessibilityIdentifier("acquire-send")
+            if busy { EspnSlowNote() }
         }
         .padding(.horizontal, Spacing.xl + Spacing.xs)
         .padding(.vertical, Spacing.lg)

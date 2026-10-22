@@ -10,17 +10,20 @@ enum SeasonSample {
         GameState(state: state, detail: detail, opponent: opponent, home: true, kickoff: kickoff, score: state == "pre" ? nil : .init(team: 17, opponent: 10))
     }
 
-    static func player(_ id: Int, _ name: String, _ pos: String, slot: String, actual: Double?, points: Double, game: GameState?, injury: String = "ACTIVE", stats: String? = nil) -> ViewPlayer {
-        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, locked: game.map { $0.state != "pre" } ?? false, actual: actual, points: points, statLine: stats, game: game)
+    static func player(_ id: Int, _ name: String, _ pos: String, slot: String, actual: Double?, points: Double, game: GameState?, injury: String = "ACTIVE", stats: String? = nil, news: String? = nil) -> ViewPlayer {
+        ViewPlayer(playerId: id, name: name, pos: pos, team: "DET", slot: slot, injuryStatus: injury, locked: game.map { $0.state != "pre" } ?? false, actual: actual, points: points, statLine: stats, game: game,
+                   news: news.map { .init(note: $0, at: kickoff.addingTimeInterval(-3_600)) })
     }
 
     static let mine: [ViewPlayer] = [
-        player(1, "Jalen Hurts", "QB", slot: "QB", actual: 18.4, points: 21.2, game: game("in", detail: "8:12 - 3rd"), stats: "187 YDS, 1 TD, 34 RUSH YDS"),
+        player(1, "Jalen Hurts", "QB", slot: "QB", actual: 18.4, points: 21.2, game: game("in", detail: "8:12 - 3rd"), stats: "187 YDS, 1 TD, 34 RUSH YDS",
+               news: "Hurts was a full participant in practice all week and carries no injury designation into Sunday. Expect his usual heavy work near the goal line."),
         player(2, "Jahmyr Gibbs", "RB", slot: "RB", actual: 22.1, points: 16.3, game: game("in", detail: "8:12 - 3rd"), stats: "14 CAR, 91 YDS, 1 TD"),
         player(3, "Puka Nacua", "WR", slot: "WR", actual: 9.6, points: 15.1, game: game("post"), stats: "6 REC, 66 YDS"),
         player(4, "Sam LaPorta", "TE", slot: "TE", actual: nil, points: 10.2, game: game("pre", opponent: "GB")),
         player(5, "Jake Elliott", "K", slot: "K", actual: nil, points: 8.0, game: game("pre", opponent: "DAL")),
-        player(6, "Tank Bigsby", "RB", slot: "BN", actual: nil, points: 7.4, game: game("pre", opponent: "GB")),
+        player(6, "Tank Bigsby", "RB", slot: "BN", actual: nil, points: 7.4, game: game("pre", opponent: "GB"),
+               news: "Bigsby should see more early-down work with the starter limited in practice this week."),
         player(7, "Josh Downs", "WR", slot: "BN", actual: nil, points: 9.1, game: nil, injury: "OUT"),
         player(8, "Tucker Kraft", "TE", slot: "BN", actual: nil, points: 11.6, game: game("pre", opponent: "CHI")),
     ]
@@ -83,7 +86,11 @@ enum SeasonSample {
             espnCall: EspnCall(me: .init(projected: 98.6, actual: nil), them: .init(projected: 101.2, actual: nil), best: .init(playerId: 2, projected: 16.3, actual: 22.1), worst: nil, season: CallRecord(weeks: 2, meanMiss: 11.4, meanBias: -2.1)),
             showArchive: false),
         lineup: lineup,
-        consent: WriteConsent(version: 2, lines: ["Draft Room changes your team on ESPN only when you confirm a change.", "You can stop it any time by disconnecting ESPN."], agreed: false))
+        consent: WriteConsent(version: 2, lines: [
+            "Draft Room changes your team on ESPN only when you confirm, and only the changes you just reviewed: lineup, IR, adds and drops, waivers and trades. Never on its own.",
+            "It re-checks ESPN first and stops if anything changed or a game started.",
+            "It's unofficial and can break if ESPN changes things.",
+        ], agreed: false))
 
     /// War Room fills the empty FLEX with Bigsby; the games already on lock their players in. Downs
     /// is out, so he could go to IR.
@@ -109,7 +116,7 @@ enum SeasonSample {
     static func finished(_ players: [ViewPlayer]) -> [ViewPlayer] {
         players.map { p in
             ViewPlayer(playerId: p.playerId, name: p.name, pos: p.pos, team: p.team, slot: p.slot, injuryStatus: p.injuryStatus, locked: true,
-                       actual: finalScores[p.playerId], points: p.points, game: p.game.map { _ in game("post") })
+                       actual: finalScores[p.playerId], points: p.points, game: p.game.map { _ in game("post") }, news: p.news)
         }
     }
 

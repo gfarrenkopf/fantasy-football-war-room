@@ -27,6 +27,7 @@ struct GameDayView: View {
                             ProblemNote(message: message, reconnect: reconnect, onReconnect: onReconnect) { Task { await store.refresh(force: true) } }
                         }
                         GameDayContent(season: season, offline: store.offline, onLineup: onLineup)
+                            .newsSheet()
                         if season.gameDay.showArchive {
                             RecapArchiveView(store: recaps, hiding: season.gameDay.result == nil ? nil : RecapKey(season: season.gameDayView.season, week: season.gameDayView.currentWeek), firstWeek: season.gameDay.week)
                                 .task(id: recaps.leagueId) { await recaps.start() }
@@ -91,8 +92,8 @@ private struct GameDayContent: View {
                             // The opponent's team name, as the web's head-to-head names it.
                             Text(view.matchup.flatMap { view.team($0.them.teamId)?.name } ?? "Your opponent").foregroundStyle(.muted).lineLimit(1)
                         }
-                        .typeStyle(TypeScale.label)
-                        .padding(.horizontal, Spacing.xl).padding(.bottom, Spacing.md)
+                        .typeStyle(TypeScale.label, dense: true).fontWeight(.bold)
+                        .padding(.horizontal, Spacing.lg).padding(.bottom, Spacing.sm)
                         .accessibilityHidden(true)
                         HeadToHead(view: view, day: day)
                     }
@@ -274,23 +275,25 @@ private struct GlassPanel: ViewModifier {
 // MARK: - Head to head
 
 /// Both lineups at once (APE-343): the user's starters on the left, their opponent's mirrored on the
-/// right, paired by slot down a narrow spine, the points toward it.
-private struct HeadToHead: View {
+/// right, paired by slot down a narrow spine, the points toward it. Sized as the web's phone layout
+/// (APE-423), with ESPN's outlook on the user's players.
+struct HeadToHead: View {
     let view: SeasonView
     let day: GameDay
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(day.headToHead.enumerated()), id: \.offset) { _, row in
+                let mine = row.me.flatMap(view.player)
                 Divider().overlay(.rowLine)
                 HStack(spacing: 0) {
-                    H2HSide(player: row.me.flatMap(view.player), pace: row.me.flatMap(day.pace(of:)), theirs: false)
+                    H2HSide(player: mine, pace: row.me.flatMap(day.pace(of:)), theirs: false)
                     // The spine takes the slot's hue, as on the web: a wash over the tier tone, the label in the hue.
                     let hue = Color.slot(row.key)
                     Text(SlotLabel.of(row.key))
-                        .typeStyle(TypeScale.micro).foregroundStyle(hue.mix(with: .text, by: 0.2))
+                        .typeStyle(TypeScale.micro, dense: true).foregroundStyle(hue.mix(with: .text, by: 0.2))
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(width: 44)
+                        .frame(width: 32)
                         .frame(maxHeight: .infinity)
                         .background(hue.opacity(0.14))
                         .background(.tier)
@@ -298,22 +301,24 @@ private struct HeadToHead: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken(row))
+                .accessibilityLabel(Self.spoken(row, view: view, day: day))
+                .newsAction(mine)
             }
         }
     }
 }
 
 extension HeadToHead {
-    /// One slot as a sentence: "QB. Yours: Jalen Hurts, 18.4 points, … Theirs: Joe Burrow, …".
-    func spoken(_ row: GameDay.SlotPair) -> String {
+    /// One slot as a sentence: "QB. Yours: Jalen Hurts, 18.4 points, …, ESPN news. Theirs: Joe Burrow, …".
+    static func spoken(_ row: GameDay.SlotPair, view: SeasonView, day: GameDay) -> String {
         func side(_ id: Int?) -> String {
             guard let id, let player = view.player(id) else { return "empty" }
             let pace = day.pace(of: id)
             let started = (pace?.pace ?? .pre) != .pre
             let points = started ? "\(SeasonFormat.points(player.actual ?? 0)) points of \(SeasonFormat.points(player.points)) projected" : "projected \(SeasonFormat.points(player.points))"
             let game = player.game.map { ", \(SeasonFormat.gameWhen($0))" } ?? ""
-            return "\(player.name), \(points)\(game)"
+            let news = row.me == id && player.news != nil ? ", ESPN news" : ""
+            return "\(player.name), \(points)\(game)\(news)"
         }
         return "\(SlotLabel.of(row.key)). Yours: \(side(row.me)). Theirs: \(side(row.them))."
     }
@@ -328,15 +333,18 @@ private struct H2HSide: View {
         HStack(spacing: Spacing.sm) {
             if let player {
                 if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading, brief: true) }
-                PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading)
+                // ESPN's news on the user's players only, as on the web.
+                PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading, news: !theirs)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
                 if !theirs { ScoreCell(player: player, pace: pace, brief: true) }
             } else {
-                Text("Empty").typeStyle(TypeScale.label).foregroundStyle(.dim)
+                Text("Empty").typeStyle(TypeScale.label, dense: true).foregroundStyle(.dim)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
             }
         }
-        .padding(.horizontal, Spacing.md)
+        // As the web's half-phone column: a little more room at the screen's edge than at the spine.
+        .padding(.leading, theirs ? Spacing.md : Spacing.lg)
+        .padding(.trailing, theirs ? Spacing.lg : Spacing.md)
         .padding(.vertical, Spacing.md)
         .frame(maxWidth: .infinity)
     }

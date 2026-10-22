@@ -19,7 +19,7 @@ struct SaveSheet: View {
                         if let dry = model.dry {
                             ReviewStep(model: model, dry: dry)
                         } else {
-                            ProgressView().tint(.muted).frame(maxWidth: .infinity).padding(Spacing.xl * 2)
+                            EspnWait(label: "Checking your team on ESPN…").padding(.vertical, Spacing.xl * 2)
                         }
                     case .idle, .saved:
                         EmptyView()
@@ -43,33 +43,89 @@ struct SaveSheet: View {
     }
 
     private var title: String {
-        if case .consent = model.phase { return "Before Draft Room changes your team" }
+        if case .consent = model.phase { return "Changes on ESPN" }
         return "Save to ESPN"
     }
 }
 
 /// The write consent, in the server's words (never the app's): asked once, recorded on the server.
+/// The first line is the promise, in text ink; the rest are its terms, quieter, on one panel.
 struct ConsentStep: View {
     let lines: [String]
     let onAgree: () -> Void
     @State private var agreed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            ForEach(lines, id: \.self) { line in
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-                    Text("•").foregroundStyle(.dim)
-                    Text(line).typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.text)
-                        .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                    if i > 0 { Divider().overlay(.rowLine) }
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+                        Circle().fill(i == 0 ? Color.sky : Color.dim).frame(width: 5, height: 5)
+                            .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 3 }
+                        Text(line)
+                            .typeStyle(i == 0 ? TypeScale.body : TypeScale.label).fontWeight(i == 0 ? .semibold : .regular)
+                            .foregroundStyle(i == 0 ? Color.text : Color.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            Toggle("I agree to Draft Room changing my team on ESPN when I confirm a change", isOn: $agreed)
+            .background(.panel, in: RoundedRectangle(cornerRadius: Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(.line))
+            .accessibilityElement(children: .combine)
+            Toggle("I agree", isOn: $agreed)
                 .typeStyle(TypeScale.body).foregroundStyle(.text).tint(.sky)
+                .accessibilityLabel("I agree to Draft Room changing my team on ESPN when I confirm")
                 .accessibilityIdentifier("consent-toggle")
             Button("Agree and continue", action: onAgree)
                 .buttonStyle(ProviderButtonStyle(prominent: true))
                 .disabled(!agreed)
                 .accessibilityIdentifier("consent-agree")
+        }
+    }
+}
+
+/// A wait on ESPN (APE-420): a spinner and what Draft Room is doing, and the slow-ESPN note under it.
+struct EspnWait: View {
+    let label: String
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            HStack(spacing: Spacing.md) {
+                ProgressView().tint(.muted)
+                Text(label).typeStyle(TypeScale.label).foregroundStyle(.muted)
+            }
+            EspnSlowNote()
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Said only once a wait on ESPN passes a few seconds (APE-420): ESPN can be slow to answer, most of
+/// all the first time Draft Room reads a team, so a long wait reads as expected rather than stuck.
+struct EspnSlowNote: View {
+    @State private var slow = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        // A stack, not a Group: an empty Group drops its modifiers, and the task with them.
+        VStack(spacing: 0) {
+            if slow {
+                Text("ESPN can take a little while, most of all the first time. Keep this open.")
+                    .typeStyle(TypeScale.label).foregroundStyle(.dim)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(4))
+            withAnimation(reduceMotion ? nil : Motion.respond) { slow = true }
         }
     }
 }
@@ -126,6 +182,7 @@ private struct ReviewStep: View {
             .buttonStyle(ProviderButtonStyle(prominent: true))
             .disabled(busy || picked.isEmpty || !dry.problems.isEmpty)
             .accessibilityIdentifier("apply-lineup")
+            if busy { EspnSlowNote() }
         }
     }
 
