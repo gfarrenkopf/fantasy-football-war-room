@@ -339,8 +339,7 @@ private struct GameChangerCard: View {
                     }
                     .monospacedDigit()
                 }
-                (Text("Won ") + Text("\(SeasonFormat.points(changer.score.his))–\(SeasonFormat.points(changer.score.theirs))").bold()
-                    + Text(" against \(changer.opponent): by less than his ") + Text(SeasonFormat.points(p.gap)).bold() + Text(" over ESPN's call."))
+                Text("Won \(Text("\(SeasonFormat.points(changer.score.his))–\(SeasonFormat.points(changer.score.theirs))").bold()) against \(changer.opponent): by less than his \(Text(SeasonFormat.points(p.gap)).bold()) over ESPN's call.")
                     .typeStyle(TypeScale.label).foregroundStyle(.muted).monospacedDigit()
                     .fixedSize(horizontal: false, vertical: true)
             }

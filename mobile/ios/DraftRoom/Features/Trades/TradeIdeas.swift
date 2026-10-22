@@ -240,7 +240,7 @@ private struct Written: View {
             }
             if let counter = writeup.counter {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    (Text("Counter: ").fontWeight(.semibold) + Text(counter.text))
+                    Text("\(Text("Counter: ").fontWeight(.semibold))\(counter.text)")
                         .typeStyle(TypeScale.label).foregroundStyle(.text)
                         .fixedSize(horizontal: false, vertical: true)
                     Button("Check this counter") {

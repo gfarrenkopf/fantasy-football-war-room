@@ -96,7 +96,7 @@ private struct SectionMenu: View {
     var body: some View {
         // An inline picker, so the tick sits in the menu's own gutter and every row lines up.
         Menu {
-            Picker("Sections", selection: Binding(get: { index.current ?? "" }, set: onPick)) {
+            Picker("Sections", selection: Binding(get: { index.current ?? "" }, set: { onPick($0) })) {
                 ForEach(index.titles, id: \.self) { Text($0).tag($0) }
             }
             .pickerStyle(.inline)

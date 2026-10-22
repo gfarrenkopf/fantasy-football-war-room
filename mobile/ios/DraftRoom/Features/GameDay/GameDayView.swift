@@ -252,7 +252,7 @@ private struct WinOdds: View {
                 .clipShape(Capsule())
             }
             .frame(height: 4)
-            (Text("ESPN: ") + Text("\(win)%").bold() + Text(" to win"))
+            Text("ESPN: \(Text("\(win)%").bold()) to win")
                 .typeStyle(TypeScale.label).foregroundStyle(.muted).monospacedDigit()
                 .contentTransition(.numericText(value: Double(win)))
         }
@@ -438,13 +438,13 @@ private struct EspnCallCard: View {
     private func line(_ who: String, _ call: ProjectionCall, now: Double?) -> some View {
         row(who) {
             // One run of text, so it wraps between words rather than between pieces.
-            let had = Text("ESPN had ") + Text(SeasonFormat.points(call.projected)).bold()
+            let had = Text("ESPN had \(Text(SeasonFormat.points(call.projected)).bold())")
             Group {
                 if let actual = call.actual {
-                    had + Text(" · scored ") + Text(SeasonFormat.points(actual)).bold() + Text(" ")
-                        + Text("(\(SeasonFormat.signed(actual - call.projected)))").foregroundColor(actual >= call.projected ? .valueInk : .reachInk)
+                    let diff = Text("(\(SeasonFormat.signed(actual - call.projected)))").foregroundColor(actual >= call.projected ? .valueInk : .reachInk)
+                    Text("\(had) · scored \(Text(SeasonFormat.points(actual)).bold()) \(diff)")
                 } else if let now {
-                    had + Text(" · ") + Text(SeasonFormat.points(now)).bold() + Text(" so far")
+                    Text("\(had) · \(Text(SeasonFormat.points(now)).bold()) so far")
                 } else {
                     had
                 }

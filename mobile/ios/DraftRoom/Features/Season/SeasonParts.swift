@@ -232,9 +232,20 @@ struct NewsTag: View {
     }
 }
 
+/// Opens ESPN's news on a player. Equal by the host that made it, so the environment can compare it
+/// where it couldn't a bare closure.
+struct OpenNewsAction: Equatable {
+    let host: UUID
+    let open: (ViewPlayer) -> Void
+
+    func callAsFunction(_ player: ViewPlayer) { open(player) }
+
+    static func == (a: Self, b: Self) -> Bool { a.host == b.host }
+}
+
 extension EnvironmentValues {
     /// Opens ESPN's news on a player, set by `newsSheet()`; without it, no News tag shows.
-    @Entry var openNews: ((ViewPlayer) -> Void)? = nil
+    @Entry var openNews: OpenNewsAction? = nil
 }
 
 extension View {
@@ -252,10 +263,12 @@ extension View {
 
 private struct NewsHost: ViewModifier {
     @State private var reading: ViewPlayer?
+    @State private var id = UUID()
 
     func body(content: Content) -> some View {
-        content
-            .environment(\.openNews) { reading = $0 }
+        let reading = $reading
+        return content
+            .environment(\.openNews, OpenNewsAction(host: id) { reading.wrappedValue = $0 })
             .sheet(item: $reading) { NewsSheet(player: $0) }
     }
 }

@@ -226,7 +226,7 @@ struct WinNight: View {
             Text([SlotLabel.of(p.pos), p.team ?? "FA", p.slot != p.pos ? "at \(SlotLabel.of(p.slot))" : nil].compactMap(\.self).joined(separator: " · "))
                 .typeStyle(TypeScale.label).foregroundStyle(.muted)
             if star.beat {
-                (Text("ESPN had him at ") + Text(SeasonFormat.points(p.projected)).bold() + Text(". He gave you ") + Text(SeasonFormat.points(p.points)).bold() + Text("."))
+                Text("ESPN had him at \(Text(SeasonFormat.points(p.projected)).bold()). He gave you \(Text(SeasonFormat.points(p.points)).bold()).")
                     .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.text).multilineTextAlignment(.center)
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                     Text("+" + SeasonFormat.points(at(6) ? gain : 0))
@@ -237,7 +237,7 @@ struct WinNight: View {
                     Text("over the call").typeStyle(TypeScale.label).foregroundStyle(.muted)
                 }
             } else {
-                (Text(SeasonFormat.points(p.points)).bold() + Text(" points, the most of your starters."))
+                Text("\(Text(SeasonFormat.points(p.points)).bold()) points, the most of your starters.")
                     .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.text)
             }
         }

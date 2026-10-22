@@ -101,7 +101,7 @@ private struct PendingCard: View {
         SeasonCard(title: "Pending on ESPN", note: "Answer here or on ESPN") {
             VStack(alignment: .leading, spacing: 0) {
                 if let at = trades.deadline.at, !trades.deadline.passed {
-                    (Text("Trade deadline ") + Text(at.formatted(.dateTime.weekday(.abbreviated).month().day().hour().minute())).fontWeight(.semibold))
+                    Text("Trade deadline \(Text(at.formatted(.dateTime.weekday(.abbreviated).month().day().hour().minute())).fontWeight(.semibold))")
                         .typeStyle(TypeScale.label).foregroundStyle(.muted)
                         .padding(.horizontal, Spacing.xl)
                         .padding(.bottom, Spacing.lg)
@@ -203,7 +203,7 @@ struct GradeLine: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                 if grade.level != "rest" {
-                    (Text(SeasonFormat.signed(grade.perWeek)).monospacedDigit() + Text(" a week").font(.footnote))
+                    Text("\(Text(SeasonFormat.signed(grade.perWeek)).monospacedDigit())\(Text(" a week").font(.footnote))")
                         .typeStyle(TypeScale.title)
                         .foregroundStyle(tone)
                 }

@@ -176,7 +176,7 @@ private struct SwapList: View {
             ForEach(swaps) { swap in
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
                     Circle().fill(Color.value).frame(width: 5, height: 5).alignmentGuide(.firstTextBaseline) { $0[.bottom] + 1 }
-                    (Text(swap.text) + Text(swap.tag.map { "  \($0.label)" } ?? "").foregroundStyle(swap.tag?.kind == "out" ? Color.reachInk : Color.warnInk).fontWeight(.bold))
+                    Text("\(swap.text)\(Text(swap.tag.map { "  \($0.label)" } ?? "").foregroundStyle(swap.tag?.kind == "out" ? Color.reachInk : Color.warnInk).fontWeight(.bold))")
                         .typeStyle(TypeScale.body).foregroundStyle(.text)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: Spacing.md)
@@ -360,9 +360,9 @@ private struct HoleWhy: View {
             if let holder {
                 let slot = SlotLabel.of(hole.key)
                 let tag = hole.reason == "bye" ? nil : (SeasonFormat.injuryTag(holder.injuryStatus) ?? "OUT")
-                (Text(holder.name).fontWeight(.bold).foregroundStyle(Color.text)
-                    + Text(tag.map { "  \($0)" } ?? " is on a bye").fontWeight(.bold).foregroundStyle(tag == nil ? Color.muted : Color.reachInk)
-                    + Text(" · no one else on your team can play \(slot)").foregroundStyle(Color.muted))
+                let name = Text(holder.name).fontWeight(.bold).foregroundStyle(Color.text)
+                let why = Text(tag.map { "  \($0)" } ?? " is on a bye").fontWeight(.bold).foregroundStyle(tag == nil ? Color.muted : Color.reachInk)
+                Text("\(name)\(why)\(Text(" · no one else on your team can play \(slot)").foregroundStyle(Color.muted))")
             } else {
                 Text(HoleText.why(hole, holder: nil)).foregroundStyle(.muted)
             }
@@ -452,8 +452,7 @@ struct MatchupCard: View {
                     }
                     Group {
                         if let win = matchup.me.winProbability {
-                            Text("ESPN gives you a \(Int((win * 100).rounded()))% chance to win. ")
-                                + Text("Projections are for the lineups set on ESPN now.")
+                            Text("ESPN gives you a \(Int((win * 100).rounded()))% chance to win. Projections are for the lineups set on ESPN now.")
                         } else {
                             Text("Projections are for the lineups set on ESPN now.")
                         }
