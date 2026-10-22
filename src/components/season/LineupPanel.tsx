@@ -545,6 +545,8 @@ function SeatPicker({ draft, seat, label: text, onDrop }: { draft: LineupDraft; 
   const ours = draft.recommended[seat];
   const espn = draft.onEspn[seat];
   const holder = current === null ? undefined : draft.byId.get(current);
+  // Drop offers the player the row names: ESPN's in the seat, or the one staged there when ESPN's is empty.
+  const named = espn !== null ? draft.byId.get(espn) : holder;
   const rank = (id: number) => (id === ours ? 0 : id === espn ? 1 : 2);
   const options = draft.roster
     .filter((p) => !draft.ir.includes(p.playerId) && canPlay(p.pos, key) && (!p.locked || p.playerId === current))
@@ -602,12 +604,12 @@ function SeatPicker({ draft, seat, label: text, onDrop }: { draft: LineupDraft; 
               </button>
             </li>
           )}
-          {holder && (
+          {named && !named.locked && (
             <DropOption
-              player={holder}
+              player={named}
               onDrop={() => {
                 close();
-                onDrop(holder);
+                onDrop(named);
               }}
             />
           )}

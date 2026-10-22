@@ -282,7 +282,8 @@ private struct StarterRow: View {
                     } else {
                         Text("Empty on ESPN").typeStyle(TypeScale.body).foregroundStyle(.dim)
                     }
-                    if changed, let tag = now.flatMap({ model.lineup?.tag(of: $0.playerId) }) {
+                    // His injury chip already shows by his name; a bye, or ESPN expecting him to sit, gets one here.
+                    if changed, let now, !SeasonFormat.isRuledOut(now.injuryStatus), let tag = model.lineup?.tag(of: now.playerId) {
                         TagPill(tag: tag)
                     }
                     if changed {
@@ -613,8 +614,9 @@ private struct SeatPicker: View {
                     }
                     .foregroundStyle(.muted)
                 }
-                if let holder = model.player(current), !holder.locked {
-                    Section { DropButton(player: holder) { dropping = holder } }
+                // The player the row names: ESPN's in the seat, or the one staged there when ESPN's is empty.
+                if let named = model.player(model.onEspn[seat] ?? current), !named.locked {
+                    Section { DropButton(player: named) { dropping = named } }
                 }
             }
             .listRowBackground(Color.panel)
