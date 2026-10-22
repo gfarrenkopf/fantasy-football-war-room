@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acquireItems, acquireLanded, checkAcquire, checkCancel, checkClaim, claimPending, dropCandidates, FAAB_CLAIMS, needsDrop, rosterLimit } from "./acquire";
+import { acquireItems, acquireLanded, checkAcquire, checkCancel, checkClaim, checkDrop, claimPending, dropCandidates, dropItems, dropLanded, FAAB_CLAIMS, needsDrop, rosterLimit } from "./acquire";
 import type { ApplyEntry } from "./apply";
 import { ESPN_SLOT_ID } from "./espnLeague";
 import type { LineupSlot, LineupSlotCount } from "./types";
@@ -36,6 +36,25 @@ describe("checkAcquire", () => {
     expect(checkAcquire(FULL, THEM, { add: 99, drop: 77 }, LIMIT)).toContain("The player you're dropping isn't on your team any more.");
     expect(checkAcquire(FULL, THEM, { add: 50, drop: 4 }, LIMIT)).toEqual(["That player is on Their Team now."]);
     expect(checkAcquire(FULL, THEM, { add: 3, drop: 4 }, LIMIT)).toEqual(["That player is already on your team."]);
+  });
+});
+
+describe("checkDrop / dropItems / dropLanded (APE-425)", () => {
+  it("drops anyone on the team whose game hasn't started, IR included, whatever the roster's size", () => {
+    expect(checkDrop(FULL, 4)).toEqual([]);
+    expect(checkDrop(FULL, 5)).toEqual([]);
+    expect(checkDrop(FULL.slice(0, 2), 2)).toEqual([]);
+  });
+
+  it("refuses a player who's gone or whose game has started", () => {
+    expect(checkDrop(FULL, 77)).toEqual(["The player you're dropping isn't on your team any more."]);
+    expect(checkDrop(FULL.map((p) => (p.playerId === 4 ? { ...p, locked: true } : p)), 4)).toEqual(["Bench Two's game has started, so ESPN won't drop them this week."]);
+  });
+
+  it("sends one DROP item, and reads the roster after for him gone", () => {
+    expect(dropItems(1, 4)).toEqual([{ playerId: 4, type: "DROP", fromTeamId: 1 }]);
+    expect(dropLanded([{ playerId: 1 }], 4)).toEqual({ dropped: true });
+    expect(dropLanded([{ playerId: 4 }], 4)).toEqual({ dropped: false });
   });
 });
 

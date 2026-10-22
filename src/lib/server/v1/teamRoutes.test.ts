@@ -45,7 +45,7 @@ vi.mock("@/lib/server/espn/acquire", () => {
     state.sent.push({ kind, request });
     return state.outcome;
   };
-  return { addFreeAgent: run("add"), claimWaiver: run("claim"), cancelClaim: run("cancel") };
+  return { addFreeAgent: run("add"), claimWaiver: run("claim"), cancelClaim: run("cancel"), dropPlayer: run("drop") };
 });
 vi.mock("@/lib/server/espn/trades", () => {
   const run = (kind: string) => async (_db: unknown, _key: unknown, _userId: unknown, _leagueId: unknown, request: unknown) => {
@@ -116,6 +116,7 @@ const post = (leagueId: string, path: string, body: Record<string, unknown>, que
   new Request(`http://localhost/api/v1/leagues/${leagueId}/team/${path}${query}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 const ADD = { kind: "add", week: view.currentWeek, snapshot: snapshotOf(roster), add: AGENT.playerId, drop: id("Broncos D/ST") };
+const DROP = { kind: "drop", week: view.currentWeek, snapshot: snapshotOf(roster), drop: id("Broncos D/ST") };
 const CANCEL = { kind: "cancel", week: view.currentWeek, claimId: CLAIM.id };
 const ACCEPT = { kind: "accept", week: view.currentWeek, snapshot: snapshotOf(roster), tradeId: OFFER.id };
 
@@ -286,6 +287,22 @@ describe("POST /api/v1/leagues/:id/team/acquire", () => {
     state.outcome = { kind: "applied", landed: { cancelled: true } };
     expect(await (await POST(post(leagueId, "acquire", CANCEL), ctx(leagueId))).json()).toEqual({ cancelled: true, landed: true, result: "Claim for Claimed Guy cancelled." });
     expect(errors.filter((e) => e.includes("didn't land"))).toHaveLength(2);
+  });
+
+  it("dry-runs and writes a drop with nobody added (APE-425)", async () => {
+    const { POST } = await load<Post>("acquire");
+    const dry = async (body: Record<string, unknown>) => (await (await POST(post(leagueId, "acquire", body, "?dryRun=1"), ctx(leagueId))).json()) as TeamDryRun;
+    expect(await dry(DROP)).toEqual({ text: "Drop Broncos D/ST. They go on waivers, so getting them back takes a claim.", problems: [] });
+    expect((await dry({ ...DROP, drop: 1 })).problems).toEqual(["The player you're dropping isn't on your team any more."]);
+    expect(state.sent).toEqual([]);
+
+    await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
+    state.outcome = { kind: "applied", landed: { dropped: true } };
+    expect((await (await POST(post(leagueId, "acquire", DROP), ctx(leagueId))).json()) as TeamApplied).toEqual({ dropped: true, landed: true, result: "Broncos D/ST is off your team." });
+    expect(state.sent).toEqual([{ kind: "drop", request: expect.objectContaining({ drop: id("Broncos D/ST"), week: view.currentWeek }) }]);
+    state.outcome = { kind: "applied", landed: { dropped: false } };
+    expect(await (await POST(post(leagueId, "acquire", DROP), ctx(leagueId))).json()).toMatchObject({ landed: false, result: "ESPN still shows Broncos D/ST on your team. Check ESPN. Draft Room has been alerted." });
+    expect(errors.filter((e) => e.includes("drop didn't land"))).toHaveLength(1);
   });
 
   it("answers ESPN's refusal as the web does", async () => {

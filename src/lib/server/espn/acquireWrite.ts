@@ -1,29 +1,33 @@
 import "server-only";
 import type { Db } from "@/lib/db/types";
-import { addFreeAgent, cancelClaim, claimWaiver, type AcquireLanded, type AcquireRequest } from "./acquire";
+import { addFreeAgent, cancelClaim, claimWaiver, dropPlayer, type AcquireLanded, type AcquireRequest, type DropRequest } from "./acquire";
 import type { GuardedOutcome } from "./guardedWrite";
 import { isObject, readSnapshot } from "./lineupWrite";
 import { forgetWaivers } from "./waivers";
 import { consentOf } from "./writeRoute";
 
 /**
- * Adding, claiming and cancelling a claim on ESPN, as both the web's acquire route and the app's
+ * Adding, claiming, cancelling a claim and dropping (APE-425) on ESPN, as both the web's acquire route and the app's
  * (Epic 13, APE-386) do it, once the consent gate has passed: the guarded write, then an alert for a
  * write ESPN took that the re-read doesn't show.
  */
 
-export type AcquireBody = ({ kind: "add" | "claim" } & AcquireRequest) | { kind: "cancel"; week: number; claimId: string };
+export type AcquireBody = ({ kind: "add" | "claim" } & AcquireRequest) | ({ kind: "drop" } & DropRequest) | { kind: "cancel"; week: number; claimId: string };
 
-/** What landed, by kind: `{ added, dropped }` for an add, `{ pending }` for a claim, `{ cancelled }` for a cancel. */
-export type AcquireResult = AcquireLanded | { pending: boolean } | { cancelled: boolean };
+/** What landed, by kind: `{ added, dropped }` for an add, `{ dropped }` for a drop, `{ pending }` for a claim, `{ cancelled }` for a cancel. */
+export type AcquireResult = AcquireLanded | { dropped: boolean } | { pending: boolean } | { cancelled: boolean };
 
 const isId = (v: unknown): v is number => Number.isInteger(v);
 
-/** An add, claim or cancel from a request body, or null when it isn't one. */
+/** An add, claim, drop or cancel from a request body, or null when it isn't one. */
 export function parseAcquire(body: unknown): (AcquireBody & { consentVersion: number | null }) | null {
   if (!isObject(body) || !isId(body.week)) return null;
   const consentVersion = consentOf(body);
   if (body.kind === "cancel") return typeof body.claimId === "string" && /^[\w-]{1,64}$/.test(body.claimId) ? { kind: "cancel", week: body.week, claimId: body.claimId, consentVersion } : null;
+  if (body.kind === "drop") {
+    const snapshot = readSnapshot(body.snapshot);
+    return isId(body.drop) && snapshot ? { kind: "drop", week: body.week, snapshot, drop: body.drop, consentVersion } : null;
+  }
   if ((body.kind !== "add" && body.kind !== "claim") || !isId(body.add) || !(body.drop === null || isId(body.drop))) return null;
   const snapshot = readSnapshot(body.snapshot);
   if (!snapshot) return null;
@@ -35,6 +39,12 @@ export async function writeAcquire(db: Db, key: Buffer, userId: string, leagueId
     const out = await cancelClaim(db, key, userId, leagueId, body);
     if (out.kind === "applied" && !out.landed.cancelled) alert(`ESPN claim cancel didn't land: ${body.claimId} still pending`);
     return { what: "claim cancel", out };
+  }
+  if (body.kind === "drop") {
+    const out = await dropPlayer(db, key, userId, leagueId, body);
+    if (out.kind === "applied" || out.kind === "unverified") forgetWaivers(userId, leagueId);
+    if (out.kind === "applied" && !out.landed.dropped) alert(`ESPN drop didn't land: ${body.drop} still on the team`);
+    return { what: "drop", out };
   }
   if (body.kind === "claim") {
     const out = await claimWaiver(db, key, userId, leagueId, body);

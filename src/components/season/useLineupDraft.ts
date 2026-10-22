@@ -126,6 +126,16 @@ export function useLineupDraft(view: SeasonView) {
       setIr(onIr);
       edited();
     },
+    /**
+     * The user dropped him on ESPN (APE-425): he leaves the staged lineup and IR. The user's own
+     * edits survive the re-read that follows; with none, the lineup starts again from ESPN's as usual.
+     */
+    dropped(id: number) {
+      setStagedRaw((prev) => prev.map((x) => (x === id ? null : x)));
+      setIr((prev) => prev.filter((x) => x !== id));
+      setKeepStaged(!same(recommended) && !same(onEspn));
+      edited();
+    },
     /** ESPN took the apply: show what landed, and keep what was left out on offer. */
     applied(result: Landed) {
       setLanded(result);

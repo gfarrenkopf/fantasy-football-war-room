@@ -1,4 +1,4 @@
-import { checkAcquire, checkCancel, checkClaim, dropCandidates, FAAB_CLAIMS, needsDrop, rosterLimit } from "@/lib/season/acquire";
+import { checkAcquire, checkCancel, checkClaim, checkDrop, dropCandidates, FAAB_CLAIMS, needsDrop, rosterLimit } from "@/lib/season/acquire";
 import type { Fill, HoleFills, Hole } from "@/lib/season/holes";
 import type { AheadFill, WeekHole } from "@/lib/season/holesAhead";
 import { checkMoves, label, rosterChanges, type RosterSnapshot } from "@/lib/season/apply";
@@ -105,13 +105,16 @@ function namer(view: SeasonView, extra: Iterable<readonly [number, string]> = []
 const list = (ids: readonly number[], name: (id: number) => string) => ids.map(name).join(", ");
 
 /**
- * An add, claim or cancel against the season view, for the confirm sheet. `pooled` is the player
+ * An add, claim, drop or cancel against the season view, for the confirm sheet. `pooled` is the player
  * being added, from the waiver wire the app read; ESPN is checked again before the real write.
  */
 export function acquireDryRun(view: SeasonView, body: AcquireBody, pooled: FreeAgent | null): TeamDryRun {
   if (body.kind === "cancel") {
     const claim = view.claims.find((c) => c.id === body.claimId);
     return { text: `Cancel your claim for ${claim?.add.name ?? "this player"}.`, problems: checkCancel(view.claims, body.claimId) };
+  }
+  if (body.kind === "drop") {
+    return { text: `Drop ${namer(view)(body.drop)}. They go on waivers, so getting them back takes a claim.`, problems: checkDrop(mine(view), body.drop) };
   }
   const name = namer(view, pooled ? [[pooled.playerId, pooled.name]] : []);
   const roster = mine(view);
@@ -140,11 +143,17 @@ export function acquireApplied(view: SeasonView, body: AcquireBody, landed: Acqu
     };
   }
   if (body.kind === "cancel") throw new Error("A cancel answered as an add");
+  if (body.kind === "drop") {
+    const who = namer(view)(body.drop);
+    const dropped = "dropped" in landed && landed.dropped;
+    return { dropped, landed: dropped, result: dropped ? `${who} is off your team.` : `ESPN still shows ${who} on your team. Check ESPN. Draft Room has been alerted.` };
+  }
   const name = namer(view, pooled ? [[pooled.playerId, pooled.name]] : []);
   const add = name(body.add);
   if ("pending" in landed) {
     return { ...landed, landed: landed.pending, result: landed.pending ? `Claim placed for ${add}.` : `ESPN doesn't show your claim for ${add}. Check ESPN. Draft Room has been alerted.` };
   }
+  if (!("added" in landed)) throw new Error("A drop answered as an add");
   const dropped = body.drop === null ? "" : landed.dropped ? `, and ${name(body.drop)} is gone` : ", but your drop is still on your team";
   return {
     ...landed,

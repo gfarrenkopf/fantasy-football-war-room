@@ -21,7 +21,7 @@ vi.mock("@/lib/server/espn/acquire", () => {
     state.calls++;
     return state.outcome;
   };
-  return { addFreeAgent: run, claimWaiver: run, cancelClaim: run };
+  return { addFreeAgent: run, claimWaiver: run, cancelClaim: run, dropPlayer: run };
 });
 
 let db: Db;
@@ -85,7 +85,7 @@ describe("POST /api/leagues/:id/season/acquire", () => {
   it("refuses bad bodies", async () => {
     const POST = await route();
     await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
-    for (const bad of [{ kind: "drop" }, { add: "99" }, { drop: "none" }, { snapshot: [{ playerId: 1, slot: "PK" }] }]) {
+    for (const bad of [{ kind: "trade" }, { kind: "drop", drop: null }, { kind: "drop", snapshot: null }, { add: "99" }, { drop: "none" }, { snapshot: [{ playerId: 1, slot: "PK" }] }]) {
       expect((await POST(post(leagueId, bad), ctx(leagueId))).status).toBe(400);
     }
     expect(state.calls).toBe(0);
@@ -104,6 +104,19 @@ describe("POST /api/leagues/:id/season/acquire", () => {
     expect(await (await POST(cancel, ctx(leagueId))).json()).toEqual({ cancelled: false });
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("claim cancel didn't land");
+    expect(state.calls).toBe(2);
+  });
+
+  it("drops a player with nobody added, and logs a drop that didn't land (APE-425)", async () => {
+    const POST = await route();
+    await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
+    state.outcome = { kind: "applied", landed: { dropped: true } };
+    const drop = { kind: "drop", add: undefined };
+    expect(await (await POST(post(leagueId, drop), ctx(leagueId))).json()).toEqual({ dropped: true });
+    state.outcome = { kind: "applied", landed: { dropped: false } };
+    expect(await (await POST(post(leagueId, drop), ctx(leagueId))).json()).toEqual({ dropped: false });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("ESPN drop didn't land: 1 still on the team");
     expect(state.calls).toBe(2);
   });
 

@@ -150,6 +150,48 @@ extension StubbedNetwork {
             #expect(shell.lineup(for: league) === lineup) // kept across tab switches
         }
 
+        // MARK: Dropping (APE-425)
+
+        private static let acquirePath = "/api/v1/leagues/lg-1/team/acquire"
+
+        @Test func agreesThenDropsAndTakesHimOutOfTheStagedLineup() async throws {
+            let model = await model(routes: [
+                "/api/v1/espn/write-consent": Self.ok("write-consent"),
+                Self.acquirePath: Self.ok("acquire-drop-applied"),
+            ])
+            model.choose(2, Self.javonte)
+            #expect(model.dropNeedsConsent)
+            #expect(!model.consentLines.isEmpty)
+
+            await model.drop(try #require(model.player(Self.javonte)))
+            let paths = StubURLProtocol.requests.compactMap { $0.url?.path() }
+            let consent = try #require(paths.firstIndex(of: "/api/v1/espn/write-consent"))
+            let drop = try #require(paths.firstIndex(of: Self.acquirePath))
+            #expect(consent < drop)
+            #expect(!model.dropNeedsConsent)
+
+            let body = try Self.sent(StubURLProtocol.requests[drop])
+            #expect(body["kind"] as? String == "drop")
+            #expect(body["drop"] as? Int == Self.javonte)
+            #expect(body["add"] == nil)
+            #expect((body["snapshot"] as? [Any])?.isEmpty == false)
+
+            #expect(model.dropNotice == .init(text: "Javonte Williams is off your team.", landed: true))
+            #expect(model.dropFailure == nil)
+            #expect(model.staged[2] == nil)
+            #expect(!model.staged.contains(Self.javonte))
+        }
+
+        @Test func saysWhyADropDidntGo() async throws {
+            let model = await model(season: try Self.agreed(), routes: [Self.acquirePath: .init(status: 409, body: Fixture.data("acquire-drop-refused"))])
+            model.choose(2, Self.javonte)
+            await model.drop(try #require(model.player(Self.javonte)))
+            #expect(StubURLProtocol.requests.allSatisfy { $0.url?.path() != "/api/v1/espn/write-consent" })
+            #expect(model.dropFailure == .init(message: "This can't be done on ESPN. Nothing was sent.", details: ["Javonte Williams's game has started, so ESPN won't drop them this week."]))
+            #expect(model.dropNotice == nil)
+            #expect(model.staged[2] == Self.javonte) // nothing dropped, nothing unstaged
+        }
+
         // MARK: Saving
 
         @Test func asksForConsentFirstThenListsTheChanges() async throws {

@@ -44,6 +44,22 @@ final class LineupModel {
     /// A player whose slot the tab should open: a tapped "is out" push (21.4). Cleared once shown.
     var focus: Int?
 
+    /// Dropping a player from a picker (APE-425): the drop on its way, then what ESPN shows, or why it didn't go.
+    private(set) var droppingNow = false
+    private(set) var dropNotice: DropNotice?
+    var dropFailure: DropFailure?
+
+    struct DropNotice: Equatable {
+        let text: String
+        let landed: Bool
+    }
+
+    struct DropFailure: Equatable, Identifiable {
+        let message: String
+        let details: [String]
+        var id: String { message + details.joined() }
+    }
+
     private let api: APIClient
     private let defaults: UserDefaults
     /// Where each of the user's players sat on ESPN when staging started.
@@ -282,6 +298,53 @@ final class LineupModel {
             }
         }
         return aligned
+    }
+
+    // MARK: Dropping
+
+    /// The user hasn't agreed to ESPN writes yet: the drop's confirm carries the consent's lines.
+    var dropNeedsConsent: Bool { !agreed }
+    var consentLines: [String] { season?.consent.lines ?? [] }
+
+    /// Drops a player on ESPN with nobody added (APE-425), once the user has confirmed: the consent
+    /// first if it's never been given, then the write. He leaves the staged lineup and IR; the user's
+    /// own edits survive the read that follows. Never queued: offline, nothing goes.
+    func drop(_ player: ViewPlayer) async {
+        guard let season, !droppingNow else { return }
+        droppingNow = true
+        dropNotice = nil
+        defer { droppingNow = false }
+        do {
+            if !agreed {
+                let _: ConsentGrant = try await api.post("api/v1/espn/write-consent", body: ConsentRequest(version: season.consent.version))
+                agreed = true
+            }
+            let request = AcquireRequest(
+                kind: .drop, week: season.view.currentWeek,
+                snapshot: roster.map { .init(playerId: $0.playerId, slot: $0.slot) },
+                drop: player.playerId)
+            let applied: TeamApplied = try await api.post("api/v1/leagues/\(store.leagueId)/team/acquire", body: request)
+            dropNotice = DropNotice(text: applied.result, landed: applied.landed)
+            keepStaged = hasUnsavedEdits
+            staged = staged.map { $0 == player.playerId ? nil : $0 }
+            ir.removeAll { $0 == player.playerId }
+            await store.refresh(force: true)
+            sync()
+        } catch {
+            switch error {
+            case .consentNeeded:
+                agreed = false
+                dropFailure = DropFailure(message: "Draft Room's terms for changing your ESPN team have changed. Try the drop again to agree to them.", details: [])
+            case let .declined(message, details):
+                dropFailure = DropFailure(message: message, details: details)
+            case .offline:
+                dropFailure = DropFailure(message: "You're offline, so nothing was sent to ESPN. Try again once you're connected.", details: [])
+            case .signedOut:
+                break
+            default:
+                dropFailure = DropFailure(message: error.message, details: [])
+            }
+        }
     }
 
     // MARK: Saving
