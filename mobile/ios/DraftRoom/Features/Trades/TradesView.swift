@@ -12,6 +12,7 @@ struct TradesView: View {
     /// Starting slots nobody can play this week, and the fill sheet for one (APE-418).
     var holes: [Hole] = []
     var onFill: (Hole) -> Void = { _ in }
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ScrollViewReader { scroll in
@@ -77,14 +78,30 @@ struct TradesView: View {
         .background(.bg)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("section-trade")
+        // The ideas say whether an idea is offered from the same pending trades the Pending card
+        // lists, so they're read together (APE-445): on coming back to the tab, or to the app, both
+        // again, never one, or an idea can say "Offer on ESPN" over a card still showing the offer.
         .task {
-            await model.start()
-            await ai.start()
+            if model.trades == nil {
+                await model.start()
+                await ai.start()
+            } else {
+                await rereadBoth()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, model.trades != nil { Task { await rereadBoth() } }
         }
         .sensoryFeedback(trigger: model.notice) { _, notice in
             notice.map { $0.landed ? Haptic.success : Haptic.failure }
         }
         .sheet(isPresented: confirming) { TradeSheet(model: model) }
+    }
+
+    private func rereadBoth() async {
+        async let trades: Void = model.refresh()
+        async let ideas: Void = ai.refresh()
+        _ = await (trades, ideas)
     }
 
     /// The confirm sheet is up from the tap until ESPN has answered.
