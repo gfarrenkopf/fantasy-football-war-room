@@ -29,6 +29,7 @@ struct FillSheet: View {
                     }
                 }
                 .padding(Spacing.xl + Spacing.xs)
+                .tabWidth()
                 .animation(Motion.respond, value: model.phase)
                 .animation(Motion.respond, value: model.load)
             }

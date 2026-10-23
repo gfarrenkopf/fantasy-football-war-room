@@ -34,7 +34,7 @@ xcodebuild test -project mobile/ios/DraftRoom.xcodeproj -scheme DraftRoom \
 - `DraftRoomTests/` holds unit tests written with Swift Testing (`import Testing`), run inside the app.
 - `DraftRoomUITests/` holds the XCUITest smoke tests, which launch the app.
 
-Debug builds launched with `-uiTestStub` answer the API from canned JSON (`Support/UITestStub.swift`): signed in, with two leagues. UI tests use it to drive the signed-in app without a server, and it's handy for screenshots: `xcrun simctl launch booted tech.apeman.draftroom -uiTestStub`. Add `-uiTestFinal` to get the week decided (a win, so Win Night opens) instead of the live one. The stub's first league has three weeks of recaps (`Support/RecapSample.swift`); the second has none. Release builds don't contain it.
+Debug builds launched with `-uiTestStub` answer the API from canned JSON (`Support/UITestStub.swift`): signed in, with two leagues. UI tests use it to drive the signed-in app without a server, and it's handy for screenshots: `xcrun simctl launch booted tech.apeman.draftroom -uiTestStub`. Add `-uiTestFinal` to get the week decided (a win, so Win Night opens) instead of the live one. Add `-uiTestNoLeagues` to get an account with no leagues yet, on the first-league screen. The stub's first league has three weeks of recaps (`Support/RecapSample.swift`); the second has none. Release builds don't contain it.
 
 Hand off code for testing email link login on simulator
 ```sh

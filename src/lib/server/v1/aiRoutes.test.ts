@@ -6,7 +6,7 @@ import type { Db } from "@/lib/db/types";
 import { grantEntitlement, SEASON_PASS } from "../entitlements";
 import { claimSeasonAiUse, startTrial, trialStartWeek, usedSeasonAi } from "../seasonAi";
 import { createTestLeague } from "../testLeagues";
-import { AI_LOCKED, type AiResponse, type AiWriteupView } from "./ai";
+import { AI_LOCKED, STALE_LINEUP, type AiResponse, type AiWriteupView } from "./ai";
 
 vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({
@@ -128,6 +128,25 @@ describe("/api/v1 in-season AI routes", () => {
     expect((await lineup(post(leagueId, "/lineup"), ctx(leagueId))).status).toBe(200);
     expect(state.calls).toHaveLength(1);
     expect(((await (await read(get(leagueId), ctx(leagueId))).json()) as AiResponse).lineup?.intro).toBe("Set it and forget it.");
+  });
+
+  it("marks a lineup stale once the projections move under it, and rewrites it for free (APE-439)", async () => {
+    const { lineup, get: read } = await routes();
+    await lineup(post(leagueId, "/lineup"), ctx(leagueId));
+    // RB1 started in it; ESPN now projects him for nothing although his team plays, and the lineup fills without him.
+    const game = { state: "pre", detail: "", opponent: "GB", home: true, kickoff: null } as never;
+    const spares = [player("Spare WR1", "WR", 3), player("Spare WR2", "WR", 2), player("Spare WR3", "WR", 1), player("Spare TE", "TE", 2)];
+    state.view = seasonView([...mine.map((p) => (p.name === "RB1" ? { ...p, points: 0, game } : p)), ...spares], theirs);
+    const stale = (await (await read(get(leagueId), ctx(leagueId))).json()) as AiResponse;
+    expect(stale.lineup).toMatchObject({ stale: true, espn: { matches: false, text: STALE_LINEUP } });
+    expect(stale.lineup?.starters.some((s) => s.playerId === mine[1].playerId)).toBe(false);
+    expect(stale.lineupAction).toBe("rewrite"); // although the mid-week allowance is used
+
+    const rewritten = (await (await lineup(post(leagueId, "/lineup"), ctx(leagueId))).json()) as AiResponse;
+    expect(rewritten.lineup?.stale).toBe(false);
+    expect(rewritten.lineupAction).toBeNull();
+    expect(state.calls).toHaveLength(2);
+    expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual(["lineup-midweek"]);
   });
 
   it("says when the mid-week lineup went without a stored one", async () => {

@@ -42,6 +42,7 @@ export function addFreeAgent(db: Db, key: Buffer, userId: string, leagueId: stri
       transaction: ({ teamId }) => ({ type: "FREEAGENT", items: acquireItems(teamId, { add, drop }) }),
       landed: ({ roster }) => acquireLanded(roster, { add, drop }),
       anyLanded: (l) => l.added,
+      settled: (l) => l.added && l.dropped,
     },
     deps,
   );
@@ -66,6 +67,7 @@ export function dropPlayer(db: Db, key: Buffer, userId: string, leagueId: string
       transaction: ({ teamId }) => ({ type: "ROSTER", items: dropItems(teamId, drop) }),
       landed: ({ roster }) => dropLanded(roster, drop),
       anyLanded: (l) => l.dropped,
+      settled: (l) => l.dropped,
     },
     deps,
   );

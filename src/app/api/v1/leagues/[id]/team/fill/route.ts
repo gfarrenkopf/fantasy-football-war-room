@@ -92,7 +92,8 @@ export const POST = withUser<Ctx>(async (request, ctx, { db, userId, email }) =>
       const why = answer.changed ?? answer.problems ?? answer.refused ?? [];
       details = why.length ? why : answer.error ? [answer.error] : [];
     }
-    return json(200, fillApplied(view, hole.hole, fill, plan, ran.map(stepLanded), details));
+    const unconfirmed = last.step === "start" && last.out.kind === "applied" && !stepLanded(last);
+    return json(200, fillApplied(view, hole.hole, fill, plan, ran.map(stepLanded), details, unconfirmed));
   } catch (err) {
     failed(err);
     return error(503, "Filling the hole on ESPN is temporarily unavailable");

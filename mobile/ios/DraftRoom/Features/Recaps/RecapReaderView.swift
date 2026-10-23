@@ -99,6 +99,7 @@ private struct RecapPage: View {
             }
             .padding(.horizontal, Spacing.xl + Spacing.xs)
             .padding(.vertical, Spacing.xl)
+            .tabWidth()
         }
         .onAppear(perform: play)
     }

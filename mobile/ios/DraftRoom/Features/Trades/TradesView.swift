@@ -12,13 +12,13 @@ struct TradesView: View {
     /// Starting slots nobody can play this week, and the fill sheet for one (APE-418).
     var holes: [Hole] = []
     var onFill: (Hole) -> Void = { _ in }
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ScrollViewReader { scroll in
             ScrollView {
                 VStack(spacing: Spacing.xl) {
                     if !holes.isEmpty { HoleBanner(holes: holes, onFill: onFill) }
-                    if let notice = model.notice { TradeNotice(notice: notice) }
                     switch model.load {
                     case .loading:
                         VStack(spacing: Spacing.lg) {
@@ -49,7 +49,6 @@ struct TradesView: View {
                 .padding(.horizontal, Spacing.xl + Spacing.xs)
                 .padding(.vertical, Spacing.xl)
                 .tabWidth()
-                .animation(Motion.respond, value: model.notice)
                 .animation(Motion.respond, value: model.grade)
             }
             .sectionJump()
@@ -62,12 +61,36 @@ struct TradesView: View {
             // An idea or a counter opened in the builder: show it there.
             .onChange(of: model.loads) { withAnimation(Motion.settle) { scroll.scrollTo("builder", anchor: .top) } }
         }
+        // What the last write did: a toast over the tab, as a drop shows on Lineup (APE-445).
+        .overlay(alignment: .bottom) {
+            Group {
+                if let notice = model.notice {
+                    NoticeToast(text: notice.text, landed: notice.landed, identifier: "trades-notice") { model.dismissNotice() }
+                }
+            }
+            .padding(.horizontal, Spacing.xl)
+            .padding(.bottom, Spacing.lg)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+        .animation(Motion.respond, value: model.notice)
+        // An offer sent, or one answered, changes what the trade ideas say about it: read them again.
+        .onChange(of: model.written) { Task { await ai.refresh() } }
         .background(.bg)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("section-trade")
+        // The ideas say whether an idea is offered from the same pending trades the Pending card
+        // lists, so they're read together (APE-445): on coming back to the tab, or to the app, both
+        // again, never one, or an idea can say "Offer on ESPN" over a card still showing the offer.
         .task {
-            await model.start()
-            await ai.start()
+            if model.trades == nil {
+                await model.start()
+                await ai.start()
+            } else {
+                await rereadBoth()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, model.trades != nil { Task { await rereadBoth() } }
         }
         .sensoryFeedback(trigger: model.notice) { _, notice in
             notice.map { $0.landed ? Haptic.success : Haptic.failure }
@@ -75,25 +98,17 @@ struct TradesView: View {
         .sheet(isPresented: confirming) { TradeSheet(model: model) }
     }
 
+    private func rereadBoth() async {
+        async let trades: Void = model.refresh()
+        async let ideas: Void = ai.refresh()
+        _ = await (trades, ideas)
+    }
+
     /// The confirm sheet is up from the tap until ESPN has answered.
     private var confirming: Binding<Bool> {
         Binding { model.action != nil } set: { shown in
             if !shown { model.dismiss() }
         }
-    }
-}
-
-/// What the last write did, in the server's words.
-private struct TradeNotice: View {
-    let notice: TradesModel.Notice
-
-    var body: some View {
-        Label(notice.text, systemImage: notice.landed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-            .typeStyle(TypeScale.body)
-            .foregroundStyle(notice.landed ? .valueInk : .warnInk)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("trades-notice")
     }
 }
 

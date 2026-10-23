@@ -42,6 +42,7 @@ export async function applyLineup(db: Db, key: Buffer, userId: string, leagueId:
       transaction: ({ roster }) => ({ type: "ROSTER", items: toEspnItems(roster, request.moves) }),
       landed: ({ roster }) => landedMoves(request.moves, roster),
       anyLanded: (moves) => moves.some((m) => m.landed),
+      settled: (moves) => moves.every((m) => m.landed),
     },
     deps,
   );

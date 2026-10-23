@@ -180,10 +180,11 @@ export function fillDryRun(view: SeasonView, hole: Pick<Hole, "key">, fill: Fill
 
 /**
  * A hole fill ESPN took at least the first step of: `landed` is each step sent, in order, and the
- * last one is where it stopped when it's false. `details` is why that step didn't go. The words are
- * the web hole card's.
+ * last one is where it stopped when it's false. `details` is why that step didn't go. `unconfirmed`
+ * is a start ESPN took that its re-reads don't show yet (APE-444): it usually has landed. The words
+ * are the web hole card's.
  */
-export function fillApplied(view: SeasonView, hole: Pick<Hole, "key">, fill: Fill, plan: FillPlan, landed: readonly boolean[], details: string[]): FillApplied {
+export function fillApplied(view: SeasonView, hole: Pick<Hole, "key">, fill: Fill, plan: FillPlan, landed: readonly boolean[], details: string[], unconfirmed = false): FillApplied {
   const name = namer(view, [[fill.player.playerId, fill.player.name]]);
   const texts = fillSteps(plan, hole.key, name);
   const steps = texts.map((text, i) => ({ text, landed: i < landed.length ? landed[i] : null }));
@@ -197,7 +198,9 @@ export function fillApplied(view: SeasonView, hole: Pick<Hole, "key">, fill: Fil
       ? `ESPN didn't move ${name(plan.ir!.move.playerId)} to IR. Nothing else was sent.`
       : stopped === 1
         ? `ESPN didn't add ${add}.${plan.ir ? ` ${name(plan.ir.move.playerId)} is on IR now.` : ""}`
-        : `${add} is on your team, but ESPN didn't start him at ${slot}. Start him from your lineup.`;
+        : unconfirmed
+          ? `${add} is on your team. ESPN took the change to start him at ${slot} but doesn't show it yet. Check your lineup in a minute.`
+          : `${add} is on your team, but ESPN didn't start him at ${slot}. Start him from your lineup.`;
   return { landed: false, result, steps, details };
 }
 

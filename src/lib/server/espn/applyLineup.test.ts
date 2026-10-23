@@ -6,6 +6,7 @@ import { ESPN_SLOT_ID } from "@/lib/season/espnLeague";
 import type { LineupMove } from "@/lib/season/lineup";
 import type { LineupSlot, RosterEntry, SeasonLeague } from "@/lib/season/types";
 import { applyLineup, type ApplyDeps } from "./applyLineup";
+import { RECHECK_MS } from "./guardedWrite";
 import type { EspnTransaction, EspnWrite } from "./transactionWriter";
 import type { SeasonLoad } from "./seasonData";
 
@@ -68,14 +69,18 @@ function league(roster: RosterEntry[], week = 4): SeasonLeague {
 
 const ok = (lg: SeasonLeague): SeasonLoad => ({ kind: "ok", league: lg, espnTeamId: 1, fetchedAt: new Date(), stale: false });
 
-/** A fake ESPN: reads return `reads` in turn, writes are recorded and answered with `answer`. */
+/** A fake ESPN: reads return `reads` in turn, then the last one again; writes are recorded and answered with `answer`. */
 function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true, id: "tx" }, { signedOut = true }: { signedOut?: boolean } = {}) {
   const writes: EspnTransaction[] = [];
   const refreshes: boolean[] = [];
+  const pauses: number[] = [];
   const deps: ApplyDeps = {
     load: async (_db, _key, _user, _league, options) => {
       refreshes.push(!!options?.refresh);
-      return reads.shift()!;
+      return reads.length > 1 ? reads.shift()! : reads[0];
+    },
+    pause: async (ms) => {
+      pauses.push(ms);
     },
     login: async () => ({ espnS2: "s2", swid: "{SWID}" }),
     write: async (_login, w) => {
@@ -84,7 +89,7 @@ function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true, id: "tx" }, {
     },
     signedOut: async () => signedOut,
   };
-  return { deps, writes, refreshes };
+  return { deps, writes, refreshes, pauses };
 }
 
 const moved = (roster: RosterEntry[], moves: LineupMove[]) => roster.map((p) => ({ ...p, slot: moves.find((m) => m.playerId === p.playerId)?.to ?? p.slot }));
@@ -162,10 +167,23 @@ describe("applyLineup", () => {
     expect(await applyLineup(db, key, "user", "league", { week: 4, snapshot: snapshotOf(ROSTER), moves: MOVES }, lost.deps)).toEqual({ kind: "write-failed", detail: "timed out after 20s" });
   });
 
+  it("reads again when ESPN took the write but doesn't show it yet (APE-444)", async () => {
+    const lagging = fake([ok(league(ROSTER)), ok(league(ROSTER)), ok(league(moved(ROSTER, MOVES)))]);
+    const out = await applyLineup(db, key, "user", "league", { week: 4, snapshot: snapshotOf(ROSTER), moves: MOVES }, lagging.deps);
+    expect(out.kind === "applied" && out.moves.every((m) => m.landed)).toBe(true);
+    expect(lagging.pauses).toEqual([500]);
+
+    // A re-read that fails while waiting keeps the last good one.
+    const dropped = fake([ok(league(ROSTER)), ok(league(ROSTER)), { kind: "unavailable" }]);
+    const kept = await applyLineup(db, key, "user", "league", { week: 4, snapshot: snapshotOf(ROSTER), moves: MOVES }, dropped.deps);
+    expect(kept.kind === "applied" && kept.moves.map((m) => m.landed)).toEqual([false, false, false, false]);
+  });
+
   it("reports moves that didn't land, and a write it couldn't check", async () => {
     const partial = fake([ok(league(ROSTER)), ok(league(moved(ROSTER, MOVES.slice(0, 2))))]);
     const out = await applyLineup(db, key, "user", "league", { week: 4, snapshot: snapshotOf(ROSTER), moves: MOVES }, partial.deps);
     expect(out.kind === "applied" && out.moves.map((m) => m.landed)).toEqual([true, true, false, false]);
+    expect(partial.pauses).toEqual(RECHECK_MS);
 
     const blind = fake([ok(league(ROSTER)), { kind: "unavailable" }]);
     expect(await applyLineup(db, key, "user", "league", { week: 4, snapshot: snapshotOf(ROSTER), moves: MOVES }, blind.deps)).toMatchObject({ kind: "unverified" });

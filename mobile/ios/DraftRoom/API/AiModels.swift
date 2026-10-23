@@ -65,8 +65,13 @@ struct AiLineup: Codable, Equatable, Sendable {
     let departures: String?
     let calls: [Call]
     let starters: [Starter]
-    /// Whether ESPN starts these players now.
+    /// Whether ESPN starts these players now; once stale, that it's out of date.
     let espn: Espn
+    /// The projections have moved under it since it was written (APE-439): its lineup no longer
+    /// holds, and it can be written again for free. Missing from servers before it was sent.
+    var stale: Bool?
+
+    var isStale: Bool { stale == true }
 }
 
 /// One of this week's trade ideas, graded again against the rosters now.
@@ -89,6 +94,8 @@ struct AiIdea: Codable, Equatable, Sendable, Identifiable {
 
     var id: String { kind }
     var isStale: Bool { status == "stale" }
+    /// The user has offered it on ESPN, and it's pending there.
+    var isOffered: Bool { status == "offered" }
 }
 
 struct AiIdeas: Codable, Equatable, Sendable {

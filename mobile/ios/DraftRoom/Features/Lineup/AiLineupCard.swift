@@ -31,7 +31,8 @@ struct AiLineupCard: View {
             AiLocked(note: state.access.note)
         } else if let written = state.lineup {
             Written(lineup: written)
-            if !written.espn.matches {
+            // A stale lineup no longer holds: nothing to stage, only a rewrite (APE-439).
+            if !written.espn.matches, !written.isStale {
                 if lineup.isStaged(ai: written.starters) {
                     // Staged, not saved: say where it went, and that the review bar sends it.
                     StagedNote()
@@ -48,7 +49,7 @@ struct AiLineupCard: View {
                 }
             }
             if state.lineupAction == "rewrite" {
-                action("Rewrite with the latest news", working: "Rewriting…", prominent: false)
+                action("Rewrite with the latest news", working: "Rewriting…", prominent: written.isStale)
             }
         } else if let note = state.lineupNote {
             Text(note).typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.muted)
@@ -87,7 +88,7 @@ private struct Written: View {
     let lineup: AiLineup
 
     var body: some View {
-        Text(lineup.intro).typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.text)
+        Text(lineup.intro).typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(lineup.isStale ? Color.muted : Color.text)
             .fixedSize(horizontal: false, vertical: true)
         if let departures = lineup.departures {
             Text(departures)
@@ -119,7 +120,7 @@ private struct Written: View {
                 }
             }
         }
-        Label(lineup.espn.text, systemImage: lineup.espn.matches ? "checkmark.circle.fill" : "arrow.left.arrow.right")
+        Label(lineup.espn.text, systemImage: lineup.isStale ? "clock.arrow.circlepath" : lineup.espn.matches ? "checkmark.circle.fill" : "arrow.left.arrow.right")
             .typeStyle(TypeScale.label)
             .foregroundStyle(lineup.espn.matches ? Color.valueInk : Color.warnInk)
             .fixedSize(horizontal: false, vertical: true)

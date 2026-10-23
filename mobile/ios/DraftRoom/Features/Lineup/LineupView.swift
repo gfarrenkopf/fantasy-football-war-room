@@ -98,7 +98,7 @@ struct LineupView: View {
                 if let player = model.droppingPlayer {
                     DropProgressToast(player: player)
                 } else if let notice = model.dropNotice {
-                    DropToast(notice: notice) { model.dismissDropNotice() }
+                    NoticeToast(text: notice.text, landed: notice.landed, identifier: "drop-notice") { model.dismissDropNotice() }
                 }
             }
             .padding(.horizontal, Spacing.xl)
@@ -746,33 +746,6 @@ private struct DropIconButton: View {
     }
 }
 
-/// What ESPN shows after a drop, in the server's words: a floating capsule like the system's own
-/// confirmations. VoiceOver reads it out; a tap or a few seconds puts it away. One that didn't land stays longer.
-private struct DropToast: View {
-    let notice: LineupModel.DropNotice
-    let onDismiss: () -> Void
-
-    var body: some View {
-        Label {
-            Text(notice.text).foregroundStyle(notice.landed ? Color.text : Color.reachInk)
-        } icon: {
-            Image(systemName: notice.landed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(notice.landed ? Color.valueInk : Color.reachInk)
-        }
-            .typeStyle(TypeScale.body).fontWeight(.semibold)
-            .toastCapsule(border: notice.landed ? Color.line2 : Color.reach.opacity(0.6))
-            .onTapGesture(perform: onDismiss)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Dismisses")
-            .accessibilityIdentifier("drop-notice")
-            .task(id: notice) {
-                AccessibilityNotification.Announcement(notice.text).post()
-                try? await Task.sleep(for: .seconds(notice.landed ? 4 : 8))
-                if !Task.isCancelled { onDismiss() }
-            }
-    }
-}
-
 /// A drop on its way: ESPN re-reads the roster before and after, so it can take a few seconds.
 private struct DropProgressToast: View {
     let player: ViewPlayer
@@ -791,17 +764,6 @@ private struct DropProgressToast: View {
 }
 
 extension View {
-    /// The drop toasts' floating capsule, like the system's own confirmations.
-    fileprivate func toastCapsule(border: Color) -> some View {
-        fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, Spacing.xl)
-            .padding(.vertical, Spacing.lg)
-            .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(border))
-            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
-            .contentShape(Capsule())
-    }
-
     /// Asks before a drop goes to ESPN: a dropped player goes on waivers, so getting him back takes a
     /// claim. Carries the write consent's lines the first time. `then` runs as the drop starts, to
     /// close the picker it was asked from.

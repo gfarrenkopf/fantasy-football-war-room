@@ -16,7 +16,7 @@ enum AiSample {
               {"slot":"FLEX","player":{"id":6,"name":"Tank Bigsby"},"reason":"Nobody's at FLEX on ESPN. Bigsby has the most carries behind a banged-up starter."}],
      "starters":[{"key":"QB","playerId":1,"locked":true},{"key":"RB","playerId":2,"locked":true},{"key":"WR","playerId":3,"locked":true},
                  {"key":"TE","playerId":8,"locked":false},{"key":"FLEX","playerId":6,"locked":false},{"key":"K","playerId":5,"locked":false}],
-     "espn":{"matches":false,"text":"Not on ESPN yet: Tucker Kraft at TE, Tank Bigsby at FLEX."}}
+     "espn":{"matches":false,"text":"Not on ESPN yet: Tucker Kraft at TE, Tank Bigsby at FLEX."},"stale":false}
     """#
 
     static let ideas = #"""

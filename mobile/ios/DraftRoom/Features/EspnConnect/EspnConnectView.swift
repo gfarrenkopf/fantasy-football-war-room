@@ -8,6 +8,8 @@ struct EspnConnectView: View {
     @State private var model: EspnConnectModel?
     /// MyDisney is on screen, so ESPN's page underneath can show.
     @State private var signInReady = false
+    /// Whether this is the account's first league, which the success moment celebrates (APE-440).
+    var firstLeague = false
     /// Called with the connected Draft Room league's id after the success moment.
     var onConnected: (String) -> Void = { _ in }
 
@@ -76,6 +78,7 @@ struct EspnConnectView: View {
                         .foregroundStyle(.muted)
                 }
                 .padding(Spacing.xl)
+                .tabWidth()
             }
 
         case .signingIn:
@@ -165,7 +168,7 @@ struct EspnConnectView: View {
             .padding(Spacing.xl)
 
         case let .connected(connected, name):
-            ConnectedView(name: name) {
+            ConnectedView(leagueId: connected.leagueId, name: name, first: firstLeague) {
                 onConnected(connected.leagueId)
                 dismiss()
                 // A league to be alerted about is the moment notifications make sense.
@@ -185,42 +188,87 @@ struct EspnConnectView: View {
     }
 }
 
-/// The success moment: a ring draws itself closed, the check lands with a haptic, then the league opens.
+/// The success moment: a ring draws itself closed, the check lands with a haptic, then the league
+/// rises on the switcher's own pill, its mark and color as the top of every tab will show them. A first
+/// league gets the confetti too (APE-440). With Reduce Motion or VoiceOver on, it's all there at once.
 private struct ConnectedView: View {
+    let leagueId: String
     let name: String
+    let first: Bool
     let onContinue: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @State private var drawn = false
+    @State private var landed = false
+
+    private var still: Bool { reduceMotion || voiceOver }
 
     var body: some View {
-        VStack(spacing: Spacing.xl) {
-            ZStack {
-                Circle().stroke(.line, lineWidth: 3)
-                Circle()
-                    .trim(from: 0, to: drawn ? 1 : 0)
-                    .stroke(.mine, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(.mine)
-                    .scaleEffect(drawn ? 1 : 0.3)
-                    .opacity(drawn ? 1 : 0)
+        ZStack {
+            VStack(spacing: Spacing.xl) {
+                ZStack {
+                    Circle().stroke(.line, lineWidth: 3)
+                    Circle()
+                        .trim(from: 0, to: drawn ? 1 : 0)
+                        .stroke(.mine, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(.mine)
+                        .scaleEffect(drawn ? 1 : 0.3)
+                        .opacity(drawn ? 1 : 0)
+                }
+                .frame(width: 88, height: 88)
+                .accessibilityHidden(true)
+                VStack(spacing: Spacing.sm) {
+                    Text(first ? "You're in" : "Connected").typeStyle(TypeScale.headline).foregroundStyle(.text)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("\(name) is in Draft Room. Your lineup, trades and the waiver wire are a tap away.")
+                        .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.muted)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                VStack(spacing: Spacing.sm) {
+                    pill
+                    Text("It's at the top of every tab.").typeStyle(TypeScale.label).foregroundStyle(.dim)
+                }
+                .offset(y: landed ? 0 : 18)
+                .opacity(landed ? 1 : 0)
+                Button("Open my league", action: onContinue)
+                    .buttonStyle(ProviderButtonStyle(prominent: true))
+                    .accessibilityIdentifier("espn-open-league")
             }
-            .frame(width: 88, height: 88)
-            VStack(spacing: Spacing.sm) {
-                Text("Connected").typeStyle(TypeScale.headline).foregroundStyle(.text)
-                Text("\(name) is in Draft Room. Your lineup, trades and the waiver wire are a tap away.")
-                    .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.muted)
-                    .multilineTextAlignment(.center)
+            .padding(Spacing.xl * 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if first && landed && !still {
+                Confetti().ignoresSafeArea().allowsHitTesting(false)
             }
-            Button("Open my league", action: onContinue)
-                .buttonStyle(ProviderButtonStyle(prominent: true))
-                .accessibilityIdentifier("espn-open-league")
         }
-        .padding(Spacing.xl * 2)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sensoryFeedback(Haptic.success, trigger: drawn)
-        .onAppear {
+        .sensoryFeedback(Haptic.success, trigger: drawn) { _, now in now && !still }
+        .task {
+            if still {
+                drawn = true
+                landed = true
+                return
+            }
             withAnimation(.easeInOut(duration: 0.7)) { drawn = true }
+            try? await Task.sleep(for: .milliseconds(750))
+            withAnimation(Motion.settle) { landed = true }
         }
+    }
+
+    /// The league as the switcher shows it, without the menu: a picture of where it lives.
+    private var pill: some View {
+        HStack(spacing: Spacing.sm) {
+            LeagueMark(id: leagueId, name: name)
+            Text(League.shortName(of: name)).typeStyle(TypeScale.title).foregroundStyle(.text).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold)).foregroundStyle(.muted)
+        }
+        .padding(.leading, Spacing.sm)
+        .padding(.trailing, Spacing.xl)
+        .frame(height: 38)
+        .glassEffect(.regular, in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(name), at the top of every tab")
     }
 }

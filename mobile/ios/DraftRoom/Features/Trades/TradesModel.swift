@@ -52,6 +52,8 @@ final class TradesModel {
     private(set) var action: Action?
     private(set) var phase: Phase = .idle
     private(set) var notice: Notice?
+    /// Counts writes that landed, once the rosters and offers are read again after each.
+    private(set) var written = 0
 
     // The builder.
     private(set) var partnerId: Int?
@@ -249,12 +251,16 @@ final class TradesModel {
             // The offers and the rosters changed: read them again.
             await store.refresh(force: true)
             await refresh()
+            if applied.landed { written += 1 }
         } catch {
             fail(error)
         }
     }
 
     func retry() async { await check() }
+
+    /// Puts the last write's notice away.
+    func dismissNotice() { notice = nil }
 
     /// Closes the sheet without sending.
     func dismiss() {

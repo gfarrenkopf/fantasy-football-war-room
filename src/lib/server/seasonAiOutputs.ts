@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { costUsd } from "@/lib/ai/pricing";
 import { PlanModelError, type ModelErrorDetail, type ModelUsage, type PlanModel, type PlanModelErrorKind } from "@/lib/ai/provider";
 import { buildLineupInput, generateAiLineup, LINEUP_PROMPT_VERSION, type AiLineup } from "@/lib/ai/season/lineup";
-import { espnStartersOf } from "@/lib/ai/season/lineupStatus";
+import { aiLineupOutdated, espnStartersOf } from "@/lib/ai/season/lineupStatus";
 import type { SeasonAiLineupKind, StoredAiOutput } from "@/lib/ai/season/state";
 import { buildTradeInput, generateTradeWriteup, TRADE_PROMPT_VERSION, type AiTradeWriteup } from "@/lib/ai/season/trade";
 import { buildTradeIdeasInput, generateTradeIdeas, TRADE_IDEAS_PROMPT_VERSION, type AiTradeIdeas } from "@/lib/ai/season/tradeIdeas";
@@ -150,7 +150,9 @@ async function logGeneration(
 
 /**
  * This week's AI lineup of `kind` for the user's team: the stored one, or a new one, which uses the
- * week's allowance. A failed call gives the allowance back.
+ * week's allowance. A failed call gives the allowance back. When the newest of the week's lineups is
+ * stale, the projections having moved under it (APE-439), a new one is written over any stored one
+ * without touching the allowance: it only happens again once the projections move again.
  */
 export async function writeAiLineup(
   db: Db,
@@ -159,8 +161,12 @@ export async function writeAiLineup(
 ): Promise<WriteResult<AiLineup>> {
   const where = { leagueId, season: view.season, week: view.currentWeek, kind };
   const stored = await findOutput<AiLineup>(db, where);
-  if (stored) return { status: "ok", cached: true, ...stored };
-  if (!(await claimSeasonAiUse(db, where))) {
+  const mine = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
+  // Only the user's mid-week write; Sunday's is written once, by the Sunday run.
+  const newest = kind === "lineup-midweek" ? await newestLineup(db, where) : null;
+  const free = newest !== null && aiLineupOutdated(newest.output, view.lineup, mine);
+  if (stored && !free) return { status: "ok", cached: true, ...stored };
+  if (!free && !(await claimSeasonAiUse(db, where))) {
     // Someone else's request may have just written it.
     const raced = await findOutput<AiLineup>(db, where);
     return raced ? { status: "ok", cached: true, ...raced } : { status: "used" };
@@ -169,21 +175,29 @@ export async function writeAiLineup(
     const input = buildLineupInput(view);
     const result = await logged({ db, model, userId, leagueId, purpose: "season-lineup", promptVersion: LINEUP_PROMPT_VERSION }, (signal) => generateAiLineup(model, input, { signal }));
     if (!result.ok) {
-      await releaseSeasonAiUse(db, where);
+      if (!free) await releaseSeasonAiUse(db, where);
       return { status: "failed", kind: result.kind };
     }
     const { issues, provider, model: modelId } = result.value;
-    const mine = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
     const lineup: AiLineup = { ...result.value.lineup, espnStarters: espnStartersOf(mine) };
+    const values = { output: lineup, issues, provider, model: modelId, promptVersion: LINEUP_PROMPT_VERSION };
     const [row] = await db
       .insert(seasonAiOutputs)
-      .values({ ...where, output: lineup, issues, provider, model: modelId, promptVersion: LINEUP_PROMPT_VERSION })
+      .values({ ...where, ...values })
+      // A stale one is written over, as new.
+      .onConflictDoUpdate({ target: [seasonAiOutputs.leagueId, seasonAiOutputs.season, seasonAiOutputs.week, seasonAiOutputs.kind, seasonAiOutputs.key], set: { ...values, createdAt: new Date() } })
       .returning({ createdAt: seasonAiOutputs.createdAt });
     return { status: "ok", cached: false, output: lineup, createdAt: row.createdAt.toISOString() };
   } catch (error) {
-    await releaseSeasonAiUse(db, where).catch(() => {});
+    if (!free) await releaseSeasonAiUse(db, where).catch(() => {});
     throw error;
   }
+}
+
+/** The newest of the week's AI lineups, of either kind (latestLineup() in v1/ai.ts). */
+async function newestLineup(db: Db, w: Where): Promise<StoredOutput<AiLineup> | null> {
+  const found = await Promise.all(LINEUP_KINDS.map((kind) => findOutput<AiLineup>(db, { ...w, kind: kind as SeasonAiOutputKind })));
+  return found.filter((x) => x !== null).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
 }
 
 /**

@@ -105,7 +105,13 @@ private struct IdeaRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if let note = idea.note {
+            if let note = idea.note, idea.isOffered {
+                // Offered: say so where the user offered it, as good news (APE-445).
+                Label(note, systemImage: "clock.badge.checkmark")
+                    .typeStyle(TypeScale.label).fontWeight(.semibold).foregroundStyle(.valueInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("idea-offered-\(idea.kind)")
+            } else if let note = idea.note {
                 Text(note).typeStyle(TypeScale.label).fontWeight(.regular).foregroundStyle(idea.isStale ? Color.dim : Color.warnInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
