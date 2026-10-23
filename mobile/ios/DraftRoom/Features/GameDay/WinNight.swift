@@ -382,8 +382,9 @@ private struct Beams: View {
     }
 }
 
-/// Confetti over the star: one burst that falls, sways and spins for about four seconds, then stops.
-private struct Confetti: View {
+/// Confetti over the star (and over a first league connected): one burst that falls, sways and spins
+/// for about four seconds, then stops.
+struct Confetti: View {
     private struct Piece {
         let x: Double, speed: Double, sway: Double, spin: Double, delay: Double, size: CGSize, color: Color
     }

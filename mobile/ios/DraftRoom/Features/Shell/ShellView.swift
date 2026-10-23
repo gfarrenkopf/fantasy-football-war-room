@@ -27,7 +27,7 @@ struct ShellView: View {
         }
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .sheet(isPresented: $connecting) {
-            EspnConnectView { leagueId in
+            EspnConnectView(firstLeague: model?.leagues.isEmpty ?? true) { leagueId in
                 Task { await model?.refresh(select: leagueId) }
             }
         }
@@ -252,16 +252,27 @@ private struct LeagueSwitcher: View {
 }
 
 /// A league's initials on a color of its own, the same on every launch.
-private struct LeagueMark: View {
-    let league: League
+struct LeagueMark: View {
+    let id: String
+    let name: String
     private static let palette: [Color] = [.qb, .rb, .wr, .te, .k, .flex]
 
+    init(league: League) {
+        self.init(id: league.id, name: league.name)
+    }
+
+    /// For a league the shell doesn't list yet: the one just connected.
+    init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+
     var body: some View {
-        Text(league.monogram)
+        Text(League.monogram(of: name))
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(.bg)
             .frame(width: 24, height: 24)
-            .background(Self.palette[league.markIndex(of: Self.palette.count)], in: Circle())
+            .background(Self.palette[League.markIndex(id: id, of: Self.palette.count)], in: Circle())
             .accessibilityHidden(true)
     }
 }
@@ -269,14 +280,18 @@ private struct LeagueMark: View {
 extension League {
     /// The name as the switcher pill shows it: 12 characters at most, cut with an ellipsis (APE-431).
     /// The menu lists each league's full name.
-    var shortName: String {
+    var shortName: String { Self.shortName(of: name) }
+
+    static func shortName(of name: String) -> String {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard name.count > 12 else { return name }
         return name.prefix(12).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     /// The league's initials: the first letters of its first two words, or a one-word name's first two.
-    var monogram: String {
+    var monogram: String { Self.monogram(of: name) }
+
+    static func monogram(of name: String) -> String {
         let words = name.split { !$0.isLetter && !$0.isNumber }
         guard let first = words.first else { return "?" }
         let letters = words.count > 1 ? first.prefix(1) + words[1].prefix(1) : first.prefix(2)
@@ -285,7 +300,9 @@ extension League {
 
     /// A steady pick among `count` colors: from the league's id, so it holds across launches
     /// (`hashValue` is seeded per launch).
-    func markIndex(of count: Int) -> Int {
+    func markIndex(of count: Int) -> Int { Self.markIndex(id: id, of: count) }
+
+    static func markIndex(id: String, of count: Int) -> Int {
         let hash = id.unicodeScalars.reduce(UInt(5381)) { $0 &* 33 &+ UInt($1.value) }
         return Int(hash % UInt(count))
     }
@@ -303,30 +320,6 @@ private struct AccountMark: View {
 }
 
 // MARK: - Empty states
-
-/// No in-season leagues yet: the reason to connect one.
-private struct ConnectPitchView: View {
-    let onConnect: () -> Void
-    @State private var shown = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            Text("Bring your league in.").typeStyle(TypeScale.headline).foregroundStyle(.text)
-            Text("Connect your ESPN league and Draft Room sets your lineup with you each week, weighs trades against everyone's real rosters, and watches the waiver wire.")
-                .typeStyle(TypeScale.body).fontWeight(.regular).foregroundStyle(.muted)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Connect a league", action: onConnect)
-                .buttonStyle(ProviderButtonStyle(prominent: true))
-                .padding(.top, Spacing.sm)
-                .accessibilityIdentifier("connect-league")
-            Text("Works with ESPN Fantasy").typeStyle(TypeScale.label).foregroundStyle(.dim)
-        }
-        .padding(Spacing.xl + Spacing.sm)
-        .offset(y: shown ? 0 : 12)
-        .opacity(shown ? 1 : 0)
-        .onAppear { withAnimation(Motion.settle) { shown = true } }
-    }
-}
 
 /// In-season help isn't open to this account (APE-341): the same words as the web.
 private struct SeasonClosedView: View {
