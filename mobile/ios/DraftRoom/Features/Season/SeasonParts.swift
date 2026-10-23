@@ -86,6 +86,11 @@ struct StandingStrip: View {
 /// (`hidesStandingOnScroll()`): a scroll down past `travel` hides the strip, one back up past it or
 /// a return to the top shows it again. Only the open tab: the others sit at their own offsets, and a
 /// refresh in one still at its top would bring the strip back mid-scroll (APE-435).
+///
+/// The strip's own coming and going moves the content's inset, and the offset follows, sometimes a
+/// report later, by about the strip's height: taller than `travel` at large text, so it read as the
+/// user scrolling and flipped the strip back (APE-438). Reports while the strip settles are ignored,
+/// and it only goes once the content is well clear of the top, so the shift can't land at the top.
 @MainActor
 @Observable
 final class StandingBar {
@@ -95,24 +100,42 @@ final class StandingBar {
     /// first scrolls: another tab's offset means nothing here.
     @ObservationIgnored private var turn: CGFloat?
     @ObservationIgnored private var down = true
+    /// Until when the strip is still coming or going.
+    @ObservationIgnored private var settling: ContinuousClock.Instant?
+    @ObservationIgnored private let now: () -> ContinuousClock.Instant
 
     /// How far a scroll goes one way before the strip follows it: past a nudge, under a flick.
-    private static let travel: CGFloat = 32
+    static let travel: CGFloat = 32
+    /// How far down the content has to be before the strip goes: past the strip's height, wrapped at the largest text.
+    static let clear: CGFloat = 160
+    /// How long the strip's coming and going takes to settle the scroll view's inset and offset.
+    static let settle: Duration = .milliseconds(450)
+
+    init(now: @escaping () -> ContinuousClock.Instant = { .now }) {
+        self.now = now
+    }
 
     func scrolled(from old: ScrollSpot, to new: ScrollSpot) {
-        // The strip's own coming and going moves the content's inset; that isn't the user scrolling.
+        // Back at the top: always shown, whatever the strip is doing.
+        if new.y + new.inset <= Spacing.xl { return show(true) }
+        if let settling, now() < settling {
+            turn = new.y
+            return
+        }
+        // The inset moving isn't the user scrolling.
         guard old.inset == new.inset else {
             turn = new.y
             return
         }
-        if new.y <= -new.inset + Spacing.xl { return show(true) }
         // Past the end the scroll view bounces back, which reads as a scroll up.
         guard new.y <= new.end else { return }
         if turn == nil || (new.y > old.y) != down {
             down = new.y > old.y
             turn = old.y
         }
-        if let turn, abs(new.y - turn) > Self.travel { show(!down) }
+        guard let turn, abs(new.y - turn) > Self.travel else { return }
+        if down && new.y + new.inset < Self.clear { return }
+        show(!down)
     }
 
     /// Back on screen, for a tab or league just opened.
@@ -123,6 +146,7 @@ final class StandingBar {
 
     private func show(_ shown: Bool) {
         guard hidden == shown else { return }
+        settling = now() + Self.settle
         withAnimation(Motion.respond) { hidden = !shown }
     }
 }
