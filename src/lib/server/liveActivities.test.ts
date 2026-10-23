@@ -69,10 +69,11 @@ describe("livePayload and nextSend", () => {
     });
   });
 
-  it("sends only a change, at most once a minute, and always the final", () => {
+  it("sends a change at most once a minute, the same state before it goes stale, and always the final", () => {
     const at = (ms: number) => new Date(NOW.getTime() + ms);
     expect(nextSend(null, null, live(0, 0), NOW)).toEqual({ send: true, priority: 10, end: false });
-    expect(nextSend(live(10, 8), NOW, live(10, 8), at(5 * 60_000))).toEqual({ send: false });
+    expect(nextSend(live(10, 8), NOW, live(10, 8), at(4 * 60_000))).toEqual({ send: false });
+    expect(nextSend(live(10, 8), NOW, live(10, 8), at(5 * 60_000))).toEqual({ send: true, priority: 5, end: false });
     expect(nextSend(live(10, 8), NOW, live(12, 8), at(30_000))).toEqual({ send: false });
     expect(nextSend(live(10, 8), NOW, live(12, 8), at(60_000))).toEqual({ send: true, priority: 10, end: false });
     expect(nextSend(live(10, 8), NOW, { ...live(10, 8), status: "3 left for Theirs" }, at(60_000))).toEqual({ send: true, priority: 5, end: false });
@@ -115,6 +116,11 @@ describe("runLiveJob", () => {
     // Nothing new a minute later: nothing sent.
     expect(await runLiveJob(db, { ...deps, apns, now: new Date(NOW.getTime() + 90_000) })).toMatchObject({ updated: 0 });
     expect(sent).toHaveLength(1);
+
+    // Still nothing new five minutes on: the same score again, quietly, so it doesn't go stale.
+    expect(await runLiveJob(db, { ...deps, apns, now: new Date(NOW.getTime() + 5 * 60_000) })).toMatchObject({ updated: 1 });
+    expect(sent[1]).toMatchObject({ token, message: { priority: 5 } });
+    expect((sent[1].message.payload as { aps: { "content-state": LiveMatchup } }).aps["content-state"]).toEqual(pushed);
   });
 
   it("ends the activity once the week is decided, and stops", async () => {
