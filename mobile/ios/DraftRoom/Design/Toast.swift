@@ -19,6 +19,10 @@ struct NoticeToast: View {
             .typeStyle(TypeScale.body).fontWeight(.semibold)
             .toastCapsule(border: landed ? Color.line2 : Color.reach.opacity(0.6))
             .onTapGesture(perform: onDismiss)
+            // One element read as the server's words: left to the Label, the identifier lands on the
+            // icon too, which VoiceOver reads as "Selected".
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(text)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Dismisses")
             .accessibilityIdentifier(identifier)
