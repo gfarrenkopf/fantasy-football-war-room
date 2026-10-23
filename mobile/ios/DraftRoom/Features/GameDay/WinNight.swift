@@ -94,6 +94,7 @@ struct WinNight: View {
                     .padding(.horizontal, Spacing.xl * 1.5)
                     .padding(.top, Spacing.xl * 3)
                     .padding(.bottom, Spacing.xl * 2)
+                    .tabWidth()
                 }
                 .scrollIndicators(.hidden)
                 // The stage fades out under the status bar instead of running into it.

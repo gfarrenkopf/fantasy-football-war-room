@@ -143,6 +143,7 @@ extension View {
     /// A tab's scroll content at exactly the scroll view's width (APE-434). The tab can hand its
     /// content a hair over the screen's width (354.00000000000006), and a card of full-width text
     /// rounds that up a whole pixel; the content then outgrew the screen, and the tab panned sideways.
+    /// Every vertical scroll view's content takes it, pages and sheets too (APE-441).
     func tabWidth() -> some View {
         containerRelativeFrame(.horizontal)
     }
@@ -468,6 +469,7 @@ struct NewsSheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(Spacing.xl + Spacing.xs)
+                .tabWidth()
             }
             .background(.bg)
             .navigationTitle(player.name)

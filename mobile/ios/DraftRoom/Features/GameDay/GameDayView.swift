@@ -330,15 +330,21 @@ private struct H2HSide: View {
     let player: ViewPlayer?
     let pace: PlayerPace?
     let theirs: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// At the largest sizes the points don't fit beside the name in half a phone (APE-441): they go under it.
+    private var stacked: Bool { typeSize >= .xxxLarge }
 
     var body: some View {
-        HStack(spacing: Spacing.sm) {
+        let edge: HorizontalAlignment = theirs ? .trailing : .leading
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: edge, spacing: Spacing.xs)) : AnyLayout(HStackLayout(spacing: Spacing.sm))
+        layout {
             if let player {
-                if theirs { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading, brief: true) }
+                if theirs && !stacked { ScoreCell(player: player, pace: pace, theirs: true, alignment: .leading, brief: true) }
                 // ESPN's news on the user's players only, as on the web.
                 PlayerLine(player: player, showPosition: false, compact: true, alignment: theirs ? .trailing : .leading, news: !theirs)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)
-                if !theirs { ScoreCell(player: player, pace: pace, brief: true) }
+                if !theirs || stacked { ScoreCell(player: player, pace: pace, theirs: theirs, alignment: stacked ? edge : .trailing, brief: true) }
             } else {
                 Text("Empty").typeStyle(TypeScale.label, dense: true).foregroundStyle(.dim)
                     .frame(maxWidth: .infinity, alignment: theirs ? .trailing : .leading)

@@ -76,6 +76,7 @@ struct EspnConnectView: View {
                         .foregroundStyle(.muted)
                 }
                 .padding(Spacing.xl)
+                .tabWidth()
             }
 
         case .signingIn:

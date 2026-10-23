@@ -60,6 +60,7 @@ struct SignInView: View {
                 }
                 .padding(.horizontal, Spacing.xl + Spacing.sm)
                 .padding(.vertical, Spacing.xl * 2)
+                .tabWidth()
                 // Centered in the room above the panel on a tall phone; scrolls on a short one.
                 .frame(minHeight: room.size.height)
             }

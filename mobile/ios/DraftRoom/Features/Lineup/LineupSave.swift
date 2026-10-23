@@ -26,6 +26,7 @@ struct SaveSheet: View {
                     }
                 }
                 .padding(Spacing.xl + Spacing.xs)
+                .tabWidth()
                 .animation(Motion.respond, value: model.phase)
             }
             .background(.bg)
