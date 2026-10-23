@@ -89,6 +89,8 @@ extension StubbedNetwork {
             await model.send()
             #expect(model.action == nil)
             #expect(model.notice == .init(text: "Offer accepted. It's in the league's review.", landed: true))
+            // A write that landed tells the tab to read the trade ideas again (APE-445).
+            #expect(model.written == 1)
         }
 
         @Test func saysWhenESPNDoesntShowTheChange() async throws {
@@ -99,6 +101,7 @@ extension StubbedNetwork {
             await model.respond(try #require(model.trades?.offers.first), .accept)
             await model.send()
             #expect(model.notice == .init(text: "ESPN doesn't show that change. Check ESPN. Draft Room has been alerted.", landed: false))
+            #expect(model.written == 0)
         }
 
         @Test func withdrawsTheUsersOwnOffer() async throws {
@@ -138,6 +141,7 @@ extension StubbedNetwork {
 
             await model.send()
             #expect(model.notice?.text == "Offer sent to Gridiron Gang. It's in Pending on ESPN.")
+            #expect(model.written == 1)
             #expect(model.gives.isEmpty && model.gets.isEmpty && model.grade == nil) // the builder clears
         }
 

@@ -89,6 +89,8 @@ struct AiIdea: Codable, Equatable, Sendable, Identifiable {
 
     var id: String { kind }
     var isStale: Bool { status == "stale" }
+    /// The user has offered it on ESPN, and it's pending there.
+    var isOffered: Bool { status == "offered" }
 }
 
 struct AiIdeas: Codable, Equatable, Sendable {

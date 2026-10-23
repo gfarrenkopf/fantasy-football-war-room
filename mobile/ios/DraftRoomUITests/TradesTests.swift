@@ -30,7 +30,7 @@ final class TradesTests: XCTestCase {
         XCTAssertEqual(app.buttons["trade-send"].label, "Accept on ESPN")
         app.buttons["trade-send"].tap()
 
-        let notice = app.staticTexts["trades-notice"]
+        let notice = app.descendants(matching: .any)["trades-notice"]
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCTAssertEqual(notice.label, "Offer accepted. It's in the league's review.")
     }
