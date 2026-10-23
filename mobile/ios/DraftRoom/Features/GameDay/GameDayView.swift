@@ -36,6 +36,7 @@ struct GameDayView: View {
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
+                    .tabWidth()
                 }
                 .sectionJump()
                 .hidesStandingOnScroll()
@@ -317,7 +318,7 @@ extension HeadToHead {
             let pace = day.pace(of: id)
             let started = (pace?.pace ?? .pre) != .pre
             let points = started ? "\(SeasonFormat.points(player.actual ?? 0)) points of \(SeasonFormat.points(player.points)) projected" : "projected \(SeasonFormat.points(player.points))"
-            let game = player.isOnBye ? ", on a bye" : player.game.map { ", \(SeasonFormat.gameWhen($0))" } ?? ""
+            let game = player.isOnBye ? ", on a bye" : player.isFreeAgent ? ", a free agent" : player.game.map { ", \(SeasonFormat.gameWhen($0))" } ?? ""
             let news = row.me == id && player.news != nil ? ", ESPN news" : ""
             return "\(player.name), \(points)\(game)\(news)"
         }

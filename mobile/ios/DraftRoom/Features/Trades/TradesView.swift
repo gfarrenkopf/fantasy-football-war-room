@@ -48,6 +48,7 @@ struct TradesView: View {
                 }
                 .padding(.horizontal, Spacing.xl + Spacing.xs)
                 .padding(.vertical, Spacing.xl)
+                .tabWidth()
                 .animation(Motion.respond, value: model.notice)
                 .animation(Motion.respond, value: model.grade)
             }

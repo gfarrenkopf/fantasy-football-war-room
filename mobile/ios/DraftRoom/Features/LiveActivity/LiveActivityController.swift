@@ -63,14 +63,20 @@ final class LiveActivityController {
     }
 
     /// Game day read a new score while the app is open: show it at once, without waiting for a push.
+    /// The same score goes again once half its stale window has passed, so it doesn't say "Not updating".
     func update(leagueId: String, live: LiveMatchup) async {
-        for activity in Activity<GameDayAttributes>.activities where activity.attributes.leagueId == leagueId && activity.content.state != live {
+        for activity in Activity<GameDayAttributes>.activities where activity.attributes.leagueId == leagueId && (activity.content.state != live || Self.dueForRefresh(activity.content)) {
             let content = ActivityContent(state: live, staleDate: Date.now.addingTimeInterval(10 * 60))
             if live.decided { await activity.end(content, dismissalPolicy: .after(.now.addingTimeInterval(2 * 60 * 60))) } else { await activity.update(content) }
         }
     }
 
-    private func watch(_ activity: Activity<GameDayAttributes>) {
+    private static func dueForRefresh(_ content: ActivityContent<LiveMatchup>) -> Bool {
+        guard let staleDate = content.staleDate else { return false }
+        return staleDate.timeIntervalSinceNow < 5 * 60
+    }
+
+        private func watch(_ activity: Activity<GameDayAttributes>) {
         guard !watched.contains(activity.id) else { return }
         watched.insert(activity.id)
         let leagueId = activity.attributes.leagueId

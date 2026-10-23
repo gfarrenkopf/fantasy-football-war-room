@@ -21,7 +21,9 @@ import { liveMatchup } from "./v1/season";
  *
  * The content state is the season response's `live` sub-object (LiveMatchup), so the app and the
  * activity decode the same thing. Apple budgets updates, so they're throttled: a change at most once
- * a minute, high priority only when the score moves, and an end push once the week is decided.
+ * a minute, high priority only when the score moves, and an end push once the week is decided. A
+ * quiet spell (no starter playing) still gets a low-priority refresh before the stale date passes,
+ * or the phone would say "Not updating" while the job is running fine.
  */
 
 /** The Swift type the activity is declared with (ActivityAttributes), named in push-to-start. */
@@ -33,6 +35,8 @@ export type LiveAttributes = { leagueId: string; league: string };
 export const UPDATE_EVERY_MS = 60_000;
 /** A content state older than this shows as stale on the phone: the job has stopped sending. */
 const STALE_AFTER_MS = 10 * 60_000;
+/** Unchanged this long, the state goes again anyway, well inside STALE_AFTER_MS. */
+export const REFRESH_EVERY_MS = 5 * 60_000;
 /** An ended activity stays on the lock screen this long with the final score. */
 const DISMISS_AFTER_MS = 2 * 60 * 60_000;
 /** How long after a kickoff its game can still be on, for the push-to-start check. */
@@ -63,12 +67,15 @@ export function livePayload(
 const sameState = (a: LiveMatchup, b: LiveMatchup) => isDeepStrictEqual(a, b);
 
 /**
- * Whether to push `next` to an activity that last got `prev` at `sentAt`: only a change, at most
- * once a minute, except the final state, which always goes and ends the activity.
+ * Whether to push `next` to an activity that last got `prev` at `sentAt`: a change, at most once a
+ * minute, or the same state again once it's been a while, to push its stale date out. The final
+ * state always goes and ends the activity.
  */
 export function nextSend(prev: LiveMatchup | null, sentAt: Date | null, next: LiveMatchup, now: Date): { send: false } | { send: true; priority: 5 | 10; end: boolean } {
   if (next.decided) return { send: true, priority: 10, end: true };
-  if (prev && sameState(prev, next)) return { send: false };
+  if (prev && sameState(prev, next)) {
+    return sentAt && now.getTime() - sentAt.getTime() >= REFRESH_EVERY_MS ? { send: true, priority: 5, end: false } : { send: false };
+  }
   if (sentAt && now.getTime() - sentAt.getTime() < UPDATE_EVERY_MS) return { send: false };
   const scored = !prev || prev.me.points !== next.me.points || prev.them.points !== next.them.points;
   return { send: true, priority: scored ? 10 : 5, end: false };

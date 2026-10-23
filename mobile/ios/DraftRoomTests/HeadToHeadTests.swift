@@ -83,4 +83,14 @@ struct HeadToHeadTests {
         #expect(try !player(#""team":"BUF","points":21.3,"projected":true,"game":null"#).isOnBye)
         #expect(try !player(#""team":null,"points":0,"projected":true,"game":null"#).isOnBye)
     }
+
+    /// No NFL team: a free agent, marked where his game would be (APE-436).
+    @Test func marksAFreeAgentByHisMissingTeam() throws {
+        func player(_ team: String) throws -> ViewPlayer {
+            let json = #"{"playerId":1,"name":"Harrison Mevis","pos":"K","slot":"K","injuryStatus":"ACTIVE","locked":false,"actual":null,"points":0,"game":null,"team":"#
+            return try APIClient.decoder.decode(ViewPlayer.self, from: Data((json + team + "}").utf8))
+        }
+        #expect(try player("null").isFreeAgent)
+        #expect(try !player(#""LAR""#).isFreeAgent)
+    }
 }

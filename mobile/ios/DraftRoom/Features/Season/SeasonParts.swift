@@ -48,9 +48,12 @@ struct StandingStrip: View {
             // One line: the week and record always whole, points for and against trailing off when
             // the phone is narrow. At accessibility text sizes the line wraps instead.
             line(view: view, standing: standing, wraps: typeSize.isAccessibilitySize)
-            .typeStyle(TypeScale.body)
+            .typeStyle(TypeScale.label)
             .padding(.horizontal, Spacing.xl + Spacing.xs)
-            .padding(.vertical, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            // The bar can lay the strip out at its ideal width, the whole line centered and running off
+            // both edges (APE-435); the screen's width keeps it leading and trailing off.
+            .containerRelativeFrame(.horizontal, alignment: .leading)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Week \(view.currentWeek). \(SeasonFormat.spokenRecord(standing, teams: view.teams.count)). \(SeasonFormat.points(standing.pointsFor)) points for, \(SeasonFormat.points(standing.pointsAgainst)) against.")
             .accessibilityIdentifier("standing")
@@ -79,16 +82,18 @@ struct StandingStrip: View {
     }
 }
 
-/// Whether the standing strip is out of the way (APE-432). Each tab's scroll view reports to it
+/// Whether the standing strip is out of the way (APE-432). The open tab's scroll view reports to it
 /// (`hidesStandingOnScroll()`): a scroll down past `travel` hides the strip, one back up past it or
-/// a return to the top shows it again.
+/// a return to the top shows it again. Only the open tab: the others sit at their own offsets, and a
+/// refresh in one still at its top would bring the strip back mid-scroll (APE-435).
 @MainActor
 @Observable
 final class StandingBar {
     private(set) var hidden = false
 
-    /// Where the scroll last turned around, and which way it's going since.
-    @ObservationIgnored private var turn: CGFloat = 0
+    /// Where the scroll last turned around, and which way it's going since. Nil until the open tab
+    /// first scrolls: another tab's offset means nothing here.
+    @ObservationIgnored private var turn: CGFloat?
     @ObservationIgnored private var down = true
 
     /// How far a scroll goes one way before the strip follows it: past a nudge, under a flick.
@@ -103,15 +108,16 @@ final class StandingBar {
         if new.y <= -new.inset + Spacing.xl { return show(true) }
         // Past the end the scroll view bounces back, which reads as a scroll up.
         guard new.y <= new.end else { return }
-        if (new.y > old.y) != down {
+        if turn == nil || (new.y > old.y) != down {
             down = new.y > old.y
             turn = old.y
         }
-        if abs(new.y - turn) > Self.travel { show(!down) }
+        if let turn, abs(new.y - turn) > Self.travel { show(!down) }
     }
 
     /// Back on screen, for a tab or league just opened.
     func reset() {
+        turn = nil
         show(true)
     }
 
@@ -132,6 +138,13 @@ extension View {
     /// Hides the standing strip while this scroll view scrolls down, and shows it on the way back up.
     func hidesStandingOnScroll() -> some View {
         modifier(HidesStandingOnScroll())
+    }
+
+    /// A tab's scroll content at exactly the scroll view's width (APE-434). The tab can hand its
+    /// content a hair over the screen's width (354.00000000000006), and a card of full-width text
+    /// rounds that up a whole pixel; the content then outgrew the screen, and the tab panned sideways.
+    func tabWidth() -> some View {
+        containerRelativeFrame(.horizontal)
     }
 }
 
@@ -284,6 +297,8 @@ struct PlayerLine: View {
             }
             if compact, player.isOnBye {
                 byeLine.typeStyle(TypeScale.label, dense: true).foregroundStyle(.muted).lineLimit(1)
+            } else if compact, player.isFreeAgent {
+                freeAgentLine.typeStyle(TypeScale.label, dense: true).foregroundStyle(.muted).lineLimit(1)
             } else if compact, let game = player.game {
                 // A narrow column, as the web's phone head-to-head: the opponent and score on one line,
                 // where the game stands on the next (in Terminal Sky behind a still dot while it's on),
@@ -307,6 +322,8 @@ struct PlayerLine: View {
                 }
             } else if player.isOnBye {
                 byeLine.typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1)
+            } else if player.isFreeAgent {
+                freeAgentLine.typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1)
             } else {
                 Text(detail).typeStyle(TypeScale.label).foregroundStyle(player.game?.state == "in" ? Color.sky : Color.muted).lineLimit(1)
             }
@@ -318,6 +335,12 @@ struct PlayerLine: View {
         let bye = Text("BYE").fontWeight(.bold).foregroundStyle(Color.warnInk)
         let lead = compact ? (player.team ?? "") : detail
         return lead.isEmpty ? bye : Text("\(lead) · \(bye)")
+    }
+
+    /// A FREE AGENT mark in warning ink where his game would be, after his position (APE-436).
+    private var freeAgentLine: Text {
+        let mark = Text("FREE AGENT").fontWeight(.bold).foregroundStyle(Color.warnInk)
+        return compact || !showPosition ? mark : Text("\(SlotLabel.of(player.pos)) · \(mark)")
     }
 
     private var detail: String {

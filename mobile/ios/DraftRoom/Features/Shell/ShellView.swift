@@ -90,7 +90,8 @@ struct ShellView: View {
                         }
                         // Where the user stands, over every tab (APE-432); the page scrolls under it.
                         .safeAreaBar(edge: .top) { StandingStrip(store: store, bar: standingBar) }
-                        .environment(standingBar)
+                        // Only the open tab's scrolling moves the strip.
+                        .environment(section == tab ? standingBar : nil)
                     }
                 }
                 .accessibilityIdentifier("tab-\(section.rawValue)")
