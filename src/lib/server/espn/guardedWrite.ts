@@ -17,7 +17,8 @@ import { writeEspnTransaction, type EspnTransaction, type EspnWrite } from "./tr
  *   now locked). ESPN has no dry run, so this is the only check of stale state.
  * - Write one transaction, which ESPN applies whole or not at all.
  * - Re-read after writing and report what landed, whatever ESPN answered: a timed-out write may
- *   still have landed.
+ *   still have landed. ESPN's reads can trail a write it took, so when it took the write but the
+ *   re-read doesn't show all of it yet, read again a few times before saying it didn't land (APE-444).
  *
  * Only the user's own team, from their season link; the request never names it.
  */
@@ -42,7 +43,12 @@ export interface GuardedWrite<Landed> {
   landed: (after: Fresh, sent: { id: string | null } | null) => Landed;
   /** Whether anything landed; a failed write with nothing landed is `write-failed`. */
   anyLanded: (landed: Landed) => boolean;
+  /** Whether all of the write landed; until it has, a write ESPN took is re-read again. Without it, one re-read. */
+  settled?: (landed: Landed) => boolean;
 }
+
+/** How long to wait before each extra re-read of a write ESPN took but doesn't show yet. */
+export const RECHECK_MS = [500, 1000, 2000];
 
 export type GuardedOutcome<Landed> =
   /** ESPN took the write; `landed` is what the re-read shows. */
@@ -66,10 +72,14 @@ export interface WriteDeps {
   write?: (login: EspnLogin, transaction: EspnTransaction) => Promise<EspnWrite>;
   /** Confirms ESPN has signed the user out before the login is dropped (APE-244). */
   signedOut?: SessionCheck;
+  /** Waits between re-reads; tests skip the wait. */
+  pause?: (ms: number) => Promise<void>;
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export async function guardedWrite<Landed>(db: Db, key: Buffer, userId: string, leagueId: string, w: GuardedWrite<Landed>, deps: WriteDeps = {}): Promise<GuardedOutcome<Landed>> {
-  const { load = loadSeason, login: getLogin = (d, k, u) => loadLogin(d, k, u), write = writeEspnTransaction, signedOut = confirmSignedOut } = deps;
+  const { load = loadSeason, login: getLogin = (d, k, u) => loadLogin(d, k, u), write = writeEspnTransaction, signedOut = confirmSignedOut, pause = sleep } = deps;
 
   const before = await load(db, key, userId, leagueId, { refresh: true });
   if (before.kind !== "ok") return { kind: "problem", problem: before.kind };
@@ -101,7 +111,17 @@ export async function guardedWrite<Landed>(db: Db, key: Buffer, userId: string, 
   if (after.kind !== "ok" || !rosterAfter) {
     return { kind: "unverified", detail: `${sent.ok ? "ESPN took the write" : `the write failed (${sent.detail})`}, then the re-read failed (${after.kind === "ok" ? "stale" : after.kind})` };
   }
-  const landed = w.landed({ league: after.league, teamId, roster: rosterAfter }, sent.ok ? { id: sent.id } : null);
+  const answer = sent.ok ? { id: sent.id } : null;
+  let landed = w.landed({ league: after.league, teamId, roster: rosterAfter }, answer);
+  for (const ms of sent.ok && w.settled ? RECHECK_MS : []) {
+    if (w.settled!(landed)) break;
+    await pause(ms);
+    const again = await load(db, key, userId, leagueId, { refresh: true });
+    const rosterAgain = again.kind === "ok" && !again.stale ? rosterOf(again.league, teamId) : null;
+    // A re-read that fails now leaves the last good one standing.
+    if (again.kind !== "ok" || !rosterAgain) break;
+    landed = w.landed({ league: again.league, teamId, roster: rosterAgain }, answer);
+  }
   if (!sent.ok && !w.anyLanded(landed)) return { kind: "write-failed", detail: sent.detail };
   return { kind: "applied", landed };
 }

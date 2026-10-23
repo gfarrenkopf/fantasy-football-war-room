@@ -170,11 +170,19 @@ describe("POST /api/v1/leagues/:id/team/fill", () => {
     expect(state.sent.map((s) => s.kind)).toEqual(["apply"]);
   });
 
-  it("says when the player was added but ESPN didn't start him", async () => {
+  it("says when the player was added but ESPN refused to start him", async () => {
+    await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
+    state.espn = [moved, added, () => ({ kind: "espn-refused", errors: [{ type: "TRAN_PLAYER_LOCKED", message: "Locked" }], detail: "HTTP 409" })];
+    const out = (await (await (await route()).POST(post(leagueId), ctx(leagueId))).json()) as FillApplied;
+    expect(out).toMatchObject({ landed: false, result: "Wire QB is on your team, but ESPN didn't start him at QB. Start him from your lineup." });
+    expect(out.steps.map((s) => s.landed)).toEqual([true, true, false]);
+  });
+
+  it("says when ESPN took the start but doesn't show it yet (APE-444)", async () => {
     await agreeToWrites(db, userId, ESPN_WRITE_VERSION);
     state.espn = [moved, added, (request: { moves: LineupMove[] }) => ({ kind: "applied", moves: request.moves.map((m) => ({ ...m, landed: false })) })];
     const out = (await (await (await route()).POST(post(leagueId), ctx(leagueId))).json()) as FillApplied;
-    expect(out).toMatchObject({ landed: false, result: "Wire QB is on your team, but ESPN didn't start him at QB. Start him from your lineup.", details: [] });
+    expect(out).toMatchObject({ landed: false, result: "Wire QB is on your team. ESPN took the change to start him at QB but doesn't show it yet. Check your lineup in a minute.", details: [] });
     expect(out.steps.map((s) => s.landed)).toEqual([true, true, false]);
   });
 

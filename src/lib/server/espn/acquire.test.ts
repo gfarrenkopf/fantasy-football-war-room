@@ -70,8 +70,9 @@ const ok = (lg: SeasonLeague): SeasonLoad => ({ kind: "ok", league: lg, espnTeam
 function fake(reads: SeasonLoad[], answer: EspnWrite = { ok: true, id: "tx" }) {
   const writes: EspnTransaction[] = [];
   const deps: WriteDeps = {
-    load: async () => reads.shift()!,
+    load: async () => (reads.length > 1 ? reads.shift()! : reads[0]),
     login: async () => ({ espnS2: "s2", swid: "{SWID}" }),
+    pause: async () => {},
     write: async (_login, w) => {
       writes.push(w);
       return answer;

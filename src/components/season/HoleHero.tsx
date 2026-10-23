@@ -304,6 +304,11 @@ function FillOption({
       router.refresh();
       return setPhase({ kind: "done", message: `Done. ${player.name} starts at ${slot}.` });
     }
+    // ESPN took it but its re-reads don't show it yet (APE-444): it usually has landed.
+    if (r.ok && r.body.moves) {
+      router.refresh();
+      return fail(r.body, `${player.name} is on your team. ESPN took the change to start him at ${slot} but doesn't show it yet. Check your lineup in a minute.`);
+    }
     fail(r.body, `${player.name} is on your team, but ESPN didn't start him at ${slot}.`, "start");
   }
 
