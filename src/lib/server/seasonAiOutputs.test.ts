@@ -56,6 +56,22 @@ describe("writeAiLineup", () => {
     expect(await generations()).toEqual([expect.objectContaining({ purpose: "season-lineup", outcome: "ready", promptVersion: LINEUP_PROMPT_VERSION, inputTokens: 1_000, outputTokens: 200 })]);
   });
 
+  it("writes a stale mid-week lineup again for free, once per move of the projections (APE-439)", async () => {
+    const model = createFakePlanModel(() => ({ json: lineupJson, usage }));
+    const first = await writeAiLineup(db, model, { userId, leagueId, view, kind: "lineup-midweek" });
+    // RB1, one of its starters, is ruled out since.
+    const moved = seasonView(mine.map((p) => (p.name === "RB1" ? { ...p, injuryStatus: "OUT" as const } : p)), theirs);
+    const second = await writeAiLineup(db, model, { userId, leagueId, view: moved, kind: "lineup-midweek" });
+    expect(second).toMatchObject({ status: "ok", cached: false });
+    expect(second.status === "ok" && first.status === "ok" && second.createdAt > first.createdAt).toBe(true);
+    expect(second.status === "ok" && second.output.slots.some((s) => s.playerId === mine[1].playerId)).toBe(false);
+    // Written against the new projections, it holds again.
+    expect(await writeAiLineup(db, model, { userId, leagueId, view: moved, kind: "lineup-midweek" })).toMatchObject({ status: "ok", cached: true });
+    expect(model.calls).toHaveLength(2);
+    expect(await usedSeasonAi(db, leagueId, 2026, 5)).toEqual(["lineup-midweek"]);
+    expect((await findAiLineups(db, leagueId, 2026, 5))["lineup-midweek"]?.createdAt).toBe(second.status === "ok" ? second.createdAt : null);
+  });
+
   it("answers used when the allowance went without a stored lineup", async () => {
     await claimSeasonAiUse(db, { leagueId, season: 2026, week: 5, kind: "lineup-sunday" });
     const model = createFakePlanModel(() => ({ json: lineupJson, usage }));

@@ -45,11 +45,22 @@ extension StubbedNetwork {
             #expect(lineup.calls.map(\.slot) == ["QB", "FLEX"])
             #expect(lineup.espn.matches == false)
             #expect(lineup.starters.count == 9)
+            #expect(lineup.isStale == false)
             let idea = try #require(ai.ideas?.ideas.first)
             #expect(idea.label == "Win-win")
             #expect(idea.status == "ok")
             #expect(idea.grade != nil)
             #expect(ai.ideas?.missing == ["No bolder swing this week that a partner would plausibly take."])
+        }
+
+        @Test func decodesAStaleLineupAndOneFromAServerThatDoesntSay() throws {
+            // APE-439: the server marks a lineup the projections have moved under.
+            var json = try #require(String(data: Fixture.data("ai-trial"), encoding: .utf8))
+            json = json.replacingOccurrences(of: "\"stale\": false", with: "\"stale\": true")
+            #expect(try APIClient.decoder.decode(AiResponse.self, from: Data(json.utf8)).lineup?.isStale == true)
+            json = json.replacingOccurrences(of: ",\n    \"stale\": true", with: "")
+            let older = try APIClient.decoder.decode(AiResponse.self, from: Data(json.utf8))
+            #expect(older.lineup?.stale == nil && older.lineup?.isStale == false)
         }
 
         @Test func decodesTheEmptyLockedAndWriteupFixtures() throws {

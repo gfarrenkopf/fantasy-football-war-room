@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AiLineup } from "@/lib/ai/season/lineup";
-import { aiLineupStatus } from "@/lib/ai/season/lineupStatus";
+import { aiLineupOutdated, aiLineupStatus } from "@/lib/ai/season/lineupStatus";
 import type { SeasonAiState, StoredAiOutput } from "@/lib/ai/season/state";
 import type { AiTradeWriteup } from "@/lib/ai/season/trade";
 import type { Trade } from "@/lib/season/trade";
@@ -127,6 +127,8 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
   const departures = stored?.output.slots.filter((slot) => slot.playerId !== slot.enginePlayerId) ?? [];
   // Live, against ESPN now: the stored text was written against the lineup ESPN had then.
   const status = stored ? aiLineupStatus(stored.output, roster) : null;
+  // The projections moved under it (APE-439): its lineup no longer holds, and it's rewritten for free.
+  const stale = stored ? aiLineupOutdated(stored.output, view.lineup, roster) : false;
   return (
     <section className={[s.panel, className].filter(Boolean).join(" ")} aria-labelledby="ai-lineup-title">
       <div className={s.panelHead}>
@@ -158,7 +160,11 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
               ))}
             </ul>
           )}
-          {status && (
+          {stale ? (
+            <p className={s.aiStatus} data-match={false} role="note">
+              The projections have moved since this was written, so this lineup is out of date. The lineup above has the latest; rewrite this to catch up.
+            </p>
+          ) : status && (
             <p className={s.aiStatus} data-match={status.missing.length === 0} role="note">
               {status.missing.length === 0
                 ? "ESPN has the AI's starters."
@@ -169,8 +175,8 @@ export function AiLineupCard({ leagueId, view, ai, className }: { leagueId: stri
           <p className={s.fine}>
             Written <LocalTime iso={stored.createdAt} /> from the projections then.
           </p>
-          {/* Sunday's lineup came first: the unused mid-week one is a refresh for late news. */}
-          {!ai.midweekUsed && !written && (
+          {/* Sunday's lineup came first: the unused mid-week one is a refresh for late news. A stale one is rewritten whatever's left. */}
+          {(stale || (!ai.midweekUsed && !written)) && (
             <>
               <button type="button" className={`${s.button} ${s.aiRefresh}`} onClick={write} disabled={phase === "writing"}>
                 {phase === "writing" ? "Rewriting…" : "Rewrite with the latest news"}

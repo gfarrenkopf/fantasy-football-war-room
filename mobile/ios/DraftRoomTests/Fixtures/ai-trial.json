@@ -79,7 +79,8 @@
     "espn": {
       "matches": false,
       "text": "Not on ESPN yet: Jeremiyah Love at FLEX."
-    }
+    },
+    "stale": false
   },
   "lineupAction": "rewrite",
   "lineupNote": null,

@@ -1,5 +1,5 @@
 import type { AiLineup } from "@/lib/ai/season/lineup";
-import { aiLineupStatus } from "@/lib/ai/season/lineupStatus";
+import { aiLineupOutdated, aiLineupStatus } from "@/lib/ai/season/lineupStatus";
 import type { SeasonAiState, StoredAiOutput } from "@/lib/ai/season/state";
 import type { AiTradeWriteup } from "@/lib/ai/season/trade";
 import type { TradeIdea } from "@/lib/ai/season/tradeIdeas";
@@ -42,8 +42,13 @@ export interface AiLineupView {
   calls: { slot: string; player: AiPlayer | null; reason: string }[];
   /** Every starting slot the AI fills, for "Use this lineup". */
   starters: { key: AiLineup["slots"][number]["key"]; playerId: number | null; locked: boolean }[];
-  /** Whether ESPN starts the AI's lineup now, said the web's way. */
+  /** Whether ESPN starts the AI's lineup now, said the web's way; once stale, that it's out of date. */
   espn: { matches: boolean; text: string };
+  /**
+   * The projections have moved under it since it was written (APE-439): its lineup no longer holds,
+   * `starters` are the recommended lineup's instead, and it can be written again for free.
+   */
+  stale: boolean;
 }
 
 /** One of this week's trade ideas, graded again against the rosters now. */
@@ -83,7 +88,7 @@ export interface AiResponse {
   week: number;
   /** The newest of this week's AI lineups; null before one is written, and while locked. */
   lineup: AiLineupView | null;
-  /** write: none yet; rewrite: one is stored and the mid-week allowance is unused (the web's "Rewrite with the latest news"). */
+  /** write: none yet; rewrite: one is stored and the mid-week allowance is unused, or it's stale (the web's "Rewrite with the latest news"). */
   lineupAction: "write" | "rewrite" | null;
   /** Said in place of the button once this week's mid-week lineup is used and none is stored. */
   lineupNote: string | null;
@@ -132,12 +137,15 @@ export function latestLineup(ai: SeasonAiState): StoredAiOutput<AiLineup> | unde
   return [ai.lineups["lineup-sunday"], ai.lineups["lineup-midweek"]].filter((x) => x !== undefined).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 }
 
+export const STALE_LINEUP = "The projections have moved since this was written, so this lineup is out of date. The recommended lineup has the latest; rewrite this to catch up.";
+
 export function aiLineupView(view: SeasonView, stored: StoredAiOutput<AiLineup>): AiLineupView {
   const roster = view.teams.find((t) => t.id === view.myTeamId)?.roster ?? [];
   const names = new Map(roster.map((p) => [p.playerId, p.name]));
   const name = (id: number | null) => (id === null ? "nobody" : (names.get(id) ?? `ESPN player ${id}`));
   const { output } = stored;
   const departures = output.slots.filter((slot) => slot.playerId !== slot.enginePlayerId);
+  const stale = aiLineupOutdated(output, view.lineup, roster);
   // Live, against ESPN now: the stored text was written against the lineup ESPN had then.
   const status = aiLineupStatus(output, roster);
   const espn =
@@ -153,8 +161,10 @@ export function aiLineupView(view: SeasonView, stored: StoredAiOutput<AiLineup>)
     calls: output.slots.flatMap((slot) =>
       slot.reason ? [{ slot: label(slot.key), player: slot.playerId === null ? null : { id: slot.playerId, name: name(slot.playerId) }, reason: slot.reason }] : [],
     ),
-    starters: output.slots.map((slot) => ({ key: slot.key, playerId: slot.playerId, locked: slot.locked })),
-    espn: { matches: status.missing.length === 0, text: espn },
+    // A stale lineup's starters would stage what no longer holds: an app that still offers "Use this lineup" stages the recommended one.
+    starters: (stale ? view.lineup.starters : output.slots).map((slot) => ({ key: slot.key, playerId: slot.playerId, locked: slot.locked })),
+    espn: stale ? { matches: false, text: STALE_LINEUP } : { matches: status.missing.length === 0, text: espn },
+    stale,
   };
 }
 
@@ -194,12 +204,14 @@ export function aiResponse(view: SeasonView, ai: SeasonAiState): AiResponse {
   const access = aiAccess(ai.access);
   const locked = access.state === "locked";
   const stored = locked ? undefined : latestLineup(ai);
+  const lineup = stored ? aiLineupView(view, stored) : null;
   const ideas = ai.tradeIdeas;
   return {
     access,
     week: view.currentWeek,
-    lineup: stored ? aiLineupView(view, stored) : null,
-    lineupAction: locked || ai.midweekUsed ? null : stored ? "rewrite" : "write",
+    lineup,
+    // A stale lineup is written again for free (APE-439), whatever's left of the allowance.
+    lineupAction: locked ? null : lineup?.stale ? "rewrite" : ai.midweekUsed ? null : stored ? "rewrite" : "write",
     lineupNote: !locked && !stored && ai.midweekUsed ? "This week's mid-week AI lineup is used. The Sunday one comes after the inactives are posted." : null,
     // Stored ideas stay readable after the trial, as on the web.
     ideas: ideas
