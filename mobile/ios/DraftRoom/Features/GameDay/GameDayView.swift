@@ -36,6 +36,7 @@ struct GameDayView: View {
                     }
                     .padding(.horizontal, Spacing.xl + Spacing.xs)
                     .padding(.vertical, Spacing.xl)
+                    .tabWidth()
                 }
                 .sectionJump()
                 .hidesStandingOnScroll()

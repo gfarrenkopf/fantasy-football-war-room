@@ -133,6 +133,13 @@ extension View {
     func hidesStandingOnScroll() -> some View {
         modifier(HidesStandingOnScroll())
     }
+
+    /// A tab's scroll content at exactly the scroll view's width (APE-434). The tab can hand its
+    /// content a hair over the screen's width (354.00000000000006), and a card of full-width text
+    /// rounds that up a whole pixel; the content then outgrew the screen, and the tab panned sideways.
+    func tabWidth() -> some View {
+        containerRelativeFrame(.horizontal)
+    }
 }
 
 private struct HidesStandingOnScroll: ViewModifier {
