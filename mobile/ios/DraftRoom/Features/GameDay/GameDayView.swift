@@ -178,15 +178,18 @@ private struct Scoreboard<Rows: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: Spacing.lg) {
-                HStack(alignment: .firstTextBaseline) {
-                    HStack(spacing: Spacing.sm) {
-                        Text("Week \(live.week)").foregroundStyle(.muted)
-                        if live.live { Circle().fill(.sky).frame(width: 6, height: 6).accessibilityHidden(true) }
-                        Text(live.status).foregroundStyle(live.live ? Color.sky : Color.text)
+                // "Week 7 · 14 to play" never wraps mid-phrase (APE-442): with no room beside it, "ESPN's numbers" goes under.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        heading.fixedSize()
+                        Spacer(minLength: Spacing.md)
+                        source.fixedSize()
                     }
-                    .typeStyle(TypeScale.title)
-                    Spacer()
-                    Text("ESPN's numbers").typeStyle(TypeScale.label).foregroundStyle(.dim)
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        heading
+                        source
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack(alignment: .center, spacing: Spacing.md) {
                     side(live.me, name: "You", mine: true)
@@ -211,6 +214,19 @@ private struct Scoreboard<Rows: View>: View {
         .sensoryFeedback(.impact(weight: .heavy), trigger: leader)
     }
 
+    private var heading: some View {
+        HStack(spacing: Spacing.sm) {
+            Text("Week \(live.week)").foregroundStyle(.muted)
+            if live.live { Circle().fill(.sky).frame(width: 6, height: 6).accessibilityHidden(true) }
+            Text(live.status).foregroundStyle(live.live ? Color.sky : Color.text)
+        }
+        .typeStyle(TypeScale.title)
+    }
+
+    private var source: some View {
+        Text("ESPN's numbers").typeStyle(TypeScale.label).foregroundStyle(.dim)
+    }
+
     private func side(_ team: LiveSide, name: String, mine: Bool) -> some View {
         let number = live.started ? team.points : team.projected
         return VStack(spacing: Spacing.xs) {
@@ -220,8 +236,12 @@ private struct Scoreboard<Rows: View>: View {
                 .minimumScaleFactor(0.6).lineLimit(1)
                 .foregroundStyle(.text)
                 .contentTransition(.numericText(value: number))
-            Text(live.started ? "proj \(SeasonFormat.points(team.projected))\(live.decided ? "" : " · \(team.left == 0 ? "done" : "\(team.left) to play")")" : "projected")
-                .typeStyle(TypeScale.label).foregroundStyle(.dim).monospacedDigit().lineLimit(1)
+            // The projection and who's left each get a line (APE-442): side by side, half a phone cut them short.
+            Group {
+                Text(live.started ? "proj \(SeasonFormat.points(team.projected))" : "projected")
+                if live.started && !live.decided { Text(team.left == 0 ? "done" : "\(team.left) to play") }
+            }
+            .typeStyle(TypeScale.label).foregroundStyle(.dim).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
     }
