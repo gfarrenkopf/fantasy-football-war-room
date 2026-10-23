@@ -175,6 +175,9 @@ struct ViewPlayer: Codable, Equatable, Sendable, Identifiable {
     /// On a bye this week, as the web's `onBye()`: ESPN projects him for nothing and his team has no
     /// game this week. A player ESPN expects to sit while his team plays has a game, so isn't on a bye.
     var isOnBye: Bool { projected != false && points == 0 && team != nil && game == nil }
+
+    /// Without an NFL team (ESPN's team 0): released and unsigned, so no game to show (APE-436).
+    var isFreeAgent: Bool { team == nil }
 }
 
 struct GameState: Codable, Equatable, Sendable {

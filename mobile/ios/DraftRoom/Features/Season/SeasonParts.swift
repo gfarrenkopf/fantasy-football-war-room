@@ -297,6 +297,8 @@ struct PlayerLine: View {
             }
             if compact, player.isOnBye {
                 byeLine.typeStyle(TypeScale.label, dense: true).foregroundStyle(.muted).lineLimit(1)
+            } else if compact, player.isFreeAgent {
+                freeAgentLine.typeStyle(TypeScale.label, dense: true).foregroundStyle(.muted).lineLimit(1)
             } else if compact, let game = player.game {
                 // A narrow column, as the web's phone head-to-head: the opponent and score on one line,
                 // where the game stands on the next (in Terminal Sky behind a still dot while it's on),
@@ -320,6 +322,8 @@ struct PlayerLine: View {
                 }
             } else if player.isOnBye {
                 byeLine.typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1)
+            } else if player.isFreeAgent {
+                freeAgentLine.typeStyle(TypeScale.label).foregroundStyle(.muted).lineLimit(1)
             } else {
                 Text(detail).typeStyle(TypeScale.label).foregroundStyle(player.game?.state == "in" ? Color.sky : Color.muted).lineLimit(1)
             }
@@ -331,6 +335,12 @@ struct PlayerLine: View {
         let bye = Text("BYE").fontWeight(.bold).foregroundStyle(Color.warnInk)
         let lead = compact ? (player.team ?? "") : detail
         return lead.isEmpty ? bye : Text("\(lead) · \(bye)")
+    }
+
+    /// A FREE AGENT mark in warning ink where his game would be, after his position (APE-436).
+    private var freeAgentLine: Text {
+        let mark = Text("FREE AGENT").fontWeight(.bold).foregroundStyle(Color.warnInk)
+        return compact || !showPosition ? mark : Text("\(SlotLabel.of(player.pos)) · \(mark)")
     }
 
     private var detail: String {
