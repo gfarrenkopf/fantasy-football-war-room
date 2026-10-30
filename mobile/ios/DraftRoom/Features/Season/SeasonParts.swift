@@ -44,7 +44,7 @@ struct StandingStrip: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        if !bar.hidden, let view = store.season?.view, let standing = view.team(view.myTeamId)?.standing {
+        if let view = store.season?.view, let standing = view.team(view.myTeamId)?.standing {
             // One line: the week and record always whole, points for and against trailing off when
             // the phone is narrow. At accessibility text sizes the line wraps instead.
             line(view: view, standing: standing, wraps: typeSize.isAccessibilitySize)
@@ -57,7 +57,15 @@ struct StandingStrip: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Week \(view.currentWeek). \(SeasonFormat.spokenRecord(standing, teams: view.teams.count)). \(SeasonFormat.points(standing.pointsFor)) points for, \(SeasonFormat.points(standing.pointsAgainst)) against.")
             .accessibilityIdentifier("standing")
-            .transition(.move(edge: .top).combined(with: .opacity))
+            // Out of the way by sliding up and fading, never by leaving the bar (APE-438): the bar keeps
+            // its height, so the scroll view's inset and offset never move on their own, and the strip is
+            // laid out once rather than again on every return.
+            .visualEffect { [hidden = bar.hidden] content, proxy in
+                content.offset(y: hidden ? -proxy.size.height : 0)
+            }
+            .opacity(bar.hidden ? 0 : 1)
+            .allowsHitTesting(!bar.hidden)
+            .accessibilityHidden(bar.hidden)
         }
     }
 
@@ -87,10 +95,10 @@ struct StandingStrip: View {
 /// a return to the top shows it again. Only the open tab: the others sit at their own offsets, and a
 /// refresh in one still at its top would bring the strip back mid-scroll (APE-435).
 ///
-/// The strip's own coming and going moves the content's inset, and the offset follows, sometimes a
-/// report later, by about the strip's height: taller than `travel` at large text, so it read as the
-/// user scrolling and flipped the strip back (APE-438). Reports while the strip settles are ignored,
-/// and it only goes once the content is well clear of the top, so the shift can't land at the top.
+/// The strip hides in place and keeps its room in the bar (APE-438), so every report is the user
+/// scrolling. When it left the bar instead, the content's inset and offset moved with it, a report or
+/// a few frames later, and no timer or threshold told that apart from the user reliably: it flipped
+/// back, swallowed a flick up and stayed gone, and crept right as the bar laid it out again.
 @MainActor
 @Observable
 final class StandingBar {
@@ -100,29 +108,14 @@ final class StandingBar {
     /// first scrolls: another tab's offset means nothing here.
     @ObservationIgnored private var turn: CGFloat?
     @ObservationIgnored private var down = true
-    /// Until when the strip is still coming or going.
-    @ObservationIgnored private var settling: ContinuousClock.Instant?
-    @ObservationIgnored private let now: () -> ContinuousClock.Instant
 
     /// How far a scroll goes one way before the strip follows it: past a nudge, under a flick.
     static let travel: CGFloat = 32
-    /// How far down the content has to be before the strip goes: past the strip's height, wrapped at the largest text.
-    static let clear: CGFloat = 160
-    /// How long the strip's coming and going takes to settle the scroll view's inset and offset.
-    static let settle: Duration = .milliseconds(450)
-
-    init(now: @escaping () -> ContinuousClock.Instant = { .now }) {
-        self.now = now
-    }
 
     func scrolled(from old: ScrollSpot, to new: ScrollSpot) {
-        // Back at the top: always shown, whatever the strip is doing.
+        // Back at the top: always shown.
         if new.y + new.inset <= Spacing.xl { return show(true) }
-        if let settling, now() < settling {
-            turn = new.y
-            return
-        }
-        // The inset moving isn't the user scrolling.
+        // The inset moving (the standing first arriving, the text size changing) isn't the user scrolling.
         guard old.inset == new.inset else {
             turn = new.y
             return
@@ -133,9 +126,7 @@ final class StandingBar {
             down = new.y > old.y
             turn = old.y
         }
-        guard let turn, abs(new.y - turn) > Self.travel else { return }
-        if down && new.y + new.inset < Self.clear { return }
-        show(!down)
+        if let turn, abs(new.y - turn) > Self.travel { show(!down) }
     }
 
     /// Back on screen, for a tab or league just opened.
@@ -146,7 +137,6 @@ final class StandingBar {
 
     private func show(_ shown: Bool) {
         guard hidden == shown else { return }
-        settling = now() + Self.settle
         withAnimation(Motion.respond) { hidden = !shown }
     }
 }
